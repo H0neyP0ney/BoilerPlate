@@ -12,7 +12,9 @@
     "zip": "npm run zip -w @xiao/swarm-attack",
     "typecheck": "tsc -p packages/engine && tsc -p packages/engine/tsconfig.sim.json && tsc -p games/_starter && tsc -p games/xiao-swarm && tsc -p games/xiao-swarm/tsconfig.sim.json",
     "new-game": "node scripts/new-game.mjs",
-    "sim:headless": "npm run sim -w @xiao/swarm-attack --"
+    "sim:headless": "npm run sim -w @xiao/swarm-attack --",
+    "sim:net": "npm run sim:net -w @xiao/swarm-attack --",
+    "build:poki": "bash scripts/build-poki.sh"
   },
   "devDependencies": {
     "fflate": "^0.8.2",

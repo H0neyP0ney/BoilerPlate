@@ -13,9 +13,11 @@ export const TICK_RATE = 30;
  * L'affichage (GameScene / WorldView) ne sait pas d'où vient l'état :
  *
  *  - LocalSession   : solo / bots — la simulation tourne ici.            (✔ implémenté)
- *  - HostSession    : hôte P2P Netlib — simule + diffuse snapshots/events. (à venir)
- *  - ClientSession  : reçoit snapshots, interpole, prédit l'ancre locale.  (à venir)
+ *  - HostSession    : hôte (P2P) — simule + diffuse snapshots/events.     (✔ HostSession.ts)
+ *  - ClientSession  : reçoit snapshots, reflète la partie de l'hôte.        (✔ ClientSession.ts)
  *  - serveur Node   : même Sim + même boucle, sans Phaser (sim/ est pur).  (à venir)
+ *
+ * Le réseau lui-même est caché derrière `Transport` (Netlib, WebSocket, mémoire…).
  */
 export interface Session {
   readonly sim: Sim;
@@ -27,6 +29,17 @@ export interface Session {
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void;
   /** Revive de la squad locale (après pub récompensée). */
   reviveLocal(): void;
+  /**
+   * Partie en ligne : pas de pause (l'hôte fait tourner tout le monde), pas de revive par pub,
+   * et un joueur anéanti réapparaît tout seul (l'hôte s'en charge).
+   */
+  readonly online: boolean;
+  /** Code de la salle à partager (null hors ligne). */
+  readonly roomCode: string | null;
+  /** 'lost' : la connexion à l'hôte / à la salle est coupée. */
+  readonly connection: 'connected' | 'lost';
+  /** Libère les ressources réseau. */
+  close(): void;
 }
 
 export interface LocalSessionOptions {
@@ -38,6 +51,9 @@ export interface LocalSessionOptions {
 export class LocalSession implements Session {
   readonly sim: Sim;
   readonly localPlayer: PlayerId = 'p1';
+  readonly online = false;
+  readonly roomCode = null;
+  readonly connection = 'connected';
   private readonly loop = new FixedStep(TICK_RATE);
   private readonly inputs = new Map<PlayerId, PlayerInput>();
   private readonly local: PlayerInput = { mx: 0, my: 0 };
@@ -72,4 +88,6 @@ export class LocalSession implements Session {
   reviveLocal(): void {
     this.sim.respawnSquad(this.localPlayer, this.sim.rng.pick(START_SQUADS));
   }
+
+  close(): void {}
 }

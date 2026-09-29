@@ -4,6 +4,7 @@ import { SCENES } from '../config';
 import { WAVE_MARKS } from '../data/aliens';
 import type { SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
+import { t } from '../i18n';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
@@ -16,6 +17,8 @@ import type { GameOverData } from './GameOverScene';
  * Elle ne contient aucune règle de jeu : tout est dans sim/.
  *
  * Paramètres d'URL (tests) : ?mode=royale&bots=5
+ * En ligne (voir online.ts) : ?net=host, ?net=join&room=CODE, ?net=auto. BootScene fournit alors
+ * la session via `registry` ; la scène ne fait aucune différence entre solo, hôte et client.
  */
 export class GameScene extends Phaser.Scene {
   readonly flow = new RunFlow('survival');
@@ -34,13 +37,19 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.revived = false;
     this.ended = false;
-    const mode = this.pickMode();
-    const botsParam = Number(poki.getURLParam('bots'));
-    this.session = new LocalSession({
-      mode,
-      seed: (Math.random() * 2 ** 31) | 0,
-      bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
-    });
+    const online = this.registry.get('session') as Session | undefined;
+    this.registry.remove('session');
+    if (online) {
+      this.session = online;
+    } else {
+      const mode = this.pickMode();
+      const botsParam = Number(poki.getURLParam('bots'));
+      this.session = new LocalSession({
+        mode,
+        seed: (Math.random() * 2 ** 31) | 0,
+        bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
+      });
+    }
     this.view = new WorldView(this, this.session.sim, this.session.localPlayer);
 
     const cam = this.cameras.main;
@@ -59,6 +68,7 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseGame);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseGame);
+      this.session.close();
       this.view.arena.destroy();
       this.scene.stop(SCENES.hud);
     });
@@ -74,11 +84,12 @@ export class GameScene extends Phaser.Scene {
     this.session.setLocalInput(dir.x, dir.y);
     if (this.flow.state === 'ready' && this.move.active) this.flow.begin();
 
-    if (this.flow.isPlaying) {
+    // En ligne, le monde ne s'arrête jamais : l'hôte fait tourner la partie de tout le monde.
+    if (this.flow.isPlaying || this.session.online) {
       this.session.advance(delta, this.onEvent);
       this.checkEnd();
     }
-    this.view.render(this.flow.isPlaying ? this.session.alpha : 1, dt, secs);
+    this.view.render(this.flow.isPlaying || this.session.online ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
     const sim = this.session.sim;
@@ -97,6 +108,11 @@ export class GameScene extends Phaser.Scene {
 
   get localSquad(): Squad {
     return this.session.sim.squadOf(this.session.localPlayer)!;
+  }
+
+  /** Nombre de joueurs dans la partie (1 hors ligne). */
+  get playerCount(): number {
+    return this.session.online ? this.session.sim.squads.length : 1;
   }
 
   get runTime(): number {
@@ -133,6 +149,9 @@ export class GameScene extends Phaser.Scene {
   private checkEnd(): void {
     if (this.ended) return;
     const sim = this.session.sim;
+    if (this.session.connection === 'lost') return this.endRun(false, true);
+    // En ligne, une squad anéantie réapparaît toute seule (voir HostSession) : jamais d'écran de fin.
+    if (this.session.online) return;
     if (!this.localSquad.alive) return this.endRun(false);
     if (this.mode.id === 'survival' && sim.time >= this.mode.duration) return this.endRun(true);
     if (this.mode.id === 'royale' && sim.squads.length > 1 && sim.aliveSquads.length === 1) return this.endRun(true);
@@ -141,6 +160,7 @@ export class GameScene extends Phaser.Scene {
   // ---------- Flow Poki ----------
 
   readonly pauseGame = (): void => {
+    if (this.session.online) return; // pause impossible : les autres joueurs continuent
     if (!this.scene.isActive() || !this.flow.interrupt()) return;
     this.scene.pause();
     this.scene.pause(SCENES.hud);
@@ -153,16 +173,27 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume(SCENES.hud);
   }
 
-  private endRun(victory: boolean): void {
+  private endRun(victory: boolean, connectionLost = false): void {
     this.ended = true;
     if (victory) this.flow.win();
     else this.flow.fail();
+    const online = this.session.online;
     const time = Math.floor(this.runTime);
-    const best = Math.max(time, storage.get('bestTime', 0));
-    storage.set('bestTime', best);
-    this.scene.pause();
-    this.scene.pause(SCENES.hud);
-    const data: GameOverData = { victory, time, kills: this.kills, best, canRevive: !victory && !this.revived };
+    const best = online ? time : Math.max(time, storage.get('bestTime', 0));
+    if (!online) storage.set('bestTime', best);
+    // En ligne la scène ne se met JAMAIS en pause : l'hôte ferait geler tous les joueurs.
+    if (!online) {
+      this.scene.pause();
+      this.scene.pause(SCENES.hud);
+    }
+    const data: GameOverData = {
+      victory,
+      time,
+      kills: this.kills,
+      best,
+      canRevive: !online && !victory && !this.revived,
+      title: connectionLost ? t('connectionLost') : undefined,
+    };
     this.scene.launch(SCENES.gameOver, data);
   }
 
@@ -177,10 +208,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   async retry(): Promise<void> {
+    if (this.session.online) return this.retryOnline();
     await this.flow.restart();
     this.scene.restart();
     // "Rejouer" est un input du joueur : le run démarre directement.
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.flow.begin());
+  }
+
+  /** En ligne, le seul écran de fin est « connexion perdue » : retour au solo. */
+  private retryOnline(): void {
+    window.location.assign(window.location.pathname);
   }
 
   // ---------- Caméra ----------
@@ -188,11 +225,14 @@ export class GameScene extends Phaser.Scene {
   /** Suit le coeur de la squad locale et dézoome un peu quand elle grossit. */
   private updateCamera(dt: number): void {
     const focus = this.view.squadFocus(this.session.localPlayer);
+    const cam = this.cameras.main;
     if (focus) {
+      // Réapparition à l'autre bout de la carte : on saute au lieu de traverser la carte en glissant.
+      const jump = Math.hypot(focus.x - this.camTarget.x, focus.y - this.camTarget.y) > 900;
       this.camTarget.x = focus.x;
       this.camTarget.y = focus.y;
+      if (jump) cam.centerOn(focus.x, focus.y);
     }
-    const cam = this.cameras.main;
     const target = clamp(1 - (this.localSquad.size - 4) * 0.009, 0.8, 1);
     cam.setZoom(damp(cam.zoom, target, 2, dt));
   }

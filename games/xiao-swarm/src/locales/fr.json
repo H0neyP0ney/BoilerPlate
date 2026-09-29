@@ -19,5 +19,14 @@
   "class_flammer": "Flammeur",
   "class_sniper": "Sniper",
   "class_tank": "Tank",
-  "squadsLeft": "{value} escouades en vie"
+  "squadsLeft": "{value} escouades en vie",
+  "room": "Salle {code} · {players} joueur(s)",
+  "roomHint": "Partage ce code : {code}",
+  "connecting": "Connexion…",
+  "connectFailed": "Connexion impossible — partie solo",
+  "roomNotFound": "Salle introuvable — partie solo",
+  "roomFull": "Salle pleine — partie solo",
+  "connectionLost": "Connexion perdue",
+  "versionMismatch": "Version différente — partie solo",
+  "respawning": "Réapparition…"
 }

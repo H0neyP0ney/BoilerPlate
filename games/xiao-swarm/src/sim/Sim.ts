@@ -1,4 +1,4 @@
-import { EventQueue, IdGen, Rng, SpatialHash, WaveDirector } from '@xiao/engine/sim';
+import { EventQueue, IdGen, Rng, SpatialHash, WaveDirector, type Point } from '@xiao/engine/sim';
 import type { AlienId } from '../data/aliens';
 import type { SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
@@ -10,6 +10,9 @@ import { Horde } from './Horde';
 import { Recruits } from './Recruits';
 import { Squad } from './Squad';
 import { NO_INPUT, type PlayerId, type PlayerInput, type SimEvent } from './types';
+
+/** Distance minimale entre un point de réapparition et les squads vivantes (hors écran). */
+const SAFE_SPAWN_DISTANCE = 700;
 
 /** Distance de spawn des aliens autour d'une squad (hors écran). */
 const SPAWN_DISTANCE = 780;
@@ -99,6 +102,57 @@ export class Sim {
   spawnSquads(pickComposition: () => SoldierClassId[]): void {
     const points = this.mode.spawnPoints(this.map, this.squads.length, this.rng);
     this.squads.forEach((sq, i) => sq.spawn(pickComposition(), points[i]));
+  }
+
+  // ---------- Joueurs en cours de partie (réseau) ----------
+
+  /** Crée (sans la placer) la squad d'un joueur qui rejoint. Idempotent. */
+  addPlayer(owner: PlayerId): Squad {
+    let sq = this.squadOf(owner);
+    if (!sq) {
+      sq = new Squad(this, owner);
+      this.squads.push(sq);
+    }
+    return sq;
+  }
+
+  /** Un joueur part : sa squad disparaît de la partie (ses soldats sont retirés sans mort spectaculaire). */
+  removePlayer(owner: PlayerId): void {
+    const i = this.squads.findIndex((s) => s.owner === owner);
+    if (i === -1) return;
+    for (const s of this.squads[i].soldiers) s.alive = false;
+    this.squads.splice(i, 1);
+    this.events.push({ t: 'squadWiped', owner });
+  }
+
+  /**
+   * (Re)place la squad d'un joueur à un endroit aléatoire de la carte, à distance des
+   * autres squads vivantes (arrivée en cours de partie, ou réapparition après une mort).
+   */
+  spawnLate(owner: PlayerId, composition: SoldierClassId[], invulnerable = 2.5): void {
+    const sq = this.addPlayer(owner);
+    if (sq.alive) return;
+    sq.spawn(composition, this.randomSpawnPoint());
+    for (const s of sq.soldiers) s.invulnerable = invulnerable;
+  }
+
+  /** Point libre tiré au hasard, idéalement hors de vue (> SAFE_SPAWN_DISTANCE) des squads vivantes. */
+  private randomSpawnPoint(): Point {
+    const b = this.arena.bounds;
+    const others = this.aliveSquads;
+    let best: Point | null = null;
+    let bestD = -1;
+    for (let i = 0; i < 30; i++) {
+      const p = { x: this.rng.range(b.minX + 120, b.maxX - 120), y: this.rng.range(b.minY + 120, b.maxY - 120) };
+      if (!this.arena.isFree(p, 80)) continue;
+      const d = others.reduce((m, o) => Math.min(m, Math.hypot(o.center.x - p.x, o.center.y - p.y)), Infinity);
+      if (d >= SAFE_SPAWN_DISTANCE) return p;
+      if (d > bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best ?? { x: this.map.width / 2, y: this.map.height / 2 };
   }
 
   // ---------- Tick ----------

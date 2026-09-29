@@ -40,6 +40,7 @@ export class WorldView {
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly beams: Phaser.GameObjects.Graphics;
   private readonly colors = new Map<PlayerId, number>();
+  private nextRival = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -51,14 +52,17 @@ export class WorldView {
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
     this.beams = scene.add.graphics().setDepth(DEPTH.fx);
-    let i = 0;
-    for (const sq of sim.squads) {
-      this.colors.set(sq.owner, sq.owner === localPlayer ? PALETTE.allyRing : RIVAL_COLORS[i++ % RIVAL_COLORS.length]);
-    }
+    for (const sq of sim.squads) this.colorOf(sq.owner);
   }
 
+  /** Couleur d'anneau d'un joueur, attribuée à sa première apparition (arrivée en cours de partie comprise). */
   colorOf(owner: PlayerId): number {
-    return this.colors.get(owner) ?? 0xffffff;
+    let c = this.colors.get(owner);
+    if (c === undefined) {
+      c = owner === this.localPlayer ? PALETTE.allyRing : RIVAL_COLORS[this.nextRival++ % RIVAL_COLORS.length];
+      this.colors.set(owner, c);
+    }
+    return c;
   }
 
   // ---------- Événements ----------

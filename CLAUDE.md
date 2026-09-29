@@ -11,6 +11,7 @@ répondre, commenter et documenter en français.
 - `npm run dev` (Xiao Swarm, port 5173), `npm run dev:starter`
 - `npm run typecheck` — tout le monorepo + pureté des simulations. À lancer après chaque modification.
 - `npm run sim:headless -- royale 9 300` — simulation dans Node (sans navigateur)
+- `npm run sim:net` — test réseau hôte + client sans navigateur. En ligne : `?net=host`, `?net=join&room=CODE`, `?net=auto` (voir `docs/MULTIJOUEUR.md`)
 - `npm run zip` — build + zip Poki
 - `node tools/slice-sheet.mjs games/xiao-swarm/art-src/<nom>.slice.json` — découpe une planche de sprites
 

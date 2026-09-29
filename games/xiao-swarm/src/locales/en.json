@@ -19,5 +19,14 @@
   "class_flammer": "Flammer",
   "class_sniper": "Sniper",
   "class_tank": "Tank",
-  "squadsLeft": "{value} squads left"
+  "squadsLeft": "{value} squads left",
+  "room": "Room {code} · {players} player(s)",
+  "roomHint": "Share this code: {code}",
+  "connecting": "Connecting…",
+  "connectFailed": "Can't connect — solo game",
+  "roomNotFound": "Room not found — solo game",
+  "roomFull": "Room full — solo game",
+  "connectionLost": "Connection lost",
+  "versionMismatch": "Version mismatch — solo game",
+  "respawning": "Respawning…"
 }

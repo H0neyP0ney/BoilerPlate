@@ -7,6 +7,8 @@ import { registerDefaultSprites } from '../art/catalog';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
 import { makeSoldierTextures } from '../art/soldiers';
+import { t } from '../i18n';
+import { createOnlineSession, OnlineError, readOnlineRequest } from '../online';
 
 /**
  * Chargement : planches de sprites du manifeste (avec barre de progression),
@@ -43,6 +45,27 @@ export class BootScene extends Phaser.Scene {
     registerDefaultSprites();
 
     poki.gameLoadingFinished();
+    void this.launch();
+  }
+
+  /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
+  private async launch(): Promise<void> {
+    const req = readOnlineRequest();
+    if (req) {
+      const { width, height } = this.scale;
+      const status = this.add
+        .text(width / 2, height / 2, t('connecting'), { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim })
+        .setOrigin(0.5);
+      try {
+        this.registry.set('session', await createOnlineSession(req));
+      } catch (e) {
+        log.warn('[online]', e);
+        const reason = e instanceof OnlineError ? e.reason : 'failed';
+        const key = reason === 'not-found' ? 'roomNotFound' : reason === 'full' ? 'roomFull' : reason === 'version' ? 'versionMismatch' : 'connectFailed';
+        status.setText(t(key));
+        await new Promise((resolve) => setTimeout(resolve, 2200));
+      }
+    }
     this.scene.start(SCENES.game);
   }
 }

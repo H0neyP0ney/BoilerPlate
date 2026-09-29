@@ -33,6 +33,11 @@ export class WaveDirector<T extends string> {
     return this._time;
   }
 
+  /** Recale l'horloge sans déclencher de vague (client réseau qui reflète l'hôte). */
+  setTime(seconds: number): void {
+    this._time = seconds;
+  }
+
   reset(): void {
     this._time = 0;
     this.runtime = this.events.map((ev) => ({ ev, next: 'at' in ev ? ev.at : ev.from, done: false }));

@@ -7,7 +7,7 @@ import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
  * simulation ; seuls la carte, les points de départ, le PvP et la fin changent.
  */
 export interface ModeDef {
-  id: 'survival' | 'royale';
+  id: 'survival' | 'royale' | 'versus';
   map: (seed: number) => MapDef;
   /** Les soldats de squads différentes se tirent dessus. */
   pvp: boolean;
@@ -72,4 +72,31 @@ export const ROYALE: ModeDef = {
   },
 };
 
-export const MODES = { survival: SURVIVAL, royale: ROYALE } as const;
+/** Vagues du mode versus : celles du solo, mais sans fin, avec un crabe toutes les minutes. */
+const VERSUS_WAVES: WaveEvent<AlienId>[] = [
+  ...WAVES.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
+  { from: 300, to: 36000, every: 60, type: 'crab', count: 1, label: '6' },
+];
+
+/**
+ * PvPvE en ligne (2 joueurs et plus) : la carte du solo, des aliens qui
+ * attaquent tout le monde, et les squads se tirent dessus. On peut rejoindre en
+ * cours de partie ; une squad anéantie peut revenir. Pas de fin : `duration` infinie.
+ */
+export const VERSUS: ModeDef = {
+  id: 'versus',
+  map: () => JUNGLE_ARENA,
+  pvp: true,
+  duration: Infinity,
+  waves: VERSUS_WAVES,
+  maxAliens: { base: 30, perPlayer: 70 },
+  spawnPoints(map, players) {
+    const r = Math.min(map.width, map.height) * 0.3;
+    return Array.from({ length: players }, (_, i) => {
+      const a = (i / players) * Math.PI * 2;
+      return { x: map.width / 2 + Math.cos(a) * r, y: map.height / 2 + Math.sin(a) * r };
+    });
+  },
+};
+
+export const MODES = { survival: SURVIVAL, royale: ROYALE, versus: VERSUS } as const;

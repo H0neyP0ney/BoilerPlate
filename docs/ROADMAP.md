@@ -14,6 +14,7 @@ DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
 | **M3 — Combat** | 5 classes (Gunner, Medic, Flammeur, Sniper, Tank), tir auto indépendant du déplacement, soin à l'arrêt, explosion du Flammeur, knockback spécial |
 | **Recrutement** | drop selon taille de squad + composition cible, cap de squad |
 | **Réseau-ready** | simulation pure (`sim/`, sans Phaser/DOM, vérifiée par tsconfig), pas fixe 30 Hz + interpolation, inputs par joueur, événements, ids, RNG seedé, multi-squads + PvP, modes/cartes en données, sol en morceaux, bots, simulation headless dans Node |
+| **Multijoueur P2P** | mode `versus` PvPvE 2–4 joueurs : `HostSession` / `ClientSession` derrière une interface `Transport` (Netlib branché), rejoindre en cours de partie, respawn, `npm run sim:net` — voir [MULTIJOUEUR.md](MULTIJOUEUR.md) |
 | **Pipeline sprites** | catalogue de sprites + manifeste (grille, Aseprite, atlas, PNG), animations directionnelles, repli procédural, outil `tools/slice-sheet.mjs` ; Gunner importé |
 
 ## À faire
@@ -22,7 +23,7 @@ DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
 2. **M4 — Progression** : cristaux d'XP + aimant, level-up avec 3 choix, upgrades (Damage/Fire Rate/Health +10 %, Max Squad +3, bonus conditionnels) — `Stats` par squad déjà en place.
 3. **M5 — Équilibrage** : une squad immobile survit aujourd'hui aux 5 min (soin du Medic trop fort) ; début plus facile, montée de pression, boss final.
 4. **M6 — Onboarding & polish Poki** : tuto intégré, écran de fin, audio, traductions EN/FR/IT/DE/ES/TR, Poki Inspector, miniatures.
-5. **Battle royale** : zone qui rétrécit, UI de fin (classement), puis réseau : `HostSession` (Netlib P2P, 2–4 joueurs) et serveur Node autoritaire pour ~10 joueurs (snapshots delta, interest management, prédiction de l'ancre).
+5. **Battle royale** : zone qui rétrécit, UI de fin (classement), puis serveur Node autoritaire pour ~10 joueurs (snapshots delta, interest management, prédiction de l'ancre) — le P2P 2–4 joueurs est fait.
 6. **Boilerplate** : faire évoluer `games/_starter` avec les modules génériques, script `npm run new-game`.
 
 ## Points d'attention

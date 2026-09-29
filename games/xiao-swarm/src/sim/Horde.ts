@@ -205,7 +205,10 @@ export class Horde {
     }
   }
 
-  /** Choisit une cible proche selon la préférence, sinon vise la squad la plus proche. */
+  /**
+   * Un alien s'en prend à la squad (de n'importe quel joueur) la plus proche : il choisit
+   * son soldat selon sa préférence PARMI cette squad, sinon marche vers son centre.
+   */
   private pickTarget(a: AlienState, pref: TargetPref): void {
     const nearestSquad = this.sim.nearestSquad(a.x, a.y);
     if (nearestSquad) {
@@ -216,7 +219,7 @@ export class Horde {
     if (pref === 'center') return;
     let bestScore = Infinity;
     for (const s of this.sim.soldierHash.query(a.x, a.y, SEEK_RADIUS, this.scratchS)) {
-      if (!s.alive) continue;
+      if (!s.alive || (nearestSquad && s.owner !== nearestSquad.owner)) continue;
       const d = Math.hypot(s.x - a.x, s.y - a.y);
       if (d > SEEK_RADIUS) continue;
       let score = d;

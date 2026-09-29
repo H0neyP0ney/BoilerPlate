@@ -1,0 +1,264 @@
+import { robustCentroid } from '@xiao/engine/sim';
+import { SQUAD } from '../config';
+import { ALIENS } from '../data/aliens';
+import { CLASSES } from '../data/classes';
+import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
+import type { Sim } from '../sim/Sim';
+import type { AlienSnap, ProjectileSnap, RecruitSnap, Snapshot, SoldierSnap } from './Protocol';
+
+/** Part de l'écart rattrapée à chaque tick client (0.5 = lissage rapide sans à-coups). */
+const CATCH_UP = 0.5;
+/** Au-delà de cet écart (px), on téléporte au lieu de lisser. */
+const TELEPORT = 240;
+/** Durée de vie approximative des projectiles côté client (cosmétique : flammes). */
+const PROJECTILE_FADE = 0.5;
+
+interface Goal {
+  x: number;
+  y: number;
+}
+
+/**
+ * Reflet côté client de la simulation de l'hôte. Il écrit les snapshots reçus
+ * DANS un `Sim` ordinaire (jamais avancé avec `step`) : le WorldView, le HUD et la
+ * caméra le lisent comme une partie locale, sans savoir qu'elle vient du réseau.
+ *
+ * Entre deux snapshots (15 Hz), `step()` tourne à 30 Hz : les entités avancent à
+ * leur vitesse connue (extrapolation) et se rapprochent de la dernière position
+ * reçue (lissage), ce qui donne un mouvement fluide sans tampon d'interpolation.
+ */
+export class Mirror {
+  private readonly soldiers = new Map<number, SoldierState>();
+  private readonly aliens = new Map<number, AlienState>();
+  private readonly recruits = new Map<number, RecruitState>();
+  private readonly goals = new WeakMap<object, Goal>();
+
+  constructor(readonly sim: Sim) {}
+
+  apply(snap: Snapshot): void {
+    const { sim } = this;
+    sim.tick = snap.tick;
+    sim.waves.setTime(snap.time);
+
+    const seenSoldiers = new Set<number>();
+    for (const sq of snap.squads) {
+      const squad = sim.addPlayer(sq.owner);
+      squad.kills = sq.kills;
+      squad.stats.reset();
+      squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
+      // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
+      squad.stillTime = sq.healing ? SQUAD.stillDelay + 1 : 0;
+      squad.soldiers.length = 0;
+      for (const u of sq.soldiers) {
+        seenSoldiers.add(u.id);
+        squad.soldiers.push(this.upsertSoldier(u, sq.owner));
+      }
+    }
+    prune(this.soldiers, seenSoldiers);
+    // Joueurs partis : leur squad n'est plus dans le snapshot.
+    for (let i = sim.squads.length - 1; i >= 0; i--) {
+      if (!snap.squads.some((sq) => sq.owner === sim.squads[i].owner)) sim.squads.splice(i, 1);
+    }
+
+    const seenAliens = new Set<number>();
+    sim.aliens.length = 0;
+    for (const a of snap.aliens) {
+      seenAliens.add(a.id);
+      sim.aliens.push(this.upsertAlien(a));
+    }
+    prune(this.aliens, seenAliens);
+
+    const seenRecruits = new Set<number>();
+    sim.recruits.items.length = 0;
+    for (const r of snap.recruits) {
+      seenRecruits.add(r.id);
+      sim.recruits.items.push(this.upsertRecruit(r));
+    }
+    prune(this.recruits, seenRecruits);
+
+    sim.combat.projectiles.releaseAll();
+    for (const p of snap.projectiles) this.addProjectile(p);
+    for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
+  }
+
+  /** Un tick client : extrapolation + lissage + recalcul du centre des squads. */
+  step(dt: number): void {
+    const { sim } = this;
+    for (const sq of sim.squads) {
+      for (const s of sq.soldiers) this.follow(s, dt);
+      if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
+    }
+    for (const a of sim.aliens) this.follow(a, dt);
+    for (const r of sim.recruits.items) {
+      r.px = r.x;
+      r.py = r.y;
+      r.life -= dt;
+      const g = this.goals.get(r);
+      if (g) this.approach(r, g);
+    }
+    for (const p of sim.combat.projectiles.active) {
+      p.px = p.x;
+      p.py = p.y;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life = Math.max(0, p.life - dt / PROJECTILE_FADE);
+    }
+  }
+
+  // ---------- Entités ----------
+
+  private upsertSoldier(u: SoldierSnap, owner: string): SoldierState {
+    let s = this.soldiers.get(u.id);
+    if (!s) {
+      const def = CLASSES[u.cls];
+      s = {
+        kind: 'soldier',
+        id: u.id,
+        owner,
+        team: owner,
+        def,
+        x: u.x,
+        y: u.y,
+        px: u.x,
+        py: u.y,
+        vx: 0,
+        vy: 0,
+        kx: 0,
+        ky: 0,
+        radius: def.radius,
+        mass: def.mass,
+        hp: u.hp,
+        maxHp: u.maxHp,
+        alive: true,
+        slotX: 0,
+        slotY: 0,
+        gain: 0,
+        cooldown: 0,
+        retarget: 0,
+        target: null,
+        facing: u.facing,
+        aim: u.aim,
+        invulnerable: 0,
+      };
+      this.soldiers.set(u.id, s);
+    }
+    s.vx = u.vx;
+    s.vy = u.vy;
+    s.hp = u.hp;
+    s.maxHp = u.maxHp;
+    s.aim = u.aim;
+    s.facing = u.facing;
+    // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
+    s.target = u.target ? s : null;
+    s.invulnerable = u.invulnerable ? 1 : 0;
+    this.setGoal(s, u.x, u.y);
+    return s;
+  }
+
+  private upsertAlien(a: AlienSnap): AlienState {
+    let s = this.aliens.get(a.id);
+    if (!s) {
+      const def = ALIENS[a.type];
+      s = {
+        kind: 'alien',
+        id: a.id,
+        team: 'aliens',
+        def,
+        x: a.x,
+        y: a.y,
+        px: a.x,
+        py: a.y,
+        vx: 0,
+        vy: 0,
+        kx: 0,
+        ky: 0,
+        radius: def.radius,
+        mass: def.mass,
+        hp: a.hp,
+        maxHp: a.maxHp,
+        alive: true,
+        target: null,
+        goalX: a.x,
+        goalY: a.y,
+        retarget: 0,
+        attackCd: 0,
+        chargeT: 0,
+        chargeCd: 0,
+        chargeDx: 0,
+        chargeDy: 0,
+        slamWind: 0,
+        slamCd: 0,
+      };
+      this.aliens.set(a.id, s);
+    }
+    s.vx = a.vx;
+    s.vy = a.vy;
+    s.hp = a.hp;
+    s.maxHp = a.maxHp;
+    s.slamWind = a.slamWind;
+    s.chargeT = a.charging ? 1 : 0;
+    this.setGoal(s, a.x, a.y);
+    return s;
+  }
+
+  private upsertRecruit(r: RecruitSnap): RecruitState {
+    let s = this.recruits.get(r.id);
+    if (!s) {
+      s = { id: r.id, cls: r.cls, x: r.x, y: r.y, px: r.x, py: r.y, life: r.life };
+      this.recruits.set(r.id, s);
+    }
+    s.life = r.life;
+    this.goals.set(s, { x: r.x, y: r.y });
+    return s;
+  }
+
+  private addProjectile(snap: ProjectileSnap): void {
+    const p = this.sim.combat.projectiles.acquire();
+    p.x = p.px = snap.x;
+    p.y = p.py = snap.y;
+    p.vx = snap.vx;
+    p.vy = snap.vy;
+    p.texture = snap.texture;
+    p.flame = snap.flame;
+    p.maxLife = 1;
+    p.life = snap.age;
+  }
+
+  // ---------- Lissage ----------
+
+  private setGoal(u: Unit, x: number, y: number): void {
+    const g = this.goals.get(u);
+    if (g) {
+      g.x = x;
+      g.y = y;
+    } else {
+      this.goals.set(u, { x, y });
+    }
+  }
+
+  private follow(u: Unit, dt: number): void {
+    const g = this.goals.get(u);
+    u.px = u.x;
+    u.py = u.y;
+    if (!g) return;
+    g.x += u.vx * dt;
+    g.y += u.vy * dt;
+    this.approach(u, g);
+  }
+
+  private approach(u: { x: number; y: number }, g: Goal): void {
+    const dx = g.x - u.x;
+    const dy = g.y - u.y;
+    if (dx * dx + dy * dy > TELEPORT * TELEPORT) {
+      u.x = g.x;
+      u.y = g.y;
+      return;
+    }
+    u.x += dx * CATCH_UP;
+    u.y += dy * CATCH_UP;
+  }
+}
+
+function prune<V>(map: Map<number, V>, keep: Set<number>): void {
+  for (const id of map.keys()) if (!keep.has(id)) map.delete(id);
+}

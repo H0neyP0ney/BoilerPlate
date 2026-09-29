@@ -10,6 +10,8 @@ export interface GameOverData {
   kills: number;
   best: number;
   canRevive: boolean;
+  /** Remplace le titre (ex. connexion perdue). */
+  title?: string;
 }
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -37,7 +39,7 @@ export class GameOverScene extends Phaser.Scene {
     panel.lineStyle(3, PALETTE.panelBorder, 1).strokeRoundedRect(cx - 260, cy - 250, 520, 460, 20);
 
     this.add
-      .text(cx, cy - 195, data.victory ? t('victory') : t('gameOver'), {
+      .text(cx, cy - 195, data.title ?? (data.victory ? t('victory') : t('gameOver')), {
         fontFamily: theme.font,
         fontSize: '42px',
         color: data.victory ? '#ffe066' : '#ffffff',

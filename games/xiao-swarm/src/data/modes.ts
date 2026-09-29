@@ -1,5 +1,5 @@
 import type { Point, Rng, WaveEvent } from '@xiao/engine/sim';
-import { WAVES, type AlienId } from './aliens';
+import { onlyActive, WAVE_SCRIPT, WAVES, type AlienId } from './aliens';
 import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
 
 /**
@@ -73,10 +73,10 @@ export const ROYALE: ModeDef = {
 };
 
 /** Vagues du mode versus : celles du solo, mais sans fin, avec un crabe toutes les minutes. */
-const VERSUS_WAVES: WaveEvent<AlienId>[] = [
-  ...WAVES.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
+const VERSUS_WAVES: WaveEvent<AlienId>[] = onlyActive([
+  ...WAVE_SCRIPT.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
   { from: 300, to: 36000, every: 60, type: 'crab', count: 1, label: '6' },
-];
+]);
 
 /**
  * PvPvE en ligne (2 joueurs et plus) : la carte du solo, des aliens qui

@@ -9,14 +9,43 @@ export const SAFE_SIZE = 720;
 export const SQUAD = {
   startSize: 4,
   baseMaxSize: 12,
-  speed: 210,
-  /** Distance entre voisins dans la formation. */
-  spacing: 50,
-  /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad. */
-  leash: 70,
-  /** Temps à l'arrêt avant que le Medic soigne. */
-  stillDelay: 0.5,
 } as const;
+
+/**
+ * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau debug
+ * (touche ² / F2, sliders) les change en direct ; `CROWD_DEFAULTS` est la référence de départ.
+ * Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
+ *
+ * Défauts « réactifs » (mesurés avec `node scripts/crowd-headless.mjs`) : 0,23 s pour atteindre 90 % de la vitesse
+ * et 0,23 s pour se reformer à l'arrêt. Anciens réglages : gainMin 4, gainSpread 2, velDamp 10, maxSpeedMul 1.6 (0,43 s / 0,5 s).
+ */
+export const CROWD_DEFAULTS = {
+  /** Vitesse de l'ancre = vitesse max de la squad (px/s). */
+  speed: 210,
+  /** Distance entre voisins dans la formation (px). */
+  spacing: 50,
+  /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad (px) : plus grand = la squad « tire » plus loin devant. */
+  leash: 70,
+  /** Laisse en plus par √(nombre de soldats). */
+  leashPerRoot: 6,
+  /** Réactivité individuelle minimale : vitesse voulue = écart au slot × gain (1/s). */
+  gainMin: 8,
+  /** Écart aléatoire de réactivité entre soldats (0 = tous identiques = formation rigide). */
+  gainSpread: 3,
+  /** Vivacité de la vitesse vers la vitesse voulue (1/s) : plus grand = accélère / freine plus sec. */
+  velDamp: 18,
+  /** Vitesse max d'un soldat qui rattrape son slot, en multiple de `speed`. */
+  maxSpeedMul: 1.8,
+  /** Force de la séparation entre soldats (0 = ils se traversent, 1 = repoussés d'un coup). */
+  separation: 0.5,
+  /** Amortissement du knockback (1/s). */
+  knockDamp: 5,
+  /** Temps à l'arrêt avant que le Medic soigne (s). */
+  stillDelay: 0.5,
+};
+
+export type CrowdKey = keyof typeof CROWD_DEFAULTS;
+export const CROWD: Record<CrowdKey, number> = { ...CROWD_DEFAULTS };
 
 /** Profondeurs : sol < ombres/anneaux < acteurs (triés par y) < barres de vie. */
 export const DEPTH = {

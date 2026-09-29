@@ -104,14 +104,17 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
 };
 
 /**
- * Compositions de départ viables (GDD §7) : randomisation contrainte.
+ * Classes réellement en jeu pour l'instant : les autres restent définies (données, textures, réseau)
+ * mais ne sont ni dans les squads de départ ni recrutées. Pour en réactiver une : l'ajouter ici et
+ * dans START_SQUADS.
  */
-export const START_SQUADS: SoldierClassId[][] = [
-  ['medic', 'gunner', 'flammer', 'gunner'],
-  ['medic', 'gunner', 'gunner', 'sniper'],
-  ['medic', 'gunner', 'flammer', 'tank'],
-  ['medic', 'gunner', 'sniper', 'flammer'],
-];
+export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner'];
+
+/**
+ * Compositions de départ viables (GDD §7) : randomisation contrainte.
+ * Pour l'instant : 4 Gunners (les autres classes sont désactivées, voir ACTIVE_CLASSES).
+ */
+export const START_SQUADS: SoldierClassId[][] = [['gunner', 'gunner', 'gunner', 'gunner']];
 
 /**
  * Composition "idéale" visée par le recrutement : le type de recrue droppée

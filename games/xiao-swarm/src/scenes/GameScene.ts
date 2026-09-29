@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, poki, RunFlow, storage } from '@xiao/engine';
 import { SCENES } from '../config';
-import { WAVE_MARKS } from '../data/aliens';
-import type { SoldierClassId } from '../data/classes';
+import { ACTIVE_ALIENS, WAVE_MARKS } from '../data/aliens';
+import { ACTIVE_CLASSES, type SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
+import { addCrowdMenu, loadSavedCrowd } from '../debugCrowd';
 import { t } from '../i18n';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
@@ -37,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.revived = false;
     this.ended = false;
+    loadSavedCrowd();
     const online = this.registry.get('session') as Session | undefined;
     this.registry.remove('session');
     if (online) {
@@ -244,8 +246,18 @@ export class GameScene extends Phaser.Scene {
 
   // ---------- Debug (dev uniquement) ----------
 
+  /** Bouton du HUD : ouvre / ferme le menu debug (comme la touche ² / F2). */
+  toggleDebug(): void {
+    this.debug?.toggleMenu();
+  }
+
+  /** Le menu debug existe-t-il (dev uniquement) ? Le HUD n'affiche son bouton que dans ce cas. */
+  get hasDebug(): boolean {
+    return !!this.debug;
+  }
+
   private setupDebug(): void {
-    this.debug = DebugOverlay.create(this);
+    this.debug = DebugOverlay.create(this, { top: 64 }); // sous le bouton du menu debug du HUD
     if (!this.debug) return;
     const sim = this.session.sim;
     const me = this.session.localPlayer;
@@ -253,10 +265,10 @@ export class GameScene extends Phaser.Scene {
       for (const a of sim.aliens) sim.damage(a, 1e6, me);
     });
     this.debug.cheat('R', 'drop recruit', () => {
-      const ids: SoldierClassId[] = ['gunner', 'medic', 'flammer', 'sniper', 'tank'];
-      sim.recruits.drop(sim.rng.pick(ids), this.localSquad.center.x + 90, this.localSquad.center.y);
+      sim.recruits.drop(sim.rng.pick(ACTIVE_CLASSES), this.localSquad.center.x + 90, this.localSquad.center.y);
     });
     this.debug.cheat('T', '+30s', () => sim.waves.update(30));
-    this.debug.cheat('B', 'spawn crab', () => sim.horde.spawnNear(this.localSquad, 'crab', 1, 420));
+    addCrowdMenu(this.debug);
+    this.debug.cheat('B', 'spawn 5 aliens', () => sim.horde.spawnNear(this.localSquad, ACTIVE_ALIENS[0], 5, 420));
   }
 }

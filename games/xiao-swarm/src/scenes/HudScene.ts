@@ -13,6 +13,7 @@ export class HudScene extends Phaser.Scene {
   private pauseBtn!: Phaser.GameObjects.Container;
   private hint!: Phaser.GameObjects.Container;
   private roomText!: Phaser.GameObjects.Text;
+  private debugBtn?: Phaser.GameObjects.Container;
   private respawnText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -33,6 +34,8 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
       .setVisible(false);
+    // Dev uniquement : le menu debug (sliders du mouvement de foule…) n'existe pas dans le build Poki.
+    if (import.meta.env.DEV) this.debugBtn = this.makeDebugButton();
     this.pauseBtn = this.makePauseButton().setVisible(!this.game_.session.online);
     this.hint = this.makeHint();
 
@@ -49,6 +52,25 @@ export class HudScene extends Phaser.Scene {
     );
     this.hint.setVisible(g.flow.state === 'ready');
     this.respawnText.setVisible(s.online && s.connection === 'connected' && !g.localSquad?.alive);
+  }
+
+  /** Bouton « engrenage » en haut à gauche : ouvre / ferme le menu debug. */
+  private makeDebugButton(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const g = this.add.graphics();
+    g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-22, -22, 44, 44, 10);
+    g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-22, -22, 44, 44, 10);
+    // engrenage : disque à 8 dents + trou central
+    g.fillStyle(0xffffff, 1).fillCircle(0, 0, 9);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.fillRect(Math.cos(a) * 11 - 2.5, Math.sin(a) * 11 - 2.5, 5, 5);
+    }
+    g.fillStyle(PALETTE.panel, 1).fillCircle(0, 0, 4);
+    const hit = this.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => this.game_.toggleDebug());
+    c.add([g, hit]);
+    return c;
   }
 
   private makePauseButton(): Phaser.GameObjects.Container {
@@ -90,7 +112,9 @@ export class HudScene extends Phaser.Scene {
     const { width, height } = this.scale;
     // Décalé sous la pill Poki sur mobile
     const top = device.isTouch ? 70 : 12;
-    this.roomText.setPosition(14, top);
+    // le code de salle (en ligne) se place à droite du bouton debug s'il y en a un
+    this.debugBtn?.setPosition(14 + 22, top + 22);
+    this.roomText.setPosition(this.debugBtn ? 14 + 44 + 10 : 14, this.debugBtn ? top + 10 : top);
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height / 2);

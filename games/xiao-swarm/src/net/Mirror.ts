@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { SQUAD } from '../config';
+import { CROWD, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
@@ -47,7 +47,7 @@ export class Mirror {
       squad.stats.reset();
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
-      squad.stillTime = sq.healing ? SQUAD.stillDelay + 1 : 0;
+      squad.stillTime = sq.healing ? CROWD.stillDelay + 1 : 0;
       squad.soldiers.length = 0;
       for (const u of sq.soldiers) {
         seenSoldiers.add(u.id);

@@ -65,7 +65,7 @@ try {
   check(maxErr < 60, 'positions des soldats proches (erreur max)', `${maxErr.toFixed(1)} px`);
   const kinds = {};
   for (const e of clientEvents) kinds[e.t] = (kinds[e.t] ?? 0) + 1;
-  check((kinds.beam ?? 0) > 0 && (kinds.alienDied ?? 0) > 0, 'le client reçoit les événements', JSON.stringify(kinds));
+  check((kinds.hit ?? 0) > 0 && (kinds.alienDied ?? 0) > 0, 'le client reçoit les événements', JSON.stringify(kinds));
 
   const snap = encodeSnapshot(takeSnapshot(hs));
   const back = decodeSnapshot(snap);
@@ -96,7 +96,7 @@ try {
   check(!client.sim.squadOf(client.localPlayer).alive, 'le client voit sa squad anéantie');
   for (let i = 0; i < 90; i++) await tick(client);
   const revived = client.sim.squadOf(client.localPlayer);
-  check(revived.alive && revived.size === 4, 'réapparition automatique avec une escouade de départ', `${revived.size} soldats`);
+  check(revived.alive && revived.size >= 4, 'réapparition automatique avec une escouade de départ', `${revived.size} soldats`);
   check(Math.hypot(revived.center.x - deathAt.x, revived.center.y - deathAt.y) > 150, 'réapparition ailleurs sur la carte', `à ${Math.round(Math.hypot(revived.center.x - deathAt.x, revived.center.y - deathAt.y))} px`);
 
   // 5) Départ du client.

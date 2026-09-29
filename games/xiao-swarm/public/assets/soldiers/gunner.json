@@ -1,58 +1,22 @@
 {
-  "frameWidth": 98,
-  "frameHeight": 88,
-  "columns": 6,
-  "originX": 0.4030612244897959,
-  "originY": 0.8636363636363636,
+  "frameWidth": 64,
+  "frameHeight": 74,
+  "originX": 0.402,
+  "originY": 0.894,
+  "cols": 4,
+  "frames": 48,
   "anims": {
-    "idle": [
-      0,
-      1,
-      2,
-      3
-    ],
-    "shoot": [
-      6,
-      7,
-      8,
-      9
-    ],
-    "walk_down": [
-      12,
-      13,
-      14,
-      15
-    ],
-    "walk_up": [
-      18,
-      19,
-      20,
-      21
-    ],
-    "walk_left": [
-      24,
-      25,
-      26,
-      27
-    ],
-    "walk_right": [
-      30,
-      31,
-      32,
-      33
-    ],
-    "hurt": [
-      36,
-      37,
-      38
-    ],
-    "die": [
-      42,
-      43,
-      44,
-      45,
-      46,
-      47
-    ]
+    "idle": {
+      "first": 0,
+      "count": 16
+    },
+    "walk": {
+      "first": 16,
+      "count": 16
+    },
+    "death": {
+      "first": 32,
+      "count": 16
+    }
   }
 }

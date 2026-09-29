@@ -1,5 +1,5 @@
 import { clamp } from '@xiao/engine/sim';
-import { TARGET_MIX, type SoldierClassId } from '../data/classes';
+import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
 import type { AlienState, RecruitState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -68,7 +68,7 @@ export class Recruits {
   /** Classe qui comble le mieux l'écart à TARGET_MIX (avec un peu d'aléatoire). */
   private chooseClass(squad: Squad): SoldierClassId {
     const n = Math.max(1, squad.size);
-    const ids = Object.keys(TARGET_MIX) as SoldierClassId[];
+    const ids = ACTIVE_CLASSES;
     return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'gunner';
   }
 

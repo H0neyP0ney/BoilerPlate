@@ -27,6 +27,23 @@ node tools/slice-sheet.mjs games/xiao-swarm/art-src/gunner.slice.json
 
 Exemple : `art-src/gunner_sheet.png` → `public/assets/soldiers/gunner.png` (8 animations, 31 frames).
 
+## Planches déjà en grille (une par animation)
+
+Si chaque animation est une grille régulière (ex. `gunner_idle.png`, `gunner_walk.png`, `gunner_death.png`, 4×4 cases),
+`tools/pack-grids.mjs` les assemble en UNE planche (un sprite n'a qu'une texture) : cases identiques, pieds alignés
+d'une planche à l'autre, réduction finale (`scale`). Il affiche la taille de case et l'ancrage pour le manifeste.
+
+```bash
+node tools/pack-grids.mjs games/xiao-swarm/art-src/gunner.pack.json
+```
+
+Actuel : Gunner = `idle` (16 frames) + `walk` (16) + `die` (16) → `public/assets/soldiers/gunner.png`, 48 cases de 64×74.
+Slime vert = 1 planche 4×4 de 1024 px (cycle de marche) réduite à 64 px → `public/assets/aliens/slime.png` (`art-src/slime.pack.json`) ;
+il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycle, plus lent.
+
+**Ennemis actifs** : seul le slime (`ACTIVE_ALIENS` dans `data/aliens.ts`) ; les vagues des autres sont filtrées.
+**Bordure de carte** : de l'eau animée (texture procédurale `water`) avec une frange d'écume, plus de palmiers.
+
 ## Conventions
 
 - **Vue** : top-down légèrement inclinée (~60–70°), personnages vus de trois-quarts face.
@@ -65,5 +82,10 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 | `rock_big` `rock_small` | 110×92, 56×46 | ×1 | obstacles (collision fixe, ne pas changer l'emprise) |
 | `fx_bullet` `fx_bolt_green` `fx_flame` `fx_glow` `fx_dot` `fx_ring` `fx_plus` `hand` | variées | — | effets : PNG isolé (`image`) du même id |
 
-Le sol (sable, herbe, étangs) est procédural et découpé en morceaux ; une texture de sol en tuiles
-pourra être ajoutée plus tard.
+**Sol** : une texture qui se raccorde (`ground_tile`, `public/assets/ground/ground.webp`, 1024 px — puissance de 2)
+est répétée sur toute la carte par un seul `TileSprite` (`view/ArenaView.ts`, échelle `GROUND_SCALE`). Source :
+`art-src/ground.png` (1254 px) ; pour la régénérer, réduire en gardant le raccord (tuile 3×3 puis recadrage du centre).
+Sans cette texture, le sol procédural (sable, herbe, étangs) sert de repli.
+
+**Obstacles** : aucun pour l'instant (`ponds` / `rocks` / `logs` vides dans `data/maps.ts`) ; la collision et le décor
+sont prêts, il suffit de les remplir.

@@ -104,7 +104,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Vagues scriptées sur 5 minutes (GDD §18, §28) : début très doux pour
  * comprendre le contrôle, voir les tirs, recruter, puis montée progressive.
  */
-export const WAVES: WaveEvent<AlienId>[] = [
+export const WAVE_SCRIPT: WaveEvent<AlienId>[] = [
   { from: 1, to: 30, every: 1.8, type: 'slime', count: 2, label: '1' },
   { from: 30, to: 300, every: 1.3, type: 'slime', count: 3, label: '2' },
   { from: 45, to: 300, every: 5, type: 'spider', count: 5, label: '2' },
@@ -117,6 +117,18 @@ export const WAVES: WaveEvent<AlienId>[] = [
   { at: 220, type: 'crab', count: 1, label: '6' },
   { at: 265, type: 'crab', count: 2, label: '6' },
 ];
+
+/**
+ * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
+ * leurs vagues sont retirées. Pour en réactiver un : l'ajouter ici (le script WAVE_SCRIPT le fait réapparaître).
+ */
+export const ACTIVE_ALIENS: AlienId[] = ['slime'];
+
+/** Garde uniquement les vagues des ennemis actifs. */
+export const onlyActive = (waves: WaveEvent<AlienId>[]): WaveEvent<AlienId>[] => waves.filter((w) => ACTIVE_ALIENS.includes(w.type));
+
+/** Vagues jouées : le script complet, filtré sur les ennemis actifs. */
+export const WAVES: WaveEvent<AlienId>[] = onlyActive(WAVE_SCRIPT);
 
 /** Numéro de vague affiché en fonction du temps. */
 export const WAVE_MARKS = [0, 30, 75, 130, 170, 220];

@@ -1,5 +1,5 @@
 import { assignSlots, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
-import { SQUAD } from '../config';
+import { CROWD, SQUAD } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -24,6 +24,7 @@ export class Squad {
   stillTime = 0;
   kills = 0;
   private slots: Point[] = [];
+  private slotSpacing: number = CROWD.spacing;
   private dirty = true;
   private healFx = 0;
 
@@ -45,7 +46,7 @@ export class Squad {
   }
 
   get isHealing(): boolean {
-    return this.stillTime > SQUAD.stillDelay && this.soldiers.some((s) => s.def.heal);
+    return this.stillTime > CROWD.stillDelay && this.soldiers.some((s) => s.def.heal);
   }
 
   countOf(id: SoldierClassId): number {
@@ -56,14 +57,14 @@ export class Squad {
 
   /** Taille de la formation, utile pour la caméra et le spawn. */
   get radius(): number {
-    return SQUAD.spacing * 0.55 * Math.sqrt(this.soldiers.length + 0.5) + SQUAD.spacing;
+    return CROWD.spacing * 0.55 * Math.sqrt(this.soldiers.length + 0.5) + CROWD.spacing;
   }
 
   spawn(ids: SoldierClassId[], at: Point): void {
     this.anchor.x = at.x;
     this.anchor.y = at.y;
     this.stillTime = 0;
-    const slots = sunflowerSlots(ids.length, SQUAD.spacing);
+    const slots = sunflowerSlots(ids.length, CROWD.spacing);
     ids.forEach((id, i) => this.add(id, { x: at.x + slots[i].x, y: at.y + slots[i].y }));
     this.updateCenter();
     this.sim.events.push({ t: 'squadSpawned', owner: this.owner, x: at.x, y: at.y });
@@ -93,7 +94,7 @@ export class Squad {
       alive: true,
       slotX: 0,
       slotY: 0,
-      gain: 4 + this.sim.rng.next() * 2,
+      gain: this.sim.rng.next(),
       cooldown: this.sim.rng.next() * def.weapon.cooldown,
       retarget: 0,
       target: null,
@@ -126,7 +127,7 @@ export class Squad {
     const my = len > 1 ? input.my / len : input.my;
     this.moving = len > 0.1;
     this.stillTime = this.moving ? 0 : this.stillTime + dt;
-    const speed = SQUAD.speed * this.stats.get('speed');
+    const speed = CROWD.speed * this.stats.get('speed');
 
     // 1. Ancre : réponse immédiate à l'input
     this.anchor.x += mx * speed * dt;
@@ -138,31 +139,32 @@ export class Squad {
     const dx = this.anchor.x - this.center.x;
     const dy = this.anchor.y - this.center.y;
     const d = Math.hypot(dx, dy);
-    const leash = SQUAD.leash + Math.sqrt(n) * 6;
+    const leash = CROWD.leash + Math.sqrt(n) * CROWD.leashPerRoot;
     if (d > leash) {
       this.anchor.x = this.center.x + (dx / d) * leash;
       this.anchor.y = this.center.y + (dy / d) * leash;
     }
 
-    // 3. Slots (recalculés seulement quand la taille change)
-    if (this.dirty) this.reassign();
+    // 3. Slots (recalculés quand la taille ou l'espacement change)
+    if (this.dirty || this.slotSpacing !== CROWD.spacing) this.reassign();
 
     // 4. Chaque soldat rejoint son slot avec inertie
-    const maxSpeed = speed * 1.6;
+    const maxSpeed = speed * CROWD.maxSpeedMul;
     for (const s of this.soldiers) {
-      let desiredX = (this.anchor.x + s.slotX - s.x) * s.gain;
-      let desiredY = (this.anchor.y + s.slotY - s.y) * s.gain;
+      const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;
+      let desiredX = (this.anchor.x + s.slotX - s.x) * gain;
+      let desiredY = (this.anchor.y + s.slotY - s.y) * gain;
       const l = Math.hypot(desiredX, desiredY);
       if (l > maxSpeed) {
         desiredX = (desiredX / l) * maxSpeed;
         desiredY = (desiredY / l) * maxSpeed;
       }
-      s.vx = damp(s.vx, desiredX, 10, dt);
-      s.vy = damp(s.vy, desiredY, 10, dt);
+      s.vx = damp(s.vx, desiredX, CROWD.velDamp, dt);
+      s.vy = damp(s.vy, desiredY, CROWD.velDamp, dt);
       s.x += (s.vx + s.kx) * dt;
       s.y += (s.vy + s.ky) * dt;
-      s.kx = damp(s.kx, 0, 5, dt);
-      s.ky = damp(s.ky, 0, 5, dt);
+      s.kx = damp(s.kx, 0, CROWD.knockDamp, dt);
+      s.ky = damp(s.ky, 0, CROWD.knockDamp, dt);
       if (s.invulnerable > 0) s.invulnerable -= dt;
     }
 
@@ -177,7 +179,7 @@ export class Squad {
         const d2 = ddx * ddx + ddy * ddy;
         if (d2 >= min * min || d2 === 0) continue;
         const dd = Math.sqrt(d2);
-        const push = ((min - dd) / dd) * 0.5;
+        const push = ((min - dd) / dd) * CROWD.separation;
         const wa = b.mass / (a.mass + b.mass);
         const wb = a.mass / (a.mass + b.mass);
         a.x -= ddx * push * wa;
@@ -216,7 +218,8 @@ export class Squad {
 
   private reassign(): void {
     this.dirty = false;
-    this.slots = sunflowerSlots(this.soldiers.length, SQUAD.spacing, this.slots);
+    this.slotSpacing = CROWD.spacing;
+    this.slots = sunflowerSlots(this.soldiers.length, CROWD.spacing, this.slots);
     const rel = this.soldiers.map((s) => ({ x: s.x - this.anchor.x, y: s.y - this.anchor.y }));
     const assignment = assignSlots(rel, this.slots);
     this.soldiers.forEach((s, i) => {

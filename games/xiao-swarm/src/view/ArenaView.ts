@@ -15,26 +15,53 @@ const PRELOAD = 512;
 /** Au-delà de cette marge, les morceaux sont libérés (mémoire GPU sur mobile). */
 const UNLOAD = 1024;
 
+/** Texture de sol qui se raccorde (assets/manifest.ts) et son échelle d'affichage (1024 px → ~750 px à l'écran). */
+const GROUND_TEXTURE = 'ground_tile';
+const GROUND_SCALE = 0.73;
+
 /**
- * Affichage de la carte : sol découpé en morceaux de 2048 px créés/détruits
- * autour de la caméra (supporte les grandes cartes battle royale), décor haut
- * (rochers, palmiers) en sprites triés en profondeur.
+ * Affichage de la carte : sol en texture répétée sur la zone jouable (un seul TileSprite, quelle que soit
+ * la taille), entouré d'eau animée (la bordure infranchissable) ; à défaut de texture fournie, repli sur le sol
+ * procédural découpé en morceaux de 2048 px créés/détruits autour de la caméra. Décor haut (obstacles
+ * éventuels) en sprites triés en profondeur.
  */
 export class ArenaView {
   private readonly features: GroundFeature[];
   private readonly chunks = new Map<string, Phaser.GameObjects.Image>();
+  private readonly tiled: boolean;
   private first = true;
+  private water?: Phaser.GameObjects.TileSprite;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly map: MapDef,
   ) {
-    this.features = buildGround(map);
+    this.tiled = scene.textures.exists(GROUND_TEXTURE);
+    if (this.tiled) {
+      // Eau partout, sol seulement dans la zone jouable (bords = `Arena.bounds`), avec une frange d'écume.
+      const b = { x: map.border, y: map.border, w: map.width - 2 * map.border, h: map.height - 2 * map.border };
+      this.water = scene.add.tileSprite(0, 0, map.width, map.height, 'water').setOrigin(0).setDepth(DEPTH.ground - 1);
+      scene.add.tileSprite(b.x, b.y, b.w, b.h, GROUND_TEXTURE).setOrigin(0).setTileScale(GROUND_SCALE).setDepth(DEPTH.ground);
+      scene.add
+        .graphics()
+        .setDepth(DEPTH.ground + 0.5)
+        .lineStyle(16, 0xd8f3ff, 0.22)
+        .strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8)
+        .lineStyle(5, 0xffffff, 0.75)
+        .strokeRect(b.x, b.y, b.w, b.h);
+    }
+    this.features = this.tiled ? [] : buildGround(map);
     this.addDecor();
   }
 
   /** À appeler chaque frame avec la zone visible de la caméra. */
   update(view: Phaser.Geom.Rectangle): void {
+    if (this.water) {
+      // l'eau glisse doucement
+      const t = this.scene.time.now;
+      this.water.setTilePosition(t * 0.012, t * 0.006);
+    }
+    if (this.tiled) return;
     const x0 = Math.max(0, Math.floor((view.x - PRELOAD) / CHUNK));
     const y0 = Math.max(0, Math.floor((view.y - PRELOAD) / CHUNK));
     const x1 = Math.min(Math.ceil(this.map.width / CHUNK) - 1, Math.floor((view.right + PRELOAD) / CHUNK));
@@ -84,27 +111,26 @@ export class ArenaView {
     }
     for (const l of this.map.logs) this.decor(l.x, l.y, 'log', 0.95);
 
-    // Bordure de jungle
-    const edge = (x: number, y: number) => {
-      const r = rng.next();
-      const key = r < 0.35 ? 'palm' : r < 0.7 ? 'bush' : 'bush_flowers';
-      this.decor(x + rng.range(-25, 25), y + rng.range(-25, 25), key, rng.range(0.85, 1.25), rng.chance(0.5));
-    };
-    for (let x = 0; x <= W; x += 95) {
-      edge(x, B * 0.35);
-      edge(x, B * 0.8);
-      edge(x, H - B * 0.25);
-      edge(x, H - B * 0.7 + 40);
+    // Bordure : plus de jungle, c'est de l'eau (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
+    if (!this.tiled) {
+      const edge = (x: number, y: number) => {
+        const r = rng.next();
+        const key = r < 0.35 ? 'palm' : r < 0.7 ? 'bush' : 'bush_flowers';
+        this.decor(x + rng.range(-25, 25), y + rng.range(-25, 25), key, rng.range(0.85, 1.25), rng.chance(0.5));
+      };
+      for (let x = 0; x <= W; x += 95) {
+        edge(x, B * 0.35);
+        edge(x, B * 0.8);
+        edge(x, H - B * 0.25);
+        edge(x, H - B * 0.7 + 40);
+      }
+      for (let y = B; y <= H - B; y += 95) {
+        edge(B * 0.3, y);
+        edge(B * 0.75, y);
+        edge(W - B * 0.3, y);
+        edge(W - B * 0.75, y);
+      }
     }
-    for (let y = B; y <= H - B; y += 95) {
-      edge(B * 0.3, y);
-      edge(B * 0.75, y);
-      edge(W - B * 0.3, y);
-      edge(W - B * 0.75, y);
-    }
-    // quelques buissons fleuris dans l'arène (décor pur, pas d'obstacle)
-    const n = Math.round(8 * ((W * H) / (2400 * 1800)));
-    for (let i = 0; i < n; i++) this.decor(rng.range(B + 200, W - B - 200), rng.range(B + 150, H - B - 150), 'bush_flowers', 0.6);
   }
 
   /** Élément de décor via le catalogue (planche fournie ou dessin procédural). */

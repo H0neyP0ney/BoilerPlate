@@ -32,7 +32,7 @@ export interface SoldierState extends Body {
   /** Slot relatif à l'ancre de la squad. */
   slotX: number;
   slotY: number;
-  /** Réactivité individuelle (formation organique). */
+  /** Aléa de réactivité individuelle (0 → 1), mis à l'échelle par CROWD.gainMin / gainSpread (formation organique). */
   gain: number;
   cooldown: number;
   retarget: number;

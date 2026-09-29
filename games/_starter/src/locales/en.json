@@ -1,0 +1,13 @@
+{
+  "loading": "Loading…",
+  "hintKeyboard": "Arrows / WASD to move · Esc to pause",
+  "hintTouch": "Drag anywhere to move",
+  "score": "Score: {value}",
+  "best": "Best: {value}",
+  "paused": "Paused",
+  "resume": "Resume",
+  "gameOver": "Game over",
+  "retry": "Play again",
+  "revive": "Revive",
+  "noSave": "Progress won't be saved in private browsing"
+}

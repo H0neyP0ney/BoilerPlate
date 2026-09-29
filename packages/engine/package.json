@@ -1,0 +1,14 @@
+{
+  "name": "@xiao/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Briques réutilisables pour jeux Poki (Phaser 4). Ne dépend d'aucun jeu.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./sim": "./src/sim/index.ts"
+  },
+  "peerDependencies": {
+    "phaser": "^4.2.1"
+  }
+}

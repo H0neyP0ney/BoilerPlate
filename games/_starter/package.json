@@ -1,0 +1,16 @@
+{
+  "name": "@xiao/starter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "zip": "npm run build && node ../../scripts/zip.mjs"
+  },
+  "dependencies": {
+    "@xiao/engine": "*",
+    "phaser": "^4.2.1"
+  }
+}

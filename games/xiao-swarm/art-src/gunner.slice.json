@@ -1,0 +1,80 @@
+{
+  "input": "gunner_sheet.png",
+  "output": "../public/assets/soldiers/gunner.png",
+  "scale": 0.5,
+  "anims": {
+    "idle": {
+      "box": [
+        290,
+        68,
+        875,
+        240
+      ],
+      "frames": 4
+    },
+    "shoot": {
+      "box": [
+        890,
+        68,
+        1536,
+        250
+      ],
+      "frames": 4,
+      "alphaMin": 200
+    },
+    "walk_down": {
+      "box": [
+        290,
+        305,
+        875,
+        480
+      ],
+      "frames": 4
+    },
+    "walk_up": {
+      "box": [
+        890,
+        305,
+        1536,
+        480
+      ],
+      "frames": 4
+    },
+    "walk_left": {
+      "box": [
+        270,
+        545,
+        875,
+        715
+      ],
+      "frames": 4
+    },
+    "walk_right": {
+      "box": [
+        890,
+        545,
+        1536,
+        715
+      ],
+      "frames": 4
+    },
+    "hurt": {
+      "box": [
+        20,
+        790,
+        385,
+        960
+      ],
+      "frames": 3
+    },
+    "die": {
+      "box": [
+        390,
+        790,
+        1310,
+        985
+      ],
+      "frames": 6
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "hintDrag": "Drag to move your squad",
+  "hintKeys": "Arrows / WASD to move your squad",
+  "wave": "Wave {value}",
+  "kills": "{value} kills",
+  "squad": "Squad {value}/{max}",
+  "paused": "Paused",
+  "resume": "Resume",
+  "gameOver": "Squad wiped out!",
+  "victory": "Extraction successful!",
+  "survived": "Survived {time} · {kills} kills",
+  "best": "Best: {value}",
+  "retry": "Play again",
+  "revive": "Revive squad",
+  "recruit": "+1 {name}!",
+  "noSave": "Progress won't be saved in private browsing",
+  "class_gunner": "Gunner",
+  "class_medic": "Medic",
+  "class_flammer": "Flammer",
+  "class_sniper": "Sniper",
+  "class_tank": "Tank",
+  "squadsLeft": "{value} squads left"
+}

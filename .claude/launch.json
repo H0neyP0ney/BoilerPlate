@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "swarm", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173 },
+    { "name": "starter", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev:starter", "--", "--port", "5180"], "port": 5180 }
+  ]
+}

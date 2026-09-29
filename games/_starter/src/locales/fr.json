@@ -1,0 +1,13 @@
+{
+  "loading": "Chargement…",
+  "hintKeyboard": "Flèches / ZQSD pour bouger · Échap pour la pause",
+  "hintTouch": "Glisse n'importe où pour bouger",
+  "score": "Score : {value}",
+  "best": "Record : {value}",
+  "paused": "Pause",
+  "resume": "Reprendre",
+  "gameOver": "Perdu !",
+  "retry": "Rejouer",
+  "revive": "Continuer",
+  "noSave": "La progression ne sera pas sauvegardée en navigation privée"
+}

@@ -1,0 +1,23 @@
+{
+  "hintDrag": "Glisse pour déplacer ton escouade",
+  "hintKeys": "Flèches / ZQSD pour déplacer ton escouade",
+  "wave": "Vague {value}",
+  "kills": "{value} éliminés",
+  "squad": "Escouade {value}/{max}",
+  "paused": "Pause",
+  "resume": "Reprendre",
+  "gameOver": "Escouade anéantie !",
+  "victory": "Extraction réussie !",
+  "survived": "Survie {time} · {kills} éliminés",
+  "best": "Record : {value}",
+  "retry": "Rejouer",
+  "revive": "Relancer l'escouade",
+  "recruit": "+1 {name} !",
+  "noSave": "La progression ne sera pas sauvegardée en navigation privée",
+  "class_gunner": "Gunner",
+  "class_medic": "Medic",
+  "class_flammer": "Flammeur",
+  "class_sniper": "Sniper",
+  "class_tank": "Tank",
+  "squadsLeft": "{value} escouades en vie"
+}

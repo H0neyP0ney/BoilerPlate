@@ -20,6 +20,9 @@ d'ouverture (`src/dev/dock.ts`). Boutons du HUD, de gauche à droite : Réglages
 Obstacles · Divers. Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
 vues : on repasse par le jeu).
 
+## Save / Reset (toutes les vues de dev)
+Chaque panneau ou visionneuse qui a des valeurs réglables a deux boutons : **Save** écrit les valeurs actuelles comme valeurs par défaut dans le code (plugin Vite `games/xiao-swarm/dev-save.ts` : réécrit seulement les nombres concernés de `config.ts`, `fxParams.ts`, `assets/manifest.ts`, `data/obstacles.ts` ou `data/waves.ts`, sans recharger la page) ; **Reset** revient à la dernière sauvegarde, c'est-à-dire aux valeurs par défaut du code. Le dev-save n'existe qu'avec `npm run dev` (pas dans le build Poki). Une unité sans planche dans le manifeste (visuel procédural) ne peut pas être enregistrée.
+
 ## Panneau Foule (`src/dev/crowdPanel.ts`, `src/debugCrowd.ts`)
 
 - Un slider par paramètre de `CROWD` (vitesse, réactivité, laisse, espacement, séparation…), appliqué en direct.
@@ -59,6 +62,9 @@ le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS`.
 - **Taille** : le champ « Taille (échelle) » redimensionne sprite, hitbox et taches ensemble. En jeu chaque obstacle posé varie
   de ±10 % (`OBSTACLE_SIZE_JITTER`, `data/maps.ts`, tiré avec la seed de la carte → identique chez tous les joueurs).
 - En ligne, des hitbox différentes entre deux navigateurs donneraient deux cartes différentes : réglages de test local seulement.
+
+## Gestionnaire de vagues (`?waves`, `src/scenes/WaveEditorScene.ts`, `src/data/waves.ts`, `src/debugWaves.ts`)
+Écrit le script de vagues : **9 niveaux** de vague, chacun avec plusieurs **configurations** (compositions d'aliens) dont une est tirée au hasard (`sim.rng`) à chaque envoi du niveau, et une **timeline** (quel niveau à quel moment, éventuellement répété toutes les X s jusqu'à Y s ; un clic dans la timeline ajoute un envoi du niveau sélectionné). Mémorisé dans le navigateur et joué tel quel ; « Copier le code » → coller dans `DEFAULT_WAVE_SCRIPT` (`data/waves.ts`). Le panneau Triche a un bouton « Envoyer » pour lancer un niveau à la demande. Exécution : `sim/WaveRunner.ts`.
 
 ## Visionneuse divers (`?misc`, `src/scenes/MiscViewerScene.ts`)
 

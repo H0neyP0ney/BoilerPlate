@@ -1,4 +1,4 @@
-import type { AlienDef } from '../data/aliens';
+import type { AlienDef, AlienId } from '../data/aliens';
 import type { SoldierClassDef, SoldierClassId } from '../data/classes';
 import type { PlayerId, Team } from './types';
 
@@ -41,6 +41,8 @@ export interface SoldierState extends Body {
   facing: number;
   aim: number;
   invulnerable: number;
+  /** Id de la bulle qui le tient captif (0 = libre) : il ne bouge ni ne tire, et seule la bulle peut le blesser. */
+  capturedBy: number;
 }
 
 export interface AlienState extends Body {
@@ -57,6 +59,27 @@ export interface AlienState extends Body {
   chargeDy: number;
   slamWind: number;
   slamCd: number;
+  /** Délai avant le prochain tir en cloche (aliens à `def.lob`). */
+  lobCd: number;
+  /** Langue (grenouille) et crachat (cracheur) : délai avant le prochain. */
+  tongueCd: number;
+  sprayCd: number;
+  /** Charge télégraphiée : délai avant la prochaine, préparation (zone rouge), charge en cours, direction verrouillée. */
+  rushCd: number;
+  rushWind: number;
+  rushT: number;
+  rushDx: number;
+  rushDy: number;
+  /** Chaman : délai avant la prochaine incantation, incantation en cours (s restantes) et flaque visée. */
+  reviveCd: number;
+  castT: number;
+  castCorpse: number;
+  /** Slime de feu : délai avant la prochaine flaque de flammes. */
+  trailCd: number;
+  /** Bulle : le soldat qu'elle digère (null = à la recherche d'une proie). */
+  captive: SoldierState | null;
+  /** Déjà ressuscité une fois : sa flaque ne pourra plus servir. */
+  revived: boolean;
 }
 
 export type Unit = SoldierState | AlienState;
@@ -76,10 +99,46 @@ export interface Projectile {
   /** Grenade en cloche : pas de collision en vol, explose à la fin de sa course (rayon `aoe`). */
   lob: boolean;
   aoe: number;
+  /** Recul infligé au soldat touché (px/s, divisé par sa masse) : boules du cracheur. */
+  knock: number;
+  /** Caillou : rayon de l'obstacle laissé au sol à l'atterrissage (0 = aucun) et sa durée de vie (s). */
+  rock: number;
+  rockTtl: number;
   texture: string;
   team: Team;
   owner: PlayerId;
   hit: Set<number>;
+}
+
+/** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
+export interface FirePatch {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  ttl: number;
+  dps: number;
+}
+
+/** Flaque d'un slime mort : un chaman peut le ressusciter tant qu'elle dure (`claimed` = id du chaman qui l'incante). */
+export interface Corpse {
+  id: number;
+  x: number;
+  y: number;
+  type: AlienId;
+  ttl: number;
+  claimed: number;
+}
+
+/** Globe d'XP au sol (voir sim/Xp.ts). `value` = 1, 3 ou 8 (taille affichée). */
+export interface XpOrb {
+  id: number;
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  value: number;
+  life: number;
 }
 
 export interface RecruitState {

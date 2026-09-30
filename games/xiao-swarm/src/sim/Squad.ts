@@ -1,11 +1,12 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
 import { CROWD, SQUAD } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
+import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { PlayerId, PlayerInput } from './types';
 
-export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad';
+export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -17,9 +18,18 @@ export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad';
 export class Squad {
   readonly soldiers: SoldierState[] = [];
   readonly anchor = { x: 0, y: 0, radius: 18 };
+  private readonly steerV = { x: 0, y: 0 };
+  private readonly slotTarget = { x: 0, y: 0, radius: 0 };
   readonly center: Point = { x: 0, y: 0 };
   /** Upgrades propres à ce joueur. */
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize });
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1 });
+  /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
+  xp = 0;
+  level = 1;
+  /** Les 3 upgrades à choisir, ou null. */
+  offer: UpgradeId[] | null = null;
+  private pendingLevels = 0;
+  readonly picked: Partial<Record<UpgradeId, number>> = {};
   moving = false;
   stillTime = 0;
   kills = 0;
@@ -45,6 +55,74 @@ export class Squad {
 
   get maxSize(): number {
     return Math.floor(this.stats.get('maxSquad'));
+  }
+
+  /** Nouvelle partie : plus de soldats, progression (XP, niveau, upgrades) et bonus remis à zéro. */
+  resetRun(): void {
+    this.soldiers.length = 0;
+    this.newcomers.length = 0;
+    this.stats.reset();
+    this.xp = 0;
+    this.level = 1;
+    this.offer = null;
+    this.pendingLevels = 0;
+    for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
+    this.kills = 0;
+    this.stillTime = 0;
+    this.dirty = true;
+  }
+
+  /** XP nécessaire pour le prochain niveau. */
+  get xpNeeded(): number {
+    return xpToNext(this.level);
+  }
+
+  /** Ajoute de l'XP (bonus `xpGain` compris) ; chaque niveau franchi prépare un choix d'upgrade. */
+  gainXp(value: number): void {
+    this.xp += value * this.stats.get('xpGain');
+    while (this.xp >= this.xpNeeded) {
+      this.xp -= this.xpNeeded;
+      this.level++;
+      this.pendingLevels++;
+      this.sim.events.push({ t: 'levelUp', owner: this.owner, level: this.level });
+    }
+    if (this.pendingLevels > 0 && !this.offer) this.rollOffer();
+  }
+
+  private rollOffer(): void {
+    const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
+    this.offer = eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null;
+    if (!this.offer) this.pendingLevels = 0;
+  }
+
+  /** Choisit l'upgrade `index` parmi les propositions ; enchaîne sur le niveau suivant s'il y en a un en attente. */
+  chooseUpgrade(index: number): boolean {
+    const id = this.offer?.[index];
+    if (!id) return false;
+    this.applyUpgrade(id);
+    this.offer = null;
+    this.pendingLevels--;
+    if (this.pendingLevels > 0) this.rollOffer();
+    return true;
+  }
+
+  private applyUpgrade(id: UpgradeId): void {
+    const def = UPGRADES[id];
+    this.picked[id] = (this.picked[id] ?? 0) + 1;
+    if (def.stat && def.mod) this.stats.add(def.stat, def.mod);
+    if (id === 'hp') {
+      // les soldats déjà là gagnent aussi les PV supplémentaires
+      for (const s of this.soldiers) {
+        const max = s.def.hp * this.stats.get('hp');
+        s.hp += max - s.maxHp;
+        s.maxHp = max;
+      }
+    } else if (id === 'heal') {
+      for (const s of this.soldiers) {
+        s.hp = Math.min(s.maxHp, s.hp + s.maxHp * (def.value / 100));
+        this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
+      }
+    }
   }
 
   get isHealing(): boolean {
@@ -103,6 +181,7 @@ export class Squad {
       facing: 1,
       aim: 0,
       invulnerable: 0,
+      capturedBy: 0,
     };
     this.soldiers.push(s);
     this.dirty = true;
@@ -143,8 +222,11 @@ export class Squad {
     const speed = CROWD.speed * this.stats.get('speed');
 
     // 1. Ancre : réponse immédiate à l'input
-    this.anchor.x += mx * speed * dt;
-    this.anchor.y += my * speed * dt;
+    this.steerV.x = mx * speed;
+    this.steerV.y = my * speed;
+    this.sim.arena.steer(this.anchor.x, this.anchor.y, this.anchor.radius, this.steerV);
+    this.anchor.x += this.steerV.x * dt;
+    this.anchor.y += this.steerV.y * dt;
     this.sim.arena.constrain(this.anchor);
 
     // 2. Laisse autour du coeur de la squad
@@ -164,9 +246,19 @@ export class Squad {
     // 4. Chaque soldat rejoint son slot avec inertie
     const maxSpeed = speed * CROWD.maxSpeedMul;
     for (const s of this.soldiers) {
+      // prisonnier d'une bulle : elle le porte ; si la bulle a disparu, il est libre
+      if (s.capturedBy) {
+        if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
+        s.capturedBy = 0;
+      }
       const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;
-      let desiredX = (this.anchor.x + s.slotX - s.x) * gain;
-      let desiredY = (this.anchor.y + s.slotY - s.y) * gain;
+      // le slot visé est ramené hors du décor : un slot dans un obstacle plaquerait le soldat contre lui
+      this.slotTarget.x = this.anchor.x + s.slotX;
+      this.slotTarget.y = this.anchor.y + s.slotY;
+      this.slotTarget.radius = s.radius + CROWD.wallMargin * 0.4;
+      this.sim.arena.constrain(this.slotTarget);
+      let desiredX = (this.slotTarget.x - s.x) * gain;
+      let desiredY = (this.slotTarget.y - s.y) * gain;
       const l = Math.hypot(desiredX, desiredY);
       if (l > maxSpeed) {
         desiredX = (desiredX / l) * maxSpeed;
@@ -174,6 +266,11 @@ export class Squad {
       }
       s.vx = damp(s.vx, desiredX, CROWD.velDamp, dt);
       s.vy = damp(s.vy, desiredY, CROWD.velDamp, dt);
+      this.steerV.x = s.vx;
+      this.steerV.y = s.vy;
+      this.sim.arena.steer(s.x, s.y, s.radius, this.steerV);
+      s.vx = this.steerV.x;
+      s.vy = this.steerV.y;
       s.x += (s.vx + s.kx) * dt;
       s.y += (s.vy + s.ky) * dt;
       s.kx = damp(s.kx, 0, CROWD.knockDamp, dt);
@@ -186,6 +283,7 @@ export class Squad {
       const a = this.soldiers[i];
       for (let j = i + 1; j < n; j++) {
         const b = this.soldiers[j];
+        if (a.capturedBy || b.capturedBy) continue;
         const ddx = b.x - a.x;
         const ddy = b.y - a.y;
         const min = (a.radius + b.radius) * 1.05;
@@ -203,7 +301,7 @@ export class Squad {
     }
 
     // 6. Obstacles & bords
-    for (const s of this.soldiers) this.sim.arena.constrain(s);
+    for (const s of this.soldiers) if (!s.capturedBy) this.sim.arena.constrain(s);
 
     this.updateHealing(dt);
   }

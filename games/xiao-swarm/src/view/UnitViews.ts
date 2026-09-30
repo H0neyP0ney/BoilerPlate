@@ -65,7 +65,7 @@ export class SoldierView {
       this.body.setFlipX(sprites.flipFor(this.bodyId, facing));
     }
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
-    this.body.setPosition(this.rx, this.ry + bob).setDepth(depth);
+    this.body.setPosition(this.rx, this.ry + bob).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));
 
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
@@ -79,6 +79,8 @@ export class SoldierView {
     if (this.flash > 0) {
       this.flash -= dt;
       this.body.setTint(0xff6a6a).setTintMode(Phaser.TintModes.FILL);
+    } else if (s.capturedBy) {
+      this.body.setTint(0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
@@ -119,7 +121,6 @@ export class AlienView {
   private spawnT = 0;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly id: string;
-  private readonly baseScale: number;
   private readonly animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
 
@@ -129,7 +130,6 @@ export class AlienView {
   ) {
     this.id = `alien_${state.def.id}`;
     this.body = sprites.add(scene, this.id, state.x, state.y);
-    this.baseScale = sprites.scaleOf(this.id);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);
   }
@@ -151,20 +151,25 @@ export class AlienView {
       if (!attacking) sprites.play(this.body, this.id, moving ? 'walk' : 'idle') || sprites.play(this.body, this.id, 'idle');
     }
     this.spawnT = Math.min(1, this.spawnT + dt * 4);
-    const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * this.baseScale;
+    const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
     this.body.setScale(pop * (1 + squash + wind * 0.12), pop * (1 - squash - wind * 0.1));
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
-    const flips = this.animated || a.def.id === 'beast';
+    const flips = this.animated || a.def.id === 'beast' || a.def.id === 'charger' || a.def.id === 'rhino_boss';
     this.body
       .setPosition(this.rx, this.ry + lift)
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
+    if (a.def.capture) {
+      // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
+      this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
+      if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
+    }
 
     if (this.flash > 0) {
       this.flash -= dt;
       this.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
-    } else if (a.chargeT > 0) {
+    } else if (a.chargeT > 0 || a.rushWind > 0) {
       this.body.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);

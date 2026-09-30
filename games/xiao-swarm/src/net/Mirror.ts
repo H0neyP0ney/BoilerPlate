@@ -1,6 +1,7 @@
 import { robustCentroid } from '@xiao/engine/sim';
 import { CROWD, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
+import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
@@ -44,6 +45,10 @@ export class Mirror {
     for (const sq of snap.squads) {
       const squad = sim.addPlayer(sq.owner);
       squad.kills = sq.kills;
+      squad.level = sq.level;
+      squad.xp = sq.xp;
+      squad.offer = sq.offer.length ? sq.offer.map((i) => UPGRADE_IDS[i]) : null;
+      UPGRADE_IDS.forEach((id, i) => (squad.picked[id] = sq.picked[i]));
       squad.stats.reset();
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
@@ -67,6 +72,9 @@ export class Mirror {
       sim.aliens.push(this.upsertAlien(a));
     }
     prune(this.aliens, seenAliens);
+    // bulles : le prisonnier est le soldat dont `capturedBy` est l'id de la bulle
+    for (const a of sim.aliens) a.captive = null;
+    for (const s of this.soldiers.values()) if (s.capturedBy) { const b = this.aliens.get(s.capturedBy); if (b) b.captive = s; }
 
     const seenRecruits = new Set<number>();
     sim.recruits.items.length = 0;
@@ -75,6 +83,9 @@ export class Mirror {
       sim.recruits.items.push(this.upsertRecruit(r));
     }
     prune(this.recruits, seenRecruits);
+
+    sim.xp.orbs.length = 0;
+    snap.orbs.forEach((o, i) => sim.xp.orbs.push({ id: i, x: o.x, y: o.y, px: o.x, py: o.y, value: o.value, life: 10 }));
 
     sim.combat.projectiles.releaseAll();
     for (const p of snap.projectiles) this.addProjectile(p);
@@ -101,7 +112,7 @@ export class Mirror {
       p.py = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.life = Math.max(0, p.life - dt / PROJECTILE_FADE);
+      p.life = Math.max(0, p.life - (p.lob ? dt : dt / PROJECTILE_FADE)); // en cloche : vrai temps de vol (télégraphe)
     }
   }
 
@@ -139,6 +150,7 @@ export class Mirror {
         facing: u.facing,
         aim: u.aim,
         invulnerable: 0,
+        capturedBy: 0,
       };
       this.soldiers.set(u.id, s);
     }
@@ -151,6 +163,7 @@ export class Mirror {
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
     s.invulnerable = u.invulnerable ? 1 : 0;
+    s.capturedBy = u.capturedBy;
     this.setGoal(s, u.x, u.y);
     return s;
   }
@@ -188,6 +201,20 @@ export class Mirror {
         chargeDy: 0,
         slamWind: 0,
         slamCd: 0,
+        lobCd: 0,
+        tongueCd: 0,
+        sprayCd: 0,
+        rushCd: 0,
+        rushWind: 0,
+        rushT: 0,
+        rushDx: 0,
+        rushDy: 0,
+        reviveCd: 0,
+        castT: 0,
+        castCorpse: 0,
+        trailCd: 0,
+        captive: null,
+        revived: false,
       };
       this.aliens.set(a.id, s);
     }
@@ -197,6 +224,12 @@ export class Mirror {
     s.maxHp = a.maxHp;
     s.slamWind = a.slamWind;
     s.chargeT = a.charging ? 1 : 0;
+    s.rushWind = a.rushWind;
+    s.rushT = a.rushing ? 1 : 0;
+    s.rushDx = a.rushDx;
+    s.rushDy = a.rushDy;
+    s.castT = a.castT;
+    s.castCorpse = a.castCorpse;
     this.setGoal(s, a.x, a.y);
     return s;
   }
@@ -221,8 +254,10 @@ export class Mirror {
     p.texture = snap.texture;
     p.flame = snap.flame;
     p.lob = snap.lob;
-    p.maxLife = 1;
-    p.life = snap.age;
+    p.aoe = snap.aoe;
+    p.team = snap.alien ? 'aliens' : '';
+    p.maxLife = snap.lob ? snap.flight : 1;
+    p.life = snap.age * p.maxLife;
   }
 
   // ---------- Lissage ----------

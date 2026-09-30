@@ -1,3 +1,4 @@
+import { saveToCode } from './dev/devSave';
 import { OBSTACLES, STAIN_IDS, type HitCircle, type ObstacleId, type StainDef } from './data/obstacles';
 
 /**
@@ -77,6 +78,17 @@ export function resetObstacle(id: ObstacleId): void {
 }
 
 const n = (v: number): number => Math.round(v * 10) / 10;
+
+/** Save : écrit l'entrée de l'obstacle (échelle, hitbox, taches) dans data/obstacles.ts. */
+export async function saveObstacleToCode(id: ObstacleId): Promise<string> {
+  const msg = await saveToCode('obstacle', { id, code: obstacleSnippet(id) });
+  if (msg.startsWith('✔')) {
+    base.set(id, snapshot(id)); // « Reset » ramène maintenant à cette sauvegarde
+    delete overrides[id];
+    persist();
+  }
+  return msg;
+}
 
 /** Entrée à coller dans OBSTACLES (data/obstacles.ts), hitbox et taches comprises. */
 export function obstacleSnippet(id: ObstacleId): string {

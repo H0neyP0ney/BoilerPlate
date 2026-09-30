@@ -30,9 +30,24 @@ export type SimEvent =
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
   | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
   | { t: 'impact'; x: number; y: number; texture: string }
-  | { t: 'explosion'; x: number; y: number; r: number }
+  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' }
+  | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
+  | { t: 'tongue'; alien: number; target: number; dur: number }
+  | { t: 'gameEnd'; victory: boolean; delay: number }
+  | { t: 'restart' }
+  | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }
+  | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final' }
+  | { t: 'fire'; id: number; x: number; y: number; r: number; ttl: number }
+  | { t: 'fireEnd'; id: number }
+  | { t: 'capture'; alien: number; soldier: number }
+  | { t: 'release'; soldier: number; x: number; y: number }
+  | { t: 'corpse'; id: number; x: number; y: number; alien: AlienId; ttl: number }
+  | { t: 'corpseEnd'; id: number; x: number; y: number; revived: boolean }
+  | { t: 'rock'; id: number; x: number; y: number; r: number; ttl: number }
+  | { t: 'rockEnd'; id: number }
   | { t: 'slam'; x: number; y: number; r: number }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }
   | { t: 'heal'; x: number; y: number }
+  | { t: 'levelUp'; owner: PlayerId; level: number }
   | { t: 'squadWiped'; owner: PlayerId }
   | { t: 'squadSpawned'; owner: PlayerId; x: number; y: number };

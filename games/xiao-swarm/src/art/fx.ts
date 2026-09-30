@@ -80,6 +80,79 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.arc(6, 6, 5.5, 0, Math.PI * 2);
     ctx.fill();
   });
+  // Caillou posé au sol (obstacle temporaire) et son petit modèle en vol.
+  const rock = (ctx: CanvasRenderingContext2D, s: number): void => {
+    const c = s / 2;
+    ctx.beginPath();
+    ctx.moveTo(c - s * 0.42, c + s * 0.15);
+    ctx.lineTo(c - s * 0.3, c - s * 0.3);
+    ctx.lineTo(c + s * 0.05, c - s * 0.44);
+    ctx.lineTo(c + s * 0.4, c - s * 0.2);
+    ctx.lineTo(c + s * 0.44, c + s * 0.22);
+    ctx.lineTo(c + s * 0.05, c + s * 0.4);
+    ctx.closePath();
+    ctx.fillStyle = '#8a7d74';
+    ctx.strokeStyle = '#2a2220';
+    ctx.lineWidth = Math.max(2, s / 16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#b5a89c';
+    ctx.beginPath();
+    ctx.moveTo(c - s * 0.3, c - s * 0.3);
+    ctx.lineTo(c + s * 0.05, c - s * 0.44);
+    ctx.lineTo(c + s * 0.1, c - s * 0.12);
+    ctx.lineTo(c - s * 0.25, c - s * 0.05);
+    ctx.closePath();
+    ctx.fill();
+  };
+  canvasTexture(scene, 'fx_rock', 48, 48, (ctx) => rock(ctx, 48));
+  canvasTexture(scene, 'fx_rock_small', 20, 20, (ctx) => rock(ctx, 20));
+  // Petite boule de crachat (cracheur) : violet lumineux.
+  canvasTexture(scene, 'fx_spit', 14, 14, (ctx) => {
+    const g = ctx.createRadialGradient(5, 5, 1, 7, 7, 7);
+    g.addColorStop(0, '#f2dcff');
+    g.addColorStop(0.5, '#b060e0');
+    g.addColorStop(1, '#6a2aa8');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#2a1050';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(7, 7, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+  // Globe d'XP : orbe bleu lumineux à reflet clair (taille réglée à l'affichage selon sa valeur).
+  canvasTexture(scene, 'fx_xp', 28, 28, (ctx) => {
+    const g = ctx.createRadialGradient(11, 10, 1, 14, 14, 13);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.3, '#8fe3ff');
+    g.addColorStop(1, '#2b7bf0');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#173a8c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(14, 14, 11.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+  // Boule de gelée bleue lancée par le gros slime : blob sombre cerclé, reflet clair.
+  canvasTexture(scene, 'fx_slime_ball', 26, 26, (ctx) => {
+    const g = ctx.createRadialGradient(10, 9, 1, 13, 13, 12);
+    g.addColorStop(0, '#d6ecff');
+    g.addColorStop(0.35, '#5aa8ff');
+    g.addColorStop(1, '#2a5fc4');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#1a2a5e';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(13, 14, 10.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(9.5, 9.5, 3, 2, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
   // Flaque irrégulière (blanche, teintée à l'affichage) : quelques lobes autour d'un centre.
   canvasTexture(scene, 'fx_puddle', 64, 64, (ctx) => {
     ctx.fillStyle = '#fff';

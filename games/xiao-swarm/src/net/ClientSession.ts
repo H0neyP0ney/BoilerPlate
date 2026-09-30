@@ -47,7 +47,8 @@ export class ClientSession implements Session {
   ) {
     this.localPlayer = welcome.you;
     this.hostId = welcome.host;
-    this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES], seed: welcome.seed, players: [] });
+    // xp : la jauge et les choix d'upgrade s'affichent (la simulation, elle, tourne chez l'hôte)
+    this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES], seed: welcome.seed, players: [], xp: true });
     this.mirror = new Mirror(this.sim);
     this.mirror.apply(first);
 
@@ -112,6 +113,11 @@ export class ClientSession implements Session {
 
   /** Pas de revive en ligne : l'hôte fait réapparaître la squad tout seul. */
   reviveLocal(): void {}
+
+  chooseUpgrade(index: number): void {
+    const msg: ClientMessage = { t: 'upgrade', index };
+    this.transport.send(this.hostId, 'reliable', JSON.stringify(msg));
+  }
 
   close(): void {
     this.transport.close();

@@ -98,11 +98,11 @@ export class Fx {
 
   /** Flash de tir ; l'appelant le repositionne à chaque frame tant qu'il est actif (il se détruit seul). */
   /** Quelques flaques au sol (nombre, position, taille, orientation et durée aléatoires) qui rétrécissent et s'effacent lentement. */
-  puddles(x: number, y: number, color: number): void {
+  puddles(x: number, y: number, color: number, size = 1): void {
     const p = FX.puddle;
     const n = Phaser.Math.Between(p.countMin, p.countMax);
     for (let i = 0; i < n; i++) {
-      const scale = Phaser.Math.FloatBetween(p.scaleMin, p.scaleMax);
+      const scale = Phaser.Math.FloatBetween(p.scaleMin, p.scaleMax) * size;
       const img = this.scene.add
         .image(x + Phaser.Math.FloatBetween(-p.spread, p.spread), y + Phaser.Math.FloatBetween(-p.spread, p.spread) * 0.5, 'fx_puddle')
         .setTint(color)
@@ -124,12 +124,12 @@ export class Fx {
   }
 
   /** Éclatement de gelée : grosses gouttes qui retombent (gravité) + fines gouttelettes, teintes `color` et `colorLight`. */
-  gloop(x: number, y: number, color: number, colorLight: number): void {
+  gloop(x: number, y: number, color: number, colorLight: number, size = 1): void {
     const g = FX.gloop;
     this.gloopBig.setParticleTint(color);
-    this.gloopBig.explode(g.count, x, y);
+    this.gloopBig.explode(Math.max(1, Math.round(g.count * size)), x, y);
     this.gloopSmall.setParticleTint(colorLight);
-    this.gloopSmall.explode(Math.round(g.count * 1.5), x, y);
+    this.gloopSmall.explode(Math.max(1, Math.round(g.count * 1.5 * size)), x, y);
   }
 
   muzzleFlash(x: number, y: number): Phaser.GameObjects.Image {

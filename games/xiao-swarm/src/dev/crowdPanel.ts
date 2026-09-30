@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { CROWD, CROWD_DEFAULTS } from '../config';
-import { copyCrowd, CROWD_SPECS, loadPreset, resetCrowd, saveCrowd, savePreset } from '../debugCrowd';
+import { copyCrowd, CROWD_SPECS, loadPreset, resetCrowd, saveCrowd, saveCrowdToCode, savePreset } from '../debugCrowd';
 import { button, floatingPanel, heading, line, note, slider, type FloatingPanel } from './devUi';
 
 /**
@@ -39,10 +39,11 @@ export class CrowdPanel {
     const syncAll = () => this.syncs.forEach((f) => f());
     body.append(
       line(
-        button('Réinitialiser', () => {
+        button('Save', () => void saveCrowdToCode().then(say)),
+        button('Reset', () => {
           resetCrowd();
           syncAll();
-          say('Valeurs par défaut restaurées');
+          say('Retour à la dernière sauvegarde (valeurs par défaut du code)');
         }),
         button('Copier (JSON)', () => {
           copyCrowd();

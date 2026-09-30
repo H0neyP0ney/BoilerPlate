@@ -2,6 +2,7 @@ import { Pool } from '@xiao/engine/sim';
 import type { WeaponDef } from '../data/classes';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
 import type { Sim } from './Sim';
+import type { PlayerId, Team } from './types';
 
 /** Plus grand rayon d'alien (crab) : marge de recherche dans la grille spatiale. */
 const MAX_UNIT_RADIUS = 55;
@@ -27,6 +28,9 @@ export class Combat {
       flame: false,
       lob: false,
       aoe: 0,
+      knock: 0,
+      rock: 0,
+      rockTtl: 0,
       texture: '',
       team: 'aliens',
       owner: '',
@@ -38,6 +42,8 @@ export class Combat {
       p.hit.clear();
       p.lob = false;
       p.aoe = 0;
+      p.knock = 0;
+      p.rock = 0;
       p.flame = false;
     },
   );
@@ -53,6 +59,7 @@ export class Combat {
     for (const squad of this.sim.squads) {
       const fireRate = squad.stats.get('fireRate');
       for (const s of squad.soldiers) {
+        if (s.capturedBy) continue; // avalé par une bulle : ne tire plus
         const weapon = s.def.weapon;
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;
@@ -117,6 +124,7 @@ export class Combat {
       p.flame = weapon.kind === 'flame';
       p.lob = false;
       p.aoe = 0;
+      p.knock = 0;
       p.texture = weapon.texture;
       p.team = s.team;
       p.owner = s.owner;
@@ -131,6 +139,51 @@ export class Combat {
     // vise où sera la cible à l'atterrissage, avec un léger écart
     const lx = target.x + target.vx * flight + rng.range(-14, 14);
     const ly = target.y + target.vy * flight + rng.range(-14, 14);
+    this.launchLob(mx, my, lx, ly, flight, damage, weapon.aoe ?? 60, weapon.texture, s.team, s.owner);
+  }
+
+  /** Alien à tir en cloche (slime bleu) : boule visant la position anticipée d'un soldat, explosion au sol qui blesse les soldats. */
+  throwBlob(a: AlienState, target: SoldierState): void {
+    const lob = a.def.lob!;
+    const { rng } = this.sim;
+    const lx = target.x + target.vx * lob.flight + rng.range(-22, 22);
+    const ly = target.y + target.vy * lob.flight + rng.range(-22, 22);
+    const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight, lob.damage, lob.aoe, lob.texture, a.team, 'aliens');
+    if (lob.rock) {
+      p.rock = lob.rock.radius;
+      p.rockTtl = lob.rock.ttl;
+    }
+  }
+
+  /** Cracheur : un éventail de petites boules vers le soldat visé (elles blessent peu mais repoussent). */
+  spray(a: AlienState, target: SoldierState): void {
+    const sp = a.def.spray!;
+    const { rng } = this.sim;
+    const ox = a.x;
+    const oy = a.y - a.radius * 0.5;
+    const base = Math.atan2(target.y - 10 - oy, target.x - ox);
+    for (let i = 0; i < sp.pellets; i++) {
+      const ang = base + rng.range(-sp.spread / 2, sp.spread / 2);
+      const speed = sp.speed * rng.range(0.75, 1.15);
+      const p = this.projectiles.acquire();
+      p.x = p.px = ox + Math.cos(ang) * a.radius * 0.8;
+      p.y = p.py = oy + Math.sin(ang) * a.radius * 0.8;
+      p.vx = Math.cos(ang) * speed;
+      p.vy = Math.sin(ang) * speed;
+      p.life = p.maxLife = sp.life * rng.range(0.85, 1.1);
+      p.damage = sp.damage;
+      p.pierce = 0;
+      p.flame = false;
+      p.lob = false;
+      p.aoe = 0;
+      p.knock = sp.push;
+      p.texture = sp.texture;
+      p.team = a.team;
+      p.owner = 'aliens';
+    }
+  }
+
+  private launchLob(mx: number, my: number, lx: number, ly: number, flight: number, damage: number, aoe: number, texture: string, team: Team, owner: PlayerId): Projectile {
     const p = this.projectiles.acquire();
     p.x = p.px = mx;
     p.y = p.py = my;
@@ -141,10 +194,12 @@ export class Combat {
     p.pierce = 0;
     p.flame = false;
     p.lob = true;
-    p.aoe = weapon.aoe ?? 60;
-    p.texture = weapon.texture;
-    p.team = s.team;
-    p.owner = s.owner;
+    p.aoe = aoe;
+    p.knock = 0;
+    p.texture = texture;
+    p.team = team;
+    p.owner = owner;
+    return p;
   }
 
   private updateProjectiles(dt: number): void {
@@ -168,6 +223,7 @@ export class Combat {
           p.x += p.vx * (dt + p.life);
           p.y += p.vy * (dt + p.life);
           this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner);
+          if (p.rock > 0) this.sim.addRock(p.x, p.y, p.rock, p.rockTtl);
         }
         return true;
       }
@@ -183,15 +239,22 @@ export class Combat {
 
       const hitR = p.flame ? 14 + (1 - p.life / p.maxLife) * 16 : 4;
       const len = Math.hypot(p.vx, p.vy) || 1;
-      for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
-        if (!this.overlaps(p, a, hitR)) continue;
-        this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
-        if (p.pierce-- <= 0) return true;
+      const fromAlien = p.team === 'aliens';
+      if (!fromAlien) {
+        for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
+          if (!this.overlaps(p, a, hitR)) continue;
+          this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
+          if (p.pierce-- <= 0) return true;
+        }
       }
-      if (pvp) {
+      if (pvp || fromAlien) {
         for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
           if (s.team === p.team || !this.overlaps(p, s, hitR)) continue;
           this.sim.damage(s, p.damage, p.owner, p.vx / len, p.vy / len);
+          if (p.knock > 0) {
+            s.kx += ((p.vx / len) * p.knock) / s.mass;
+            s.ky += ((p.vy / len) * p.knock) / s.mass;
+          }
           if (p.pierce-- <= 0) return true;
         }
       }

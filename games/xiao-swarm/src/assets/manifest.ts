@@ -53,23 +53,177 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Gunner — assemblé depuis art-src/gunner_{idle,walk,death}.png (node tools/pack-grids.mjs games/xiao-swarm/art-src/gunner.pack.json).
-  // 48 cases de 64×74, pieds alignés : idle 0-15, walk 16-31, death 32-47. Personnage tourné vers la droite
-  // (retourné par le jeu pour la gauche) ; l'arme fait partie du dessin.
+  // Petit slime rose — la planche du slime vert recolorée (node tools/hue-shift.mjs public/assets/aliens/slime.png public/assets/aliens/slime_pink.png 235),
+  // plus petit (rayon 11 contre 16) et qui marche plus vite.
+  {
+    type: 'sheet',
+    url: 'aliens/slime_pink.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_slime_pink: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.6,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(0, 15), fps: 18 },
+        },
+      },
+    },
+  },
+  // Gros slime bleu — la planche du slime vert recolorée (node tools/hue-shift.mjs public/assets/aliens/slime.png public/assets/aliens/slime_blue.png 118),
+  // plus gros (rayon 24 contre 16) et plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/slime_blue.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_slime_blue: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 1.35,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 4 },
+          walk: { frames: range(0, 15), fps: 9 },
+        },
+      },
+    },
+  },
+  // Kamikaze — la planche du slime vert recolorée en orange (node tools/hue-shift.mjs … slime_orange.png 285).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_orange.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_kamikaze: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.85,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Grenouille — planche du slime recolorée en turquoise (node tools/hue-shift.mjs … slime_teal.png 60).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_teal.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_frog: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.95,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Cracheur — planche du slime recolorée en violet (node tools/hue-shift.mjs … slime_purple.png 180).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_purple.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_spitter: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.95,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Chaman — planche du slime recolorée en jaune (node tools/hue-shift.mjs … slime_yellow.png 310).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_yellow.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_shaman: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 1,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Lanceur de cailloux — planche du slime recolorée en brun (node tools/hue-shift.mjs … slime_brown.png 285 0.4).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_brown.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_thrower: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.95,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Slime de feu — planche du slime recolorée en rouge-orangé (node tools/hue-shift.mjs … slime_red.png 275 1.15).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_red.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_fire: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 0.9,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 7 },
+          walk: { frames: range(0, 15), fps: 14 },
+        },
+      },
+    },
+  },
+  // Gunner — assemblé depuis art-src/gunner_{idle,walk}_2.png (node tools/pack-grids.mjs games/xiao-swarm/art-src/gunner.pack.json).
+  // 32 cases de 67×52, pieds alignés : idle 0-15, walk 16-31. Pas d'animation de mort pour l'instant (gunner_death.png
+  // de l'ancienne version reste dans art-src). Personnage tourné vers la droite (retourné par le jeu pour la gauche) ;
+  // l'arme fait partie du dessin.
   {
     type: 'sheet',
     url: 'soldiers/gunner.png',
-    frameWidth: 64,
-    frameHeight: 74,
+    frameWidth: 67,
+    frameHeight: 52,
     sprites: {
       soldier_gunner: {
-        originX: 0.402,
-        originY: 0.894,
+        originX: 0.339,
+        originY: 0.936,
         scale: 1,
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
           walk: { frames: range(16, 31), fps: 16 },
-          die: { frames: range(32, 47), fps: 12, repeat: 0 },
         },
       },
       gun_gunner: { hidden: true }, // l'arme est dessinée dans la planche

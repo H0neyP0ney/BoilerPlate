@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
+import { WAVE_LEVELS } from '../data/waves';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import type { SoldierState } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
@@ -28,6 +29,10 @@ export class CheatPanel {
   private readonly status: HTMLDivElement;
   private readonly counts: HTMLDivElement;
   private god = false;
+  private readonly waveLevel = select(
+    "Niveau de vague",
+    WAVE_LEVELS.map((n) => [String(n), `Niveau ${n}`] as [string, string]),
+  );
 
   constructor(
     scene: Phaser.Scene,
@@ -60,6 +65,20 @@ export class CheatPanel {
   toggle(): void {
     this.panel.toggle();
     this.refreshCounts();
+  }
+
+  private giveXp(sim: Sim, amount: number): void {
+    if (!sim.xpEnabled) return this.say('XP désactivée (partie en ligne)');
+    const squad = sim.squadOf(this.host.me);
+    squad?.gainXp(amount);
+    this.say(squad ? `XP : niveau ${squad.level} (${Math.floor(squad.xp)}/${squad.xpNeeded})` : '');
+  }
+
+  /** Envoie maintenant un niveau de vague (une configuration tirée au hasard, comme la timeline). */
+  private sendWave(sim: Sim): void {
+    const level = Number(this.waveLevel.select.value);
+    const config = sim.waves.trigger(level);
+    this.say(config ? `Vague niveau ${level} : ${config.name ?? config.groups.map((g) => `${g.count} ${g.type}`).join(', ')}` : `Niveau ${level} : aucune configuration`);
   }
 
   private say(msg: string): void {
@@ -195,6 +214,13 @@ export class CheatPanel {
       set: (v) => this.host.setTimeScale((scale = v)),
     });
     body.append(
+      heading('Progression (XP)'),
+      line(
+        button('+10 XP', () => this.giveXp(sim, 10)),
+        button('Niveau suivant', () => this.giveXp(sim, squad().xpNeeded - squad().xp)),
+      ),
+      heading('Vagues'),
+      line(this.waveLevel.row, button('Envoyer', () => this.sendWave(sim))),
       heading('Temps'),
       speed.row,
       line(

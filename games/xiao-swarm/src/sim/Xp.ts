@@ -1,0 +1,77 @@
+import { splitXp } from '../data/progression';
+import type { AlienState, XpOrb } from './entities';
+import type { Sim } from './Sim';
+
+const PICK_RADIUS = 26;
+/** Rayon d'attraction de base (px), multiplié par la stat `magnet` de la squad. */
+const MAGNET_RADIUS = 110;
+const LIFETIME = 45;
+/** Au-delà, les plus vieux globes disparaissent (garde l'affichage et la simulation légers). */
+const MAX_ORBS = 350;
+
+/**
+ * Globes d'XP : les aliens en laissent en mourant (valeur `def.xp` découpée en globes de 3 tailles). Le soldat le plus
+ * proche les attire puis les absorbe ; l'XP va à sa squad (en battle royale, on peut voler celle des autres).
+ * Actif seulement si `Sim.xpEnabled` (solo / bots : en ligne, pas de pause possible pour choisir une upgrade).
+ */
+export class Xp {
+  readonly orbs: XpOrb[] = [];
+
+  constructor(private readonly sim: Sim) {}
+
+  drop(a: AlienState): void {
+    if (a.def.xp <= 0) return;
+    const { rng } = this.sim;
+    for (const value of splitXp(a.def.xp)) {
+      const ang = rng.range(0, Math.PI * 2);
+      const r = a.radius * rng.range(0.2, 1.1);
+      const x = a.x + Math.cos(ang) * r;
+      const y = a.y + Math.sin(ang) * r * 0.6;
+      this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME });
+    }
+    if (this.orbs.length > MAX_ORBS) this.orbs.splice(0, this.orbs.length - MAX_ORBS);
+  }
+
+  update(dt: number): void {
+    const { soldierHash } = this.sim;
+    for (let i = this.orbs.length - 1; i >= 0; i--) {
+      const o = this.orbs[i];
+      o.px = o.x;
+      o.py = o.y;
+      o.life -= dt;
+      if (o.life <= 0) {
+        this.orbs.splice(i, 1);
+        continue;
+      }
+      // soldat le plus proche dans le rayon d'attraction (celui de sa squad : stat `magnet`)
+      let best: { x: number; y: number; owner: string } | undefined;
+      let bestD = Infinity;
+      let bestMag = MAGNET_RADIUS;
+      for (const s of soldierHash.query(o.x, o.y, MAGNET_RADIUS * 2.6, this.sim.scratchSoldiers)) {
+        if (!s.alive) continue;
+        const sq = this.sim.squadOf(s.owner);
+        if (!sq) continue;
+        const mag = MAGNET_RADIUS * sq.stats.get('magnet');
+        const d = Math.hypot(s.x - o.x, s.y - o.y);
+        if (d > mag || d >= bestD) continue;
+        best = s;
+        bestD = d;
+        bestMag = mag;
+      }
+      if (!best) continue;
+      if (bestD < PICK_RADIUS) {
+        this.sim.squadOf(best.owner)!.gainXp(o.value);
+        this.orbs.splice(i, 1);
+        continue;
+      }
+      // plus il est proche, plus il accélère vers le soldat
+      const k = Math.min(1, dt * (5 + (1 - bestD / bestMag) * 10));
+      o.x += (best.x - o.x) * k;
+      o.y += (best.y - o.y) * k;
+    }
+  }
+
+  clear(): void {
+    this.orbs.length = 0;
+  }
+}

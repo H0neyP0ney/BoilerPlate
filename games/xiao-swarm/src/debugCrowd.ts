@@ -1,5 +1,6 @@
 import { log } from '@xiao/engine';
 import { CROWD, CROWD_DEFAULTS, type CrowdKey } from './config';
+import { saveToCode } from './dev/devSave';
 
 /**
  * Réglages du mouvement de foule (dev uniquement) : un paramètre de `CROWD` par slider du panneau « Foule »
@@ -30,6 +31,9 @@ export const CROWD_SPECS: CrowdSpec[] = [
   { key: 'leashPerRoot', label: 'Laisse / √soldats', min: 0, max: 20, step: 0.5, hint: 'Laisse en plus selon la taille de la squad' },
   { key: 'spacing', label: 'Espacement', min: 25, max: 100, step: 1, hint: 'Distance entre voisins dans la formation' },
   { key: 'separation', label: 'Séparation', min: 0, max: 1, step: 0.05, hint: 'Force qui écarte les soldats qui se chevauchent' },
+  { key: 'wallMargin', label: 'Décor : zone douce', min: 0, max: 80, step: 1, hint: "Largeur autour des hitbox où les unités glissent au lieu de buter. 0 = hitbox dure seule" },
+  { key: 'wallPush', label: 'Décor : écartement', min: 0, max: 300, step: 5, hint: 'Vitesse qui écarte doucement du décor, maximale au contact de la hitbox' },
+  { key: 'wallNudge', label: 'Décor : glisse', min: 0, max: 1.5, step: 0.05, hint: "Part de la vitesse vers le mur convertie en glissade le long du bord (0 = elle s'annule, évite de contourner)" },
   { key: 'knockDamp', label: 'Amorti knockback', min: 1, max: 15, step: 0.5, hint: "Vitesse à laquelle le recul des coups s'éteint" },
 ];
 
@@ -63,6 +67,13 @@ export function loadSavedCrowd(): void {
 export function resetCrowd(): void {
   Object.assign(CROWD, CROWD_DEFAULTS);
   saveCrowd();
+}
+
+/** Save : écrit les valeurs courantes dans `CROWD_DEFAULTS` (config.ts) ; Reset ramène ensuite à cette sauvegarde. */
+export async function saveCrowdToCode(): Promise<string> {
+  const msg = await saveToCode('crowd', CROWD);
+  if (msg.startsWith('✔')) Object.assign(CROWD_DEFAULTS, CROWD);
+  return msg;
 }
 
 /** Copie les valeurs courantes en JSON (presse-papiers + console) : à recoller dans CROWD_DEFAULTS. */

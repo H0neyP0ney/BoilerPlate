@@ -26,7 +26,7 @@ export class Recruits {
     if (size >= squad.maxSize) return;
     // petite squad = beaucoup d'aide ; grosse squad = recrutement ralenti
     const sizeFactor = clamp(1.8 - (size - 4) * 0.12, 0.25, 1.8);
-    if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor)) return;
+    if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor * squad.stats.get('recruit'))) return;
     this.drop(this.chooseClass(squad), a.x, a.y);
   }
 

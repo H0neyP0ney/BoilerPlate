@@ -1,7 +1,7 @@
-# Multijoueur (PvPvE, 2–4 joueurs, P2P)
+# Multijoueur (coop par défaut, 2–4 joueurs, P2P)
 
 Un joueur **héberge** (il fait tourner la simulation), les autres **rejoignent** et n'affichent que ce que l'hôte leur envoie.
-Tout le monde affronte les mêmes aliens, et les squads se tirent dessus (mode `versus`, `pvp: true`).
+**Coop** (mode `coop`, `pvp: false`, pas de tir ami) : tout le monde affronte les mêmes vagues (boss compris). Difficulté dynamique : chaque squad vivante reçoit la vague (2 joueurs = 2× plus d'ennemis) et un boss unique a ses PV × le nombre de squads vivantes. Un joueur mort regarde un équipier ; quand tous sont morts (défaite) ou que le boss final est tombé (victoire), écran de fin puis l'hôte relance la partie (`Sim.restart`). XP et level up fonctionnent en ligne sans pause : le client envoie son choix d'upgrade à l'hôte (message `upgrade`). Le mode `versus` (PvP) reste disponible dans `MODES`.
 Les aliens s'en prennent à la squad la plus proche, quel que soit son joueur. On peut rejoindre en cours de partie ;
 une squad anéantie **réapparaît toute seule** après 2,5 s (l'hôte s'en charge) : escouade de départ, endroit aléatoire
 de la carte à distance des autres squads, brève invulnérabilité. Pas d'écran de fin en ligne.

@@ -40,6 +40,12 @@ export const CROWD_DEFAULTS = {
   separation: 0.5,
   /** Amortissement du knockback (1/s). */
   knockDamp: 5,
+  /** Décor : largeur (px) de la zone douce autour des hitbox où les unités glissent au lieu de buter (0 = hitbox dure seule). */
+  wallMargin: 26,
+  /** Décor : vitesse (px/s) qui écarte doucement de la hitbox, maximale au contact. */
+  wallPush: 90,
+  /** Décor : part de la vitesse « dans le mur » convertie en glissade le long du bord (0 = elle s'annule, 1 = tout glisse). */
+  wallNudge: 0.5,
   /** Temps à l'arrêt avant que le Medic soigne (s). */
   stillDelay: 0.5,
 };
@@ -91,5 +97,7 @@ export const SCENES = {
   obstacles: 'Obstacles',
   particles: 'Particles',
   misc: 'Misc',
+  waves: 'Waves',
+  levelUp: 'LevelUp',
   gameOver: 'GameOver',
 } as const;

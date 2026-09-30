@@ -4,6 +4,7 @@ import { DEPTH, PALETTE } from '../config';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import { t } from '../i18n';
+import type { Projectile } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
@@ -15,6 +16,10 @@ export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0
 
 /** Hauteur maximale (px) de l'arc d'une grenade en cloche (effet d'affichage uniquement). */
 export const LOB_HEIGHT = 55;
+/** Durée (s) avant l'impact pendant laquelle la zone d'une boule ennemie est signalée en rouge. */
+const TELEGRAPH_S = 0.8;
+/** Distance (px) de vol sur laquelle une balle rejoint sa trajectoire depuis la bouche du canon dessinée. */
+const MUZZLE_BLEND_PX = 40;
 
 interface Tracer {
   x1: number;
@@ -41,6 +46,22 @@ export class WorldView {
   private readonly tracers: Tracer[] = [];
   /** Flashes de tir en cours : ils suivent la bouche du canon de leur soldat (dx, dy : repli si la planche n'en définit pas). */
   private readonly flashes: { img: Phaser.GameObjects.Image; view: SoldierView; dx: number; dy: number }[] = [];
+  /**
+   * Balles fraîchement tirées : décalage (dx, dy) entre l'origine simulée (sx, sy) et la bouche du canon dessinée.
+   * Affichage seulement : la balle part visuellement du flash de tir puis rejoint sa vraie trajectoire.
+   */
+  private readonly muzzleShift = new Map<Projectile, { sx: number; sy: number; dx: number; dy: number }>();
+  /** Globes d'XP : pool d'images réutilisées dans l'ordre (comme les projectiles). */
+  private readonly orbImgs: Phaser.GameObjects.Image[] = [];
+  /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
+  private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
+  /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
+  private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
+  /** Flaques de slimes morts (ressuscitables) et cailloux au sol, par id de simulation. */
+  private readonly corpseImgs = new Map<number, Phaser.GameObjects.Image>();
+  private readonly rockImgs = new Map<number, Phaser.GameObjects.Image>();
+  /** Flammes au sol (traînées des slimes de feu), par id de simulation. */
+  private readonly fireImgs = new Map<number, { img: Phaser.GameObjects.Image; base: number; seed: number; r: number }>();
   private readonly lobShadows: { x: number; y: number; h: number }[] = [];
   private readonly ground: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
@@ -91,9 +112,11 @@ export class WorldView {
       case 'alienDied': {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'crab' ? 40 : 10);
-        if (e.alien === 'slime') {
-          this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, 0xc8ffb0);
-          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color);
+        if (e.alien.startsWith('slime')) {
+          const size = e.alien === 'slime_pink' ? 0.5 : e.alien === 'slime_blue' ? 1.6 : 1;
+          const light = e.alien === 'slime_pink' ? 0xffd6ea : e.alien === 'slime_blue' ? 0xcfe6ff : 0xc8ffb0;
+          this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
+          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size === 0.5 ? 0.6 : size);
         }
         if (e.alien === 'crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
@@ -110,7 +133,9 @@ export class WorldView {
       case 'shot':
         if (e.cls === 'gunner' && nearCam(e.x, e.y)) {
           const view = this.soldiers.get(e.id);
-          const p = view?.muzzlePoint() ?? e;
+          const mp = view?.muzzlePoint();
+          const p = mp ?? e;
+          if (mp) this.shiftFreshBullets(e.x, e.y, mp.x - e.x, mp.y - e.y);
           const img = this.fx.muzzleFlash(p.x, p.y);
           if (view) this.flashes.push({ img, view, dx: e.x - view.rx, dy: e.y - view.ry });
         }
@@ -118,7 +143,100 @@ export class WorldView {
       case 'impact':
         if (e.texture === 'fx_blaster_blue' && nearCam(e.x, e.y)) this.fx.impact(e.x, e.y, 0x5ab4ff);
         break;
+      case 'restart': {
+        // nouvelle partie : on efface tout ce qui reste au sol
+        for (const img of this.corpseImgs.values()) img.destroy();
+        for (const img of this.rockImgs.values()) img.destroy();
+        for (const f of this.fireImgs.values()) f.img.destroy();
+        for (const f of this.fuses) f.img.destroy();
+        this.corpseImgs.clear();
+        this.rockImgs.clear();
+        this.fireImgs.clear();
+        this.fuses.length = 0;
+        this.tongues.length = 0;
+        break;
+      }
+      case 'fuse': {
+        const id = `alien_${e.alien}`;
+        const img = sprites.add(this.scene, id, e.x, e.y).setDepth(DEPTH.actors + e.y);
+        sprites.place(img, id);
+        const base = sprites.scaleOf(id);
+        img.setScale(base);
+        this.fuses.push({ x: e.x, y: e.y, r: e.r, t: e.delay, dur: e.delay, img, base });
+        break;
+      }
+      case 'corpse': {
+        const color = ALIENS[e.alien].color;
+        const img = this.scene.add
+          .image(e.x, e.y, 'fx_puddle')
+          .setTint(color)
+          .setDepth(DEPTH.groundFx - 0.3)
+          .setScale(0.85 * (ALIENS[e.alien].radius / 16), 0.55 * (ALIENS[e.alien].radius / 16))
+          .setFlipX(Math.random() < 0.5)
+          .setAlpha(0.8);
+        this.corpseImgs.set(e.id, img);
+        break;
+      }
+      case 'corpseEnd': {
+        const img = this.corpseImgs.get(e.id);
+        this.corpseImgs.delete(e.id);
+        if (e.revived) {
+          img?.destroy();
+          this.fx.ring(e.x, e.y, 70, 0xffe14a);
+          this.fx.gloop(e.x, e.y - 8, 0xffd84a, 0xfff6c0, 0.9);
+        } else if (img) {
+          this.scene.tweens.add({ targets: img, alpha: 0, duration: 400, onComplete: () => img.destroy() });
+        }
+        break;
+      }
+      case 'rock': {
+        const img = this.scene.add.image(e.x, e.y, 'fx_rock').setOrigin(0.5, 0.6).setDepth(DEPTH.actors + e.y);
+        const target = (e.r * 2.1) / 48;
+        img.setScale(target * 0.4);
+        this.scene.tweens.add({ targets: img, scale: target, duration: 160, ease: 'Back.Out' });
+        this.rockImgs.set(e.id, img);
+        if (nearCam(e.x, e.y)) this.fx.burst(e.x, e.y, 0x8a7d74, 8);
+        break;
+      }
+      case 'rockEnd': {
+        const img = this.rockImgs.get(e.id);
+        this.rockImgs.delete(e.id);
+        if (img) this.scene.tweens.add({ targets: img, alpha: 0, scale: img.scale * 0.6, duration: 350, onComplete: () => img.destroy() });
+        break;
+      }
+      case 'fire': {
+        const img = this.scene.add.image(e.x, e.y - 6, 'fx_flame').setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.groundFx + 0.3);
+        const base = (e.r * 2.4) / 40;
+        img.setScale(base * 0.3);
+        this.fireImgs.set(e.id, { img, base, seed: Math.random() * 10, r: e.r });
+        break;
+      }
+      case 'fireEnd': {
+        const f = this.fireImgs.get(e.id);
+        this.fireImgs.delete(e.id);
+        if (f) this.scene.tweens.add({ targets: f.img, alpha: 0, scale: f.base * 0.3, duration: 300, onComplete: () => f.img.destroy() });
+        break;
+      }
+      case 'capture': {
+        const v = this.aliens.get(e.alien);
+        if (v) this.fx.ring(v.rx, v.ry, 60, 0x8fe0ff);
+        break;
+      }
+      case 'release':
+        this.fx.ring(e.x, e.y, 80, 0xffffff);
+        this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
+        break;
+      case 'tongue':
+        this.tongues.push({ alien: e.alien, target: e.target, t: e.dur, dur: e.dur });
+        break;
       case 'explosion':
+        if (e.style === 'slime') {
+          // boule de slime : éclaboussure bleue au sol plutôt que des flammes
+          this.fx.gloop(e.x, e.y, 0x5aa8ff, 0xcfe6ff, e.r / 60);
+          this.fx.puddles(e.x, e.y, 0x5aa8ff, e.r / 70);
+          this.fx.ring(e.x, e.y, e.r, 0x5aa8ff);
+          break;
+        }
         // pas de secousse pour les petites explosions (grenades), sinon l'écran tremble en permanence
         this.fx.explosion(e.x, e.y, e.r, e.r >= 100 && nearCam(e.x, e.y));
         break;
@@ -137,6 +255,14 @@ export class WorldView {
       case 'squadSpawned':
         this.fx.ring(e.x, e.y, 200, this.colorOf(e.owner));
         break;
+      case 'levelUp': {
+        if (e.owner !== this.localPlayer) break;
+        const c = this.sim.squadOf(e.owner)?.center;
+        if (!c) break;
+        this.fx.ring(c.x, c.y, 150, 0x5aa8ff);
+        this.fx.text(c.x, c.y - 80, t('levelUpTitle', { level: e.level }), '#9fd3ff', 30);
+        break;
+      }
       case 'squadWiped':
         break;
     }
@@ -159,6 +285,9 @@ export class WorldView {
     this.syncUnits(alpha, dt, time);
     this.followFlashes();
     this.syncProjectiles(alpha);
+    this.syncOrbs(alpha, time);
+    this.updateFuses(dt, time);
+    this.updateFires(time);
     this.drawOverlay(time, dt);
     this.arena.update(this.scene.cameras.main.worldView);
   }
@@ -245,9 +374,138 @@ export class WorldView {
         const k = 1 - p.life / p.maxLife;
         img.setScale(0.35 + k * 1.3).setAlpha(1 - k * k).setBlendMode(Phaser.BlendModes.ADD);
       } else {
-        img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
+        let bx = x;
+        let by = y;
+        const sh = this.muzzleShift.get(p);
+        if (sh) {
+          const k = 1 - Math.hypot(x - sh.sx, y - sh.sy) / MUZZLE_BLEND_PX;
+          if (k > 0) {
+            bx += sh.dx * k;
+            by += sh.dy * k;
+          } else this.muzzleShift.delete(p);
+        }
+        img.setVisible(true).setPosition(bx, by).setRotation(Math.atan2(p.vy, p.vx));
         img.setScale(1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
       }
+    }
+  }
+
+  /** Les balles nées à (sx, sy) ce tick partent visuellement de la bouche du canon (décalage dx, dy, résorbé en vol). */
+  private shiftFreshBullets(sx: number, sy: number, dx: number, dy: number): void {
+    if (this.muzzleShift.size > 200) this.muzzleShift.clear();
+    for (const p of this.sim.combat.projectiles.active) {
+      if (p.lob || p.flame || Math.abs(p.px - sx) > 0.5 || Math.abs(p.py - sy) > 0.5) continue;
+      this.muzzleShift.set(p, { sx, sy, dx, dy });
+    }
+  }
+
+  /** Globes d'XP : taille selon la valeur, léger flottement, clignote avant de disparaître ; masqués hors caméra. */
+  private syncOrbs(alpha: number, time: number): void {
+    const orbs = this.sim.xp.orbs;
+    const view = this.scene.cameras.main.worldView;
+    while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, 'fx_xp').setDepth(DEPTH.groundFx + 0.2).setBlendMode(Phaser.BlendModes.ADD));
+    for (let i = 0; i < this.orbImgs.length; i++) {
+      const img = this.orbImgs[i];
+      const o = orbs[i];
+      if (!o) {
+        img.setVisible(false);
+        continue;
+      }
+      const x = lerp(o.px, o.x, alpha);
+      const y = lerp(o.py, o.y, alpha);
+      if (x < view.x - 40 || x > view.right + 40 || y < view.y - 40 || y > view.bottom + 40) {
+        img.setVisible(false);
+        continue;
+      }
+      const size = o.value >= 8 ? 1.25 : o.value >= 3 ? 0.85 : 0.55;
+      const bob = Math.sin(time * 4 + o.id) * 2.5;
+      const blink = o.life < 5 && Math.sin(time * 18) > 0;
+      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
+    }
+  }
+
+  /** Flammes : elles vacillent (taille, transparence) ; cachées hors de la caméra. */
+  private updateFires(time: number): void {
+    const view = this.scene.cameras.main.worldView;
+    for (const f of this.fireImgs.values()) {
+      const { img } = f;
+      if (!img.active) continue;
+      if (img.x < view.x - 40 || img.x > view.right + 40 || img.y < view.y - 40 || img.y > view.bottom + 40) {
+        img.setVisible(false);
+        continue;
+      }
+      const w = 1 + Math.sin(time * 11 + f.seed) * 0.12 + Math.sin(time * 23 + f.seed * 2) * 0.06;
+      img.setVisible(true).setScale(Math.min(f.base, img.scaleX + f.base * 0.12) * w, Math.min(f.base, img.scaleY + f.base * 0.12) * w * 0.9).setAlpha(0.75 + Math.sin(time * 15 + f.seed) * 0.2);
+    }
+  }
+
+  /** Corps de kamikaze en attente d'explosion : clignote de plus en plus vite, enfle un peu. */
+  private updateFuses(dt: number, time: number): void {
+    for (let i = this.fuses.length - 1; i >= 0; i--) {
+      const f = this.fuses[i];
+      f.t -= dt;
+      if (f.t <= 0) {
+        f.img.destroy();
+        this.fuses.splice(i, 1);
+        continue;
+      }
+      const k = 1 - f.t / f.dur;
+      if (Math.sin(time * (14 + 34 * k)) > 0) f.img.setTint(0xff3a2a).setTintMode(Phaser.TintModes.FILL);
+      else f.img.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      f.img.setScale(f.base * (1 + 0.18 * k));
+    }
+  }
+
+  /** Incantations des chamans : un fil magique pulsé jusqu'à la flaque visée, qui se referme en cercle jusqu'à la résurrection. */
+  private drawCasts(l: Phaser.GameObjects.Graphics, time: number): void {
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const rv = a.def.revive;
+      if (!rv || a.castT <= 0) continue;
+      const ci = this.corpseImgs.get(a.castCorpse);
+      if (!ci?.active) continue;
+      const c = { x: ci.x, y: ci.y };
+      const k = 1 - a.castT / rv.cast;
+      const sx = v.rx;
+      const sy = v.ry - a.radius;
+      const steps = 14;
+      for (let i = 0; i < steps; i++) {
+        const t0 = i / steps;
+        const t1 = (i + 0.55) / steps;
+        const wob = (t: number) => Math.sin(time * 9 + t * 8) * 7 * Math.sin(t * Math.PI);
+        l.lineStyle(3, 0xffe14a, 0.35 + 0.5 * k).lineBetween(
+          sx + (c.x - sx) * t0,
+          sy + (c.y - sy) * t0 + wob(t0),
+          sx + (c.x - sx) * t1,
+          sy + (c.y - sy) * t1 + wob(t1),
+        );
+      }
+      l.lineStyle(3, 0xffe14a, 0.4 + 0.5 * k).strokeCircle(c.x, c.y, 34 * (1 - 0.6 * k) + 6);
+      l.fillStyle(0xffe14a, 0.12 + 0.25 * k).fillCircle(c.x, c.y, 26 * k + 4);
+      l.lineStyle(2, 0xffe14a, 0.5).strokeCircle(sx, sy, a.radius + 6 + Math.sin(time * 10) * 3);
+    }
+  }
+
+  /** Langues des grenouilles : elles jaillissent vite, suivent le soldat tiré, puis s'effacent. */
+  private drawTongues(l: Phaser.GameObjects.Graphics, dt: number): void {
+    for (let i = this.tongues.length - 1; i >= 0; i--) {
+      const tg = this.tongues[i];
+      tg.t -= dt;
+      const av = this.aliens.get(tg.alien);
+      const sv = this.soldiers.get(tg.target);
+      if (tg.t <= 0 || !av || !sv) {
+        this.tongues.splice(i, 1);
+        continue;
+      }
+      const sx = av.rx;
+      const sy = av.ry - av.state.radius * 0.6;
+      const ext = Math.min(1, (tg.dur - tg.t) / 0.1); // part de la longueur déjà sortie
+      const ex = sx + (sv.rx - sx) * ext;
+      const ey = sy + (sv.ry - 12 - sy) * ext;
+      const a = Math.min(1, tg.t / 0.12);
+      l.lineStyle(7, 0xc23a6a, a).lineBetween(sx, sy, ex, ey);
+      l.lineStyle(4, 0xff7fa8, a).lineBetween(sx, sy, ex, ey);
+      l.fillStyle(0xff7fa8, a).fillCircle(ex, ey, 6);
     }
   }
 
@@ -283,6 +541,48 @@ export class WorldView {
         g.lineStyle(2, 0x5eff8a, 0.35).strokeEllipse(v.rx, v.ry, r * 2, r * 1.4);
       }
     }
+    // Télégraphe : zone d'impact des boules ennemies, en rouge, pendant la dernière partie du vol (uniquement là où la
+    // simulation tourne : le client réseau ne connaît ni la durée ni le rayon).
+    for (const p of this.sim.combat.projectiles.active) {
+      if (!p.lob || p.team !== 'aliens' || p.aoe <= 0 || p.life >= TELEGRAPH_S) continue;
+      const k = 1 - p.life / TELEGRAPH_S; // 0 → 1 jusqu'à l'impact
+      const ix = p.x + p.vx * p.life;
+      const iy = p.y + p.vy * p.life;
+      g.fillStyle(0xff2a2a, 0.1 + 0.22 * k).fillEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
+      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k).fillEllipse(ix, iy, p.aoe * 2 * k, p.aoe * 1.4 * k);
+      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokeEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
+    }
+    // Télégraphes rouges : explosion retardée d'un kamikaze (zone qui se remplit) et couloir de charge du rhinocéros
+    for (const f of this.fuses) {
+      const k = 1 - f.t / f.dur;
+      g.fillStyle(0xff2a2a, 0.1 + 0.22 * k).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
+      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k).fillEllipse(f.x, f.y, f.r * 2 * k, f.r * 1.4 * k);
+      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
+    }
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const rush = a.def.rush;
+      if (!rush || !(a.rushWind > 0 || a.rushT > 0)) continue;
+      const k = a.rushWind > 0 ? 1 - a.rushWind / rush.windup : 1;
+      const dx = a.rushDx;
+      const dy = a.rushDy;
+      const nx = -dy * (rush.width / 2);
+      const ny = dx * (rush.width / 2);
+      const L = rush.length;
+      const x0 = v.rx; // la zone part de l'alien
+      const y0 = v.ry;
+      const V = (x: number, y: number) => new Phaser.Math.Vector2(x, y);
+      const lane = (len: number) => [V(x0 + nx, y0 + ny), V(x0 - nx, y0 - ny), V(x0 - nx + dx * len, y0 - ny + dy * len), V(x0 + nx + dx * len, y0 + ny + dy * len)];
+      g.fillStyle(0xff2a2a, a.rushWind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
+      if (a.rushWind > 0) g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(lane(L * k), true);
+      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(lane(L), true);
+    }
+    // traces de brûlure au sol sous les flammes
+    for (const f of this.fireImgs.values()) {
+      if (!f.img.active) continue;
+      g.fillStyle(0x3a1408, 0.3).fillEllipse(f.img.x, f.img.y + 8, f.r * 2.1, f.r * 1.3);
+      g.fillStyle(0xff5a1a, 0.1).fillEllipse(f.img.x, f.img.y + 8, f.r * 1.7, f.r * 1.05);
+    }
     for (const s of this.lobShadows) {
       const k = 1 - Math.min(1, s.h / LOB_HEIGHT) * 0.4;
       g.fillStyle(0x2a1d2e, 0.3 * k).fillEllipse(s.x, s.y, 16 * k, 7 * k);
@@ -311,6 +611,8 @@ export class WorldView {
 
     const l = this.beams;
     l.clear();
+    this.drawTongues(l, dt);
+    this.drawCasts(l, time);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tr = this.tracers[i];
       tr.life -= dt;

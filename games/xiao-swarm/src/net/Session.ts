@@ -29,6 +29,8 @@ export interface Session {
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void;
   /** Revive de la squad locale (après pub récompensée). */
   reviveLocal(): void;
+  /** La squad locale choisit l'upgrade `index` parmi ses propositions (en ligne : envoyé à l'hôte). */
+  chooseUpgrade(index: number): void;
   /**
    * Partie en ligne : pas de pause (l'hôte fait tourner tout le monde), pas de revive par pub,
    * et un joueur anéanti réapparaît tout seul (l'hôte s'en charge).
@@ -62,7 +64,7 @@ export class LocalSession implements Session {
   constructor(opts: LocalSessionOptions) {
     const players: PlayerId[] = [this.localPlayer];
     for (let i = 0; i < opts.bots; i++) players.push(`bot${i + 1}`);
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
     players.slice(1).forEach((id, i) => this.bots.push(new BotBrain(id, opts.seed + 101 * (i + 1))));
@@ -81,8 +83,17 @@ export class LocalSession implements Session {
     this.loop.advance(deltaMs, (dt) => {
       for (const b of this.bots) this.inputs.set(b.owner, b.think(this.sim, dt));
       this.sim.step(dt, this.inputs);
+      // les bots choisissent leurs upgrades au hasard ; le joueur local choisit dans l'overlay de niveau (GameScene)
+      for (const b of this.bots) {
+        const offer = this.sim.squadOf(b.owner)?.offer;
+        if (offer) this.sim.chooseUpgrade(b.owner, Math.floor(this.sim.rng.next() * offer.length));
+      }
       this.sim.events.drain(onEvent);
     });
+  }
+
+  chooseUpgrade(index: number): void {
+    this.sim.chooseUpgrade(this.localPlayer, index);
   }
 
   reviveLocal(): void {

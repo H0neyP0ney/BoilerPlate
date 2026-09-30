@@ -1,5 +1,6 @@
 import type { DebugOverlay } from '@xiao/engine';
 import { VISUAL, VISUAL_DEFAULTS, type VisualKey } from './config';
+import { saveToCode } from './dev/devSave';
 
 /**
  * Menu debug des réglages visuels (dev uniquement) : un slider par paramètre de `VISUAL`,
@@ -49,10 +50,16 @@ export function addVisualMenu(dbg: DebugOverlay): void {
       },
     });
   }
-  dbg.button('Réinitialiser le visuel', () => {
+  dbg.button('Save (visuel)', () => {
+    void saveToCode('visual', VISUAL).then((msg) => {
+      if (msg.startsWith('✔')) Object.assign(VISUAL_DEFAULTS, VISUAL);
+      dbg.message(msg);
+    });
+  });
+  dbg.button('Reset (visuel)', () => {
     Object.assign(VISUAL, VISUAL_DEFAULTS);
     save();
     dbg.syncSliders();
-    dbg.message('Réglages visuels par défaut restaurés');
+    dbg.message('Retour à la dernière sauvegarde');
   });
 }

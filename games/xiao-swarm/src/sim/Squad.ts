@@ -1,4 +1,4 @@
-import { assignSlots, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
+import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
 import { CROWD, SQUAD } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import type { SoldierState } from './entities';
@@ -24,6 +24,8 @@ export class Squad {
   stillTime = 0;
   kills = 0;
   private slots: Point[] = [];
+  /** Recrues qui viennent d'arriver : elles gardent leur place (voir `recruit`). */
+  private readonly newcomers: SoldierState[] = [];
   private slotSpacing: number = CROWD.spacing;
   private dirty = true;
   private healFx = 0;
@@ -104,6 +106,17 @@ export class Squad {
     };
     this.soldiers.push(s);
     this.dirty = true;
+    return s;
+  }
+
+  /**
+   * Un soldat rejoint la squad en cours de route (ramassage). Il prend dans la formation la place la plus proche
+   * de l'endroit où il a été ramassé, et les autres se décalent au besoin : le joueur choisit où s'insère la
+   * recrue en choisissant quel côté de la squad passe dessus.
+   */
+  recruit(id: SoldierClassId, at: Point): SoldierState {
+    const s = this.add(id, at);
+    this.newcomers.push(s);
     return s;
   }
 
@@ -220,12 +233,42 @@ export class Squad {
     this.dirty = false;
     this.slotSpacing = CROWD.spacing;
     this.slots = sunflowerSlots(this.soldiers.length, CROWD.spacing, this.slots);
-    const rel = this.soldiers.map((s) => ({ x: s.x - this.anchor.x, y: s.y - this.anchor.y }));
-    const assignment = assignSlots(rel, this.slots);
-    this.soldiers.forEach((s, i) => {
-      const slot = this.slots[assignment[i]];
+    const relOf = (s: SoldierState): Point => ({ x: s.x - this.anchor.x, y: s.y - this.anchor.y });
+
+    // 1. Les recrues prennent d'abord la place libre la plus proche de leur point de ramassage.
+    const slotOf = new Map<SoldierState, number>();
+    const taken = new Set<number>();
+    for (const s of this.newcomers) {
+      if (!this.soldiers.includes(s)) continue;
+      const p = relOf(s);
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < this.slots.length; i++) {
+        if (taken.has(i)) continue;
+        const d = (this.slots[i].x - p.x) ** 2 + (this.slots[i].y - p.y) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      slotOf.set(s, best);
+      taken.add(best);
+    }
+    this.newcomers.length = 0;
+
+    // 2. Les autres soldats se répartissent les places restantes en se déplaçant le moins possible.
+    const others = this.soldiers.filter((s) => !slotOf.has(s));
+    const free = this.slots.map((_, i) => i).filter((i) => !taken.has(i));
+    const assignment = assignSlotsOptimal(
+      others.map(relOf),
+      free.map((i) => this.slots[i]),
+    );
+    others.forEach((s, i) => slotOf.set(s, free[assignment[i]]));
+
+    for (const s of this.soldiers) {
+      const slot = this.slots[slotOf.get(s)!];
       s.slotX = slot.x;
       s.slotY = slot.y;
-    });
+    }
   }
 }

@@ -53,7 +53,7 @@ export class Recruits {
       const d = Math.hypot(s.x - r.x, s.y - r.y);
       if (d < PICK_RADIUS) {
         const squad = this.sim.squadOf(s.owner)!;
-        const recruit = squad.add(r.cls, { x: r.x, y: r.y });
+        const recruit = squad.recruit(r.cls, { x: r.x, y: r.y });
         recruit.invulnerable = 1;
         this.sim.events.push({ t: 'recruited', owner: squad.owner, cls: r.cls, x: r.x, y: r.y });
         this.items.splice(i, 1);

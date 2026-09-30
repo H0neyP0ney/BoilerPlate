@@ -17,7 +17,7 @@ répondre, commenter et documenter en français.
 
 Test en navigateur : `?mode=royale&bots=9`, `?lang=en` ; en dev `window.__game` et le panneau debug (touche `²`/F2 ou
 bouton engrenage en haut à gauche du HUD) avec des sliders pour le mouvement de foule (`CROWD` dans `config.ts`, mémorisés dans
-le navigateur ; **F8 / F9** = sauvegarder / charger une config de travail ; `npm run sim:crowd` mesure la réactivité).
+le navigateur ; **F8 / F9** = sauvegarder / charger une config de travail ; `npm run sim:crowd` mesure la réactivité, `npm run sim:recruit` où une recrue s'insère dans la formation).
 
 ## Règles d'architecture (multijoueur battle royale ~10 joueurs prévu)
 1. `games/*/src/sim/`, `data/`, `net/`, `config.ts` sont **purs** : pas de Phaser ni DOM, imports depuis

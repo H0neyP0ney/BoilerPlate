@@ -84,7 +84,8 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 
 **Sol** : une texture qui se raccorde (`ground_tile`, `public/assets/ground/ground.webp`, 1024 px — puissance de 2)
 est répétée sur toute la carte par un seul `TileSprite` (`view/ArenaView.ts`, échelle `GROUND_SCALE`). Source :
-`art-src/ground.png` (1254 px) ; pour la régénérer, réduire en gardant le raccord (tuile 3×3 puis recadrage du centre).
+`art-src/ground.png` (1024 px, déjà une puissance de 2 : conversion directe en WebP qualité 90 avec Pillow). Si une nouvelle texture n'est pas en 1024 px,
+la réduire en gardant le raccord (tuile 3×3, réduction, recadrage du centre).
 Sans cette texture, le sol procédural (sable, herbe, étangs) sert de repli.
 
 **Obstacles** : aucun pour l'instant (`ponds` / `rocks` / `logs` vides dans `data/maps.ts`) ; la collision et le décor

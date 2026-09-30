@@ -10,7 +10,8 @@
     "zip": "npm run build && node ../../scripts/zip.mjs",
     "sim": "node scripts/sim-headless.mjs",
     "sim:net": "node scripts/net-headless.mjs",
-    "sim:crowd": "node scripts/crowd-headless.mjs"
+    "sim:crowd": "node scripts/crowd-headless.mjs",
+    "sim:recruit": "node scripts/recruit-slot-headless.mjs"
   },
   "dependencies": {
     "@poki/netlib": "^0.0.20",

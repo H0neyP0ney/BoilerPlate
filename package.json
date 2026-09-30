@@ -14,6 +14,8 @@
     "new-game": "node scripts/new-game.mjs",
     "sim:headless": "npm run sim -w @xiao/swarm-attack --",
     "sim:net": "npm run sim:net -w @xiao/swarm-attack --",
+    "sim:crowd": "npm run sim:crowd -w @xiao/swarm-attack --",
+    "sim:recruit": "npm run sim:recruit -w @xiao/swarm-attack --",
     "build:poki": "bash scripts/build-poki.sh"
   },
   "devDependencies": {

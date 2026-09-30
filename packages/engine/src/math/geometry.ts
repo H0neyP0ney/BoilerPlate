@@ -99,6 +99,65 @@ export function assignSlots(agents: readonly Point[], slots: readonly Point[]): 
   return result;
 }
 
+/**
+ * Affectation OPTIMALE agents → slots : minimise la somme des distances au carré (méthode hongroise, O(n²·m)).
+ * Contrairement à `assignSlots` (gloutonne), un changement local se répartit en plusieurs petits décalages
+ * au lieu d'un grand saut : une recrue qui s'insère pousse ses voisines d'un cran, sans qu'une seule traverse
+ * tout le groupe. Demande `agents.length <= slots.length` (sinon repli sur la version gloutonne).
+ * Retourne `assignment[agentIndex] = slotIndex`.
+ */
+export function assignSlotsOptimal(agents: readonly Point[], slots: readonly Point[]): number[] {
+  const n = agents.length;
+  const m = slots.length;
+  if (n > m) return assignSlots(agents, slots);
+  const INF = 1e18;
+  const u = new Array<number>(n + 1).fill(0);
+  const v = new Array<number>(m + 1).fill(0);
+  const p = new Array<number>(m + 1).fill(0); // p[j] = agent (1-based) affecté au slot j
+  const way = new Array<number>(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array<number>(m + 1).fill(INF);
+    const used = new Array<boolean>(m + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = INF;
+      let j1 = 0;
+      for (let j = 1; j <= m; j++) {
+        if (used[j]) continue;
+        const cur = dist2(agents[i0 - 1], slots[j - 1]) - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= m; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+  const result = new Array<number>(n).fill(-1);
+  for (let j = 1; j <= m; j++) if (p[j] !== 0) result[p[j] - 1] = j - 1;
+  return result;
+}
+
 /** Repousse un cercle hors d'un autre cercle (obstacle statique). true si collision. */
 export function pushOutOfCircle(p: Circle, obstacle: Circle): boolean {
   const dx = p.x - obstacle.x;

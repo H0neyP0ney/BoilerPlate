@@ -27,6 +27,14 @@ interface PokiSDKApi {
   movePill?(topPercent: number, topPx: number): void;
 }
 
+/**
+ * Interrupteur des pubs Poki. FAUX pour le moment : plus aucune pub (interstitielle ni récompensée) n'est demandée
+ * au SDK ; les events de gameplay (gameplayStart / Stop, measure) restent envoyés. Une « pub » passe alors
+ * instantanément : la reprise / le redémarrage ne sont pas retardés et la récompense est accordée tout de suite
+ * (revive gratuit). À remettre à `true` avant la soumission Poki (règles pub : voir CLAUDE.md).
+ */
+export const ADS_ENABLED = false;
+
 declare global {
   interface Window {
     PokiSDK?: PokiSDKApi;
@@ -97,7 +105,7 @@ class Poki {
    * Poki gère la fréquence : ne jamais ajouter de timer maison.
    */
   async commercialBreak(): Promise<void> {
-    if (!this.sdk || this.adPlaying) return;
+    if (!ADS_ENABLED || !this.sdk || this.adPlaying) return;
     this.gameplayStop();
     this.adPlaying = true;
     try {
@@ -114,6 +122,7 @@ class Poki {
    * Retourne true seulement si la récompense doit être donnée.
    */
   async rewardedBreak(): Promise<boolean> {
+    if (!ADS_ENABLED) return true; // pubs désactivées : récompense accordée sans pub
     if (!this.sdk || this.adPlaying) return false;
     this.gameplayStop();
     this.adPlaying = true;

@@ -17,20 +17,37 @@ export class PauseScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const dim = this.add.rectangle(0, 0, width, height, 0x0a1422, 0.7).setOrigin(0).setInteractive();
     const title = this.add
-      .text(width / 2, height / 2 - 90, t('paused'), { fontFamily: theme.font, fontSize: '64px', color: '#ffffff', fontStyle: 'bold' })
+      .text(width / 2, height / 2 - 120, t('paused'), { fontFamily: theme.font, fontSize: '64px', color: '#ffffff', fontStyle: 'bold' })
       .setOrigin(0.5);
-    const resume = new Button(this, width / 2, height / 2 + 40, { label: t('resume'), onClick: () => this.resume() });
+    const resume = new Button(this, width / 2, height / 2 + 10, { label: t('resume'), onClick: () => this.resume() });
+    // Recommencer : même mécanisme que « Rejouer » de l'écran de fin (pub entre deux parties, le run repart aussitôt).
+    const restart = new Button(this, width / 2, height / 2 + 110, {
+      label: t('restart'),
+      variant: 'secondary',
+      width: 320,
+      height: 64,
+      onClick: () => this.restart(),
+    });
 
     for (const key of ['ESC', 'P', 'SPACE', 'ENTER']) this.input.keyboard!.on(`keydown-${key}`, () => this.resume());
 
     const layout = () => {
       const { width: w, height: h } = this.scale;
       dim.setSize(w, h);
-      title.setPosition(w / 2, h / 2 - 90);
-      resume.setPosition(w / 2, h / 2 + 40);
+      title.setPosition(w / 2, h / 2 - 120);
+      resume.setPosition(w / 2, h / 2 + 10);
+      restart.setPosition(w / 2, h / 2 + 110);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));
+  }
+
+  private async restart(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    const game = this.scene.get(SCENES.game) as GameScene;
+    this.scene.stop();
+    await game.retry();
   }
 
   private async resume(): Promise<void> {

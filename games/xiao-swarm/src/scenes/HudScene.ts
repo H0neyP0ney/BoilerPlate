@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { device, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { t } from '../i18n';
+import { iconCheat, iconCrowd, makeSquareButton, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
 /**
@@ -14,6 +15,10 @@ export class HudScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Container;
   private roomText!: Phaser.GameObjects.Text;
   private debugBtn?: Phaser.GameObjects.Container;
+  /** Boutons des visionneuses de dev (unités, particules, obstacles, divers), dans l'ordre d'affichage. */
+  private viewerBtns: Phaser.GameObjects.Container[] = [];
+  /** Boutons des panneaux de dev (foule, triche), avant les visionneuses. */
+  private panelBtns: Phaser.GameObjects.Container[] = [];
   private respawnText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -34,8 +39,15 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
       .setVisible(false);
-    // Dev uniquement : le menu debug (sliders du mouvement de foule…) n'existe pas dans le build Poki.
-    if (import.meta.env.DEV) this.debugBtn = this.makeDebugButton();
+    // Dev uniquement : le menu Réglages, les panneaux et les visionneuses n'existent pas dans le build Poki.
+    if (import.meta.env.DEV) {
+      this.debugBtn = this.makeDebugButton();
+      this.panelBtns = [
+        makeSquareButton(this, iconCrowd, () => this.game_.toggleCrowdPanel()),
+        makeSquareButton(this, iconCheat, () => this.game_.toggleCheatPanel()),
+      ];
+      this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene)));
+    }
     this.pauseBtn = this.makePauseButton().setVisible(!this.game_.session.online);
     this.hint = this.makeHint();
 
@@ -54,19 +66,17 @@ export class HudScene extends Phaser.Scene {
     this.respawnText.setVisible(s.online && s.connection === 'connected' && !g.localSquad?.alive);
   }
 
-  /** Bouton « engrenage » en haut à gauche : ouvre / ferme le menu debug. */
+  /** Bouton « curseurs » en haut à gauche : ouvre / ferme le menu Réglages (zoom du jeu, visuel, stats). */
   private makeDebugButton(): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const g = this.add.graphics();
     g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-22, -22, 44, 44, 10);
     g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-22, -22, 44, 44, 10);
-    // engrenage : disque à 8 dents + trou central
-    g.fillStyle(0xffffff, 1).fillCircle(0, 0, 9);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      g.fillRect(Math.cos(a) * 11 - 2.5, Math.sin(a) * 11 - 2.5, 5, 5);
-    }
-    g.fillStyle(PALETTE.panel, 1).fillCircle(0, 0, 4);
+    // trois curseurs : une barre + un bouton décalé
+    [-10, 0, 10].forEach((y, i) => {
+      g.fillStyle(0xffffff, 1).fillRoundedRect(-12, y - 1.5, 24, 3, 1.5);
+      g.fillStyle(PALETTE.primary, 1).fillCircle([-4, 5, -1][i], y, 4);
+    });
     const hit = this.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
     hit.on('pointerup', () => this.game_.toggleDebug());
     c.add([g, hit]);
@@ -112,9 +122,12 @@ export class HudScene extends Phaser.Scene {
     const { width, height } = this.scale;
     // Décalé sous la pill Poki sur mobile
     const top = device.isTouch ? 70 : 12;
-    // le code de salle (en ligne) se place à droite du bouton debug s'il y en a un
+    // boutons alignés à gauche ; le code de salle (en ligne) se place à droite du dernier
     this.debugBtn?.setPosition(14 + 22, top + 22);
-    this.roomText.setPosition(this.debugBtn ? 14 + 44 + 10 : 14, this.debugBtn ? top + 10 : top);
+    const devBtns = [...this.panelBtns, ...this.viewerBtns];
+    devBtns.forEach((b, i) => b.setPosition(14 + (1 + i) * (44 + 8) + 22, top + 22));
+    const buttons = this.debugBtn ? 1 + devBtns.length : 0; // menu Réglages + panneaux + visionneuses (dev)
+    this.roomText.setPosition(buttons ? 14 + buttons * (44 + 8) + 10 : 14, buttons ? top + 10 : top);
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height / 2);

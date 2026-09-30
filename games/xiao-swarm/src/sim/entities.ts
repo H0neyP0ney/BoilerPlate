@@ -73,6 +73,9 @@ export interface Projectile {
   damage: number;
   pierce: number;
   flame: boolean;
+  /** Grenade en cloche : pas de collision en vol, explose à la fin de sa course (rayon `aoe`). */
+  lob: boolean;
+  aoe: number;
   texture: string;
   team: Team;
   owner: PlayerId;

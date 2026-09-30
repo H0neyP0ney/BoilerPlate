@@ -11,7 +11,7 @@ export interface SliderOptions {
 }
 
 /**
- * Panneau de debug (dev uniquement) : FPS + stats libres + menu de réglages (sliders, boutons).
+ * Menu Réglages (dev uniquement) : FPS + stats libres + réglages (sliders, boutons).
  * Touche ² / ` / F2 pour afficher / masquer le tout.
  * En build de prod, `DebugOverlay.create` renvoie undefined et tout est tree-shaké.
  *
@@ -21,7 +21,7 @@ export interface SliderOptions {
  *   dbg?.button('Réinitialiser', () => …);
  */
 export class DebugOverlay {
-  private readonly text: Phaser.GameObjects.Text;
+  private statsEl?: HTMLPreElement;
   private readonly stats = new Map<string, string | number>();
   private readonly cheats: { key: string; label: string }[] = [];
   private elapsed = 0;
@@ -30,26 +30,20 @@ export class DebugOverlay {
   private status?: HTMLDivElement;
   private readonly syncers: (() => void)[] = [];
 
-  /** `top` : décalage vertical du texte de stats (pour laisser la place à un bouton du HUD en haut à gauche). */
-  static create(scene: Phaser.Scene, opts: { top?: number } = {}): DebugOverlay | undefined {
-    return import.meta.env.DEV ? new DebugOverlay(scene, opts.top ?? 8) : undefined;
+  /**
+   * `title` : titre affiché en tête du menu (ex. « Réglages »).
+   * `onMenuToggle` : appelé à chaque ouverture / fermeture avec l'élément du menu, pour que le jeu le positionne
+   * (par défaut : en haut à gauche).
+   */
+  static create(scene: Phaser.Scene, opts: { title?: string; onMenuToggle?: (open: boolean, menu: HTMLElement) => void } = {}): DebugOverlay | undefined {
+    return import.meta.env.DEV ? new DebugOverlay(scene, opts.title, opts.onMenuToggle) : undefined;
   }
 
   private constructor(
     private readonly scene: Phaser.Scene,
-    top: number,
+    private readonly title?: string,
+    private readonly onMenuToggle?: (open: boolean, menu: HTMLElement) => void,
   ) {
-    this.text = scene.add
-      .text(8, top, '', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#7CFFB2',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        padding: { x: 6, y: 4 },
-      })
-      .setScrollFactor(0)
-      .setDepth(1e6)
-      .setVisible(false);
     scene.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
       if (e.code === 'Backquote' || e.key === 'F2') this.toggleMenu();
     });
@@ -60,11 +54,17 @@ export class DebugOverlay {
     });
   }
 
-  /** Affiche / masque le panneau de stats et le menu de réglages (touche ² / F2, ou bouton du HUD). */
+  /** Affiche / masque le menu (stats + réglages) : touche ² / F2, ou bouton du HUD. */
   toggleMenu(open = !this.menuVisible): void {
     this.menuVisible = open;
-    this.text.setVisible(open);
-    if (this.menu) this.menu.style.display = open ? 'block' : 'none';
+    if (open) {
+      this.ensureMenu();
+      this.elapsed = 250; // stats remplies dès la prochaine image
+    }
+    if (this.menu) {
+      this.menu.style.display = open ? 'block' : 'none';
+      this.onMenuToggle?.(open, this.menu);
+    }
   }
 
   get isOpen(): boolean {
@@ -81,7 +81,7 @@ export class DebugOverlay {
     this.scene.input.keyboard?.on(`keydown-${key}`, fn);
   }
 
-  /** Slider de réglage dans le menu debug (mise à jour en direct). */
+  /** Slider de réglage dans le menu Réglages (mise à jour en direct). */
   slider(label: string, o: SliderOptions): void {
     const row = document.createElement('label');
     row.style.cssText = 'display:block;margin:0 0 7px';
@@ -117,7 +117,7 @@ export class DebugOverlay {
     sync();
   }
 
-  /** Bouton dans le menu debug. */
+  /** Bouton dans le menu Réglages. */
   button(label: string, fn: () => void): void {
     const b = document.createElement('button');
     b.textContent = label;
@@ -129,7 +129,7 @@ export class DebugOverlay {
     this.ensureMenu().append(b);
   }
 
-  /** Titre de section dans le menu debug. */
+  /** Titre de section dans le menu Réglages. */
   section(title: string): void {
     const h = document.createElement('div');
     h.textContent = title;
@@ -157,9 +157,31 @@ export class DebugOverlay {
     if (this.menu) return this.menu;
     const m = document.createElement('div');
     m.style.cssText =
-      'position:fixed;top:8px;right:8px;z-index:99999;width:260px;max-height:calc(100vh - 16px);overflow:auto;' +
+      'position:fixed;top:8px;left:8px;z-index:99999;width:260px;max-height:calc(100vh - 16px);overflow:auto;' +
       'padding:8px 10px;background:rgba(0,0,0,0.78);color:#dfe;font:12px monospace;border-radius:6px;' +
       `display:${this.menuVisible ? 'block' : 'none'}`;
+    // en-tête : titre à gauche, croix de fermeture à droite (reste visible quand le menu défile)
+    const head = document.createElement('div');
+    head.style.cssText =
+      'display:flex;justify-content:space-between;align-items:center;position:sticky;top:-8px;z-index:1;' +
+      'margin:-8px -10px 6px;padding:6px 10px;background:rgba(0,0,0,0.92);border-bottom:1px solid #444';
+    const name = document.createElement('span');
+    name.textContent = this.title ?? '';
+    name.style.cssText = 'font:bold 14px system-ui,sans-serif;color:#ffd166';
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.title = 'Fermer (touche ² / F2 pour rouvrir)';
+    close.style.cssText = 'font:13px system-ui,sans-serif;cursor:pointer;padding:0 8px';
+    close.addEventListener('click', () => {
+      close.blur();
+      this.toggleMenu(false);
+    });
+    head.append(name, close);
+    m.append(head);
+    // stats en direct (fps + valeurs libres + raccourcis), en tête du menu
+    this.statsEl = document.createElement('pre');
+    this.statsEl.style.cssText = 'margin:0 0 8px;padding:4px 6px;color:#7CFFB2;background:rgba(0,0,0,0.6);font:12px monospace;white-space:pre-wrap';
+    m.append(this.statsEl);
     document.body.append(m);
     this.menu = m;
     return m;
@@ -167,11 +189,11 @@ export class DebugOverlay {
 
   private readonly refresh = (_t: number, delta: number): void => {
     this.elapsed += delta;
-    if (!this.text.visible || this.elapsed < 250) return;
+    if (!this.menuVisible || !this.statsEl || this.elapsed < 250) return;
     this.elapsed = 0;
     const lines = [`fps ${this.scene.game.loop.actualFps.toFixed(0)}`];
     for (const [k, v] of this.stats) lines.push(`${k} ${typeof v === 'number' ? Math.round(v * 10) / 10 : v}`);
     for (const c of this.cheats) lines.push(`[${c.key}] ${c.label}`);
-    this.text.setText(lines.join('\n'));
+    this.statsEl.textContent = lines.join('\n');
   };
 }

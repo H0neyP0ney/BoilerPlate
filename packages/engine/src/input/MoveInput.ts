@@ -10,8 +10,8 @@ export class MoveInput {
   readonly joystick: VirtualJoystick;
   private readonly keys: Record<(typeof KEYS)[number], Phaser.Input.Keyboard.Key>;
 
-  constructor(scene: Phaser.Scene, opts: { joystickRadius?: number } = {}) {
-    this.joystick = new VirtualJoystick(scene, opts.joystickRadius);
+  constructor(scene: Phaser.Scene, opts: { joystickRadius?: number; joystickFollowMargin?: number } = {}) {
+    this.joystick = new VirtualJoystick(scene, opts.joystickRadius, opts.joystickFollowMargin);
     this.keys = scene.input.keyboard!.addKeys(KEYS.join(',')) as typeof this.keys;
   }
 

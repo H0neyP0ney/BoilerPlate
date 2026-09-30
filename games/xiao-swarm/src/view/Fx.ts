@@ -1,35 +1,20 @@
 import Phaser from 'phaser';
 import { Pool, theme } from '@xiao/engine';
 import { DEPTH } from '../config';
+import { FX } from '../fxParams';
 
 /**
  * Effets visuels déclenchés par les événements de la simulation :
  * éclaboussures, explosions, ondes de choc, textes flottants, soins.
+ * Tous les réglages viennent de `fxParams.ts` (éditables dans la visionneuse de particules).
  */
 export class Fx {
-  private readonly splat: Phaser.GameObjects.Particles.ParticleEmitter;
-  private readonly fire: Phaser.GameObjects.Particles.ParticleEmitter;
+  private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private fire!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
 
   constructor(private readonly scene: Phaser.Scene) {
-    this.splat = scene.add
-      .particles(0, 0, 'fx_dot', {
-        speed: { min: 60, max: 240 },
-        scale: { start: 0.9, end: 0 },
-        lifespan: { min: 250, max: 500 },
-        emitting: false,
-      })
-      .setDepth(DEPTH.fx);
-    this.fire = scene.add
-      .particles(0, 0, 'fx_flame', {
-        speed: { min: 40, max: 260 },
-        scale: { start: 1.6, end: 0.2 },
-        alpha: { start: 1, end: 0 },
-        lifespan: { min: 300, max: 600 },
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: false,
-      })
-      .setDepth(DEPTH.fx);
+    this.build();
     this.texts = new Pool(
       () =>
         scene.add
@@ -41,46 +26,81 @@ export class Fx {
     );
   }
 
+  /** (Re)crée les émetteurs de particules depuis `FX` : à rappeler après un changement de réglage. */
+  build(): void {
+    this.splat?.destroy();
+    this.fire?.destroy();
+    const b = FX.burst;
+    this.splat = this.scene.add
+      .particles(0, 0, 'fx_dot', {
+        speed: { min: b.speedMin, max: b.speedMax },
+        scale: { start: b.scaleStart, end: b.scaleEnd },
+        lifespan: { min: b.lifeMin, max: b.lifeMax },
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
+    const e = FX.explosion;
+    this.fire = this.scene.add
+      .particles(0, 0, 'fx_flame', {
+        speed: { min: e.speedMin, max: e.speedMax },
+        scale: { start: e.scaleStart, end: e.scaleEnd },
+        alpha: { start: e.alphaStart, end: e.alphaEnd },
+        lifespan: { min: e.lifeMin, max: e.lifeMax },
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
+  }
+
   burst(x: number, y: number, color: number, count = 10): void {
     this.splat.setParticleTint(color);
-    this.splat.explode(count, x, y);
+    this.splat.explode(Math.max(1, Math.round(count * FX.burst.countMul)), x, y);
   }
 
   explosion(x: number, y: number, radius: number, shake: boolean): void {
-    this.fire.explode(22, x, y);
-    this.ring(x, y, radius, 0xffb040);
-    if (shake) this.scene.cameras.main.shake(180, 0.008);
+    const e = FX.explosion;
+    this.fire.explode(e.count, x, y);
+    this.ring(x, y, radius, e.ringColor);
+    if (shake && e.shakeAmount > 0) this.scene.cameras.main.shake(e.shakeMs, e.shakeAmount);
   }
 
   ring(x: number, y: number, radius: number, color: number): void {
-    const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(0.1, 0.07).setAlpha(0.9);
+    const r = FX.ring;
+    const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(r.startScaleX, r.startScaleY).setAlpha(r.alpha);
     this.scene.tweens.add({
       targets: img,
       scaleX: (radius * 2) / 128,
-      scaleY: (radius * 2 * 0.7) / 128,
+      scaleY: (radius * 2 * r.squash) / 128,
       alpha: 0,
-      duration: 350,
+      duration: r.durationMs,
       ease: 'Cubic.Out',
       onComplete: () => img.destroy(),
     });
   }
 
   text(x: number, y: number, value: string, color = '#ffffff', size = 22): void {
+    const f = FX.text;
     const t = this.texts.acquire();
-    t.setText(value).setColor(color).setFontSize(size).setPosition(x, y).setScale(0.6);
-    this.scene.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.Out' });
+    t.setText(value).setColor(color).setFontSize(size).setPosition(x, y).setScale(f.popFrom);
+    this.scene.tweens.add({ targets: t, scale: 1, duration: f.popMs, ease: 'Back.Out' });
     this.scene.tweens.add({
       targets: t,
-      y: y - 46,
+      y: y - f.rise,
       alpha: 0,
-      delay: 450,
-      duration: 500,
+      delay: f.holdMs,
+      duration: f.fadeMs,
       onComplete: () => this.texts.release(t),
     });
   }
 
   heal(x: number, y: number): void {
-    const img = this.scene.add.image(x + Phaser.Math.Between(-10, 10), y, 'fx_plus').setDepth(DEPTH.fx);
-    this.scene.tweens.add({ targets: img, y: y - 34, alpha: 0, duration: 700, onComplete: () => img.destroy() });
+    const h = FX.heal;
+    const img = this.scene.add.image(x + Phaser.Math.Between(-h.jitter, h.jitter), y, 'fx_plus').setDepth(DEPTH.fx);
+    this.scene.tweens.add({ targets: img, y: y - h.rise, alpha: 0, duration: h.durationMs, onComplete: () => img.destroy() });
+  }
+
+  destroy(): void {
+    this.splat.destroy();
+    this.fire.destroy();
   }
 }

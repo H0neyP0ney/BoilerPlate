@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 
 /**
  * Joystick flottant : il apparaît là où le joueur pose le doigt.
+ * Si le doigt s'éloigne franchement (au-delà du rayon + une marge), le joystick est entraîné (drag) : son centre suit
+ * le doigt, qui reste à cette distance, et la direction continue de suivre le doigt sans qu'il faille revenir vers
+ * l'ancien centre. Entre le rayon et le rayon + marge, le bouton reste au bord sans que la base bouge.
  * Fonctionne aussi à la souris (drag), utile pour tester sur desktop.
  */
 export class VirtualJoystick {
@@ -16,6 +19,8 @@ export class VirtualJoystick {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly radius = 70,
+    /** Distance au-delà du rayon avant que la base ne suive le doigt (défaut : la moitié du rayon). */
+    private readonly followMargin = radius * 0.5,
   ) {
     this.base = scene.add.circle(0, 0, radius, 0xffffff, 0.12).setStrokeStyle(3, 0xffffff, 0.35);
     this.knob = scene.add.circle(0, 0, radius * 0.45, 0xffffff, 0.45);
@@ -46,10 +51,19 @@ export class VirtualJoystick {
     if (p.id !== this.pointerId) return;
     const dx = p.x - this.origin.x;
     const dy = p.y - this.origin.y;
-    const len = Math.hypot(dx, dy);
-    const clamped = Math.min(len, this.radius);
+    let len = Math.hypot(dx, dy);
     const nx = len > 0 ? dx / len : 0;
     const ny = len > 0 ? dy / len : 0;
+    const follow = this.radius + this.followMargin;
+    if (len > follow) {
+      // le doigt est allé bien au-delà de la base : on déplace le centre pour qu'il reste à la limite de la marge
+      const excess = len - follow;
+      this.origin.x += nx * excess;
+      this.origin.y += ny * excess;
+      this.base.setPosition(this.origin.x, this.origin.y);
+      len = follow;
+    }
+    const clamped = Math.min(len, this.radius);
     this.knob.setPosition(this.origin.x + nx * clamped, this.origin.y + ny * clamped);
     this.vector.set(nx * (clamped / this.radius), ny * (clamped / this.radius));
   }

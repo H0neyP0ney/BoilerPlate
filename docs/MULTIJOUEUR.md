@@ -27,6 +27,9 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 - `ClientSession` + `Mirror` : le client écrit les snapshots dans un `Sim` jamais avancé ; le `WorldView` le lit comme une partie locale.
   Entre deux snapshots : extrapolation à la vitesse connue + lissage.
 - `Protocol.ts` : messages JSON (`hello` / `welcome` / `input` / `events`) et snapshot binaire (~1,8 Ko pour 57 aliens).
+  Version du protocole **2** : le projectile porte un indicateur de grenade en cloche (`lob`, l'arc est calculé côté affichage) ; les
+  explosions de grenade voyagent comme événements `explosion`. Les cartes (obstacles, hitbox, tailles ±10 %) sont dérivées de la seed et de
+  `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
 ## Limites connues / suite

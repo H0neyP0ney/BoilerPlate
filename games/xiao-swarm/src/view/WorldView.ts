@@ -11,7 +11,10 @@ import { Fx } from './Fx';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
-const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0xffffff, 0x3de0c0, 0xff8a3a, 0x9aa0ff];
+export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0xffffff, 0x3de0c0, 0xff8a3a, 0x9aa0ff];
+
+/** Hauteur maximale (px) de l'arc d'une grenade en cloche (effet d'affichage uniquement). */
+export const LOB_HEIGHT = 55;
 
 interface Tracer {
   x1: number;
@@ -36,6 +39,7 @@ export class WorldView {
   private readonly recruits = new Map<number, RecruitView>();
   private readonly bullets: Phaser.GameObjects.Image[] = [];
   private readonly tracers: Tracer[] = [];
+  private readonly lobShadows: { x: number; y: number; h: number }[] = [];
   private readonly ground: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly beams: Phaser.GameObjects.Graphics;
@@ -98,7 +102,8 @@ export class WorldView {
         break;
       }
       case 'explosion':
-        this.fx.explosion(e.x, e.y, e.r, nearCam(e.x, e.y));
+        // pas de secousse pour les petites explosions (grenades), sinon l'écran tremble en permanence
+        this.fx.explosion(e.x, e.y, e.r, e.r >= 100 && nearCam(e.x, e.y));
         break;
       case 'slam':
         this.fx.ring(e.x, e.y, e.r, 0xff6a6a);
@@ -127,6 +132,7 @@ export class WorldView {
     const c = sprites.add(this.scene, id, x, y).setDepth(DEPTH.actors + y - 1);
     c.setFlipX(this.soldiers.get(soldierId)?.flipX ?? false);
     sprites.play(c, id, 'die');
+    sprites.place(c, id);
     this.scene.tweens.add({ targets: c, alpha: 0, delay: 1400, duration: 600, onComplete: () => c.destroy() });
   }
 
@@ -198,6 +204,7 @@ export class WorldView {
   /** Les projectiles n'ont pas d'id : on réutilise un pool d'images, dans l'ordre. */
   private syncProjectiles(alpha: number): void {
     const list = this.sim.combat.projectiles.active;
+    this.lobShadows.length = 0;
     while (this.bullets.length < list.length) this.bullets.push(this.scene.add.image(0, 0, 'fx_bullet').setDepth(DEPTH.fx - 1));
     for (let i = 0; i < this.bullets.length; i++) {
       const img = this.bullets[i];
@@ -209,11 +216,18 @@ export class WorldView {
       const x = lerp(p.px, p.x, alpha);
       const y = lerp(p.py, p.y, alpha);
       if (img.texture.key !== p.texture) img.setTexture(p.texture);
-      img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
-      if (p.flame) {
+      if (p.lob) {
+        // grenade : trajectoire au sol + arc vertical ; l'ombre reste au sol
+        const k = Math.min(1, Math.max(0, 1 - p.life / p.maxLife));
+        const h = 4 * LOB_HEIGHT * k * (1 - k);
+        this.lobShadows.push({ x, y, h });
+        img.setVisible(true).setPosition(x, y - h).setRotation(k * 14).setScale(1 + (h / LOB_HEIGHT) * 0.3).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+      } else if (p.flame) {
+        img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
         const k = 1 - p.life / p.maxLife;
         img.setScale(0.35 + k * 1.3).setAlpha(1 - k * k).setBlendMode(Phaser.BlendModes.ADD);
       } else {
+        img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
         img.setScale(1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
       }
     }
@@ -237,6 +251,10 @@ export class WorldView {
         g.fillStyle(0x5eff8a, 0.08).fillEllipse(v.rx, v.ry, r * 2, r * 1.4);
         g.lineStyle(2, 0x5eff8a, 0.35).strokeEllipse(v.rx, v.ry, r * 2, r * 1.4);
       }
+    }
+    for (const s of this.lobShadows) {
+      const k = 1 - Math.min(1, s.h / LOB_HEIGHT) * 0.4;
+      g.fillStyle(0x2a1d2e, 0.3 * k).fillEllipse(s.x, s.y, 16 * k, 7 * k);
     }
     for (const v of this.soldiers.values()) {
       const r = v.state.radius;

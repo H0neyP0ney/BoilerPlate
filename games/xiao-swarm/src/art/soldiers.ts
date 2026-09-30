@@ -19,7 +19,7 @@ interface Look {
   visor?: boolean;
   headset?: boolean;
   goggles?: boolean;
-  backpack?: 'medkit' | 'fueltank';
+  backpack?: 'medkit' | 'fueltank' | 'grenades';
 }
 
 const LOOKS: Record<SoldierClassId, Look> = {
@@ -48,6 +48,7 @@ const LOOKS: Record<SoldierClassId, Look> = {
     headset: true,
   },
   tank: { helmet: '#8a96a8', helmetDark: '#5f6a7a', uniform: '#6c7686', uniformDark: '#4a5260', visor: true },
+  grenadier: { helmet: '#9a5ad8', helmetDark: '#6f3fa8', uniform: '#7c58b4', uniformDark: '#573d86', backpack: 'grenades' },
 };
 
 function redCross(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
@@ -85,6 +86,18 @@ function drawBody(ctx: CanvasRenderingContext2D, look: Look, big: boolean): void
     outlined(ctx, '#d6a93a');
     ctx.fillStyle = '#9a7420';
     ctx.fillRect(12, 42, 8, 3);
+  } else if (look.backpack === 'grenades') {
+    // besace violette + deux grenades accrochées
+    ctx.beginPath();
+    ctx.roundRect(8, 38, 16, 18, 4);
+    outlined(ctx, '#6f3fa8');
+    for (const y of [43, 51]) {
+      ctx.beginPath();
+      ctx.arc(16, y, 4, 0, Math.PI * 2);
+      outlined(ctx, '#3d2b52', 2);
+      ctx.fillStyle = '#ffd84a';
+      ctx.fillRect(15, y - 6, 2, 2);
+    }
   }
 
   // Jambes / bottes
@@ -244,6 +257,20 @@ const GUNS: Record<SoldierClassId, GunDraw> = {
     ctx.fillRect(52, 11, 3, 2);
     ctx.fillStyle = '#ffc83d';
     ctx.fillRect(12, 6, 10, 3);
+  },
+  // Lance-grenades : gros tube + barillet, bouche évasée.
+  grenadier: (ctx) => {
+    ctx.beginPath();
+    ctx.roundRect(6, 5, 40, 10, 4);
+    outlined(ctx, '#5b4a78', 2.5);
+    ctx.beginPath();
+    ctx.roundRect(44, 3, 14, 14, 3);
+    outlined(ctx, '#2f2540', 2);
+    ctx.beginPath();
+    ctx.arc(24, 14, 6, 0, Math.PI * 2);
+    outlined(ctx, '#3d2b52', 2);
+    ctx.fillStyle = '#c79bff';
+    ctx.fillRect(12, 7, 16, 2);
   },
 };
 

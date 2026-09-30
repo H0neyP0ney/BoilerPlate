@@ -69,8 +69,8 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 
 | Id | Taille procédurale actuelle (px) | Affiché à | Remarques |
 |---|---|---|---|
-| `soldier_gunner` `soldier_medic` `soldier_flammer` `soldier_sniper` `soldier_tank` | 64×72 | ×0.8 | corps, face à droite |
-| `gun_gunner` … `gun_tank` | 64×20 | ×0.8 | arme séparée qui pivote vers la cible ; `hidden: true` si l'arme est dans la planche du soldat |
+| `soldier_gunner` `soldier_medic` `soldier_flammer` `soldier_sniper` `soldier_tank` `soldier_grenadier` | 64×72 | ×0.8 | corps, face à droite |
+| `gun_gunner` … `gun_grenadier` | 64×20 | ×0.8 | arme séparée qui pivote vers la cible ; `hidden: true` si l'arme est dans la planche du soldat |
 | `portrait_<classe>` | — | HUD | par défaut : haut du corps du soldat |
 | `recruit_<classe>` | 56×60 | ×0.75 | recrue au sol à ramasser |
 | `alien_slime` | 48×48 | ×1 | slime vert à un oeil |
@@ -79,8 +79,9 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 | `alien_beast` | 66×52 | ×1 | bête orange à cornes (charge) |
 | `alien_crab` | 130×112 | ×1 | crabe géant (mini-boss) |
 | `palm` `bush` `bush_flowers` `log` | 160×172, 112×78, 112×78, 150×44 | ×1 | décor de bordure |
-| `rock_big` `rock_small` | 110×92, 56×46 | ×1 | obstacles (collision fixe, ne pas changer l'emprise) |
-| `fx_bullet` `fx_bolt_green` `fx_flame` `fx_glow` `fx_dot` `fx_ring` `fx_plus` `hand` | variées | — | effets : PNG isolé (`image`) du même id |
+| `obstacle_1` … `obstacle_8` | 111×107 → 260×189 (WebP) | voir `data/obstacles.ts` | obstacles volcaniques (lave, rochers, cristaux) : `public/assets/decor/`, sources `art-src/obstacle_N.png` |
+| `tache_1` … `tache_4` | 235×203 → 260×237 (WebP) | voir `data/obstacles.ts` | taches sombres sous les obstacles : chaque obstacle a son jeu de variantes (image, position, largeur, échelle Y, miroir), une tirée au hasard par obstacle posé (seed de la carte) ; `ArenaView.stain`, sources `art-src/tache_N.png` |
+| `fx_bullet` `fx_blaster_blue` `fx_bolt_green` `fx_grenade` `fx_flame` `fx_glow` `fx_dot` `fx_ring` `fx_plus` `hand` | variées | — | effets : PNG isolé (`image`) du même id |
 
 **Sol** : une texture qui se raccorde (`ground_tile`, `public/assets/ground/ground.webp`, 1024 px — puissance de 2)
 est répétée sur toute la carte par un seul `TileSprite` (`view/ArenaView.ts`, échelle `GROUND_SCALE`). Source :
@@ -88,5 +89,10 @@ est répétée sur toute la carte par un seul `TileSprite` (`view/ArenaView.ts`,
 la réduire en gardant le raccord (tuile 3×3, réduction, recadrage du centre).
 Sans cette texture, le sol procédural (sable, herbe, étangs) sert de repli.
 
-**Obstacles** : aucun pour l'instant (`ponds` / `rocks` / `logs` vides dans `data/maps.ts`) ; la collision et le décor
-sont prêts, il suffit de les remplir.
+**Obstacles** : 8 images `obstacle_N` (WebP dans `public/assets/decor/`, déclarées dans `src/assets/manifest.ts`). Échelle,
+ancrage et **hitbox** (cercles relatifs à l'ancrage) de chacun : `src/data/obstacles.ts` — c'est la seule source, partagée
+par la simulation (`Arena`) et l'affichage (`ArenaView`). Placement sur la carte : `obstacles` dans `src/data/maps.ts`, où chaque obstacle posé reçoit une taille aléatoire de ±10 %
+(`OBSTACLE_SIZE_JITTER`, tirée avec la seed de la carte) qui s'applique au sprite, à la hitbox et à la tache. L'échelle d'un obstacle
+(champ « Taille » de la vue d'obstacles) redimensionne sprite, hitbox et taches ensemble.
+Réglage des hitbox et des taches : bouton « hitbox » en haut à gauche du jeu (dev) ou `?obstacles` (liste « Édition » : hitbox / taches), puis « Copier le code » → coller
+l'entrée dans `OBSTACLES`. Opacité des taches : menu Réglages, section « Visuel » ; leur taille (largeur, échelle Y) se règle par variante dans la vue Obstacles. Les réglages du navigateur (`localStorage`) ne servent qu'à tester en local.

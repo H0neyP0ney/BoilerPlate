@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { Rng, sprites } from '@xiao/engine';
-import { DEPTH } from '../config';
-import type { MapDef } from '../data/maps';
+import { DEPTH, VISUAL } from '../config';
+import type { MapDef, PlacedObstacle } from '../data/maps';
+import { OBSTACLES } from '../data/obstacles';
 import { buildGround, drawGroundChunk, type GroundFeature } from '../art/ground';
 
 /**
@@ -15,9 +16,8 @@ const PRELOAD = 512;
 /** Au-delà de cette marge, les morceaux sont libérés (mémoire GPU sur mobile). */
 const UNLOAD = 1024;
 
-/** Texture de sol qui se raccorde (assets/manifest.ts) et son échelle d'affichage (1024 px → ~750 px à l'écran). */
+/** Texture de sol qui se raccorde (assets/manifest.ts) ; son échelle d'affichage est `VISUAL.groundScale` (config.ts). */
 const GROUND_TEXTURE = 'ground_tile';
-const GROUND_SCALE = 0.73;
 
 /**
  * Affichage de la carte : sol en texture répétée sur la zone jouable (un seul TileSprite, quelle que soit
@@ -31,6 +31,9 @@ export class ArenaView {
   private readonly tiled: boolean;
   private first = true;
   private water?: Phaser.GameObjects.TileSprite;
+  private ground?: Phaser.GameObjects.TileSprite;
+  /** Taches sombres et leur échelle (largeur et échelle Y de la variante, vue Obstacles) ; opacité : VISUAL.stainAlpha (config.ts). */
+  private readonly stains: { img: Phaser.GameObjects.Image }[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -41,7 +44,7 @@ export class ArenaView {
       // Eau partout, sol seulement dans la zone jouable (bords = `Arena.bounds`), avec une frange d'écume.
       const b = { x: map.border, y: map.border, w: map.width - 2 * map.border, h: map.height - 2 * map.border };
       this.water = scene.add.tileSprite(0, 0, map.width, map.height, 'water').setOrigin(0).setDepth(DEPTH.ground - 1);
-      scene.add.tileSprite(b.x, b.y, b.w, b.h, GROUND_TEXTURE).setOrigin(0).setTileScale(GROUND_SCALE).setDepth(DEPTH.ground);
+      this.ground = scene.add.tileSprite(b.x, b.y, b.w, b.h, GROUND_TEXTURE).setOrigin(0).setDepth(DEPTH.ground);
       scene.add
         .graphics()
         .setDepth(DEPTH.ground + 0.5)
@@ -56,6 +59,8 @@ export class ArenaView {
 
   /** À appeler chaque frame avec la zone visible de la caméra. */
   update(view: Phaser.Geom.Rectangle): void {
+    this.ground?.setTileScale(VISUAL.groundScale);
+    for (const s of this.stains) s.img.setAlpha(VISUAL.stainAlpha);
     if (this.water) {
       // l'eau glisse doucement
       const t = this.scene.time.now;
@@ -106,9 +111,10 @@ export class ArenaView {
   private addDecor(): void {
     const { width: W, height: H, border: B } = this.map;
     const rng = new Rng(this.map.seed + 1);
-    for (const r of this.map.rocks) {
-      this.decor(r.x, r.y, r.size === 'big' ? 'rock_big' : 'rock_small');
-    }
+    // Taches d'abord (sous les obstacles). Rng à part : le tirage des taches ne change pas le reste du décor.
+    const stainRng = new Rng(this.map.seed + 2);
+    for (const o of this.map.obstacles) this.stain(o, stainRng);
+    for (const o of this.map.obstacles) this.decor(o.x, o.y, o.kind, o.size ?? 1);
     for (const l of this.map.logs) this.decor(l.x, l.y, 'log', 0.95);
 
     // Bordure : plus de jungle, c'est de l'eau (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
@@ -131,6 +137,23 @@ export class ArenaView {
         edge(W - B * 0.75, y);
       }
     }
+  }
+
+  /**
+   * Tache sombre sous un obstacle : une variante du jeu de taches de l'obstacle (data/obstacles.ts, éditable dans la
+   * visionneuse d'obstacles), tirée au hasard avec la seed de la carte — identique chez tous les joueurs. Image,
+   * position, largeur, échelle Y et sens viennent de la variante ; seule l'opacité est un réglage global (menu Réglages).
+   */
+  private stain(o: PlacedObstacle, rng: Rng): void {
+    const variants = OBSTACLES[o.kind].stains;
+    const roll = rng.next(); // toujours tiré : le reste du décor ne dépend pas du nombre de variantes
+    const v = variants[Math.floor(roll * variants.length)];
+    if (!v || !this.scene.textures.exists(v.tex)) return;
+    const k = o.size ?? 1; // la tache suit la taille de l'instance
+    const img = this.scene.add.image(o.x + v.x * k, o.y + v.y * k, v.tex).setFlipX(v.flip).setDepth(DEPTH.ground + 0.2);
+    const base = (v.w * k) / img.width;
+    img.setScale(base, base * v.sy).setAlpha(VISUAL.stainAlpha);
+    this.stains.push({ img });
   }
 
   /** Élément de décor via le catalogue (planche fournie ou dessin procédural). */

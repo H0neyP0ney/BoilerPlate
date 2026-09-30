@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, poki, RunFlow, storage } from '@xiao/engine';
 import { SCENES } from '../config';
-import { ACTIVE_ALIENS, WAVE_MARKS } from '../data/aliens';
-import { ACTIVE_CLASSES, type SoldierClassId } from '../data/classes';
+import { WAVE_MARKS } from '../data/aliens';
+import type { SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
-import { addCrowdMenu, loadSavedCrowd } from '../debugCrowd';
+import { loadSavedCrowd } from '../debugCrowd';
+import { CheatPanel } from '../dev/cheatPanel';
+import { setDocked } from '../dev/dock';
+import { CrowdPanel } from '../dev/crowdPanel';
+import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
+import { settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
@@ -27,6 +32,10 @@ export class GameScene extends Phaser.Scene {
   private view!: WorldView;
   private move!: MoveInput;
   private debug?: DebugOverlay;
+  private crowdPanel?: CrowdPanel;
+  private cheatPanel?: CheatPanel;
+  /** Vitesse de la simulation (panneau Triche, dev) : 1 = normale, 0 = figée. */
+  private timeScale = 1;
   private revived = false;
   private ended = false;
   private readonly camTarget = { x: 0, y: 0 };
@@ -38,7 +47,11 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.revived = false;
     this.ended = false;
-    loadSavedCrowd();
+    if (import.meta.env.DEV) {
+      // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
+      loadSavedCrowd();
+      loadSavedVisual();
+    }
     const online = this.registry.get('session') as Session | undefined;
     this.registry.remove('session');
     if (online) {
@@ -88,7 +101,7 @@ export class GameScene extends Phaser.Scene {
 
     // En ligne, le monde ne s'arrête jamais : l'hôte fait tourner la partie de tout le monde.
     if (this.flow.isPlaying || this.session.online) {
-      this.session.advance(delta, this.onEvent);
+      this.session.advance(delta * this.timeScale, this.onEvent);
       this.checkEnd();
     }
     this.view.render(this.flow.isPlaying || this.session.online ? this.session.alpha : 1, dt, secs);
@@ -235,8 +248,17 @@ export class GameScene extends Phaser.Scene {
       this.camTarget.y = focus.y;
       if (jump) cam.centerOn(focus.x, focus.y);
     }
-    const target = clamp(1 - (this.localSquad.size - 4) * 0.009, 0.8, 1);
-    cam.setZoom(damp(cam.zoom, target, 2, dt));
+    cam.setZoom(damp(cam.zoom, this.targetZoom(), 2, dt));
+  }
+
+  /** Zoom auto (dézoome quand la squad grossit) × réglage du joueur. */
+  private targetZoom(): number {
+    return clamp(1 - (this.localSquad.size - 4) * 0.009, 0.8, 1) * settings.zoom;
+  }
+
+  /** Applique le réglage de zoom immédiatement (menu Réglages : sans attendre le lissage de la caméra). */
+  applyZoomNow(): void {
+    this.cameras.main.setZoom(this.targetZoom());
   }
 
   private pickMode(): ModeDef {
@@ -246,29 +268,59 @@ export class GameScene extends Phaser.Scene {
 
   // ---------- Debug (dev uniquement) ----------
 
-  /** Bouton du HUD : ouvre / ferme le menu debug (comme la touche ² / F2). */
+  /** Bouton du HUD : ouvre / ferme le menu Réglages (comme la touche ² / F2). */
   toggleDebug(): void {
     this.debug?.toggleMenu();
   }
 
-  /** Le menu debug existe-t-il (dev uniquement) ? Le HUD n'affiche son bouton que dans ce cas. */
+  /** Boutons du HUD (dev) : ouvrent une visionneuse (unités, particules, obstacles, divers). */
+  /** Boutons du HUD (dev) : ouvrent / ferment le panneau « Foule » ou « Triche ». */
+  toggleCrowdPanel(): void {
+    this.crowdPanel?.toggle();
+  }
+
+  toggleCheatPanel(): void {
+    this.cheatPanel?.toggle();
+  }
+
+  openViewer(scene: string): void {
+    this.scene.start(scene);
+  }
+
+  /** Le menu Réglages existe-t-il (dev uniquement) ? Le HUD n'affiche son bouton que dans ce cas. */
   get hasDebug(): boolean {
     return !!this.debug;
   }
 
   private setupDebug(): void {
-    this.debug = DebugOverlay.create(this, { top: 64 }); // sous le bouton du menu debug du HUD
+    if (!import.meta.env.DEV) return; // menu Réglages, panneaux Foule / Triche : dev uniquement
+    this.debug = DebugOverlay.create(this, { title: 'Réglages', onMenuToggle: (open, menu) => setDocked(menu, open) });
     if (!this.debug) return;
     const sim = this.session.sim;
     const me = this.session.localPlayer;
-    this.debug.cheat('K', 'kill all aliens', () => {
-      for (const a of sim.aliens) sim.damage(a, 1e6, me);
+    // Réglages du jeu : zoom total de la caméra (multiplie le dézoom automatique quand la squad grossit), mémorisé.
+    this.debug.section('Jeu');
+    this.debug.slider('Zoom du jeu', {
+      min: ZOOM_MIN,
+      max: ZOOM_MAX,
+      step: ZOOM_STEP,
+      hint: '1 = zoom d\'origine. Se combine avec le dézoom automatique quand la squad grossit.',
+      get: () => settings.zoom,
+      set: (v) => {
+        settings.setZoom(v);
+        this.applyZoomNow();
+      },
     });
-    this.debug.cheat('R', 'drop recruit', () => {
-      sim.recruits.drop(sim.rng.pick(ACTIVE_CLASSES), this.localSquad.center.x + 90, this.localSquad.center.y);
+    addVisualMenu(this.debug);
+    // Panneaux dédiés (boutons du HUD) : mouvement de foule, et triche / tests (hors ligne seulement).
+    this.crowdPanel = new CrowdPanel(this);
+    this.cheatPanel = new CheatPanel(this, {
+      sim,
+      me,
+      online: this.session.online,
+      squad: () => this.localSquad,
+      getTimeScale: () => this.timeScale,
+      setTimeScale: (v) => (this.timeScale = v),
     });
-    this.debug.cheat('T', '+30s', () => sim.waves.update(30));
-    addCrowdMenu(this.debug);
-    this.debug.cheat('B', 'spawn 5 aliens', () => sim.horde.spawnNear(this.localSquad, ACTIVE_ALIENS[0], 5, 420));
   }
 }

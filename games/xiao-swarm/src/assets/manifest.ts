@@ -27,6 +27,10 @@ import { range, type AssetEntry } from '@xiao/engine';
  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
  */
 export const ASSETS: AssetEntry[] = [
+  // Obstacles volcaniques — art-src/obstacle_N.png convertis en WebP. Échelle, ancrage et hitbox : data/obstacles.ts.
+  // Taches sombres posées sous les obstacles pour les fondre dans le sol — art-src/tache_N.png réduits de moitié (WebP).
+  ...[1, 2, 3, 4].map((n): AssetEntry => ({ type: 'image', id: `tache_${n}`, url: `decor/tache_${n}.webp` })),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n): AssetEntry => ({ type: 'image', id: `obstacle_${n}`, url: `decor/obstacle_${n}.webp` })),
   // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
   // Slime vert — art-src/sprite--9px-frames-16-rows-4-cols-4 (1).png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json.

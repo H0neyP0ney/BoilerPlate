@@ -25,13 +25,21 @@ export class Combat {
       damage: 0,
       pierce: 0,
       flame: false,
+      lob: false,
+      aoe: 0,
       texture: '',
       team: 'aliens',
       owner: '',
       hit: new Set(),
     }),
     undefined,
-    (p) => p.hit.clear(),
+    (p) => {
+      // remise à zéro à la libération : un projectile recyclé ne doit garder aucun comportement du précédent
+      p.hit.clear();
+      p.lob = false;
+      p.aoe = 0;
+      p.flame = false;
+    },
   );
   private readonly scratchA: AlienState[] = [];
   private readonly scratchS: SoldierState[] = [];
@@ -85,6 +93,11 @@ export class Combat {
       return;
     }
 
+    if (weapon.kind === 'grenade') {
+      this.lob(s, target, weapon, damage, mx, my);
+      return;
+    }
+
     const pellets = weapon.pellets ?? 1;
     const speed = weapon.projectileSpeed ?? 600;
     const life = weapon.life ?? (weapon.range / speed) * 1.15;
@@ -101,10 +114,36 @@ export class Combat {
       p.damage = damage;
       p.pierce = weapon.pierce ?? 0;
       p.flame = weapon.kind === 'flame';
+      p.lob = false;
+      p.aoe = 0;
       p.texture = weapon.texture;
       p.team = s.team;
       p.owner = s.owner;
     }
+  }
+
+  /** Grenade : trajectoire droite au sol (l'arc n'est qu'un effet d'affichage), explosion à l'arrivée sur la cible anticipée. */
+  private lob(s: SoldierState, target: Unit, weapon: WeaponDef, damage: number, mx: number, my: number): void {
+    const { rng } = this.sim;
+    const speed = weapon.projectileSpeed ?? 300;
+    const flight = Math.min(1.4, Math.max(0.45, Math.hypot(target.x - mx, target.y - my) / speed));
+    // vise où sera la cible à l'atterrissage, avec un léger écart
+    const lx = target.x + target.vx * flight + rng.range(-14, 14);
+    const ly = target.y + target.vy * flight + rng.range(-14, 14);
+    const p = this.projectiles.acquire();
+    p.x = p.px = mx;
+    p.y = p.py = my;
+    p.vx = (lx - mx) / flight;
+    p.vy = (ly - my) / flight;
+    p.life = p.maxLife = flight;
+    p.damage = damage;
+    p.pierce = 0;
+    p.flame = false;
+    p.lob = true;
+    p.aoe = weapon.aoe ?? 60;
+    p.texture = weapon.texture;
+    p.team = s.team;
+    p.owner = s.owner;
   }
 
   private updateProjectiles(dt: number): void {
@@ -112,7 +151,15 @@ export class Combat {
     const pvp = this.sim.mode.pvp;
     this.projectiles.releaseWhere((p) => {
       p.life -= dt;
-      if (p.life <= 0) return true;
+      if (p.life <= 0) {
+        if (p.lob) {
+          // dernier pas jusqu'au point d'impact, puis explosion (dégâts de zone aux ennemis de son camp adverse)
+          p.x += p.vx * (dt + p.life);
+          p.y += p.vy * (dt + p.life);
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner);
+        }
+        return true;
+      }
       if (p.flame) {
         p.vx *= 1 - 2.2 * dt;
         p.vy *= 1 - 2.2 * dt;
@@ -121,6 +168,7 @@ export class Combat {
       p.py = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      if (p.lob) return false; // en l'air : rien ne l'arrête
 
       const hitR = p.flame ? 14 + (1 - p.life / p.maxLife) * 16 : 4;
       const len = Math.hypot(p.vx, p.vy) || 1;

@@ -4,7 +4,7 @@ import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -83,6 +83,8 @@ export interface ProjectileSnap {
   vy: number;
   texture: string;
   flame: boolean;
+  /** Grenade en cloche (l'affichage ajoute l'arc). */
+  lob: boolean;
   /** life / maxLife, 0 → 1. */
   age: number;
 }
@@ -147,6 +149,7 @@ export function takeSnapshot(sim: Sim): Snapshot {
       vy: p.vy,
       texture: p.texture,
       flame: p.flame,
+      lob: p.lob,
       age: p.life / p.maxLife,
     })),
   };
@@ -295,7 +298,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.i16(p.vx);
     w.i16(p.vy);
     w.u8(TEXTURES.indexOf(p.texture));
-    w.u8((p.flame ? 1 : 0) | (Math.round(p.age * 127) << 1));
+    w.u8((p.flame ? 1 : 0) | (p.lob ? 2 : 0) | (Math.round(p.age * 63) << 2));
   }
   return w.result();
 }
@@ -355,7 +358,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       const vy = r.i16();
       const texture = TEXTURES[r.u8()];
       const flags = r.u8();
-      snap.projectiles.push({ x, y, vx, vy, texture, flame: !!(flags & 1), age: (flags >> 1) / 127 });
+      snap.projectiles.push({ x, y, vx, vy, texture, flame: !!(flags & 1), lob: !!(flags & 2), age: (flags >> 2) / 63 });
     }
     return snap;
   } catch {

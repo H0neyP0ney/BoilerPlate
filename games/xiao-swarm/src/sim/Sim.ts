@@ -202,6 +202,11 @@ export class Sim {
     if (u.hp <= 0) this.killAlien(u, attacker);
   }
 
+  /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId): void {
+    this.blasts.push({ x, y, r, dmg, team, owner });
+  }
+
   damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null): void {
     if (!s.alive || s.invulnerable > 0) return;
     s.hp -= amount;

@@ -64,6 +64,7 @@ export class SoldierView {
       bob = moving ? -Math.abs(Math.sin(this.walk)) * 3 : Math.sin(time * 2.2 + this.phase) * 0.8;
       this.body.setFlipX(sprites.flipFor(this.bodyId, facing));
     }
+    sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
     this.body.setPosition(this.rx, this.ry + bob).setDepth(depth);
 
     if (this.hasGun) {
@@ -146,6 +147,7 @@ export class AlienView {
       .setPosition(this.rx, this.ry + lift)
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
+    sprites.place(this.body, this.id);
 
     if (this.flash > 0) {
       this.flash -= dt;

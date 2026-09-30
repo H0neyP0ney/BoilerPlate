@@ -1,5 +1,6 @@
 import { clamp, pushOutOfCircle, type Circle, type Point } from '@xiao/engine/sim';
 import type { MapDef } from '../data/maps';
+import { OBSTACLES } from '../data/obstacles';
 
 /**
  * Géométrie de collision de la carte (GDD §12) : obstacles en cercles,
@@ -24,8 +25,10 @@ export class Arena {
         this.obstacles.push({ x: p.x + t * p.rx * 0.62, y: p.y, radius: p.ry * (1 - Math.abs(t) * 0.35) });
       }
     }
-    for (const r of map.rocks) {
-      this.obstacles.push({ x: r.x, y: r.y - (r.size === 'big' ? 18 : 8), radius: r.size === 'big' ? 46 : 22 });
+    for (const o of map.obstacles) {
+      // hitbox = cercles relatifs à l'ancrage du sprite (data/obstacles.ts), à la taille de cette instance
+      const k = o.size ?? 1;
+      for (const c of OBSTACLES[o.kind].hitbox) this.obstacles.push({ x: o.x + c.x * k, y: o.y + c.y * k, radius: c.r * k });
     }
   }
 

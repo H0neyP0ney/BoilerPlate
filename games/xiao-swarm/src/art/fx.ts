@@ -13,6 +13,24 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.ellipse(11, 5, 11, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
   });
+  // Tir de blaster bleu : traînée qui s'éclaircit vers la tête, cœur blanc. Dessiné pointant à droite (tête à droite).
+  canvasTexture(scene, 'fx_blaster_blue', 42, 16, (ctx) => {
+    const glow = ctx.createLinearGradient(0, 0, 42, 0);
+    glow.addColorStop(0, 'rgba(40,120,255,0)');
+    glow.addColorStop(0.65, 'rgba(60,150,255,0.8)');
+    glow.addColorStop(1, 'rgba(130,205,255,0.95)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(21, 8, 21, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const core = ctx.createLinearGradient(6, 0, 40, 0);
+    core.addColorStop(0, 'rgba(180,225,255,0)');
+    core.addColorStop(1, '#ffffff');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.ellipse(23, 8, 18, 2.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
   canvasTexture(scene, 'fx_bolt_green', 20, 10, (ctx) => {
     const g = ctx.createLinearGradient(0, 0, 20, 0);
     g.addColorStop(0, 'rgba(90,255,140,0)');
@@ -21,6 +39,23 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.beginPath();
     ctx.ellipse(10, 5, 10, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
+  });
+  canvasTexture(scene, 'fx_grenade', 18, 18, (ctx) => {
+    // petite grenade violette : corps rond, reflet, goupille
+    ctx.fillStyle = '#2a1d2e';
+    ctx.beginPath();
+    ctx.arc(9, 10, 7.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8a4fd0';
+    ctx.beginPath();
+    ctx.arc(9, 10, 5.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.arc(7, 8, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffd84a';
+    ctx.fillRect(8, 1, 3, 3);
   });
   canvasTexture(scene, 'fx_flame', 40, 40, (ctx) => {
     const g = ctx.createRadialGradient(20, 20, 2, 20, 20, 20);

@@ -220,6 +220,7 @@ export class Mirror {
     p.vy = snap.vy;
     p.texture = snap.texture;
     p.flame = snap.flame;
+    p.lob = snap.lob;
     p.maxLife = 1;
     p.life = snap.age;
   }

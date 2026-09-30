@@ -2,9 +2,9 @@
  * Classes de soldats (GDD §8). Valeurs de design, à équilibrer.
  * Ajouter une classe = une entrée ici + ses textures dans art/soldiers.ts.
  */
-export type SoldierClassId = 'gunner' | 'medic' | 'flammer' | 'sniper' | 'tank';
+export type SoldierClassId = 'gunner' | 'medic' | 'flammer' | 'sniper' | 'tank' | 'grenadier';
 
-export type WeaponKind = 'bullet' | 'flame' | 'beam';
+export type WeaponKind = 'bullet' | 'flame' | 'beam' | 'grenade';
 
 export interface WeaponDef {
   kind: WeaponKind;
@@ -20,6 +20,8 @@ export interface WeaponDef {
   pierce?: number;
   /** Durée de vie du projectile (s). */
   life?: number;
+  /** Grenade : rayon de l'explosion à l'impact (px). Le projectile part en cloche et explose au sol. */
+  aoe?: number;
   texture: string;
 }
 
@@ -45,7 +47,8 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     radius: 14,
     mass: 3,
     color: 0x3d7fe0,
-    weapon: { kind: 'bullet', range: 290, cooldown: 0.32, damage: 10, projectileSpeed: 760, spread: 0.06, texture: 'fx_bullet' },
+    // Blaster bleu : tir quasi rectiligne vers la cible (très faible dispersion).
+    weapon: { kind: 'bullet', range: 290, cooldown: 0.32, damage: 10, projectileSpeed: 760, spread: 0.015, texture: 'fx_blaster_blue' },
   },
   medic: {
     id: 'medic',
@@ -101,6 +104,15 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
       texture: 'fx_bullet',
     },
   },
+  grenadier: {
+    id: 'grenadier',
+    hp: 85,
+    radius: 14,
+    mass: 3,
+    color: 0x9a5ad8,
+    // Tir lent, en cloche : dégâts de zone (petit rayon) à l'atterrissage, pas de collision en vol.
+    weapon: { kind: 'grenade', range: 340, cooldown: 1.9, damage: 38, projectileSpeed: 300, aoe: 70, texture: 'fx_grenade' },
+  },
 };
 
 /**
@@ -108,7 +120,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
  * mais ne sont ni dans les squads de départ ni recrutées. Pour en réactiver une : l'ajouter ici et
  * dans START_SQUADS.
  */
-export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner'];
+export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner', 'grenadier'];
 
 /**
  * Compositions de départ viables (GDD §7) : randomisation contrainte.
@@ -121,9 +133,10 @@ export const START_SQUADS: SoldierClassId[][] = [['gunner', 'gunner', 'gunner', 
  * compense ce qui manque par rapport à ces proportions (GDD §13).
  */
 export const TARGET_MIX: Record<SoldierClassId, number> = {
-  gunner: 0.38,
-  medic: 0.14,
-  flammer: 0.18,
-  sniper: 0.16,
-  tank: 0.14,
+  gunner: 0.32,
+  medic: 0.12,
+  flammer: 0.16,
+  sniper: 0.14,
+  tank: 0.12,
+  grenadier: 0.14,
 };

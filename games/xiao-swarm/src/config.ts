@@ -12,7 +12,7 @@ export const SQUAD = {
 } as const;
 
 /**
- * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau debug
+ * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau Foule
  * (touche ² / F2, sliders) les change en direct ; `CROWD_DEFAULTS` est la référence de départ.
  * Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
  *
@@ -47,6 +47,17 @@ export const CROWD_DEFAULTS = {
 export type CrowdKey = keyof typeof CROWD_DEFAULTS;
 export const CROWD: Record<CrowdKey, number> = { ...CROWD_DEFAULTS };
 
+/** Réglages visuels ajustables depuis le menu Réglages (dev). Ne touche pas à la simulation. */
+export const VISUAL_DEFAULTS = {
+  /** Échelle d'affichage de la texture de sol (1024 px × échelle). Plus petit = motif plus petit et plus répété. */
+  groundScale: 0.73,
+  /** Opacité des taches sombres (0 → 1). */
+  stainAlpha: 0.6,
+};
+
+export type VisualKey = keyof typeof VISUAL_DEFAULTS;
+export const VISUAL: Record<VisualKey, number> = { ...VISUAL_DEFAULTS };
+
 /** Profondeurs : sol < ombres/anneaux < acteurs (triés par y) < barres de vie. */
 export const DEPTH = {
   ground: 0,
@@ -76,5 +87,9 @@ export const SCENES = {
   game: 'Game',
   hud: 'Hud',
   pause: 'Pause',
+  viewer: 'Viewer',
+  obstacles: 'Obstacles',
+  particles: 'Particles',
+  misc: 'Misc',
   gameOver: 'GameOver',
 } as const;

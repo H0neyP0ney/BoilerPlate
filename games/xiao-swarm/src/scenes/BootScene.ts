@@ -4,6 +4,9 @@ import { PALETTE, SCENES } from '../config';
 import { ASSETS } from '../assets/manifest';
 import { makeAlienTextures } from '../art/aliens';
 import { registerDefaultSprites } from '../art/catalog';
+import { loadFxOverrides } from '../debugFx';
+import { loadObstacleOverrides } from '../debugObstacles';
+import { loadSpriteOverrides } from '../debugSprites';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
 import { makeSoldierTextures } from '../art/soldiers';
@@ -42,7 +45,13 @@ export class BootScene extends Phaser.Scene {
     makeAlienTextures(this);
     makeEnvironmentTextures(this);
     makeFxTextures(this);
+    if (import.meta.env.DEV) {
+      // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki
+      loadFxOverrides();
+      loadObstacleOverrides();
+    }
     registerDefaultSprites();
+    if (import.meta.env.DEV) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
 
     poki.gameLoadingFinished();
     void this.launch();
@@ -50,6 +59,11 @@ export class BootScene extends Phaser.Scene {
 
   /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
   private async launch(): Promise<void> {
+    // Dev : `?viewer` (unités), `?particles`, `?obstacles` ou `?misc` ouvrent directement la visionneuse correspondante.
+    if (import.meta.env.DEV && poki.getURLParam('viewer') !== undefined) return void this.scene.start(SCENES.viewer);
+    if (import.meta.env.DEV && poki.getURLParam('obstacles') !== undefined) return void this.scene.start(SCENES.obstacles);
+    if (import.meta.env.DEV && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
+    if (import.meta.env.DEV && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
     const req = readOnlineRequest();
     if (req) {
       const { width, height } = this.scale;

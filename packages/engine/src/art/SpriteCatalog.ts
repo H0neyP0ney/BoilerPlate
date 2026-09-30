@@ -18,6 +18,15 @@ export interface SpriteDef {
   originY?: number;
   /** Échelle d'affichage. */
   scale?: number;
+  /** Bouche du canon (muzzle flash), en fraction de la frame comme l'ancrage : [0.8, 0.45]. Suit le retournement du sprite. */
+  muzzle?: [number, number];
+  /**
+   * Ancrage propre à une séquence, éventuellement à une direction affichée : clés `walk` ou `walk:left`
+   * (valeurs [originX, originY] telles que passées à `setOrigin`, sprite retourné compris). Sinon originX/originY.
+   */
+  anchors?: Record<string, [number, number]>;
+  /** Bouche du canon par séquence puis par frame (index dans la séquence, 0 = première ; null = non défini → `muzzle`). */
+  muzzles?: Record<string, ([number, number] | null)[]>;
   /** Le dessin regarde vers la gauche (par défaut : vers la droite). */
   facesLeft?: boolean;
   /** Recadrage (px de la frame) : x, y, largeur, hauteur. Ex. portrait = haut du corps. */
@@ -84,7 +93,36 @@ export class SpriteCatalog {
     const key = this.get(id).anims?.[anim];
     if (!key || !sprite.scene.anims.exists(key)) return false;
     sprite.play(key, true);
+    sprite.setData('anim', anim);
     return true;
+  }
+
+  /** Direction affichée par un sprite (selon son retournement et le sens du dessin). */
+  dirOf(id: string, flipX: boolean): 'left' | 'right' {
+    return flipX !== !!this.get(id).facesLeft ? 'left' : 'right';
+  }
+
+  /** Ancrage d'une séquence dans une direction : `anim:dir`, puis `anim`, puis l'ancrage de l'unité. */
+  anchorFor(id: string, anim: string, dir: 'left' | 'right'): [number, number] {
+    const d = this.get(id);
+    return d.anchors?.[`${anim}:${dir}`] ?? d.anchors?.[anim] ?? [d.originX ?? 0.5, d.originY ?? 0.5];
+  }
+
+  /** Bouche du canon pour une frame d'une séquence (repli : `muzzle` de l'unité). Coordonnées en fraction de la frame. */
+  muzzleFor(id: string, anim: string, frame: number): [number, number] | undefined {
+    const d = this.get(id);
+    return d.muzzles?.[anim]?.[frame] ?? d.muzzle;
+  }
+
+  /**
+   * Applique l'ancrage qui correspond à l'animation jouée et à la direction affichée.
+   * À appeler après `play` / `setFlipX` (les vues le font à chaque frame ; sans `anchors` c'est sans effet).
+   */
+  place(sprite: Phaser.GameObjects.Sprite, id: string): void {
+    if (!this.get(id).anchors) return;
+    const anim = (sprite.getData('anim') as string | undefined) ?? 'idle';
+    const [x, y] = this.anchorFor(id, anim, this.dirOf(id, sprite.flipX));
+    if (sprite.originX !== x || sprite.originY !== y) sprite.setOrigin(x, y);
   }
 
   hasAnim(id: string, anim: string): boolean {

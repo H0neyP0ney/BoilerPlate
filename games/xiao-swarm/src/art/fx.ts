@@ -80,6 +80,23 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.arc(6, 6, 5.5, 0, Math.PI * 2);
     ctx.fill();
   });
+  // Flaque irrégulière (blanche, teintée à l'affichage) : quelques lobes autour d'un centre.
+  canvasTexture(scene, 'fx_puddle', 64, 64, (ctx) => {
+    ctx.fillStyle = '#fff';
+    const lobes: [number, number, number][] = [
+      [32, 32, 19],
+      [19, 28, 11],
+      [45, 35, 12],
+      [30, 46, 9],
+      [38, 19, 8],
+      [12, 40, 5],
+    ];
+    for (const [x, y, r] of lobes) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
   canvasTexture(scene, 'fx_ring', 128, 128, (ctx) => {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 8;

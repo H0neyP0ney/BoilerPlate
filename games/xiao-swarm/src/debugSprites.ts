@@ -2,7 +2,7 @@ import { sprites } from '@xiao/engine';
 
 /**
  * Réglages de placement des sprites édités dans la visionneuse d'unités (dev uniquement) :
- * ancrage de l'unité, ancrages par séquence / direction (`anchors`), bouche du canon de l'unité (`muzzle`)
+ * ancrage de l'unité, ancrages par séquence / direction (`anchors`), taille de l'ombre (`shadow`), bouche du canon de l'unité (`muzzle`)
  * et par frame (`muzzles`). Mémorisés dans le navigateur et réappliqués au démarrage (BootScene) pour voir
  * le résultat en jeu. Une fois satisfait, « Copier le code » donne les lignes à coller dans
  * assets/manifest.ts (seule source livrée).
@@ -17,6 +17,8 @@ export interface Placement {
   muzzle?: Point;
   anchors?: Record<string, Point>;
   muzzles?: Record<string, (Point | null)[]>;
+  /** Taille de l'ombre portée (1 = défaut). */
+  shadow?: number;
 }
 
 let overrides: Record<string, Placement> = {};
@@ -25,7 +27,7 @@ const base = new Map<string, Placement>();
 
 const read = (id: string): Placement => {
   const d = sprites.get(id);
-  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
+  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow };
 };
 
 function persist(): void {
@@ -100,6 +102,7 @@ const pt = (p: Point): string => `[${n(p[0])}, ${n(p[1])}]`;
 export function placementSnippet(id: string): string {
   const d = sprites.get(id);
   const lines = [`originX: ${n(d.originX ?? 0.5)}, originY: ${n(d.originY ?? 0.5)},`];
+  if (d.shadow !== undefined && d.shadow !== 1) lines.push(`shadow: ${n(d.shadow)},`);
   const anchors = Object.entries(d.anchors ?? {});
   if (anchors.length) lines.push(`anchors: { ${anchors.map(([k, v]) => `'${k}': ${pt(v)}`).join(', ')} },`);
   if (d.muzzle) lines.push(`muzzle: ${pt(d.muzzle)},`);

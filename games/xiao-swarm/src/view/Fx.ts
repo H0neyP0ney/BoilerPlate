@@ -10,6 +10,9 @@ import { FX } from '../fxParams';
  */
 export class Fx {
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gloopBig!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gloopSmall!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private spark!: Phaser.GameObjects.Particles.ParticleEmitter;
   private fire!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
 
@@ -29,6 +32,9 @@ export class Fx {
   /** (Re)crée les émetteurs de particules depuis `FX` : à rappeler après un changement de réglage. */
   build(): void {
     this.splat?.destroy();
+    this.spark?.destroy();
+    this.gloopBig?.destroy();
+    this.gloopSmall?.destroy();
     this.fire?.destroy();
     const b = FX.burst;
     this.splat = this.scene.add
@@ -39,8 +45,36 @@ export class Fx {
         emitting: false,
       })
       .setDepth(DEPTH.fx);
+    const q = FX.gloop;
+    this.gloopBig = this.scene.add
+      .particles(0, 0, 'fx_dot', {
+        speed: { min: q.speedMin, max: q.speedMax },
+        scale: { start: q.scaleStart, end: q.scaleEnd },
+        lifespan: { min: q.lifeMin, max: q.lifeMax },
+        gravityY: q.gravity,
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
+    this.gloopSmall = this.scene.add
+      .particles(0, 0, 'fx_dot', {
+        speed: { min: q.speedMax * 0.6, max: q.speedMax * 1.5 },
+        scale: { start: q.scaleStart * 0.45, end: 0 },
+        lifespan: { min: q.lifeMin * 0.6, max: q.lifeMax * 0.8 },
+        gravityY: q.gravity * 0.5,
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
+    const i = FX.impact;
+    this.spark = this.scene.add
+      .particles(0, 0, 'fx_dot', {
+        speed: { min: i.speedMin, max: i.speedMax },
+        scale: { start: i.scaleStart, end: i.scaleEnd },
+        lifespan: { min: i.lifeMin, max: i.lifeMax },
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
     const e = FX.explosion;
-    this.fire = this.scene.add
+    this.fire =this.scene.add
       .particles(0, 0, 'fx_flame', {
         speed: { min: e.speedMin, max: e.speedMax },
         scale: { start: e.scaleStart, end: e.scaleEnd },
@@ -55,6 +89,54 @@ export class Fx {
   burst(x: number, y: number, color: number, count = 10): void {
     this.splat.setParticleTint(color);
     this.splat.explode(Math.max(1, Math.round(count * FX.burst.countMul)), x, y);
+  }
+
+  impact(x: number, y: number, color: number): void {
+    this.spark.setParticleTint(color);
+    this.spark.explode(FX.impact.count, x, y);
+  }
+
+  /** Flash de tir ; l'appelant le repositionne à chaque frame tant qu'il est actif (il se détruit seul). */
+  /** Quelques flaques au sol (nombre, position, taille, orientation et durée aléatoires) qui rétrécissent et s'effacent lentement. */
+  puddles(x: number, y: number, color: number): void {
+    const p = FX.puddle;
+    const n = Phaser.Math.Between(p.countMin, p.countMax);
+    for (let i = 0; i < n; i++) {
+      const scale = Phaser.Math.FloatBetween(p.scaleMin, p.scaleMax);
+      const img = this.scene.add
+        .image(x + Phaser.Math.FloatBetween(-p.spread, p.spread), y + Phaser.Math.FloatBetween(-p.spread, p.spread) * 0.5, 'fx_puddle')
+        .setTint(color)
+        .setDepth(DEPTH.groundFx - 0.4)
+        .setFlipX(Math.random() < 0.5)
+        .setScale(scale, scale * Phaser.Math.FloatBetween(0.55, 0.75))
+        .setAlpha(p.alpha * Phaser.Math.FloatBetween(0.7, 1));
+      this.scene.tweens.add({
+        targets: img,
+        alpha: 0,
+        scaleX: scale * p.endScale,
+        scaleY: img.scaleY * p.endScale,
+        delay: Phaser.Math.Between(300, 900),
+        duration: Phaser.Math.Between(p.lifeMinMs, p.lifeMaxMs),
+        ease: 'Sine.In',
+        onComplete: () => img.destroy(),
+      });
+    }
+  }
+
+  /** Éclatement de gelée : grosses gouttes qui retombent (gravité) + fines gouttelettes, teintes `color` et `colorLight`. */
+  gloop(x: number, y: number, color: number, colorLight: number): void {
+    const g = FX.gloop;
+    this.gloopBig.setParticleTint(color);
+    this.gloopBig.explode(g.count, x, y);
+    this.gloopSmall.setParticleTint(colorLight);
+    this.gloopSmall.explode(Math.round(g.count * 1.5), x, y);
+  }
+
+  muzzleFlash(x: number, y: number): Phaser.GameObjects.Image {
+    const m = FX.muzzle;
+    const img = this.scene.add.image(x, y, 'fx_glow').setBlendMode(Phaser.BlendModes.ADD).setTint(m.color).setDepth(DEPTH.fx).setScale(m.scale);
+    this.scene.tweens.add({ targets: img, alpha: 0, scale: m.scale * 0.6, duration: m.durationMs, onComplete: () => img.destroy() });
+    return img;
   }
 
   explosion(x: number, y: number, radius: number, shake: boolean): void {
@@ -101,6 +183,9 @@ export class Fx {
 
   destroy(): void {
     this.splat.destroy();
+    this.spark.destroy();
+    this.gloopBig.destroy();
+    this.gloopSmall.destroy();
     this.fire.destroy();
   }
 }

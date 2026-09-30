@@ -19,7 +19,7 @@ export interface AnimSpec {
   repeat?: number;
 }
 
-type Placement = Pick<SpriteDef, 'originX' | 'originY' | 'scale' | 'facesLeft' | 'crop' | 'hidden' | 'muzzle' | 'anchors' | 'muzzles'>;
+type Placement = Pick<SpriteDef, 'originX' | 'originY' | 'scale' | 'facesLeft' | 'crop' | 'hidden' | 'muzzle' | 'anchors' | 'muzzles' | 'shadow'>;
 
 export interface SheetSprite extends Placement {
   /** Frame affichée par défaut (sinon première frame de 'idle'). */

@@ -87,6 +87,18 @@ export class SoldierView {
     this.gun.setAlpha(blink ? 0.45 : 1);
   }
 
+  /** Bouche du canon en monde (planche : point de la frame en cours, comme dans la visionneuse), sinon null. */
+  muzzlePoint(): { x: number; y: number } | null {
+    const b = this.body;
+    const key = b.anims.currentAnim?.key;
+    const anim = key?.startsWith(this.bodyId + ':') ? key.slice(this.bodyId.length + 1) : 'shoot';
+    const frame = b.anims.currentFrame ? b.anims.currentFrame.index - 1 : 0;
+    const m = sprites.muzzleFor(this.bodyId, anim, frame);
+    if (!m) return null;
+    const fx = b.flipX ? 1 - m[0] : m[0];
+    return { x: b.x + (fx - b.originX) * b.displayWidth, y: b.y + (m[1] - b.originY) * b.displayHeight };
+  }
+
   /** Orientation affichée (pour l'animation de mort). */
   get flipX(): boolean {
     return this.body.flipX;

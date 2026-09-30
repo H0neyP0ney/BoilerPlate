@@ -109,30 +109,46 @@ function rock(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.stroke();
 }
 
-/** Eau qui se raccorde (128 px) : fond bleu + vaguelettes claires et sombres, dessinées aussi de l'autre côté du bord. */
-function water(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  ctx.fillStyle = '#2f93d6';
+/** Lave qui se raccorde (128 px) : fond rouge-orangé, croûtes sombres et filets incandescents, dessinés aussi de l'autre côté du bord. */
+function lava(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#d2470e';
   ctx.fillRect(0, 0, w, h);
   const rng = new Rng(11);
-  const wave = (x: number, y: number, len: number, color: string, width: number) => {
+  const wrap = (draw: (ox: number, oy: number) => void) => {
+    for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) draw(ox, oy);
+  };
+  // croûtes sombres
+  for (let i = 0; i < 7; i++) {
+    const x = rng.range(0, w);
+    const y = rng.range(0, h);
+    const rx = rng.range(10, 22);
+    const ry = rng.range(6, 13);
+    const a = rng.range(0, Math.PI);
+    ctx.fillStyle = 'rgba(70,16,10,0.55)';
+    wrap((ox, oy) => {
+      ctx.beginPath();
+      ctx.ellipse(x + ox, y + oy, rx, ry, a, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  // filets incandescents
+  const glow = (x: number, y: number, len: number, color: string, width: number) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.lineCap = 'round';
-    for (const ox of [-w, 0, w]) {
-      for (const oy of [-h, 0, h]) {
-        ctx.beginPath();
-        ctx.moveTo(x + ox, y + oy);
-        ctx.quadraticCurveTo(x + ox + len / 2, y + oy - len * 0.35, x + ox + len, y + oy);
-        ctx.stroke();
-      }
-    }
+    wrap((ox, oy) => {
+      ctx.beginPath();
+      ctx.moveTo(x + ox, y + oy);
+      ctx.quadraticCurveTo(x + ox + len / 2, y + oy - len * 0.35, x + ox + len, y + oy);
+      ctx.stroke();
+    });
   };
-  for (let i = 0; i < 9; i++) wave(rng.range(0, w), rng.range(0, h), rng.range(16, 30), 'rgba(20,90,160,0.45)', 4);
-  for (let i = 0; i < 12; i++) wave(rng.range(0, w), rng.range(0, h), rng.range(14, 28), 'rgba(190,235,255,0.75)', 3);
+  for (let i = 0; i < 10; i++) glow(rng.range(0, w), rng.range(0, h), rng.range(16, 32), 'rgba(255,150,30,0.8)', 5);
+  for (let i = 0; i < 12; i++) glow(rng.range(0, w), rng.range(0, h), rng.range(12, 26), 'rgba(255,225,110,0.85)', 2.5);
 }
 
 export function makeEnvironmentTextures(scene: Phaser.Scene): void {
-  canvasTexture(scene, 'water', 128, 128, water);
+  canvasTexture(scene, 'lava', 128, 128, lava);
   canvasTexture(scene, 'palm', 160, 172, palm);
   canvasTexture(scene, 'bush', 112, 78, (ctx) => bush(ctx, false, 1));
   canvasTexture(scene, 'bush_flowers', 112, 78, (ctx) => bush(ctx, true, 2));

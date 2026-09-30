@@ -21,7 +21,7 @@ const GROUND_TEXTURE = 'ground_tile';
 
 /**
  * Affichage de la carte : sol en texture répétée sur la zone jouable (un seul TileSprite, quelle que soit
- * la taille), entouré d'eau animée (la bordure infranchissable) ; à défaut de texture fournie, repli sur le sol
+ * la taille), entouré de lave animée (la bordure infranchissable) ; à défaut de texture fournie, repli sur le sol
  * procédural découpé en morceaux de 2048 px créés/détruits autour de la caméra. Décor haut (obstacles
  * éventuels) en sprites triés en profondeur.
  */
@@ -30,7 +30,7 @@ export class ArenaView {
   private readonly chunks = new Map<string, Phaser.GameObjects.Image>();
   private readonly tiled: boolean;
   private first = true;
-  private water?: Phaser.GameObjects.TileSprite;
+  private lava?: Phaser.GameObjects.TileSprite;
   private ground?: Phaser.GameObjects.TileSprite;
   /** Taches sombres et leur échelle (largeur et échelle Y de la variante, vue Obstacles) ; opacité : VISUAL.stainAlpha (config.ts). */
   private readonly stains: { img: Phaser.GameObjects.Image }[] = [];
@@ -41,16 +41,16 @@ export class ArenaView {
   ) {
     this.tiled = scene.textures.exists(GROUND_TEXTURE);
     if (this.tiled) {
-      // Eau partout, sol seulement dans la zone jouable (bords = `Arena.bounds`), avec une frange d'écume.
+      // Lave partout, sol seulement dans la zone jouable (bords = `Arena.bounds`), avec un liseré incandescent.
       const b = { x: map.border, y: map.border, w: map.width - 2 * map.border, h: map.height - 2 * map.border };
-      this.water = scene.add.tileSprite(0, 0, map.width, map.height, 'water').setOrigin(0).setDepth(DEPTH.ground - 1);
+      this.lava = scene.add.tileSprite(0, 0, map.width, map.height, 'lava').setOrigin(0).setDepth(DEPTH.ground - 1);
       this.ground = scene.add.tileSprite(b.x, b.y, b.w, b.h, GROUND_TEXTURE).setOrigin(0).setDepth(DEPTH.ground);
       scene.add
         .graphics()
         .setDepth(DEPTH.ground + 0.5)
-        .lineStyle(16, 0xd8f3ff, 0.22)
+        .lineStyle(18, 0xffb030, 0.3)
         .strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8)
-        .lineStyle(5, 0xffffff, 0.75)
+        .lineStyle(5, 0x3a140e, 0.85)
         .strokeRect(b.x, b.y, b.w, b.h);
     }
     this.features = this.tiled ? [] : buildGround(map);
@@ -61,10 +61,10 @@ export class ArenaView {
   update(view: Phaser.Geom.Rectangle): void {
     this.ground?.setTileScale(VISUAL.groundScale);
     for (const s of this.stains) s.img.setAlpha(VISUAL.stainAlpha);
-    if (this.water) {
-      // l'eau glisse doucement
+    if (this.lava) {
+      // la lave glisse doucement
       const t = this.scene.time.now;
-      this.water.setTilePosition(t * 0.012, t * 0.006);
+      this.lava.setTilePosition(t * 0.008, t * 0.004);
     }
     if (this.tiled) return;
     const x0 = Math.max(0, Math.floor((view.x - PRELOAD) / CHUNK));
@@ -117,7 +117,7 @@ export class ArenaView {
     for (const o of this.map.obstacles) this.decor(o.x, o.y, o.kind, o.size ?? 1);
     for (const l of this.map.logs) this.decor(l.x, l.y, 'log', 0.95);
 
-    // Bordure : plus de jungle, c'est de l'eau (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
+    // Bordure : plus de jungle, c'est de la lave (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
     if (!this.tiled) {
       const edge = (x: number, y: number) => {
         const r = rng.next();

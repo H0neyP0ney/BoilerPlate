@@ -39,6 +39,8 @@ export class WorldView {
   private readonly recruits = new Map<number, RecruitView>();
   private readonly bullets: Phaser.GameObjects.Image[] = [];
   private readonly tracers: Tracer[] = [];
+  /** Flashes de tir en cours : ils suivent la bouche du canon de leur soldat (dx, dy : repli si la planche n'en définit pas). */
+  private readonly flashes: { img: Phaser.GameObjects.Image; view: SoldierView; dx: number; dy: number }[] = [];
   private readonly lobShadows: { x: number; y: number; h: number }[] = [];
   private readonly ground: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
@@ -89,6 +91,10 @@ export class WorldView {
       case 'alienDied': {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'crab' ? 40 : 10);
+        if (e.alien === 'slime') {
+          this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, 0xc8ffb0);
+          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color);
+        }
         if (e.alien === 'crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
           this.fx.text(e.x, e.y - 90, 'BOSS DOWN!', '#ffe066', 34);
@@ -101,6 +107,17 @@ export class WorldView {
         if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(90, 0.004);
         break;
       }
+      case 'shot':
+        if (e.cls === 'gunner' && nearCam(e.x, e.y)) {
+          const view = this.soldiers.get(e.id);
+          const p = view?.muzzlePoint() ?? e;
+          const img = this.fx.muzzleFlash(p.x, p.y);
+          if (view) this.flashes.push({ img, view, dx: e.x - view.rx, dy: e.y - view.ry });
+        }
+        break;
+      case 'impact':
+        if (e.texture === 'fx_blaster_blue' && nearCam(e.x, e.y)) this.fx.impact(e.x, e.y, 0x5ab4ff);
+        break;
       case 'explosion':
         // pas de secousse pour les petites explosions (grenades), sinon l'écran tremble en permanence
         this.fx.explosion(e.x, e.y, e.r, e.r >= 100 && nearCam(e.x, e.y));
@@ -140,6 +157,7 @@ export class WorldView {
 
   render(alpha: number, dt: number, time: number): void {
     this.syncUnits(alpha, dt, time);
+    this.followFlashes();
     this.syncProjectiles(alpha);
     this.drawOverlay(time, dt);
     this.arena.update(this.scene.cameras.main.worldView);
@@ -233,12 +251,25 @@ export class WorldView {
     }
   }
 
+  private followFlashes(): void {
+    for (let i = this.flashes.length - 1; i >= 0; i--) {
+      const f = this.flashes[i];
+      if (!f.img.active) {
+        this.flashes.splice(i, 1);
+        continue;
+      }
+      const p = f.view.muzzlePoint() ?? { x: f.view.rx + f.dx, y: f.view.ry + f.dy };
+      f.img.setPosition(p.x, p.y);
+    }
+  }
+
   private drawOverlay(time: number, dt: number): void {
     const g = this.ground;
     g.clear();
     g.fillStyle(0x2a1d2e, 0.28);
     for (const v of this.aliens.values()) {
-      const r = v.state.radius * (v.state.def.floats ? 0.7 : 1);
+      const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
+      const r = v.state.radius * (v.state.def.floats ? 0.7 : 1) * k;
       g.fillEllipse(v.rx, v.ry, r * 2.1, r * 0.9);
     }
     for (const sq of this.sim.squads) {
@@ -258,7 +289,8 @@ export class WorldView {
     }
     for (const v of this.soldiers.values()) {
       const r = v.state.radius;
-      g.fillStyle(0x2a1d2e, 0.3).fillEllipse(v.rx, v.ry, r * 2.2, r);
+      const k = sprites.get(`soldier_${v.state.def.id}`).shadow ?? 1;
+      g.fillStyle(0x2a1d2e, 0.3).fillEllipse(v.rx, v.ry, r * 2.2 * k, r * k);
       g.lineStyle(3, v.ringColor, 0.9).strokeEllipse(v.rx, v.ry, r * 2.6, r * 1.3);
     }
 
@@ -266,6 +298,7 @@ export class WorldView {
     b.clear();
     for (const v of this.soldiers.values()) {
       const s = v.state;
+      if (s.hp >= s.maxHp) continue;
       const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
       this.bar(b, v.rx, v.ry - (s.def.id === 'tank' ? 66 : 58), 30, s.hp / s.maxHp, color);
     }

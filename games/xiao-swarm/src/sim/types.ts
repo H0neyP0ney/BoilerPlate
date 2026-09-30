@@ -28,6 +28,8 @@ export type SimEvent =
   | { t: 'hit'; id: number }
   | { t: 'alienDied'; id: number; x: number; y: number; alien: AlienId; killer: PlayerId | null }
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
+  | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
+  | { t: 'impact'; x: number; y: number; texture: string }
   | { t: 'explosion'; x: number; y: number; r: number }
   | { t: 'slam'; x: number; y: number; r: number }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }

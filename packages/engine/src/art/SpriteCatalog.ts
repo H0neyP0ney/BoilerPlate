@@ -31,6 +31,8 @@ export interface SpriteDef {
   facesLeft?: boolean;
   /** Recadrage (px de la frame) : x, y, largeur, hauteur. Ex. portrait = haut du corps. */
   crop?: [number, number, number, number];
+  /** Taille de l'ombre portée sous l'unité (1 = ombre par défaut, proportionnelle au rayon de l'unité). */
+  shadow?: number;
   /** Ne pas afficher (ex. arme déjà dessinée dans la planche du soldat). */
   hidden?: boolean;
   /** Animations : nom logique ('idle', 'walk', 'shoot'…) → clé d'animation Phaser. */

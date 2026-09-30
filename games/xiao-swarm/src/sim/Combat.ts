@@ -98,6 +98,7 @@ export class Combat {
       return;
     }
 
+    this.sim.events.push({ t: 'shot', id: s.id, cls: s.def.id, x: mx, y: my, aim: s.aim });
     const pellets = weapon.pellets ?? 1;
     const speed = weapon.projectileSpeed ?? 600;
     const life = weapon.life ?? (weapon.range / speed) * 1.15;
@@ -150,6 +151,16 @@ export class Combat {
     const { alienHash, soldierHash } = this.sim;
     const pvp = this.sim.mode.pvp;
     this.projectiles.releaseWhere((p) => {
+      if (!this.stepProjectile(p, dt, pvp, alienHash, soldierHash)) return false;
+      // fin de course (touche, cible disparue, portée max) : l'affichage joue un petit impact
+      if (!p.lob && !p.flame) this.sim.events.push({ t: 'impact', x: p.x, y: p.y, texture: p.texture });
+      return true;
+    });
+  }
+
+  /** Avance un projectile d'un pas ; renvoie true s'il doit être libéré. */
+  private stepProjectile(p: Projectile, dt: number, pvp: boolean, alienHash: Sim['alienHash'], soldierHash: Sim['soldierHash']): boolean {
+    {
       p.life -= dt;
       if (p.life <= 0) {
         if (p.lob) {
@@ -185,7 +196,7 @@ export class Combat {
         }
       }
       return false;
-    });
+    }
   }
 
   private overlaps(p: Projectile, u: Unit, hitR: number): boolean {

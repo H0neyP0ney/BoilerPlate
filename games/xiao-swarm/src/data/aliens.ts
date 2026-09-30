@@ -36,7 +36,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 72,
     radius: 16,
     mass: 1,
-    damage: 7,
+    damage: 12,
     attackCooldown: 0.8,
     target: 'nearest',
     recruitChance: 0.05,

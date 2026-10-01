@@ -176,6 +176,15 @@ try {
   for (let i = 0; i < 25; i++) await tick(client);
   const clurker = client.sim.aliens.find((x) => x.id === lurker.id);
   check(!!clurker && lurker.lurkPhase >= 1 && clurker.lurkPhase >= 1, 'lurker : s’enterre, phase reflétée chez le client', `hôte ${lurker.lurkPhase} / client ${clurker?.lurkPhase}`);
+  // Rhinocéros : le télégraphe de charge (point de départ du couloir, direction, préparation) arrive tel quel chez le client.
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('charger', a.center.x + 260, a.center.y);
+  const rhino = hs.aliens[0];
+  rhino.hp = rhino.maxHp = 1e6;
+  rhino.rushCd = 0;
+  let crhino;
+  for (let i = 0; i < 80 && !(rhino.rushWind > 0 && (crhino = client.sim.aliens.find((x) => x.id === rhino.id)) && crhino.rushWind > 0); i++) await tick(client);
+  check(!!crhino && crhino.rushWind > 0 && Math.abs(crhino.rushX - rhino.rushX) < 0.01 && Math.abs(crhino.rushY - rhino.rushY) < 0.01 && Math.abs(crhino.rushDx - rhino.rushDx) < 0.02, 'rhinocéros : couloir de charge (origine, direction) identique chez le client', crhino ? `origine ${crhino.rushX.toFixed(0)},${crhino.rushY.toFixed(0)} (hôte ${rhino.rushX.toFixed(0)},${rhino.rushY.toFixed(0)})` : 'pas de préparation vue');
   hs.aliens.length = 0;
   hs.powerups.items.push({ id: 9001, kind: 'stim', x: a.center.x, y: a.center.y, life: 5 });
   hs.powerups.items.push({ id: 9002, kind: 'stasis', x: a.center.x + 30, y: a.center.y, life: 5 });

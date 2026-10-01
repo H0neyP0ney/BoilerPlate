@@ -109,6 +109,8 @@ export class Horde {
       rushT: 0,
       rushDx: 0,
       rushDy: 0,
+      rushX: x,
+      rushY: y,
       leapCd: def.leap ? def.leap.every / 2 : 0,
       leapT: 0,
       leapFromX: x,
@@ -289,6 +291,8 @@ export class Horde {
           a.rushCd = r.cooldown;
           a.rushDx = gx;
           a.rushDy = gy;
+          a.rushX = a.x;
+          a.rushY = a.y;
         }
       }
       // Langue : attrape le soldat visé et le tire vers lui

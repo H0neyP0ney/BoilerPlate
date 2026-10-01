@@ -224,6 +224,8 @@ export class Mirror {
         rushT: 0,
         rushDx: 0,
         rushDy: 0,
+        rushX: a.x,
+        rushY: a.y,
         leapCd: 0,
         leapT: 0,
         leapFromX: a.x,
@@ -251,6 +253,8 @@ export class Mirror {
     s.rushT = a.rushing ? 1 : 0;
     s.rushDx = a.rushDx;
     s.rushDy = a.rushDy;
+    s.rushX = a.rushX;
+    s.rushY = a.rushY;
     s.leapT = a.leapT;
     s.leapX = a.leapX;
     s.leapY = a.leapY;

@@ -8,7 +8,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -87,6 +87,9 @@ export interface AlienSnap {
   rushing: boolean;
   rushDx: number;
   rushDy: number;
+  /** Point de départ du couloir de charge (télégraphe). */
+  rushX: number;
+  rushY: number;
   /** Saut écrasant : temps restant de la séquence (s, 0 = au sol) et point d'impact (télégraphe). */
   leapT: number;
   leapX: number;
@@ -205,6 +208,8 @@ export function takeSnapshot(sim: Sim): Snapshot {
       rushing: a.rushT > 0,
       rushDx: a.rushDx,
       rushDy: a.rushDy,
+      rushX: a.rushX,
+      rushY: a.rushY,
       leapT: a.leapT,
       leapX: a.leapX,
       leapY: a.leapY,
@@ -377,6 +382,10 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));
       w.u8(Math.round(a.rushDx * 100 + 100));
       w.u8(Math.round(a.rushDy * 100 + 100));
+      if (Math.round(a.rushWind * 200) > 0 || a.rushing) {
+        w.f32(a.rushX);
+        w.f32(a.rushY);
+      }
     }
     if (def.leap) {
       w.u8(Math.min(255, Math.round(a.leapT * 50)));
@@ -541,6 +550,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       let rushWind = 0;
       let rushDx = 0;
       let rushDy = 0;
+      let rushX = x;
+      let rushY = y;
       let castT = 0;
       let castCorpse = 0;
       let leapT = 0;
@@ -550,6 +561,10 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         rushWind = r.u8() / 200;
         rushDx = (r.u8() - 100) / 100;
         rushDy = (r.u8() - 100) / 100;
+        if (rushWind > 0 || aflags & 1) {
+          rushX = r.f32();
+          rushY = r.f32();
+        }
       }
       if (def.leap) {
         leapT = r.u8() / 50;
@@ -570,7 +585,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         lurkT = r.u8() / 30;
         spikeAng = r.f32();
       }
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();

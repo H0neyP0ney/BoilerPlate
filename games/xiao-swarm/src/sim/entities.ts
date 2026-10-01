@@ -71,6 +71,9 @@ export interface AlienState extends Body {
   rushT: number;
   rushDx: number;
   rushDy: number;
+  /** Point de départ du couloir de charge (là où l'alien s'est arrêté pour annoncer) : le télégraphe s'y ancre, chez l'hôte comme chez les clients. */
+  rushX: number;
+  rushY: number;
   /** Saut écrasant (`def.leap`) : délai avant le prochain, temps restant de la séquence (0 = au sol), départ et point d'impact. */
   leapCd: number;
   leapT: number;

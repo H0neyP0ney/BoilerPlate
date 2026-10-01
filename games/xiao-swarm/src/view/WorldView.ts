@@ -61,8 +61,8 @@ export class WorldView {
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
-  /** Point de départ (au sol) du couloir de charge de chaque alien qui charge, figé le temps de la charge. */
-  private readonly rushOrigins = new Map<number, { x: number; y: number }>();
+  /** Préparation de charge vue la dernière fois (valeur reçue et heure locale) : chez un client, `rushWind` n'arrive qu'à chaque snapshot, on la fait décroître entre deux pour un remplissage fluide. */
+  private readonly rushWindSeen = new Map<number, { v: number; at: number }>();
   /** Flaques de slimes morts (ressuscitables) et cailloux au sol, par id de simulation. */
   private readonly corpseImgs = new Map<number, Phaser.GameObjects.Image>();
   private readonly rockImgs = new Map<number, Phaser.GameObjects.Image>();
@@ -750,27 +750,30 @@ export class WorldView {
       const a = v.state;
       const rush = a.def.rush;
       if (!rush || !(a.rushWind > 0 || a.rushT > 0)) {
-        this.rushOrigins.delete(a.id);
+        this.rushWindSeen.delete(a.id);
         continue;
       }
-      const k = a.rushWind > 0 ? 1 - a.rushWind / rush.windup : 1;
+      // préparation restante : la valeur reçue, décomptée localement jusqu'au snapshot suivant (sans quoi le remplissage avance par à-coups)
+      const now = this.scene.time.now / 1000;
+      let seen = this.rushWindSeen.get(a.id);
+      if (!seen || seen.v !== a.rushWind) {
+        seen = { v: a.rushWind, at: now };
+        this.rushWindSeen.set(a.id, seen);
+      }
+      const wind = a.rushWind > 0 ? Math.max(0.001, seen.v - (now - seen.at)) : 0;
+      const k = wind > 0 ? 1 - wind / rush.windup : 1;
       const dx = a.rushDx;
       const dy = a.rushDy;
       const nx = -dy * (rush.width / 2);
       const ny = dx * (rush.width / 2);
       const L = rush.length;
-      // La zone reste au sol à l'endroit où la charge a été annoncée : elle ne suit pas l'alien pendant la charge.
-      let origin = this.rushOrigins.get(a.id);
-      if (!origin) {
-        origin = { x: v.rx, y: v.ry };
-        this.rushOrigins.set(a.id, origin);
-      }
-      const x0 = origin.x;
-      const y0 = origin.y;
+      // La zone reste au sol à l'endroit où la charge a été annoncée (fourni par la simulation, donc identique chez l'hôte et chez les clients) : elle ne suit pas l'alien pendant la charge.
+      const x0 = a.rushX;
+      const y0 = a.rushY;
       const V = (x: number, y: number) => new Phaser.Math.Vector2(x, y);
       const lane = (len: number) => [V(x0 + nx, y0 + ny), V(x0 - nx, y0 - ny), V(x0 - nx + dx * len, y0 - ny + dy * len), V(x0 + nx + dx * len, y0 + ny + dy * len)];
-      g.fillStyle(0xff2a2a, a.rushWind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
-      if (a.rushWind > 0) g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(lane(L * k), true);
+      g.fillStyle(0xff2a2a, wind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
+      if (wind > 0) g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(lane(L * k), true);
       g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(lane(L), true);
     }
     // traces de brûlure au sol sous les flammes

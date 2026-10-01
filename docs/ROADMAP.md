@@ -41,7 +41,7 @@
 
 ## Points d'attention
 
-- **Protocole réseau v18** : le snapshot porte les murs annoncés du thrower (`walls`) et la phase du lurker, en plus de XP / niveau / propositions / upgrades par squad, temps de choix d'upgrade (`choiceT`), globes d'XP, état des charges, saut du crabe, chaman et bulle ; hôte et client de versions différentes se refusent. Les cartes viennent de la seed et des données : mêmes fichiers `data/` chez tous.
+- **Protocole réseau v19** : le snapshot porte les murs annoncés du thrower (`walls`), la phase du lurker et l'origine du couloir de charge du rhinocéros (`rushX` / `rushY`), en plus de XP / niveau / propositions / upgrades par squad, temps de choix d'upgrade (`choiceT`), globes d'XP, état des charges, saut du crabe, chaman et bulle ; hôte et client de versions différentes se refusent. Les cartes viennent de la seed et des données : mêmes fichiers `data/` chez tous.
 - **Projectiles recyclés** (`Pool`) : un champ ajouté à `Projectile` doit être remis à zéro à la libération (`Combat`).
 - **Script de vagues en dev** : le navigateur mémorise le script édité (localStorage) ; après une modification de `data/waves.ts`, faire **Reset** dans le Gestionnaire de vagues.
 - **Navigateur du panneau de test** : boucle de jeu très lente ; `window.__game.step(t, dt)` pour avancer à la main, voir [OUTILS_DEV.md](OUTILS_DEV.md).

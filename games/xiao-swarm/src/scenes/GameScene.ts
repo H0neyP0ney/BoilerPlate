@@ -115,7 +115,7 @@ export class GameScene extends Phaser.Scene {
       else dir.set(0, 0);
     }
     this.session.setLocalInput(dir.x, dir.y);
-    if (this.flow.state === 'ready' && this.move.active) this.flow.begin();
+    if (this.flow.state === 'ready' && this.move.active && !poki.isAdPlaying) this.flow.begin(); // pas pendant une pub : le gameplayStart serait perdu
 
     // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
     // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.
@@ -188,7 +188,13 @@ export class GameScene extends Phaser.Scene {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown') this.events.emit('boss', e); // bandeau / flèche du HUD
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
+    // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
+    if (e.t === 'gameEnd') {
+      if (e.victory) this.flow.win();
+      else this.flow.fail();
+    }
     if (e.t === 'restart') {
+      void this.flow.restart();
       this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
       this.shownOffer = '';
     }

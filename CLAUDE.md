@@ -20,7 +20,7 @@ répondre, commenter et documenter en français.
 - `npm run deploy` — build + upload FTP vers `REMOTE_DIR/<version>/` (identifiants dans `.env.deploy`, modèle `.env.deploy.example`) ; `-- --bump` incrémente la version, `-- --force` écrase
 - `node tools/slice-sheet.mjs games/xiao-swarm/art-src/<nom>.slice.json` — découpe une planche de sprites
 
-Menu **Options** (joueur : roue crantée en haut à droite, ou écran Pause, `scenes/OptionsScene.ts`) : volume de la musique (`settings.ts`, lecture via `music` de l'engine) et, en dev, **mode debug** qui affiche les boutons des outils de dev en haut à gauche. En dev : mode debug activé et musique coupée par défaut ; build Poki : musique à 5/10.
+Menu **Options** (joueur : roue crantée en haut à droite, ou écran Pause, `scenes/OptionsScene.ts`) : volume de la musique (`settings.ts`, lecture via `music` de l'engine) et, en dev, **mode debug** qui affiche les boutons des outils de dev en haut à gauche. Les réglages (musique, bruitages, zoom, FPS, fond étoilé, debug) sont mémorisés d'une session à l'autre (`localStorage`, préfixe `xiao-swarm:` posé en tête de `settings.ts`). Par défaut : musique à 2/10 ; en dev, mode debug activé.
 Outils de dev (détail : `docs/OUTILS_DEV.md`). Visionneuses (boutons en haut à gauche du jeu en mode debug, ou `?viewer` / `?particles` / `?obstacles` / `?misc` / `?waves` / `?mapedit`) : **unités**
 (animations, ancrage par séquence / direction, bouche du canon par frame), **particules** (`fxParams.ts`), **obstacles**
 (hitbox en cercles, jeu de taches, taille : `data/obstacles.ts`) **vagues** (Gestionnaire de vagues : 9 niveaux de configurations tirées au hasard + timeline : `data/waves.ts`) **divers** (projectiles, bonus, interface, terrain) et **carte** (zones d'obstacles de l'arène solo / coop : `data/mapZones.ts`, un obstacle tiré au hasard par zone à chaque partie avec la seed, donc identique chez tous les joueurs).
@@ -63,5 +63,13 @@ Chaque visuel a un id (`soldier_gunner`, `alien_crab`…) résolu par le catalog
 ## Poki
 **Pubs désactivées pour le moment** (`ADS_ENABLED = false` dans `packages/engine/src/poki/poki.ts`) : aucune pub n'est demandée,
 le revive « rewarded » est gratuit. À réactiver avant la soumission ; les règles ci-dessous valent alors.
+Événements SDK obligatoires (https://developers.poki.com/guide/requirements-quality), tous passent par `RunFlow` / `poki` (le moteur filtre les doublons et les appels pendant une pub) :
+- `gameLoadingFinished()` : une fois, quand les assets essentiels sont chargés (`BootScene`).
+- `gameplayStart()` : au **premier input du joueur** (jamais au chargement), puis à chaque retour en jeu (sortie de pause, fin du choix d'upgrade, relance).
+- `gameplayStop()` : à **toute interruption** : pause, menu Options, mort, fin de partie (y compris l'écran de fin coop `gameEnd`), connexion perdue. Jamais deux de suite, jamais pendant une pub. **Le choix d'upgrade n'est PAS une interruption** : c'est du gameplay, pas de `gameplayStop`.
+- `commercialBreak()` : uniquement en **sortant d'une pause** vers le jeu, ou entre deux parties (retry, relance coop) ; jamais pendant une pub. Pas de timer de pub maison.
+- `rewardedBreak()` : uniquement sur choix explicite du joueur (revive solo).
+- Non obligatoires mais utiles : `poki.measure(...)` (déjà envoyé : run start / fail / complete, revive, recrues).
+En ligne la partie ne se met jamais en pause (l'hôte gèlerait tout le monde) : seuls l'écran de fin et la perte de connexion émettent `gameplayStop`. Le menu Options en ligne n'arrête pas le jeu, donc pas de `gameplayStop`.
 Pas de requête externe hors SDK, pas d'écran titre, `gameplayStart` au premier input, pas de timer de pub maison,
 bouton rewarded jamais vert et jamais plus gros que l'option standard, jouable en incognito et avec adblock.

@@ -79,9 +79,13 @@ export class RunFlow {
     return true;
   }
 
-  /** Avant de relancer une partie (retry / rejouer). */
+  /**
+   * Avant de relancer une partie (retry / rejouer, relance coop). Depuis n'importe quel état : le gameplay est arrêté d'abord
+   * (jamais deux `gameplayStop` de suite : `poki` les filtre), l'état repasse tout de suite à `ready`, la pub passe ensuite.
+   */
   async restart(): Promise<void> {
-    await poki.commercialBreak();
     this._state = 'ready';
+    poki.gameplayStop();
+    await poki.commercialBreak();
   }
 }

@@ -1,11 +1,20 @@
 import { clamp, storage } from '@xiao/engine';
 
+/**
+ * Le préfixe du stockage doit être posé AVANT la lecture des réglages ci-dessous : ce module est évalué à l'import, bien avant
+ * `beforeCreate` (main.ts). Sans cela, les lectures utilisaient le préfixe par défaut alors que les écritures utilisaient celui du jeu :
+ * aucun réglage n'était jamais relu d'une session à l'autre.
+ */
+storage.setNamespace('xiao-swarm');
+
 /** Réglages joueur (menu « Réglages »), mémorisés dans le navigateur. */
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 1.5;
 export const ZOOM_STEP = 0.1;
 /** Graduations de la réglette de volume de la musique (0 = coupée, 10 = plein volume). */
 export const MUSIC_STEPS = 10;
+/** Cran de volume de la musique à la première partie. */
+export const MUSIC_DEFAULT = 2;
 /**
  * Musique de fond (public/assets/audio), chargée en différé au lancement de la partie : OGG (léger), MP3 en secours pour les
  * navigateurs qui ne lisent pas l'OGG (vieux Safari iOS) ; un seul des deux est téléchargé. Source d'origine : art-src/audio.
@@ -31,8 +40,8 @@ export const settings = {
   starfield: flag('starfield', 'space', false),
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
   zoom: clamp(storage.get('settings.zoom', 1), ZOOM_MIN, ZOOM_MAX),
-  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut coupée en dev, 5 dans le build Poki. */
-  musicVolume: clamp(Math.round(storage.get('settings.musicVolume', import.meta.env.DEV ? 0 : 5)), 0, MUSIC_STEPS),
+  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 2 (dev et build Poki). */
+  musicVolume: clamp(Math.round(storage.get('settings.musicVolume', MUSIC_DEFAULT)), 0, MUSIC_STEPS),
   /** Volume des bruitages (tirs…), en crans de 0 à `MUSIC_STEPS` (menu Options). */
   sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', 6)), 0, MUSIC_STEPS),
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */

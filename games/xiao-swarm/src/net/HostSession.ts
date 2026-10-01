@@ -34,6 +34,8 @@ export interface HostSessionOptions {
 interface RemotePlayer {
   input: PlayerInput;
   lastInputTick: number;
+  /** Numéro (tick client) du dernier input reçu : renvoyé dans le snapshot pour la prédiction du client. */
+  seq: number;
 }
 
 /**
@@ -54,6 +56,7 @@ export class HostSession implements Session {
   private readonly inputs = new Map<PlayerId, PlayerInput>();
   private readonly local: PlayerInput = { mx: 0, my: 0 };
   private readonly remotes = new Map<PlayerId, RemotePlayer>();
+  private readonly acks = new Map<PlayerId, number>();
   private outbound: SimEvent[] = [];
   /** Tick d'anéantissement des squads en attente de réapparition. */
   private readonly deadSince = new Map<PlayerId, number>();
@@ -146,7 +149,7 @@ export class HostSession implements Session {
   // ---------- Réseau ----------
 
   private broadcast(): void {
-    this.transport.broadcast('unreliable', encodeSnapshot(takeSnapshot(this.sim)));
+    this.transport.broadcast('unreliable', encodeSnapshot(takeSnapshot(this.sim, this.acks)));
     if (this.outbound.length > 0) {
       const msg: HostMessage = { t: 'events', list: this.outbound };
       this.transport.broadcast('unreliable', JSON.stringify(msg));
@@ -171,8 +174,12 @@ export class HostSession implements Session {
       case 'input': {
         const r = this.remotes.get(peer);
         if (!r) return;
+        const n = typeof msg.n === 'number' && Number.isFinite(msg.n) ? Math.floor(msg.n) : 0;
+        if (n <= r.seq) return; // paquet en retard ou dupliqué : l'input plus récent est déjà en place
         r.input = { mx: finite(msg.mx), my: finite(msg.my) };
         r.lastInputTick = this.sim.tick;
+        r.seq = n;
+        this.acks.set(peer, n);
         return;
       }
     }
@@ -182,7 +189,7 @@ export class HostSession implements Session {
     if (version !== PROTOCOL_VERSION) return this.send(peer, { t: 'refused', reason: 'version' });
     if (!this.remotes.has(peer) && this.remotes.size + 1 >= MAX_PLAYERS) return this.send(peer, { t: 'refused', reason: 'full' });
     if (!this.remotes.has(peer)) {
-      this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick });
+      this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0 });
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));
     }
     this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer });
@@ -191,6 +198,7 @@ export class HostSession implements Session {
   private readonly onPeerLeft = (peer: string): void => {
     if (!this.remotes.delete(peer)) return;
     this.inputs.delete(peer);
+    this.acks.delete(peer);
     this.deadSince.delete(peer);
     this.sim.removePlayer(peer);
   };

@@ -1,12 +1,33 @@
-import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
+import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
 import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
+import type { Arena } from './Arena';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { PlayerId, PlayerInput } from './types';
 
-export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range';
+const anchorV = { x: 0, y: 0 };
+
+/**
+ * Avance l'ancre d'un tick selon l'input (norme ≤ 1) : obstacles et bords compris.
+ * Partagé par `Squad.update` (hôte) et par la prédiction du client (`net/Prediction.ts`) : même code, même résultat.
+ */
+export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number, speed: number, dt: number): void {
+  const len = Math.hypot(mx, my);
+  if (len > 1) {
+    mx /= len;
+    my /= len;
+  }
+  anchorV.x = mx * speed;
+  anchorV.y = my * speed;
+  arena.steer(anchor.x, anchor.y, anchor.radius, anchorV);
+  anchor.x += anchorV.x * dt;
+  anchor.y += anchorV.y * dt;
+  arena.constrain(anchor);
+}
+
+export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -64,6 +85,11 @@ export class Squad {
 
   get maxSize(): number {
     return Math.floor(this.stats.get('maxSquad'));
+  }
+
+  /** Vitesse de l'ancre (px/s) : upgrades et stimpack compris. Passe dans le snapshot pour la prédiction client. */
+  get moveSpeed(): number {
+    return CROWD.speed * this.stats.get('speed') * (this.buffs.stim > 0 ? STIM_SPEED : 1);
   }
 
   /** Nouvelle partie : plus de soldats, progression (XP, niveau, upgrades) et bonus remis à zéro. */
@@ -281,20 +307,12 @@ export class Squad {
       this.crowdSize = n;
       this.dirty = true; // la formation change de taille : slots recalculés
     }
-    const len = Math.hypot(input.mx, input.my);
-    const mx = len > 1 ? input.mx / len : input.mx;
-    const my = len > 1 ? input.my / len : input.my;
-    this.moving = len > 0.1;
+    this.moving = Math.hypot(input.mx, input.my) > 0.1;
     this.stillTime = this.moving ? 0 : this.stillTime + dt;
-    const speed = CROWD.speed * this.stats.get('speed') * (this.buffs.stim > 0 ? STIM_SPEED : 1);
+    const speed = this.moveSpeed;
 
     // 1. Ancre : réponse immédiate à l'input
-    this.steerV.x = mx * speed;
-    this.steerV.y = my * speed;
-    this.sim.arena.steer(this.anchor.x, this.anchor.y, this.anchor.radius, this.steerV);
-    this.anchor.x += this.steerV.x * dt;
-    this.anchor.y += this.steerV.y * dt;
-    this.sim.arena.constrain(this.anchor);
+    stepAnchor(this.sim.arena, this.anchor, input.mx, input.my, speed, dt);
 
     // 2. Laisse autour du coeur de la squad
     this.updateCenter();

@@ -185,6 +185,33 @@ try {
   let crhino;
   for (let i = 0; i < 80 && !(rhino.rushWind > 0 && (crhino = client.sim.aliens.find((x) => x.id === rhino.id)) && crhino.rushWind > 0); i++) await tick(client);
   check(!!crhino && crhino.rushWind > 0 && Math.abs(crhino.rushX - rhino.rushX) < 0.01 && Math.abs(crhino.rushY - rhino.rushY) < 0.01 && Math.abs(crhino.rushDx - rhino.rushDx) < 0.02, 'rhinocéros : couloir de charge (origine, direction) identique chez le client', crhino ? `origine ${crhino.rushX.toFixed(0)},${crhino.rushY.toFixed(0)} (hôte ${rhino.rushX.toFixed(0)},${rhino.rushY.toFixed(0)})` : 'pas de préparation vue');
+  // Après la charge, `rushWind` reste ≤ 0 (négatif) : le snapshot doit rester décodable et fidèle (tous les aliens, mêmes positions).
+  let rushOk = true;
+  let rushDetail = '';
+  let sawRush = false;
+  for (let i = 0; i < 120 && rushOk; i++) {
+    host.setLocalInput(0, 0);
+    hs.aliens.splice(1); // le rhino seul : on teste le format, pas la survie
+    hs.horde.spawnAt('slime_basic', rhino.x + 120, rhino.y);
+    hs.horde.spawnAt('slime_basic', rhino.x - 120, rhino.y);
+    if (rhino.rushT > 0) sawRush = true;
+    const back = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
+    if (!back || back.aliens.length !== hs.aliens.length) {
+      rushOk = false;
+      rushDetail = `tick ${i} : rushWind=${rhino.rushWind.toFixed(3)}, ${back ? `${back.aliens.length} aliens décodés pour ${hs.aliens.length}` : 'snapshot illisible'}`;
+    } else {
+      for (const a of hs.aliens) {
+        const b = back.aliens.find((x) => x.id === a.id);
+        if (!b || Math.abs(b.x - a.x) > 0.01 || Math.abs(b.y - a.y) > 0.01) {
+          rushOk = false;
+          rushDetail = `tick ${i} : alien ${a.def.id} décalé, rushWind=${rhino.rushWind.toFixed(3)}`;
+          break;
+        }
+      }
+    }
+    await tick(client);
+  }
+  check(rushOk && sawRush, 'rhinocéros : snapshot lisible et fidèle pendant et après la charge (rushWind négatif)', rushDetail || (sawRush ? 'charge vue' : 'aucune charge'));
   hs.aliens.length = 0;
   hs.powerups.items.push({ id: 9001, kind: 'stim', x: a.center.x, y: a.center.y, life: 5 });
   hs.powerups.items.push({ id: 9002, kind: 'stasis', x: a.center.x + 30, y: a.center.y, life: 5 });

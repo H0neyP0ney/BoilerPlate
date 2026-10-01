@@ -1,7 +1,7 @@
 {
   "name": "@xiao/swarm-attack",
   "private": true,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "zip": "npm run build && node ../../scripts/zip.mjs",
     "sim": "node scripts/sim-headless.mjs",
     "sim:net": "node scripts/net-headless.mjs",
+    "sim:predict": "node scripts/net-predict-headless.mjs",
     "sim:crowd": "node scripts/crowd-headless.mjs",
     "sim:recruit": "node scripts/recruit-slot-headless.mjs"
   },

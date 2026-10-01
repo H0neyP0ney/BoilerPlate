@@ -13,6 +13,7 @@ répondre, commenter et documenter en français.
 - `npm run typecheck` — tout le monorepo + pureté des simulations. À lancer après chaque modification.
 - `npm run sim:headless -- royale 9 300` — simulation dans Node (sans navigateur)
 - `npm run sim:net` — test réseau hôte + client sans navigateur. En ligne : `?net=host`, `?net=join&room=CODE`, `?net=auto` (voir `docs/MULTIJOUEUR.md`)
+- `npm run sim:predict -- 4` — prédiction de la squad locale d'un client avec latence simulée (4 ticks par sens).
 - `npm run sim:net` couvre aussi le coop (friendly fire, difficulté ×2, XP partagée et pause de choix d'upgrade, spectateur, relance).
 - `npm run zip` — build + zip Poki
 - `deploy.bat` (racine) — double-clic : lance `npm run deploy` (vérifie `.env.deploy`) ; accepte `--bump` / `--force`

@@ -5,7 +5,10 @@ import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
+import type { PlayerId } from '../sim/types';
+import { AnchorPredictor } from './Prediction';
 import type { AlienSnap, ProjectileSnap, RecruitSnap, Snapshot, SoldierSnap } from './Protocol';
+import { TICK_RATE } from './Session';
 
 /** Part de l'écart rattrapée à chaque tick client (0.5 = lissage rapide sans à-coups). */
 const CATCH_UP = 0.5;
@@ -19,6 +22,13 @@ interface Goal {
   y: number;
 }
 
+/** Input du tick client courant, pour la prédiction de la squad locale. */
+export interface LocalInput {
+  n: number;
+  mx: number;
+  my: number;
+}
+
 /**
  * Reflet côté client de la simulation de l'hôte. Il écrit les snapshots reçus
  * DANS un `Sim` ordinaire (jamais avancé avec `step`) : le WorldView, le HUD et la
@@ -27,6 +37,9 @@ interface Goal {
  * Entre deux snapshots (15 Hz), `step()` tourne à 30 Hz : les entités avancent à
  * leur vitesse connue (extrapolation) et se rapprochent de la dernière position
  * reçue (lissage), ce qui donne un mouvement fluide sans tampon d'interpolation.
+ *
+ * La squad du joueur local est PRÉDITE (`AnchorPredictor`) : ses soldats suivent l'ancre calculée tout de suite
+ * avec l'input local, recalée sur l'hôte à chaque snapshot, au lieu d'attendre un aller-retour réseau.
  */
 export class Mirror {
   private readonly soldiers = new Map<number, SoldierState>();
@@ -34,7 +47,12 @@ export class Mirror {
   private readonly recruits = new Map<number, RecruitState>();
   private readonly goals = new WeakMap<object, Goal>();
 
-  constructor(readonly sim: Sim) {}
+  readonly predictor = new AnchorPredictor();
+
+  constructor(
+    readonly sim: Sim,
+    private readonly localPlayer: PlayerId,
+  ) {}
 
   apply(snap: Snapshot): void {
     const { sim } = this;
@@ -56,6 +74,12 @@ export class Mirror {
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
       squad.stillTime = sq.healing ? CROWD.stillDelay + 1 : 0;
+      if (sq.owner === this.localPlayer) {
+        const frozen = snap.choiceT > 0;
+        this.predictor.reconcile(sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen);
+        squad.anchor.x = this.predictor.anchor.x;
+        squad.anchor.y = this.predictor.anchor.y;
+      }
       squad.soldiers.length = 0;
       for (const u of sq.soldiers) {
         seenSoldiers.add(u.id);
@@ -110,11 +134,21 @@ export class Mirror {
     for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
   }
 
-  /** Un tick client : extrapolation + lissage + recalcul du centre des squads. */
-  step(dt: number): void {
+  /** Un tick client : prédiction de la squad locale, extrapolation + lissage du reste, recalcul du centre des squads. */
+  step(dt: number, local?: LocalInput): void {
     const { sim } = this;
+    const predicting = !!local;
+    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dt, sim.choiceT > 0);
+    const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
-      for (const s of sq.soldiers) this.follow(s, dt);
+      if (predicted && sq.owner === this.localPlayer) {
+        // la squad locale suit l'ancre prédite : pas d'extrapolation à la vitesse reçue (elle est déjà dans le décalage)
+        sq.anchor.x = this.predictor.anchor.x;
+        sq.anchor.y = this.predictor.anchor.y;
+        for (const s of sq.soldiers) this.followPredicted(s);
+      } else {
+        for (const s of sq.soldiers) this.follow(s, dt);
+      }
       if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
     }
     for (const a of sim.aliens) this.follow(a, dt);
@@ -316,12 +350,25 @@ export class Mirror {
     this.approach(u, g);
   }
 
+  /** Soldat de la squad locale : but = position hôte du dernier snapshot + déplacement prédit de l'ancre depuis. */
+  private followPredicted(u: Unit): void {
+    const g = this.goals.get(u);
+    u.px = u.x;
+    u.py = u.y;
+    if (!g) return;
+    this.approachTo(u, g.x + this.predictor.dx, g.y + this.predictor.dy);
+  }
+
   private approach(u: { x: number; y: number }, g: Goal): void {
-    const dx = g.x - u.x;
-    const dy = g.y - u.y;
+    this.approachTo(u, g.x, g.y);
+  }
+
+  private approachTo(u: { x: number; y: number }, gx: number, gy: number): void {
+    const dx = gx - u.x;
+    const dy = gy - u.y;
     if (dx * dx + dy * dy > TELEPORT * TELEPORT) {
-      u.x = g.x;
-      u.y = g.y;
+      u.x = gx;
+      u.y = gy;
       return;
     }
     u.x += dx * CATCH_UP;

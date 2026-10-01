@@ -23,7 +23,7 @@ type Welcome = Extract<HostMessage, { t: 'welcome' }>;
  * Le client ne simule rien : il envoie ses inputs à l'hôte et affiche l'état reçu
  * (via `Mirror`, qui remplit un `Sim` que le WorldView lit comme une partie locale).
  *
- * Pas encore de prédiction : la squad locale réagit avec un délai ≈ aller-retour réseau.
+ * La squad locale est prédite (`Prediction.ts`) : elle réagit tout de suite, l'hôte la recale à chaque snapshot.
  */
 export class ClientSession implements Session {
   readonly sim: Sim;
@@ -35,8 +35,6 @@ export class ClientSession implements Session {
   private pending: SimEvent[] = [];
   private mx = 0;
   private my = 0;
-  private sentMx = NaN;
-  private sentMy = NaN;
   private ticks = 0;
 
   private constructor(
@@ -49,7 +47,7 @@ export class ClientSession implements Session {
     this.hostId = welcome.host;
     // xp : la jauge et les choix d'upgrade s'affichent (la simulation, elle, tourne chez l'hôte)
     this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES], seed: welcome.seed, players: [], xp: true });
-    this.mirror = new Mirror(this.sim);
+    this.mirror = new Mirror(this.sim, welcome.you);
     this.mirror.apply(first);
 
     transport.onMessage = this.onMessage;
@@ -103,7 +101,8 @@ export class ClientSession implements Session {
 
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void {
     this.loop.advance(deltaMs, (dt) => {
-      this.mirror.step(dt);
+      this.ticks++;
+      this.mirror.step(dt, { n: this.ticks, mx: this.mx, my: this.my });
       this.sendInput();
     });
     const events = this.pending;
@@ -125,13 +124,12 @@ export class ClientSession implements Session {
 
   // ---------- Réseau ----------
 
-  /** À chaque changement, et toutes les 3 ticks sinon (un paquet perdu ne bloque pas une direction). */
+  /**
+   * Un input par tick, numéroté : l'hôte renvoie le dernier numéro pris en compte, le client rejoue les suivants
+   * (réconciliation). Un paquet perdu ou en retard est sans conséquence : le suivant arrive 33 ms après.
+   */
   private sendInput(): void {
-    this.ticks++;
-    if (this.mx === this.sentMx && this.my === this.sentMy && this.ticks % 3 !== 0) return;
-    this.sentMx = this.mx;
-    this.sentMy = this.my;
-    const msg: ClientMessage = { t: 'input', mx: round(this.mx), my: round(this.my) };
+    const msg: ClientMessage = { t: 'input', mx: round(this.mx), my: round(this.my), n: this.ticks };
     this.transport.send(this.hostId, 'unreliable', JSON.stringify(msg));
   }
 

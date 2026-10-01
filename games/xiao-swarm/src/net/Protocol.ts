@@ -8,7 +8,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -18,7 +18,8 @@ export const SNAPSHOT_EVERY = 2;
 /** Client → hôte. */
 export type ClientMessage =
   | { t: 'hello'; v: number }
-  | { t: 'input'; mx: number; my: number }
+  /** `n` : numéro du tick client (prédiction) ; l'hôte renvoie le dernier reçu dans le snapshot (`ack`). */
+  | { t: 'input'; mx: number; my: number; n: number }
   /** Choix d'upgrade au level up (index dans les propositions de sa squad). */
   | { t: 'upgrade'; index: number };
 
@@ -57,6 +58,11 @@ export interface SoldierSnap {
 
 export interface SquadSnap {
   owner: PlayerId;
+  /** Ancre de la squad, vitesse de l'ancre (px/s) et dernier input client pris en compte (`n`) : base de la prédiction du joueur local. */
+  anchorX: number;
+  anchorY: number;
+  speed: number;
+  ack: number;
   kills: number;
   maxSize: number;
   healing: boolean;
@@ -162,13 +168,17 @@ const SNAPSHOT_TAG = 0x53;
 const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
-export function takeSnapshot(sim: Sim): Snapshot {
+export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
   return {
     tick: sim.tick,
     time: sim.time,
     choiceT: sim.choiceT,
     squads: sim.squads.map((sq) => ({
       owner: sq.owner,
+      anchorX: sq.anchor.x,
+      anchorY: sq.anchor.y,
+      speed: sq.moveSpeed,
+      ack: acks?.get(sq.owner) ?? 0,
       kills: sq.kills,
       maxSize: sq.maxSize,
       healing: sq.isHealing,
@@ -257,14 +267,15 @@ class Writer {
     this.view = new DataView(next);
   }
 
+  /** Borné à 0..255 : un compteur de sim peut passer sous zéro (ex. `rushWind` après la charge), et un octet qui déborde reviendrait de l'autre côté (-6 → 250) et désynchroniserait le décodeur. */
   u8(v: number): void {
     this.need(1);
-    this.view.setUint8(this.o, v);
+    this.view.setUint8(this.o, Math.max(0, Math.min(255, Math.round(v))));
     this.o += 1;
   }
   u16(v: number): void {
     this.need(2);
-    this.view.setUint16(this.o, v, true);
+    this.view.setUint16(this.o, Math.max(0, Math.min(65535, Math.round(v))), true);
     this.o += 2;
   }
   i16(v: number): void {
@@ -340,6 +351,10 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
   w.u8(s.squads.length);
   for (const sq of s.squads) {
     w.str(sq.owner);
+    w.f32(sq.anchorX);
+    w.f32(sq.anchorY);
+    w.u16(Math.min(65535, Math.round(sq.speed)));
+    w.u32(sq.ack);
     w.u16(sq.kills);
     w.u8(sq.maxSize);
     w.u8(sq.healing ? 1 : 0);
@@ -388,15 +403,17 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
       }
     }
     if (def.leap) {
-      w.u8(Math.min(255, Math.round(a.leapT * 50)));
-      if (a.leapT > 0) {
+      const leapByte = Math.max(0, Math.min(255, Math.round(a.leapT * 50)));
+      w.u8(leapByte);
+      if (leapByte > 0) { // même test que le décodeur (octet arrondi, pas la valeur brute)
         w.f32(a.leapX);
         w.f32(a.leapY);
       }
     }
     if (def.revive) {
-      w.u8(Math.min(255, Math.round(a.castT * 100)));
-      if (a.castT > 0) w.u32(a.castCorpse);
+      const castByte = Math.max(0, Math.min(255, Math.round(a.castT * 100)));
+      w.u8(castByte);
+      if (castByte > 0) w.u32(a.castCorpse);
     }
     if (def.lurk) {
       w.u8(a.lurkPhase);
@@ -505,7 +522,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), kills: r.u16(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], stim: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], stim: 0, soldiers: [] };
       sq.level = r.u8();
       sq.xp = r.u16() / 10;
       const nOffer = r.u8();

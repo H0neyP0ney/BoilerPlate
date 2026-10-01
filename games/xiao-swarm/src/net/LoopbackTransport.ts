@@ -8,7 +8,10 @@ import type { Channel, Payload, Transport } from './Transport';
  */
 export class LoopbackHub {
   private readonly rooms = new Map<string, LoopbackTransport[]>();
-  private readonly queue: (() => void)[] = [];
+  private readonly queue: { due: number; fn: () => void }[] = [];
+  private clock = 0;
+  /** Latence simulée, en nombre d'appels à `pump()` (1 pump = 1 tick de test) entre l'envoi et la livraison. */
+  latency = 0;
   private nextId = 1;
   private nextRoom = 1;
 
@@ -54,16 +57,17 @@ export class LoopbackHub {
 
   /** @internal */
   later(fn: () => void): void {
-    this.queue.push(fn);
+    this.queue.push({ due: this.clock + this.latency, fn });
   }
 
   publicRoom(): string | null {
     return this.rooms.keys().next().value ?? null;
   }
 
-  /** Livre tous les messages en attente (y compris ceux produits pendant la livraison). */
+  /** Livre les messages arrivés à échéance (y compris ceux produits pendant la livraison, si la latence est nulle). */
   pump(): void {
-    while (this.queue.length > 0) this.queue.shift()!();
+    this.clock++;
+    while (this.queue.length > 0 && this.queue[0].due <= this.clock) this.queue.shift()!.fn();
   }
 }
 

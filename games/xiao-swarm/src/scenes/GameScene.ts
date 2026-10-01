@@ -43,9 +43,8 @@ export class GameScene extends Phaser.Scene {
   /** Proposition déjà choisie mais pas encore remplacée par l'hôte (évite de la rouvrir le temps de l'aller-retour réseau). */
   /** Proposition affichée dans la fenêtre de choix (pour la rouvrir quand elle change). */
   private shownOffer = '';
-  /** Après un choix d'upgrade, le déplacement reste bloqué tant que le joueur n'a pas relâché puis re-cliqué (ou ré-appuyé sur une touche). */
+  /** Après un choix d'upgrade, le joystick (souris / tactile) reste ignoré tant que le joueur n'a pas relâché puis re-cliqué : le clic sur la carte d'upgrade ne doit pas lancer le déplacement. Le clavier n'est pas concerné. */
   private moveLocked = false;
-  private moveReleased = false;
   private readonly camTarget = { x: 0, y: 0 };
 
   constructor() {
@@ -111,10 +110,9 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(delta, 50) / 1000;
     const dir = this.move.update();
     if (this.moveLocked) {
-      // après le choix d'upgrade : on ignore le déplacement jusqu'à ce que le joueur ait relâché, puis ré-appuyé / re-cliqué
-      if (!this.move.active) this.moveReleased = true;
-      else if (this.moveReleased) this.moveLocked = false;
-      if (this.moveLocked) dir.set(0, 0);
+      // après le choix d'upgrade : le joystick (souris / tactile) est ignoré jusqu'à ce qu'il ait été relâché ; le clavier passe toujours
+      if (!this.move.joystick.active) this.moveLocked = false;
+      else dir.set(0, 0);
     }
     this.session.setLocalInput(dir.x, dir.y);
     if (this.flow.state === 'ready' && this.move.active) this.flow.begin();
@@ -227,7 +225,6 @@ export class GameScene extends Phaser.Scene {
   private closeUpgrade(): void {
     this.upgradeOpen = false;
     this.moveLocked = true;
-    this.moveReleased = !this.move.active;
     this.scene.stop(SCENES.levelUp);
   }
 

@@ -1,6 +1,6 @@
 import type { Point, Rng } from '@xiao/engine/sim';
 import { WAVE_SCRIPT, WAVE_SCRIPT_END, type WaveScript, type TimelineEntry } from './waves';
-import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
+import { makeJungleMap, makeRoyaleMap, type MapDef } from './maps';
 
 /**
  * Modes de jeu en données. Le solo et le battle royale partagent 100 % de la
@@ -24,7 +24,7 @@ export interface ModeDef {
 
 export const SURVIVAL: ModeDef = {
   id: 'survival',
-  map: () => JUNGLE_ARENA,
+  map: (seed) => makeJungleMap(seed),
   pvp: false,
   duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
   waves: WAVE_SCRIPT,
@@ -39,7 +39,7 @@ export const SURVIVAL: ModeDef = {
  */
 export const COOP: ModeDef = {
   id: 'coop',
-  map: () => JUNGLE_ARENA,
+  map: (seed) => makeJungleMap(seed),
   pvp: false,
   reviveZones: true,
   duration: Infinity,
@@ -116,7 +116,7 @@ const versusWaves = (): WaveScript => ({
  */
 export const VERSUS: ModeDef = {
   id: 'versus',
-  map: () => JUNGLE_ARENA,
+  map: (seed) => makeJungleMap(seed),
   pvp: true,
   duration: Infinity,
   get waves() {

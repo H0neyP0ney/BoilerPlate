@@ -37,8 +37,6 @@ export class Combat {
       lob: false,
       aoe: 0,
       knock: 0,
-      rock: 0,
-      rockTtl: 0,
       puddle: 0,
       puddleTtl: 0,
       puddleSlow: 1,
@@ -54,13 +52,13 @@ export class Combat {
       p.lob = false;
       p.aoe = 0;
       p.knock = 0;
-      p.rock = 0;
       p.puddle = 0;
       p.flame = false;
     },
   );
   /** Rafales en cours (power-up roquettes) : roquettes restantes et délai avant la prochaine. */
-  private readonly barrages: { owner: PlayerId; left: number; total: number; t: number }[] = [];
+  /** Rafales en cours (une par joueur) ; `recent` = ids des aliens visés par les dernières roquettes (pour ne pas viser deux fois de suite le même). */
+  private readonly barrages: { owner: PlayerId; left: number; total: number; t: number; recent: number[] }[] = [];
   private readonly scratchA: AlienState[] = [];
   private readonly scratchS: SoldierState[] = [];
 
@@ -167,11 +165,7 @@ export class Combat {
     for (let i = 0; i < n; i++) {
       const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
-      if (lob.rock) {
-        p.rock = lob.rock.radius;
-        p.rockTtl = lob.rock.ttl;
-      }
+      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
     }
   }
 
@@ -201,7 +195,14 @@ export class Combat {
    * proches (ou éparpillées autour de la squad s'il n'y en a pas) ; elles explosent en zone au premier alien touché ou au point visé.
    */
   barrage(squad: Squad, count: number): void {
-    this.barrages.push({ owner: squad.owner, left: count, total: count, t: 0 });
+    // une seule rafale par joueur : un 2e ramassage allonge la rafale en cours au lieu d'en lancer une en parallèle (roquettes doublées)
+    const running = this.barrages.find((b) => b.owner === squad.owner);
+    if (running) {
+      running.left += count;
+      running.total += count;
+      return;
+    }
+    this.barrages.push({ owner: squad.owner, left: count, total: count, t: 0, recent: [] });
   }
 
   private updateBarrages(dt: number): void {
@@ -214,7 +215,7 @@ export class Combat {
       }
       b.t -= dt;
       while (b.t <= 0 && b.left > 0) {
-        this.fireRocket(squad, b.total - b.left);
+        this.fireRocket(squad, b.total - b.left, b.recent);
         b.left--;
         b.t += BARRAGE_INTERVAL;
       }
@@ -222,14 +223,20 @@ export class Combat {
     }
   }
 
-  private fireRocket(squad: Squad, index: number): void {
+  /** Une seule roquette, tirée par UN soldat ; chacune vise un alien différent des dernières (jamais deux roquettes sur la même cible d'affilée). */
+  private fireRocket(squad: Squad, index: number, recent: number[]): void {
     const { rng } = this.sim;
     const gunners = squad.soldiers.filter((s) => s.alive && s.def.id === 'gunner');
     const shooters = gunners.length > 0 ? gunners : squad.soldiers.filter((s) => s.alive);
     if (shooters.length === 0) return;
     const src = shooters[index % shooters.length];
     const targets = this.sim.aliens.filter((a) => a.alive && Math.hypot(a.x - squad.center.x, a.y - squad.center.y) < 650);
-    const t = targets.length > 0 ? rng.pick(targets) : undefined;
+    const fresh = targets.filter((a) => !recent.includes(a.id));
+    const t = fresh.length > 0 ? rng.pick(fresh) : targets.length > 0 ? rng.pick(targets) : undefined;
+    if (t) {
+      recent.push(t.id);
+      if (recent.length > Math.min(8, Math.max(0, targets.length - 1))) recent.shift();
+    }
     const ang = rng.range(0, Math.PI * 2);
     const r = rng.range(80, 300);
     const mx = src.x;
@@ -298,7 +305,6 @@ export class Combat {
           // crachat : pas de recul (la flaque ralentit à la place) ; les autres boules repoussent comme avant
           this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, p.puddle > 0 ? 0 : 300, p.puddle > 0 ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
-          if (p.rock > 0) this.sim.addRock(p.x, p.y, p.rock, p.rockTtl);
         }
         return true;
       }

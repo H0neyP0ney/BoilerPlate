@@ -12,12 +12,12 @@ bouton « Copier le code » qui donne quoi y coller.
 | **Menu Réglages** | stats en direct, **Jeu** (zoom du jeu), **Visuel** (opacité des taches, échelle du sol). Touche `²` / F2 ou premier bouton du HUD (curseurs). Croix en haut à droite pour le fermer |
 | **Panneau Foule** | sliders du mouvement de foule (`CROWD`, `config.ts`) + config de travail |
 | **Panneau Triche** | tester vite une situation en jeu (hors ligne seulement) |
-| **Visionneuses** | Unités, Particules, Obstacles, Divers — des scènes dédiées |
+| **Visionneuses** | Unités, Particules, Obstacles, Divers, Vagues, Carte — des scènes dédiées |
 | **Panneau Équilibrage** | *annoncé, pas encore créé* : accueillera les réglages d'équilibrage du jeu (le « délai de soin » `CROWD.stillDelay` en a été retiré du panneau Foule pour y aller) |
 
 Les menus (Réglages, Foule, Triche) s'ouvrent toujours **à gauche**, sous les boutons du HUD, côte à côte dans l'ordre
 d'ouverture (`src/dev/dock.ts`). Boutons du HUD, de gauche à droite : Réglages · Foule · Triche · Unités · Particules ·
-Obstacles · Divers. Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
+Obstacles · Divers · Vagues · Carte. Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
 vues : on repasse par le jeu).
 
 ## Save / Reset (toutes les vues de dev)
@@ -41,6 +41,8 @@ raccourcis clavier (les anciens K / R / T / B ont été retirés).
 ## Visionneuse d'unités (`?viewer`, `src/scenes/UnitViewerScene.ts`, `src/debugSprites.ts`)
 
 - Une ou toutes les unités (soldats, aliens, recrues), liste des animations du catalogue, orientation, zoom.
+- Ordre du panneau : **Échelle** (réglage global du sprite), puis Ancrage (portée par défaut : « Cette séquence + direction »), Ombre, Muzzle flash.
+- **Muzzle flash** : case « Cette unité a un muzzle flash » (`muzzleFlash: true` dans le manifeste ; seul `soldier_gunner` en a un, le jeu n'affiche le flash que si la case est cochée). Cochée : point rouge (bouche du canon par frame), bouton **« Placer le canon au clic »** (le clic gauche pose le canon sur la frame affichée au lieu de déplacer le sprite), « Toutes les frames », « Effacer la frame », « Défaut unité ».
 - **Ancrage** (croix jaune, glisser le sprite) : pour toute l'unité, une séquence, ou une séquence **dans une direction**
   (`anchors: { 'walk': [x, y], 'walk:left': [x, y] }`). Pour un sprite retourné, `originX/Y` se rapportent à la boîte de l'image
   en miroir : régler la direction gauche directement, ne pas la déduire de la droite.
@@ -68,6 +70,16 @@ le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS`.
 
 **Courbe de pression** (`src/data/waveModel.ts`) : estimation des PV d'aliens vivants au fil du run (chaque envoi ajoute les PV moyens de son niveau, la squad en retire un DPS qui croît avec le temps). Réglages : DPS de départ, croissance par minute, efficacité, poids des boss (un gros boss seul compte moins). Grossière (un seul tas de PV, ni portée ni déplacements) : sert à comparer des scripts.
 **Courbe cible + Générer** : « Cible = courbe actuelle » copie la courbe en points (toutes les 20 s) ; glisser un point, clic droit (ou double-clic) dans la courbe pour en ajouter, clic droit sur un point pour le supprimer. « Générer » recompose **la timeline seulement** (`generateTimeline`) pour suivre la cible : boss et boucles d'après 10:00 gardés, chaque niveau n'arrive qu'à partir de sa première apparition dans le script, au moins un envoi toutes les 8 s. « Annuler la génération » restaure la timeline d'avant. Réglages et cible suivent Save / Reset.
+
+## Éditeur de carte (`?mapedit`, `src/scenes/MapEditorScene.ts`, `src/data/mapZones.ts`, `src/debugMapZones.ts`)
+
+Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE_SIZE` dans `data/maps.ts`). À chaque début de partie, `makeJungleMap(seed)` tire **un obstacle au hasard** (parmi `data/obstacles.ts`) à une **position au hasard** dans chaque zone ; tout vient de la seed de la partie (celle du `welcome` en ligne), donc tous les joueurs ont la même carte. Le nombre de tirages par zone est fixe : modifier une zone ne change pas le tirage des autres.
+
+- Zone = rectangle (centre `x` / `y`, `w` × `h`) + `chance` (0 → 1, 1 par défaut : probabilité que la zone donne un obstacle).
+- Clic = sélectionner, glisser = déplacer, glisser un coin = redimensionner, clic droit glissé = déplacer la vue, molette = zoom, Suppr = supprimer, flèches = 5 px (Maj : 25). « + Ajouter une zone » puis clic sur la carte ; Dupliquer ; champs X / Y / Largeur / Hauteur / Chance.
+- **Aperçu** : les obstacles affichés sont un vrai tirage (même code que la partie) avec une seed d'aperçu ; « Nouveau tirage » la change ; case pour les hitbox. Le point de départ de la squad (centre) est marqué en bleu : ne pas y mettre de zone.
+- **Save** écrit `DEFAULT_MAP_ZONES` dans `data/mapZones.ts` ; **Reset** revient à cette sauvegarde ; le travail en cours est aussi mémorisé dans le navigateur (`xiao-debug-mapzones`).
+- Hors édition : la carte royale (`makeRoyaleMap`, 4800 px) n'utilise pas les zones.
 
 ## Visionneuse divers (`?misc`, `src/scenes/MiscViewerScene.ts`)
 

@@ -18,17 +18,17 @@ export const SFX = {
 };
 
 /** Réglage booléen mémorisé ; `?clé=0` / `?clé=1` dans l'URL le force (utile sur téléphone, sans menu Réglages). */
-function flag(key: string, urlParam: string): boolean {
+function flag(key: string, urlParam: string, defaultOn = true): boolean {
   const q = new URLSearchParams(location.search).get(urlParam);
   if (q === '0' || q === '1') storage.set(`settings.${key}`, q === '1');
-  return storage.get<boolean>(`settings.${key}`, true) !== false;
+  return storage.get<boolean>(`settings.${key}`, defaultOn) !== false;
 }
 
 export const settings = {
   /** Compteur de FPS en haut à gauche (`?fps=0` pour le masquer). */
   showFps: flag('showFps', 'fps'),
-  /** Fond d'espace (nébuleuses + étoiles). Désactivé : fond noir uni, bien moins coûteux sur mobile (`?space=0`). */
-  starfield: flag('starfield', 'space'),
+  /** Fond d'espace (nébuleuses + étoiles). Désactivé par défaut (coûteux en perf) : fond noir uni ; `?space=1` ou le menu Réglages l'active. */
+  starfield: flag('starfield', 'space', false),
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
   zoom: clamp(storage.get('settings.zoom', 1), ZOOM_MIN, ZOOM_MAX),
   /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut coupée en dev, 5 dans le build Poki. */

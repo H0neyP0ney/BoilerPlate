@@ -58,10 +58,6 @@ export interface AlienState extends Body {
   goalY: number;
   retarget: number;
   attackCd: number;
-  chargeT: number;
-  chargeCd: number;
-  chargeDx: number;
-  chargeDy: number;
   slamWind: number;
   slamCd: number;
   /** Délai avant le prochain tir en cloche (aliens à `def.lob`). */
@@ -92,6 +88,10 @@ export interface AlienState extends Body {
   captive: SoldierState | null;
   /** Déjà ressuscité une fois : sa flaque ne pourra plus servir. */
   revived: boolean;
+  /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */
+  lurkPhase: number;
+  lurkT: number;
+  spikeAng: number;
 }
 
 export type Unit = SoldierState | AlienState;
@@ -113,9 +113,6 @@ export interface Projectile {
   aoe: number;
   /** Recul infligé au soldat touché (px/s, divisé par sa masse) : boules du cracheur. */
   knock: number;
-  /** Caillou : rayon de l'obstacle laissé au sol à l'atterrissage (0 = aucun) et sa durée de vie (s). */
-  rock: number;
-  rockTtl: number;
   /** Flaque ralentissante laissée à l'impact (rayon 0 = aucune), durée (s) et facteur de vitesse des soldats dedans. */
   puddle: number;
   puddleTtl: number;
@@ -149,6 +146,22 @@ export interface Field {
 }
 
 /** Flaque laissée par un crachat : ralentit les soldats qui s'y trouvent (`slow` = facteur de vitesse, < 1). */
+/** Mur annoncé (télégraphe jaune) : à la fin du compte à rebours, une ligne de rochers surgit. */
+export interface WallTelegraph {
+  id: number;
+  x: number;
+  y: number;
+  /** Direction du mur (rad). */
+  angle: number;
+  length: number;
+  /** Rayon des rochers (= demi-largeur du mur) et durée de vie du mur une fois posé (s). */
+  rockR: number;
+  ttl: number;
+  /** Temps restant avant l'apparition, et durée totale du télégraphe (s). */
+  t: number;
+  dur: number;
+}
+
 export interface Puddle {
   id: number;
   x: number;

@@ -9,6 +9,7 @@ import { LevelUpScene } from './scenes/LevelUpScene';
 import { PauseScene } from './scenes/PauseScene';
 import { OptionsScene } from './scenes/OptionsScene';
 import { MiscViewerScene } from './scenes/MiscViewerScene';
+import { MapEditorScene } from './scenes/MapEditorScene';
 import { ObstacleEditorScene } from './scenes/ObstacleEditorScene';
 import { ParticleViewerScene } from './scenes/ParticleViewerScene';
 import { WaveEditorScene } from './scenes/WaveEditorScene';
@@ -17,7 +18,7 @@ import { UnitViewerScene } from './scenes/UnitViewerScene';
 void bootPokiGame({
   safeSize: SAFE_SIZE,
   backgroundColor: PALETTE.bgDark,
-  scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(import.meta.env.DEV ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, WaveEditorScene] : [])],
+  scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(import.meta.env.DEV ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, WaveEditorScene, MapEditorScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
     i18n.init(poki.getURLParam('lang'));

@@ -33,6 +33,9 @@ export const GRAB_SLOW_TIME = 1.2;
 
 /** Zombie (alien ressuscité par un chaman) : multiplicateur de PV et de dégâts par rapport à la version de base. */
 export const ZOMBIE_MUL = 3;
+/** Enragé (zombie) : multiplicateurs de vitesse de déplacement et de cadence d'attaque. */
+export const ENRAGED_SPEED = 1.35;
+export const ENRAGED_ATTACK = 1.5;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
 /**
@@ -149,5 +152,6 @@ export const SCENES = {
   particles: 'Particles',
   misc: 'Misc',
   waves: 'Waves',
+  mapEditor: 'MapEditor',
   gameOver: 'GameOver',
 } as const;

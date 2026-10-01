@@ -8,7 +8,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 18;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -82,7 +82,6 @@ export interface AlienSnap {
   hp: number;
   maxHp: number;
   slamWind: number;
-  charging: boolean;
   /** Rhinocéros : préparation de la charge (s), charge en cours, direction verrouillée. */
   rushWind: number;
   rushing: boolean;
@@ -97,6 +96,10 @@ export interface AlienSnap {
   castCorpse: number;
   /** Zombie (ressuscité par un chaman). */
   zombie: boolean;
+  /** Lurker : phase, temps restant dans la phase (s) et direction des pics. */
+  lurkPhase: number;
+  lurkT: number;
+  spikeAng: number;
 }
 
 export interface RecruitSnap {
@@ -142,6 +145,8 @@ export interface Snapshot {
   fields: { id: number; kind: 'heal' | 'stasis'; x: number; y: number; r: number; ttl: number }[];
   puddles: { id: number; x: number; y: number; r: number; ttl: number; slow: number }[];
   rocks: { id: number; x: number; y: number; r: number; ttl: number }[];
+  /** Murs annoncés (télégraphe jaune) : centre, direction, longueur, demi-largeur, temps restant et durée du télégraphe. */
+  walls: { id: number; x: number; y: number; angle: number; length: number; r: number; ttl: number; t: number; dur: number }[];
 }
 
 const CLASS_IDS = Object.keys(CLASSES) as SoldierClassId[];
@@ -196,7 +201,6 @@ export function takeSnapshot(sim: Sim): Snapshot {
       hp: a.hp,
       maxHp: a.maxHp,
       slamWind: a.slamWind,
-      charging: a.chargeT > 0,
       rushWind: a.rushWind,
       rushing: a.rushT > 0,
       rushDx: a.rushDx,
@@ -207,6 +211,9 @@ export function takeSnapshot(sim: Sim): Snapshot {
       castT: a.castT,
       castCorpse: a.castCorpse,
       zombie: a.revived,
+      lurkPhase: a.lurkPhase,
+      lurkT: a.lurkT,
+      spikeAng: a.spikeAng,
     })),
     recruits: sim.recruits.items.map((r) => ({ id: r.id, cls: r.cls, x: r.x, y: r.y, life: r.life })),
     projectiles: sim.combat.projectiles.active.map((p) => ({
@@ -227,6 +234,7 @@ export function takeSnapshot(sim: Sim): Snapshot {
     fields: sim.powerups.fields.map((f) => ({ id: f.id, kind: f.kind, x: f.x, y: f.y, r: f.r, ttl: f.ttl })),
     puddles: sim.puddles.map((p) => ({ id: p.id, x: p.x, y: p.y, r: p.r, ttl: p.ttl, slow: p.slow })),
     rocks: sim.arena.rocks.map((k) => ({ id: k.id, x: k.x, y: k.y, r: k.radius, ttl: k.ttl })),
+    walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
   };
 }
@@ -363,7 +371,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.f32(a.maxHp); // les boss dépassent 65535 PV : PV max en f32, PV courants en part du max
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
     w.u8(Math.min(255, Math.round(a.slamWind * 200)));
-    w.u8((a.charging ? 1 : 0) | (a.rushing ? 2 : 0) | (a.zombie ? 4 : 0));
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0));
     const def = ALIENS[a.type];
     if (def.rush) {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));
@@ -380,6 +388,11 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     if (def.revive) {
       w.u8(Math.min(255, Math.round(a.castT * 100)));
       if (a.castT > 0) w.u32(a.castCorpse);
+    }
+    if (def.lurk) {
+      w.u8(a.lurkPhase);
+      w.u8(Math.min(255, Math.round(a.lurkT * 30)));
+      w.f32(a.spikeAng);
     }
   }
 
@@ -458,6 +471,18 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u16(Math.round(k.r));
     w.u8(Math.min(255, Math.round(k.ttl * 10)));
   }
+  w.u8(Math.min(255, s.walls.length));
+  for (const k of s.walls.slice(0, 255)) {
+    w.u32(k.id);
+    w.f32(k.x);
+    w.f32(k.y);
+    w.f32(k.angle);
+    w.u16(Math.round(k.length));
+    w.u16(Math.round(k.r));
+    w.u8(Math.min(255, Math.round(k.ttl * 10)));
+    w.u8(Math.min(255, Math.round(k.t * 50)));
+    w.u8(Math.min(255, Math.round(k.dur * 50)));
+  }
   return w.result();
 }
 
@@ -466,7 +491,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
   try {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
-    const snap: Snapshot = { tick: r.u32(), time: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [] };
+    const snap: Snapshot = { tick: r.u32(), time: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
@@ -537,7 +562,15 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         castT = r.u8() / 100;
         if (castT > 0) castCorpse = r.u32();
       }
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, slamWind, charging: !!(aflags & 1), rushWind, rushing: !!(aflags & 2), rushDx, rushDy, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 4) });
+      let lurkPhase = 0;
+      let lurkT = 0;
+      let spikeAng = 0;
+      if (def.lurk) {
+        lurkPhase = r.u8();
+        lurkT = r.u8() / 30;
+        spikeAng = r.f32();
+      }
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();
@@ -575,6 +608,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nPuddles; i++) snap.puddles.push({ id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10, slow: r.u8() / 100 });
     const nRocks = r.u8();
     for (let i = 0; i < nRocks; i++) snap.rocks.push({ id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10 });
+    const nWalls = r.u8();
+    for (let i = 0; i < nWalls; i++) snap.walls.push({ id: r.u32(), x: r.f32(), y: r.f32(), angle: r.f32(), length: r.u16(), r: r.u16(), ttl: r.u8() / 10, t: r.u8() / 50, dur: r.u8() / 50 });
     return snap;
   } catch {
     return null;

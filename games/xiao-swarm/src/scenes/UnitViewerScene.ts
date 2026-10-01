@@ -81,7 +81,12 @@ export class UnitViewerScene extends Phaser.Scene {
   private flashOn = false;
   private lastShot = 0;
   private paused = false;
-  private scope: Scope = 'all';
+  private scope: Scope = 'animDir';
+  /** Mode « placer le canon » : le clic gauche pose la bouche du canon au lieu de déplacer le sprite. */
+  private placeMuzzle = false;
+  private placeBtn!: HTMLButtonElement;
+  private flashBox!: HTMLInputElement;
+  private muzzleSection!: HTMLDivElement;
 
   constructor() {
     super(SCENES.viewer);
@@ -95,6 +100,12 @@ export class UnitViewerScene extends Phaser.Scene {
     this.rebuild();
 
     const kb = this.input.keyboard!;
+    // mode « placer le canon » : le clic gauche (maintenu ou non) pose la bouche du canon sur la frame affichée
+    const place = (p: Phaser.Input.Pointer) => {
+      if (this.placeMuzzle && p.leftButtonDown() && this.hasFlash()) this.dragMuzzle(p.worldX, p.worldY);
+    };
+    this.input.on('pointerdown', place);
+    this.input.on('pointermove', place);
     kb.on('keydown-LEFT', () => this.stepFrame(-1));
     kb.on('keydown-RIGHT', () => this.stepFrame(1));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.fit);
@@ -236,7 +247,7 @@ ${id}` : id;
       if (e.kind === 'soldier') bob = moving ? -Math.abs(Math.sin(t * 14)) * 3 : Math.sin(t * 2.2) * 0.8;
       else if (e.kind === 'recruit') bob = Math.sin(t * 5) * 4;
       else {
-        const f = e.unit === 'spider' ? 18 : 7;
+        const f = 7;
         const squash = e.floats ? 0 : Math.sin(t * f) * 0.06;
         lift = e.floats ? Math.sin(t * 3) * 5 : 0;
         sx = e.baseScale * (1 + squash);
@@ -358,6 +369,7 @@ ${id}` : id;
       new Option('Cette séquence', 'anim'),
       new Option('Cette séquence + direction', 'animDir'),
     );
+    this.scopeSelect.value = this.scope;
     this.scopeSelect.addEventListener('change', () => {
       this.scope = this.scopeSelect.value as Scope;
       this.scopeSelect.blur();
@@ -438,6 +450,20 @@ ${id}` : id;
       if (t && m) setPlacement(t.id, { muzzle: m });
     });
 
+    // --- Muzzle flash de l'unité (case) + pose au clic ---
+    const flashRow = document.createElement('label');
+    flashRow.style.cssText = 'display:flex;gap:6px;align-items:center';
+    this.flashBox = document.createElement('input');
+    this.flashBox.type = 'checkbox';
+    this.flashBox.addEventListener('change', () => {
+      const t = this.target;
+      if (t) setPlacement(t.id, { muzzleFlash: this.flashBox.checked });
+      if (!this.flashBox.checked) this.setPlaceMuzzle(false);
+      this.flashBox.blur();
+    });
+    flashRow.append(this.flashBox, 'Cette unité a un muzzle flash');
+    this.placeBtn = this.button('Placer le canon au clic : non', () => this.setPlaceMuzzle(!this.placeMuzzle));
+
     const flash = document.createElement('label');
     flash.style.cssText = 'display:flex;gap:6px;align-items:center';
     const cb = document.createElement('input');
@@ -466,25 +492,34 @@ ${id}` : id;
       this.info.textContent = 'Retour à la dernière sauvegarde.';
     });
 
+    this.muzzleSection = document.createElement('div');
+    this.muzzleSection.style.cssText = 'display:none;flex-direction:column;gap:6px';
+    this.muzzleSection.append(
+      note('Active « Placer au clic » : le clic gauche pose le canon sur la frame affichée (clic gauche normal : déplacer le sprite). Le point rouge se glisse aussi. ← → : frame précédente / suivante.'),
+      this.placeBtn,
+      line(this.pauseBox, 'Pause', this.frameSlider, this.frameLabel),
+      line(mx.row, my.row),
+      line(allFrames, clearFrame, unitDefault),
+      flash,
+    );
+
     box.append(
+      title('Échelle'),
+      note("Taille d'affichage de l'unité (1 = planche telle quelle). Ne change pas la hitbox."),
+      line(this.scaleSlider, this.scaleLabel),
       title('Ancrage'),
       note("Glisse le sprite sous la croix jaune. La portée dit où le réglage s'applique."),
       this.scopeSelect,
       this.status,
       line(ox.row, oy.row),
       line(clearAnchor),
-      title('Échelle'),
-      note("Taille d'affichage de l'unité (1 = planche telle quelle). Ne change pas la hitbox."),
-      line(this.scaleSlider, this.scaleLabel),
       title('Ombre portée'),
       note("Taille de l'ombre sous l'unité (1 = défaut). Appliquée aussi en jeu."),
       line(this.shadowSlider, this.shadowLabel),
-      title('Bouche du canon (par frame)'),
-      note('Glisse le point rouge (met en pause). ← → : frame précédente / suivante.'),
-      line(this.pauseBox, 'Pause', this.frameSlider, this.frameLabel),
-      line(mx.row, my.row),
-      line(allFrames, clearFrame, unitDefault),
-      flash,
+      title('Muzzle flash'),
+      note('Coche pour que cette unité tire avec un flash (seul le Trooper en a un). Décoche pour le retirer.'),
+      flashRow,
+      this.muzzleSection,
       line(save, reset, copy),
     );
     this.editorBox = box;
@@ -518,18 +553,34 @@ ${id}` : id;
     this.muzzleDot.setVisible(false);
   }
 
+  /** L'unité éditée a-t-elle un muzzle flash (case cochée) ? */
+  private hasFlash(): boolean {
+    const t = this.target;
+    return !!t && !!sprites.get(t.id).muzzleFlash;
+  }
+
+  private setPlaceMuzzle(on: boolean): void {
+    this.placeMuzzle = on && this.hasFlash();
+    this.placeBtn.textContent = `Placer le canon au clic : ${this.placeMuzzle ? 'oui' : 'non'}`;
+    this.placeBtn.style.background = this.placeMuzzle ? '#c0392b' : '';
+    if (this.placeMuzzle) this.setPaused(true); // la frame affichée doit rester fixe pour y poser le point
+    this.input.setDefaultCursor(this.placeMuzzle ? 'crosshair' : 'default');
+  }
+
   /** Active l'édition si une seule unité est affichée. */
   private setupEditor(): void {
     const t = this.target;
     this.editorBox.style.display = t ? 'flex' : 'none';
     this.cross.setVisible(!!t);
-    this.muzzleDot.setVisible(!!t);
+    this.muzzleDot.setVisible(!!t && this.hasFlash());
     this.flash.setAlpha(0);
+    this.setPlaceMuzzle(false);
     if (!t) return;
     t.sprite.setInteractive({ draggable: true, useHandCursor: true });
     let last = { x: 0, y: 0 };
     t.sprite.on('dragstart', (p: Phaser.Input.Pointer) => (last = { x: p.worldX, y: p.worldY }));
     t.sprite.on('drag', (p: Phaser.Input.Pointer) => {
+      if (this.placeMuzzle) return; // le clic pose le canon, il ne déplace pas le sprite
       const w = t.sprite.width * t.baseScale;
       const h = t.sprite.height * t.baseScale;
       // l'ancrage est fixe dans le monde : quand l'image suit le pointeur, il glisse sur l'image en sens inverse
@@ -591,10 +642,12 @@ ${id}` : id;
     this.frameLabel.textContent = `${idx + 1}/${n}`;
 
     // bouche du canon de cette frame : rouge = propre à la frame, orange = héritée de l'unité, pâle = aucune
-    const m = sprites.muzzleFor(t.id, t.playing, idx);
+    const hasFlash = this.hasFlash();
+    const m = hasFlash ? sprites.muzzleFor(t.id, t.playing, idx) : undefined;
     const own = !!sprites.get(t.id).muzzles?.[t.playing]?.[idx];
     const spot = this.worldOf(t, m?.[0] ?? 0.85, m?.[1] ?? 0.5);
     this.muzzleDot
+      .setVisible(hasFlash)
       .setPosition(spot.x, spot.y)
       .setAlpha(m ? 0.95 : 0.35)
       .setFillStyle(own ? 0xff4a30 : 0xffa030, m ? 0.95 : 0.35);
@@ -620,6 +673,9 @@ ${id}` : id;
     const sh = sprites.get(t.id).shadow ?? 1;
     if (document.activeElement !== this.shadowSlider) this.shadowSlider.value = String(sh);
     this.shadowLabel.textContent = `×${r3(sh)}`;
+    const flashOn = !!sprites.get(t.id).muzzleFlash;
+    if (this.flashBox.checked !== flashOn) this.flashBox.checked = flashOn;
+    this.muzzleSection.style.display = flashOn ? 'flex' : 'none';
     set(this.fields.ox, t.sprite.originX);
     set(this.fields.oy, t.sprite.originY);
     set(this.fields.mx, m?.[0]);

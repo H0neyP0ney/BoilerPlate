@@ -8,6 +8,7 @@ import { loadFxOverrides } from '../debugFx';
 import { loadObstacleOverrides } from '../debugObstacles';
 import { loadSpriteOverrides } from '../debugSprites';
 import { loadWaveOverrides } from '../debugWaves';
+import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
@@ -51,6 +52,7 @@ export class BootScene extends Phaser.Scene {
       loadFxOverrides();
       loadObstacleOverrides();
       loadWaveOverrides();
+      loadMapZoneOverrides();
       loadNameOverrides();
     }
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
@@ -74,6 +76,7 @@ export class BootScene extends Phaser.Scene {
     if (import.meta.env.DEV && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
     if (import.meta.env.DEV && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
     if (import.meta.env.DEV && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
+    if (import.meta.env.DEV && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
     const req = readOnlineRequest();
     if (req) {
       const { width, height } = this.scale;

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
+import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { hasComposedRecruit, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 
@@ -161,7 +162,7 @@ export class AlienView {
   private readonly animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
 
-  /** Zombie (ressuscité par un chaman) : flammes rouges qui montent du corps. */
+  /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(
@@ -182,13 +183,13 @@ export class AlienView {
     if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
 
     // Squash / lévitation procéduraux seulement sans planche animée.
-    const t = time * (a.def.id === 'spider' ? 18 : 7) + this.phase;
+    const t = time * 7 + this.phase;
     const squash = this.animated || a.def.floats ? 0 : Math.sin(t) * 0.06;
     const lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
     const wind = a.slamWind > 0 ? 1 - a.slamWind * 1.2 : 0;
     if (this.animated) {
       // attaque (slam, charge, saut) : la séquence « attack » est lancée UNE fois puis reste sur sa dernière frame jusqu'à la fin de l'action
-      const attackNow = a.slamWind > 0 || a.chargeT > 0 || a.leapT > 0;
+      const attackNow = a.slamWind > 0 || a.leapT > 0;
       if (!attackNow) this.attackStarted = false;
       else if (!this.attackStarted) this.attackStarted = sprites.play(this.body, this.id, 'attack');
       if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, moving ? 'walk' : 'idle') || sprites.play(this.body, this.id, 'idle');
@@ -197,12 +198,22 @@ export class AlienView {
     const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
     this.body.setScale(pop * (1 + squash + wind * 0.12), pop * (1 - squash - wind * 0.1));
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
-    const flips = this.animated || a.def.id === 'beast' || a.def.id === 'charger' || a.def.id === 'rhino_boss';
+    const flips = this.animated || a.def.id === 'charger' || a.def.id === 'rhino_boss';
     this.body
       .setPosition(this.rx, this.ry + lift)
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
+    if (a.def.lurk) {
+      // lurker : s'enfonce dans son trou (phase 1), invisible enterré (2-4), ressort (5)
+      const L = a.def.lurk;
+      const vis = a.lurkPhase === 1 ? a.lurkT / L.digTime : a.lurkPhase >= 2 && a.lurkPhase <= 4 ? 0 : a.lurkPhase === 5 ? 1 - a.lurkT / L.rise : 1;
+      this.body
+        .setVisible(vis > 0.03)
+        .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
+        .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
+        .setY(this.body.y + (1 - vis) * a.radius * 0.7);
+    }
     if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
@@ -214,34 +225,20 @@ export class AlienView {
     if (this.flash > 0) {
       this.flash -= dt;
       this.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
-    } else if (a.chargeT > 0 || a.rushWind > 0) {
+    } else if (a.rushWind > 0) {
       this.body.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
     } else if (a.revived) {
-      this.body.setTint(0xff8a8a).setTintMode(Phaser.TintModes.MULTIPLY); // teinte rougeâtre du zombie
+      this.body.setTint(ENRAGED_TINT).setTintMode(Phaser.TintModes.MULTIPLY); // teinte rouge de l'enragé
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
   }
 
-  /** Émetteur de flammes rouges (ADD) qui suit le zombie ; créé à la première frame où il est ressuscité. */
+  /** Flammes d'enragé qui suivent l'alien ; créé à la première frame où il est ressuscité. */
   private syncZombieFx(): void {
     const a = this.state;
     if (!this.zombieFx) {
-      const r = a.radius;
-      this.zombieFx = this.scene.add
-        .particles(0, 0, 'fx_flame', {
-          x: { min: -r * 0.7, max: r * 0.7 },
-          y: { min: -r * 0.3, max: r * 0.5 },
-          speedY: { min: -90, max: -40 },
-          speedX: { min: -14, max: 14 },
-          scale: { start: 0.75, end: 0 },
-          alpha: { start: 0.9, end: 0 },
-          lifespan: { min: 380, max: 650 },
-          frequency: 28,
-          tint: [0xff2a0a, 0xff5a1a, 0xc01008],
-          blendMode: 'ADD',
-        })
-        .setDepth(DEPTH.actors + 5000);
+      this.zombieFx = createEnragedFlames(this.scene, a.radius);
     }
     this.zombieFx.setPosition(this.rx, this.ry - a.radius * 0.4);
   }

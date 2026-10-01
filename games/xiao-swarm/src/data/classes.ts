@@ -133,10 +133,10 @@ export const START_SQUADS: SoldierClassId[][] = [['gunner', 'gunner', 'gunner', 
  * compense ce qui manque par rapport à ces proportions (GDD §13).
  */
 export const TARGET_MIX: Record<SoldierClassId, number> = {
-  gunner: 0.32,
-  medic: 0.12,
-  flammer: 0.16,
-  sniper: 0.14,
-  tank: 0.12,
-  grenadier: 0.14,
+  gunner: 0.75,
+  medic: 0.05,
+  flammer: 0.05,
+  sniper: 0.05,
+  tank: 0.05,
+  grenadier: 0.05,
 };

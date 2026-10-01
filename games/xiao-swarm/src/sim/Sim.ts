@@ -7,7 +7,7 @@ import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
 import { Combat } from './Combat';
-import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Unit } from './entities';
+import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
@@ -65,6 +65,8 @@ export class Sim {
   private readonly shockwaves: { x: number; y: number; r: number; speed: number; duration: number; reach: number; t: number; hit: Map<number, { dx: number; dy: number; k: number; left: number }> }[] = [];
   /** Flaques de crachat : ralentissent les soldats dedans. */
   readonly puddles: Puddle[] = [];
+  /** Murs annoncés (télégraphe jaune du bâtisseur) : ils deviennent des rochers à la fin du compte à rebours. */
+  readonly walls: WallTelegraph[] = [];
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
@@ -117,6 +119,7 @@ export class Sim {
     this.fires.length = 0;
     this.reviveZones.length = 0;
     this.puddles.length = 0;
+    this.walls.length = 0;
     this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
@@ -328,6 +331,7 @@ export class Sim {
     this.updateCorpsesAndRocks(dt);
     this.updateFires(dt);
     this.updateReviveZones(dt);
+    this.updateWalls(dt);
     for (let i = this.puddles.length - 1; i >= 0; i--) if ((this.puddles[i].ttl -= dt) <= 0) this.puddles.splice(i, 1);
     this.powerups.update(dt);
     this.updateShockwaves(dt);
@@ -357,6 +361,7 @@ export class Sim {
       return;
     }
     if (!u.alive) return;
+    if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
     if (u.captive) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     u.hp -= amount;
     u.kx += (dirX * 40) / u.mass;
@@ -378,12 +383,34 @@ export class Sim {
     this.horde.spawnAt(c.type, c.x, c.y, hpFrac, true);
   }
 
-  /** Caillou lancé par un alien : obstacle au sol pendant `ttl` secondes. */
+  /** Annonce un mur (télégraphe jaune) ; `windup` s plus tard, une ligne de rochers de rayon `rockR` surgit, pour `ttl` s. */
+  addWall(x: number, y: number, angle: number, length: number, windup: number, rockR: number, ttl: number): void {
+    this.walls.push({ id: this.ids.get(), x, y, angle, length, rockR, ttl, t: windup, dur: windup });
+    if (this.walls.length > 30) this.walls.shift();
+  }
+
+  private updateWalls(dt: number): void {
+    for (let i = this.walls.length - 1; i >= 0; i--) {
+      const w = this.walls[i];
+      if ((w.t -= dt) > 0) continue;
+      this.walls.splice(i, 1);
+      // rochers qui se chevauchent à moitié : un mur continu, pas une rangée de cailloux
+      const n = Math.max(2, Math.round(w.length / (w.rockR * 1.4)) + 1);
+      const cos = Math.cos(w.angle);
+      const sin = Math.sin(w.angle);
+      for (let k = 0; k < n; k++) {
+        const o = (k / (n - 1) - 0.5) * w.length;
+        this.addRock(w.x + cos * o, w.y + sin * o, w.rockR, w.ttl);
+      }
+    }
+  }
+
+  /** Rocher au sol (élément d'un mur) : obstacle pendant `ttl` secondes. */
   addRock(x: number, y: number, radius: number, ttl: number): void {
     const rock = { id: this.ids.get(), x, y, radius, ttl };
     this.arena.rocks.push(rock);
     this.events.push({ t: 'rock', id: rock.id, x, y, r: radius, ttl });
-    if (this.arena.rocks.length > 40) this.arena.rocks.shift(); // l'affichage se cale sur la liste (snapshot) : le visuel disparaît avec la collision
+    if (this.arena.rocks.length > 120) this.arena.rocks.shift(); // l'affichage se cale sur la liste (snapshot) : le visuel disparaît avec la collision
   }
 
   /**

@@ -51,74 +51,6 @@ function slime(ctx: CanvasRenderingContext2D, light = '#c4f07a', dark = '#6fb03a
   eye(ctx, 24, 21, 8);
 }
 
-/** Calmar violet flottant. */
-function squid(ctx: CanvasRenderingContext2D): void {
-  for (let i = 0; i < 4; i++) {
-    const x = 13 + i * 7;
-    ctx.beginPath();
-    ctx.moveTo(x - 3, 34);
-    ctx.quadraticCurveTo(x + (i % 2 ? 5 : -5), 46, x, 54);
-    ctx.quadraticCurveTo(x + 4, 46, x + 3, 34);
-    outlined(ctx, '#8c3fb0', 2.5);
-  }
-  ctx.beginPath();
-  ctx.moveTo(6, 34);
-  ctx.bezierCurveTo(2, 2, 46, 2, 42, 34);
-  ctx.closePath();
-  outlined(ctx, radial(ctx, 24, 20, 20, '#e7a6ff', '#9a45c4'));
-  // antenne
-  ctx.strokeStyle = OUTLINE;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(32, 8);
-  ctx.quadraticCurveTo(38, 0, 42, 3);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(42, 3, 3, 0, Math.PI * 2);
-  outlined(ctx, '#ff9ff5', 2);
-  eye(ctx, 24, 20, 8);
-}
-
-/** Petite araignée rouge (runner). */
-function spider(ctx: CanvasRenderingContext2D): void {
-  ctx.strokeStyle = OUTLINE;
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  for (let i = 0; i < 3; i++) {
-    const y = 16 + i * 4;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(18, y);
-      ctx.quadraticCurveTo(18 + side * 12, y - 8, 18 + side * (15 + i), y + 8);
-      ctx.stroke();
-    }
-  }
-  ctx.strokeStyle = '#a82035';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < 3; i++) {
-    const y = 16 + i * 4;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(18, y);
-      ctx.quadraticCurveTo(18 + side * 12, y - 8, 18 + side * (15 + i), y + 8);
-      ctx.stroke();
-    }
-  }
-  ctx.beginPath();
-  ctx.ellipse(18, 18, 11, 9, 0, 0, Math.PI * 2);
-  outlined(ctx, radial(ctx, 18, 18, 11, '#ff7a8a', '#c21f3a'));
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(14, 16, 2.6, 0, Math.PI * 2);
-  ctx.arc(22, 16, 2.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = OUTLINE;
-  ctx.beginPath();
-  ctx.arc(14.6, 16.4, 1.4, 0, Math.PI * 2);
-  ctx.arc(22.6, 16.4, 1.4, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 /** Bête orange à cornes (charge). */
 function beast(ctx: CanvasRenderingContext2D, light = '#ffc27a', dark = '#e0741f', legs = '#c0621a'): void {
   // pattes
@@ -225,9 +157,6 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     slime(ctx, '#b8dcff', '#3a78d8');
   });
   canvasTexture(scene, 'alien_slime_pink', 48, 48, (ctx) => slime(ctx, '#ffc4e0', '#e0559a'));
-  canvasTexture(scene, 'alien_squid', 48, 58, squid);
-  canvasTexture(scene, 'alien_spider', 36, 32, spider);
-  canvasTexture(scene, 'alien_beast', 66, 52, (ctx) => beast(ctx));
   canvasTexture(scene, 'alien_charger', 66, 52, (ctx) => beast(ctx, '#e09a9a', '#a33030', '#7a2020'));
   canvasTexture(scene, 'alien_kamikaze', 48, 48, (ctx) => slime(ctx, '#ffd9a8', '#e0702a'));
   canvasTexture(scene, 'alien_frog', 48, 48, (ctx) => slime(ctx, '#c0f5e4', '#2aa88a'));
@@ -266,7 +195,27 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
   });
   canvasTexture(scene, 'alien_fire', 48, 48, (ctx) => slime(ctx, '#ffd9a0', '#e04a10'));
   canvasTexture(scene, 'alien_shaman', 48, 48, (ctx) => slime(ctx, '#fff6b0', '#d8a020'));
-  canvasTexture(scene, 'alien_healer', 48, 48, (ctx) => slime(ctx, '#fffbd0', '#e8d030'));
+  // Lurker : carapace violette hérissée de pics d'os, un oeil.
+  canvasTexture(scene, 'alien_lurker', 56, 48, (ctx) => {
+    for (let i = 0; i < 6; i++) {
+      const x = 10 + i * 7.2;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, 22);
+      ctx.lineTo(x, 2 + (i % 2) * 4);
+      ctx.lineTo(x + 4, 22);
+      ctx.closePath();
+      outlined(ctx, '#efe3c4', 2);
+    }
+    ctx.beginPath();
+    ctx.ellipse(28, 30, 22, 14, 0, 0, Math.PI * 2);
+    outlined(ctx, radial(ctx, 28, 28, 18, '#b08ad8', '#5a3a86'));
+    for (const x of [14, 24, 34, 44]) {
+      ctx.beginPath();
+      ctx.ellipse(x, 42, 4, 3.5, 0, 0, Math.PI * 2);
+      outlined(ctx, '#4a2f70', 2);
+    }
+    eye(ctx, 37, 28, 6);
+  });
   canvasTexture(scene, 'alien_thrower', 48, 48, (ctx) => slime(ctx, '#d8c8b0', '#8a6a48'));
   canvasTexture(scene, 'alien_spitter', 48, 48, (ctx) => slime(ctx, '#e3c8ff', '#8a3fd0'));
   canvasTexture(scene, 'alien_crab', 130, 112, crab);

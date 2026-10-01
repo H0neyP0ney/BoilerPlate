@@ -1,5 +1,6 @@
 import { Rng, type Point } from '@xiao/engine/sim';
-import { BIG_OBSTACLES, SMALL_OBSTACLES, type ObstacleId } from './obstacles';
+import { MAP_ZONES } from './mapZones';
+import { BIG_OBSTACLES, OBSTACLE_IDS, SMALL_OBSTACLES, type ObstacleId } from './obstacles';
 
 /**
  * Cartes décrites en données : la simulation en tire les obstacles, l'affichage
@@ -46,35 +47,30 @@ export interface MapDef {
   seed: number;
 }
 
+/** Côté (px) de l'arène solo / coop : 2400 d'origine, +20 %. */
+export const JUNGLE_SIZE = 2880;
+
 /**
  * Arène solo : une île carrée flottant dans l'espace (GDD §3). Seuls des obstacles volcaniques (data/obstacles.ts) font obstacle
  * (`ponds` / `logs` restent disponibles dans MapDef). Un obstacle = ses cercles de collision (Arena) + son sprite (ArenaView).
+ *
+ * Les obstacles sont TIRÉS à chaque partie depuis les zones d'obstacle de `data/mapZones.ts` (éditeur : visionneuse « Carte ») :
+ * un obstacle au hasard, à une position au hasard, dans chaque zone. Tout vient de la seed de la partie, donc tous les joueurs
+ * ont la même carte. Le nombre de tirages par zone est fixe (même si la zone ne donne rien) : changer une zone ne change pas le
+ * tirage des autres.
  */
-export const JUNGLE_ARENA: MapDef = {
-  id: 'jungle',
-  width: 2400,
-  height: 2400,
-  border: 170,
-  seed: 7,
-  ponds: [],
-  obstacles: withSizes(
-    [
-      { x: 900, y: 860, kind: 'obstacle_3' },
-      { x: 980, y: 925, kind: 'obstacle_8' },
-      { x: 1560, y: 820, kind: 'obstacle_5' },
-      { x: 1500, y: 1550, kind: 'obstacle_1' },
-      { x: 1600, y: 1610, kind: 'obstacle_7' },
-      { x: 1150, y: 1300, kind: 'obstacle_2' },
-      { x: 1900, y: 1200, kind: 'obstacle_6' },
-      { x: 700, y: 950, kind: 'obstacle_7' },
-      { x: 1200, y: 1720, kind: 'obstacle_4' },
-      { x: 620, y: 1450, kind: 'obstacle_3' },
-      { x: 1750, y: 1750, kind: 'obstacle_8' },
-    ],
-    7,
-  ),
-  logs: [],
-};
+export function makeJungleMap(seed: number): MapDef {
+  const rng = new Rng(seed + 11);
+  const obstacles: PlacedObstacle[] = [];
+  for (const z of MAP_ZONES.obstacleZones) {
+    const roll = rng.next();
+    const kind = OBSTACLE_IDS[Math.floor(rng.next() * OBSTACLE_IDS.length)];
+    const x = z.x + (rng.next() - 0.5) * z.w;
+    const y = z.y + (rng.next() - 0.5) * z.h;
+    if (roll < (z.chance ?? 1)) obstacles.push({ x: Math.round(x), y: Math.round(y), kind });
+  }
+  return { id: `jungle-${seed}`, width: JUNGLE_SIZE, height: JUNGLE_SIZE, border: 170, seed, ponds: [], obstacles: withSizes(obstacles, seed), logs: [] };
+}
 
 /**
  * Grande carte battle royale générée depuis une seed : rochers répartis, coins dégagés pour les départs.

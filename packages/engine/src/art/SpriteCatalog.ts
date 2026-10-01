@@ -20,6 +20,8 @@ export interface SpriteDef {
   scale?: number;
   /** Bouche du canon (muzzle flash), en fraction de la frame comme l'ancrage : [0.8, 0.45]. Suit le retournement du sprite. */
   muzzle?: [number, number];
+  /** Cette unité tire avec un muzzle flash, affiché à la bouche du canon. Absent = pas de flash. */
+  muzzleFlash?: boolean;
   /**
    * Ancrage propre à une séquence, éventuellement à une direction affichée : clés `walk` ou `walk:left`
    * (valeurs [originX, originY] telles que passées à `setOrigin`, sprite retourné compris). Sinon originX/originY.

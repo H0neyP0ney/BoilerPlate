@@ -33,7 +33,6 @@ export type SimEvent =
   | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }
   | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
   | { t: 'tongue'; alien: number; target: number; dur: number }
-  | { t: 'healBeam'; from: number; to: number; dur: number }
   | { t: 'gameEnd'; victory: boolean; delay: number }
   | { t: 'restart' }
   | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }

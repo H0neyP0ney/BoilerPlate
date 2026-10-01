@@ -61,7 +61,7 @@ il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycl
 | `idle` | soldats, aliens, recrues, décor | à l'arrêt (et par défaut) |
 | `walk` | soldats, aliens | en déplacement |
 | `shoot` | soldats | quand il a une cible (optionnel) |
-| `attack` | aliens | charge (bête) / slam (crabe) (optionnel) |
+| `attack` | aliens | slam (crabe) (optionnel) |
 
 Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 
@@ -74,9 +74,6 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 | `portrait_<classe>` | — | HUD | par défaut : haut du corps du soldat |
 | `recruit_<classe>` | 56×60 | ×0.75 | recrue au sol à ramasser |
 | `alien_slime` | 48×48 | ×1 | slime vert à un oeil |
-| `alien_spider` | 36×32 | ×1 | petite araignée rouge (rapide) |
-| `alien_squid` | 48×58 | ×1 | calmar violet flottant |
-| `alien_beast` | 66×52 | ×1 | bête orange à cornes (charge) |
 | `alien_crab` | 130×112 | ×1 | crabe géant (mini-boss) |
 | `palm` `bush` `bush_flowers` `log` | 160×172, 112×78, 112×78, 150×44 | ×1 | décor de bordure |
 | `obstacle_1` … `obstacle_8` | 111×107 → 260×189 (WebP) | voir `data/obstacles.ts` | obstacles volcaniques (lave, rochers, cristaux) : `public/assets/decor/`, sources `art-src/obstacle_N.png` |

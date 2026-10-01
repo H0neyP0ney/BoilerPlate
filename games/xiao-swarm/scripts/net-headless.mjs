@@ -169,6 +169,14 @@ try {
   const zb = hs.aliens[0];
   check(zb.revived && Math.abs(zb.maxHp - 55 * 1.5 * 3) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
+  check(hs.map.obstacles.length > 0 && JSON.stringify(client.sim.map.obstacles) === JSON.stringify(hs.map.obstacles), 'carte : mêmes obstacles tirés chez l’hôte et chez le client (même seed)', `${hs.map.obstacles.length} obstacles`);
+  hs.horde.spawnAt('lurker', a.center.x + 300, a.center.y);
+  const lurker = hs.aliens[0];
+  lurker.hp = lurker.maxHp = 1e6; // la squad ne doit pas le tuer avant qu'il soit enterré
+  for (let i = 0; i < 25; i++) await tick(client);
+  const clurker = client.sim.aliens.find((x) => x.id === lurker.id);
+  check(!!clurker && lurker.lurkPhase >= 1 && clurker.lurkPhase >= 1, 'lurker : s’enterre, phase reflétée chez le client', `hôte ${lurker.lurkPhase} / client ${clurker?.lurkPhase}`);
+  hs.aliens.length = 0;
   hs.powerups.items.push({ id: 9001, kind: 'stim', x: a.center.x, y: a.center.y, life: 5 });
   hs.powerups.items.push({ id: 9002, kind: 'stasis', x: a.center.x + 30, y: a.center.y, life: 5 });
   hs.powerups.items.push({ id: 9003, kind: 'rockets', x: a.center.x - 30, y: a.center.y, life: 5 });
@@ -210,21 +218,12 @@ try {
   check(m2.hp <= far0, 'recrue en trop : un soldat hors zone n’est pas soigné');
   a.stats.add('maxSquad', { flat: gap });
 
-  // 3f) Soigneur : soigne un allié blessé ; onde de choc : repousse même un alien lourd, à chaque montée de niveau.
+  // 3f) Onde de choc : repousse même un alien lourd, à chaque montée de niveau.
   hs.aliens.length = 0;
   hs.combat.clear(); // roquettes du power-up encore en vol (la pause de choix a étalé la rafale)
   resolveChoices();
   // loin des tirs de l'escouade, vers le centre de la carte (près d'un bord, ils seraient ramenés à portée)
   const hdir = a.center.x < hs.map.width / 2 ? 1 : -1;
-  hs.horde.spawnAt('healer', a.center.x + 700 * hdir, a.center.y);
-  hs.horde.spawnAt('slime_bombardier', a.center.x + 720 * hdir, a.center.y + 40);
-  const healer = hs.aliens[0];
-  const hurt = hs.aliens[1];
-  healer.target = null;
-  hurt.hp = hurt.maxHp * 0.3;
-  const hp0 = hurt.hp;
-  for (let i = 0; i < 20; i++) await tick(client);
-  check(hurt.hp > hp0, 'slime jaune : soigne un allié blessé', `${hp0.toFixed(0)} → ${hurt.hp.toFixed(0)} PV`);
   hs.aliens.length = 0;
   hs.horde.spawnAt('crab', a.center.x - 300, a.center.y);
   const heavy = hs.aliens[0];

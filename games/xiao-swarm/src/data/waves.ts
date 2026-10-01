@@ -83,16 +83,18 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     6: [
       { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'fire', count: 4 }, { type: 'slime_basic', count: 6 }] },
       { name: 'Brasier', groups: [{ type: 'fire', count: 6 }, { type: 'slime_pink', count: 10 }] },
-      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'healer', count: 2 }, { type: 'slime_basic', count: 10 }, { type: 'slime_pink', count: 6 }] },
+      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'slime_basic', count: 10 }, { type: 'slime_pink', count: 6 }] },
     ],
     7: [
-      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'thrower', count: 4 }, { type: 'healer', count: 2 }, { type: 'slime_basic', count: 6 }] },
+      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'thrower', count: 4 }, { type: 'slime_basic', count: 6 }] },
+      { name: 'Embuscade', groups: [{ type: 'lurker', count: 3 }, { type: 'slime_basic', count: 8 }, { type: 'slime_pink', count: 6 }] },
       { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 4 }, { type: 'slime_pink', count: 11 }] },
       { name: 'Barrage', groups: [{ type: 'thrower', count: 6 }, { type: 'frog', count: 4 }, { type: 'fire', count: 4 }] },
     ],
     8: [
       { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'slime_basic', count: 12 }, { type: 'slime_pink', count: 9 }] },
-      { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'healer', count: 3 }, { type: 'kamikaze', count: 7 }] },
+      { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 5 }, { type: 'frog', count: 3 }, { type: 'kamikaze', count: 4 }] },
+      { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'kamikaze', count: 7 }] },
       { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'fire', count: 7 }, { type: 'bubble', count: 2 }] },
     ],
     9: [

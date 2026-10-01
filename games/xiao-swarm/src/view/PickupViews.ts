@@ -5,6 +5,7 @@ import { type UpgradeId } from '../data/progression';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
+import { createEnragedFlames } from './EnragedFx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
 const CAPSULE_LIFT = 52;
@@ -36,7 +37,8 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
  * centre de chaque squad. Tout est recalé chaque frame sur l'état de la simulation (snapshot en ligne) : pas d'image orpheline.
  */
 export class PickupViews {
-  private readonly syringes = new Map<number, Phaser.GameObjects.Text>();
+  /** Flammes d'enragé de chaque soldat sous stimpack (même effet que les aliens ressuscités). */
+  private readonly rageFx = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
   private readonly powerups = new Map<number, Phaser.GameObjects.Container>();
   private readonly counts = new Map<PlayerId, { box: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; x: number; y: number; shown: string }>();
 
@@ -82,7 +84,7 @@ export class PickupViews {
     }
   }
 
-  // ---------- Stimpack : seringue au-dessus de chaque soldat boosté ----------
+  // ---------- Stimpack : les soldats boostés sont enragés (flammes rouges) ----------
 
   private syncSyringes(time: number): void {
     const seen = new Set<number>();
@@ -91,19 +93,19 @@ export class PickupViews {
       const blink = sq.buffs.stim < 1.2 && Math.sin(time * 20) > 0; // clignote juste avant la fin
       for (const s of sq.soldiers) {
         seen.add(s.id);
-        let icon = this.syringes.get(s.id);
-        if (!icon) {
-          icon = this.scene.add.text(0, 0, '💉', { fontFamily: theme.font, fontSize: '20px' }).setOrigin(0.5).setDepth(DEPTH.bars + 1);
-          this.syringes.set(s.id, icon);
+        let fx = this.rageFx.get(s.id);
+        if (!fx) {
+          fx = createEnragedFlames(this.scene, s.def.radius, 45); // plus espacées que sur un alien : toute une escouade en porte
+          this.rageFx.set(s.id, fx);
         }
         const p = this.posOf(s.id) ?? s;
-        icon.setPosition(p.x + 14, p.y - 46 + Math.sin(time * 8 + s.id) * 2).setAlpha(blink ? 0.25 : 1);
+        fx.setPosition(p.x, p.y - s.def.radius * 0.6).setVisible(!blink);
       }
     }
-    for (const [id, icon] of this.syringes) {
+    for (const [id, fx] of this.rageFx) {
       if (seen.has(id)) continue;
-      icon.destroy();
-      this.syringes.delete(id);
+      fx.destroy();
+      this.rageFx.delete(id);
     }
   }
 
@@ -189,8 +191,8 @@ export class PickupViews {
   destroy(): void {
     for (const b of this.powerups.values()) b.destroy();
     for (const c of this.counts.values()) c.box.destroy();
-    for (const i of this.syringes.values()) i.destroy();
-    this.syringes.clear();
+    for (const fx of this.rageFx.values()) fx.destroy();
+    this.rageFx.clear();
     this.powerups.clear();
     this.counts.clear();
   }

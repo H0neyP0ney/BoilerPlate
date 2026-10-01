@@ -164,7 +164,7 @@ function saveObstacle(id: string, code: string): Result {
 
 // --- planches de sprites (assets/manifest.ts)
 
-const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'muzzle', 'anchors', 'muzzles'];
+const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'muzzleFlash', 'muzzle', 'anchors', 'muzzles'];
 const pt = (p: [number, number]): string => `[${fmtNumber(p[0])}, ${fmtNumber(p[1])}]`;
 
 interface SpriteProps {
@@ -172,6 +172,7 @@ interface SpriteProps {
   originY?: number;
   scale?: number;
   shadow?: number;
+  muzzleFlash?: boolean;
   muzzle?: [number, number];
   anchors?: Record<string, [number, number]>;
   muzzles?: Record<string, ([number, number] | null)[]>;
@@ -183,6 +184,7 @@ function spriteLines(p: SpriteProps): string[] {
   if (p.originY !== undefined) out.push(`originY: ${fmtNumber(p.originY)},`);
   if (p.scale !== undefined) out.push(`scale: ${fmtNumber(p.scale)},`);
   if (p.shadow !== undefined && p.shadow !== 1) out.push(`shadow: ${fmtNumber(p.shadow)},`);
+  if (p.muzzleFlash) out.push('muzzleFlash: true,');
   if (p.muzzle) out.push(`muzzle: ${pt(p.muzzle)},`);
   const anchors = Object.entries(p.anchors ?? {});
   if (anchors.length) out.push(`anchors: { ${anchors.map(([k, v]) => `'${k}': ${pt(v)}`).join(', ')} },`);
@@ -262,6 +264,8 @@ function handle(target: string, data: any): Result {
       return saveNames(data as Record<string, Record<string, string>>);
     case 'waves':
       return replaceDeclaration('data/waves.ts', /export const DEFAULT_WAVE_SCRIPT: WaveScript = \{/, String(data.code), 'Script de vagues');
+    case 'mapzones':
+      return replaceDeclaration('data/mapZones.ts', /export const DEFAULT_MAP_ZONES: MapZoneConfig = \{/, String(data.code), 'Zones de la carte');
     case 'obstacle':
       return saveObstacle(String(data.id), String(data.code));
     case 'sprite':

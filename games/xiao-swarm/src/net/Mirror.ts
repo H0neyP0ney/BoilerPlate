@@ -100,6 +100,8 @@ export class Mirror {
 
     sim.puddles.length = 0;
     for (const p of snap.puddles) sim.puddles.push({ ...p });
+    sim.walls.length = 0;
+    for (const w of snap.walls) sim.walls.push({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, rockR: w.r, ttl: w.ttl, t: w.t, dur: w.dur });
     sim.arena.rocks.length = 0;
     for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
 
@@ -212,10 +214,6 @@ export class Mirror {
         goalY: a.y,
         retarget: 0,
         attackCd: 0,
-        chargeT: 0,
-        chargeCd: 0,
-        chargeDx: 0,
-        chargeDy: 0,
         slamWind: 0,
         slamCd: 0,
         lobCd: 0,
@@ -238,6 +236,9 @@ export class Mirror {
         trailCd: 0,
         captive: null,
         revived: false,
+        lurkPhase: 0,
+        lurkT: 0,
+        spikeAng: 0,
       };
       this.aliens.set(a.id, s);
     }
@@ -246,7 +247,6 @@ export class Mirror {
     s.hp = a.hp;
     s.maxHp = a.maxHp;
     s.slamWind = a.slamWind;
-    s.chargeT = a.charging ? 1 : 0;
     s.rushWind = a.rushWind;
     s.rushT = a.rushing ? 1 : 0;
     s.rushDx = a.rushDx;
@@ -257,6 +257,9 @@ export class Mirror {
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
     s.revived = a.zombie;
+    s.lurkPhase = a.lurkPhase;
+    s.lurkT = a.lurkT;
+    s.spikeAng = a.spikeAng;
     this.setGoal(s, a.x, a.y);
     return s;
   }

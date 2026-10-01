@@ -180,6 +180,37 @@ export class Fx {
     return img;
   }
 
+  /**
+   * Particules en spirale : `arms` bras de lumière qui tournent en s'écartant du centre jusqu'à `radius` (px) en `durationMs`.
+   * Chaque particule part avec un léger retard le long de son bras (elles dessinent une spirale), rétrécit et s'estompe en
+   * arrivant. Même aplatissement que les anneaux (`FX.ring.squash`) pour rester posé sur le sol. Onde de montée de niveau.
+   */
+  spiral(x: number, y: number, radius: number, color: number, durationMs = 900, arms = 3, perArm = 14, turns = 1.1): void {
+    const squash = FX.ring.squash;
+    for (let a = 0; a < arms; a++) {
+      for (let i = 0; i < perArm; i++) {
+        const base = (a / arms) * Math.PI * 2;
+        const img = this.scene.add.image(x, y, 'fx_glow').setTint(color).setDepth(DEPTH.fx + 1).setAlpha(0); // blend normal : en additif le bleu virait au blanc sur le sol clair
+        const state = { k: 0 };
+        const life = durationMs * 0.62;
+        this.scene.tweens.add({
+          targets: state,
+          k: 1,
+          delay: (i / perArm) * durationMs * 0.38,
+          duration: life,
+          ease: 'Cubic.Out',
+          onStart: () => img.setAlpha(1),
+          onUpdate: () => {
+            const r = radius * state.k;
+            const ang = base + state.k * turns * Math.PI * 2;
+            img.setPosition(x + Math.cos(ang) * r, y + Math.sin(ang) * r * squash).setScale(0.8 * (1 - state.k * 0.65)).setAlpha(1 - state.k * state.k);
+          },
+          onComplete: () => img.destroy(),
+        });
+      }
+    }
+  }
+
   /** Colonne de lumière qui monte et s'estompe (nouvelle recrue dans la squad, mort d'un soldat…). */
   column(x: number, y: number, color: number, height = 130, durationMs = 800): { img: Phaser.GameObjects.Image; dy: number }[] {
     const img = this.scene.add.image(x, y + 6, 'fx_column').setOrigin(0.5, 1).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx);

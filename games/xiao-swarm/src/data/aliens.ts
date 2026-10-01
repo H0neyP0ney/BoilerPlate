@@ -1,10 +1,10 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime_basic' | 'spider' | 'squid' | 'beast' | 'crab' | 'slime_pink' | 'slime_bombardier' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'healer' | 'rhino_boss' | 'crab_king';
+export type AlienId = 'slime_basic' | 'crab' | 'slime_pink' | 'slime_bombardier' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'lurker' | 'rhino_boss' | 'crab_king';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
-export type TargetPref = 'nearest' | 'medic' | 'weakest' | 'center' | 'tank';
+export type TargetPref = 'nearest' | 'center' | 'specialist';
 
 export interface AlienDef {
   id: AlienId;
@@ -17,16 +17,30 @@ export interface AlienDef {
   target: TargetPref;
   /** Flotte (ombre décollée, rebond plus ample). */
   floats?: boolean;
-  /** Charge : accélère vers la cible quand elle est proche, knockback à l'impact. */
-  charge?: { trigger: number; speedMul: number; duration: number; cooldown: number; knockback: number };
   /** Slam de zone : knockback + dégâts autour de lui. */
   slam?: { radius: number; damage: number; cooldown: number; knockback: number };
   /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui explosent au sol (zone `aoe`). */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; rock?: { radius: number; ttl: number }; count?: number; keepMoving?: boolean };
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean };
+  /**
+   * Murs : quand une squad est à portée (`range`), télégraphe jaune pendant `windup` s puis fait surgir `count` murs allongés (`length` px,
+   * faits de rochers de rayon `rock.radius`, durée `rock.ttl` s) en arc, à `ring` px du centre de la squad, côté opposé au lanceur :
+   * ils gênent sa fuite. Le lanceur reste à `range × 0.8` de sa cible.
+   */
+  wall?: { range: number; cooldown: number; windup: number; count: number; ring: number; spread: number; length: number; rock: { radius: number; ttl: number } };
+  /**
+   * Lurker : anticipe où ira la squad (centre + vitesse × `lead` s), s'y rend puis s'ENTERRE (`digTime` s ; un trou reste visible).
+   * Enterré et immobile, il attend jusqu'à `wait` s qu'un soldat entre à `trigger` px : il vise (`aim` s, ligne rouge) puis lance
+   * une ligne de pics (`length` × `width` px) qui s'étend progressivement en `sweep` s et blesse (`damage`) chaque soldat une fois
+   * quand le front le traverse. Entre deux lignes : `cooldown` s. Enterré, il subit `buriedDmg` × les dégâts. Sans proie au bout
+   * de `wait` s, il ressort (`rise` s) et repart.
+   */
+  lurk?: { lead: number; digRange: number; digTime: number; rise: number; wait: number; trigger: number; aim: number; length: number; width: number; sweep: number; damage: number; cooldown: number; buriedDmg: number };
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
+  /** Accélération d'approche : à moins de `range` px de sa cible, sa vitesse est multipliée par `speedMul` (pour rattraper une squad qui court). */
+  dash?: { range: number; speedMul: number };
   /** Bulle : au contact d'un soldat, le capture et le dévore (`dps` PV par seconde) en restant immobile ; la détruire le libère. */
   capture?: { dps: number };
   /** Sa flaque reste au sol à sa mort (une seule fois par alien) : un chaman peut le ressusciter. */
@@ -65,8 +79,6 @@ export interface AlienDef {
     puddle: { radius: number; ttl: number; slow: number };
     texture: string;
   };
-  /** Soigneur : rayons de soin vers les `targets` alliés les plus blessés à portée (`pct` de leurs PV max par seconde) ; reste à `hold` px des soldats. */
-  healBeam?: { range: number; targets: number; pct: number; hold: number };
   /** Échelle d'affichage (1 par défaut) ; le rayon de collision (`radius`) est à régler en conséquence. */
   scale?: number;
   /** Probabilité de base de lâcher une recrue. */
@@ -189,22 +201,6 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xb060e0,
     hpBarWidth: 30,
   },
-  /** Slime jaune soigneur : reste en retrait et soigne ses alliés blessés avec des rayons de soin (tuez-le en priorité). */
-  healer: {
-    id: 'healer',
-    hp: 45,
-    speed: 70,
-    radius: 17,
-    mass: 1.1,
-    damage: 3,
-    attackCooldown: 1,
-    target: 'nearest',
-    healBeam: { range: 270, targets: 2, pct: 0.12, hold: 320 },
-    xp: 6,
-    recruitChance: 0.06,
-    color: 0xf2e24a,
-    hpBarWidth: 30,
-  },
   /** Chaman : slime magique qui reste en retrait et ressuscite les slimes morts depuis leur flaque (une fois chacun). */
   shaman: {
     id: 'shaman',
@@ -221,7 +217,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd84a,
     hpBarWidth: 34,
   },
-  /** Lanceur de cailloux : ses cailloux restent au sol un moment et bloquent les soldats. */
+  /** Bâtisseur de murs : de très loin, fait surgir (après un télégraphe jaune) des murs allongés autour de la squad pour gêner sa fuite. */
   thrower: {
     id: 'thrower',
     hp: 50,
@@ -231,11 +227,27 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4,
     attackCooldown: 1,
     target: 'nearest',
-    lob: { range: 330, cooldown: 2.8, flight: 1, damage: 8, aoe: 38, texture: 'fx_rock_small', rock: { radius: 24, ttl: 14 } },
+    wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 168, rock: { radius: 22, ttl: 8 } },
     xp: 4,
     recruitChance: 0.04,
     color: 0x9a8066,
     hpBarWidth: 30,
+  },
+  /** Lurker : s'enterre sur le trajet anticipé de la squad et la frappe d'une ligne de pics (comme les lurkers de StarCraft). */
+  lurker: {
+    id: 'lurker',
+    hp: 120,
+    speed: 120,
+    radius: 18,
+    mass: 2,
+    damage: 0,
+    attackCooldown: 1,
+    target: 'nearest',
+    lurk: { lead: 2.4, digRange: 140, digTime: 0.7, rise: 0.6, wait: 7, trigger: 360, aim: 0.6, length: 380, width: 44, sweep: 0.5, damage: 30, cooldown: 1.6, buriedDmg: 0.2 },
+    xp: 8,
+    recruitChance: 0.08,
+    color: 0x7a5a9a,
+    hpBarWidth: 36,
   },
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
@@ -246,8 +258,9 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     mass: 3,
     damage: 0,
     attackCooldown: 1,
-    target: 'nearest',
+    target: 'specialist',
     floats: true,
+    dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
     capture: { dps: 14 },
     xp: 12,
     recruitChance: 0,
@@ -274,7 +287,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   rhino_boss: {
     id: 'rhino_boss',
     hp: 900,
-    speed: 55,
+    speed: 71.5, // 55 + 30 %
     radius: 38,
     mass: 14,
     damage: 14,
@@ -304,50 +317,6 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xc01c40,
     hpBarWidth: 140,
   },
-  spider: {
-    id: 'spider',
-    hp: 14,
-    speed: 150,
-    radius: 11,
-    mass: 0.6,
-    damage: 4,
-    attackCooldown: 0.55,
-    target: 'weakest',
-    xp: 1,
-    recruitChance: 0.03,
-    color: 0xd9304a,
-    hpBarWidth: 22,
-  },
-  squid: {
-    id: 'squid',
-    hp: 38,
-    speed: 95,
-    radius: 16,
-    mass: 1,
-    damage: 8,
-    attackCooldown: 0.8,
-    target: 'medic',
-    floats: true,
-    xp: 3,
-    recruitChance: 0.06,
-    color: 0xb35ad8,
-    hpBarWidth: 30,
-  },
-  beast: {
-    id: 'beast',
-    hp: 110,
-    speed: 95,
-    radius: 22,
-    mass: 4,
-    damage: 14,
-    attackCooldown: 1,
-    target: 'nearest',
-    charge: { trigger: 240, speedMul: 3.2, duration: 0.55, cooldown: 3.5, knockback: 420 },
-    xp: 8,
-    recruitChance: 0.2,
-    color: 0xf08a2c,
-    hpBarWidth: 40,
-  },
   crab: {
     id: 'crab',
     hp: 900, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
@@ -372,4 +341,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime_basic', 'slime_pink', 'slime_bombardier', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'healer', 'thrower', 'bubble', 'fire'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime_basic', 'slime_pink', 'slime_bombardier', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'thrower', 'bubble', 'fire', 'lurker'];

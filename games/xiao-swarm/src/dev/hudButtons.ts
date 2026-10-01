@@ -49,6 +49,14 @@ export const iconWaves: Icon = (g) => {
   g.fillStyle(0xff4a4a, 1).fillRect(9, -13, 5, 25);
 };
 
+/** Carte : un plan avec une zone en pointillés. */
+export const iconMap: Icon = (g) => {
+  g.lineStyle(2.5, 0x7dd3ff, 1).strokeRoundedRect(-13, -13, 26, 26, 3);
+  g.fillStyle(0xffd166, 0.55).fillRect(-8, -8, 12, 9);
+  g.lineStyle(2, 0xffd166, 1).strokeRect(-8, -8, 12, 9);
+  g.fillStyle(0xff8a4a, 1).fillCircle(6, 6, 3.5);
+};
+
 /** Les visionneuses, dans l'ordre d'affichage des boutons du HUD. */
 export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.viewer, icon: iconUnit, label: 'Unités' },
@@ -56,6 +64,7 @@ export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.obstacles, icon: iconObstacle, label: 'Obstacles' },
   { scene: SCENES.misc, icon: iconMisc, label: 'Divers' },
   { scene: SCENES.waves, icon: iconWaves, label: 'Vagues' },
+  { scene: SCENES.mapEditor, icon: iconMap, label: 'Carte' },
 ];
 
 /** Bouton carré de 44 px centré sur (0, 0). */

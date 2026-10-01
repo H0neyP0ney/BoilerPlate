@@ -18,6 +18,8 @@ export interface Placement {
   originX?: number;
   originY?: number;
   muzzle?: Point;
+  /** Cette unité tire avec un muzzle flash. */
+  muzzleFlash?: boolean;
   anchors?: Record<string, Point>;
   muzzles?: Record<string, (Point | null)[]>;
   /** Taille de l'ombre portée (1 = défaut). */
@@ -32,7 +34,7 @@ const base = new Map<string, Placement>();
 
 const read = (id: string): Placement => {
   const d = sprites.get(id);
-  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale };
+  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, muzzleFlash: d.muzzleFlash, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale };
 };
 
 function persist(): void {
@@ -123,7 +125,7 @@ function commitMuzzles(id: string, anim: string, list: (Point | null)[]): void {
 /** Save : écrit le placement de l'unité (ancrage, échelle, ombre, bouche du canon) dans son entrée de assets/manifest.ts. */
 export async function saveSpriteToCode(id: string): Promise<string> {
   const d = sprites.get(id);
-  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
+  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, muzzleFlash: d.muzzleFlash, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
   const msg = await saveToCode('sprite', { id, props });
   if (msg.startsWith('✔')) {
     base.set(id, read(id)); // « Reset » ramène maintenant à cette sauvegarde
@@ -144,6 +146,7 @@ export function placementSnippet(id: string): string {
   if (d.shadow !== undefined && d.shadow !== 1) lines.push(`shadow: ${n(d.shadow)},`);
   const anchors = Object.entries(d.anchors ?? {});
   if (anchors.length) lines.push(`anchors: { ${anchors.map(([k, v]) => `'${k}': ${pt(v)}`).join(', ')} },`);
+  if (d.muzzleFlash) lines.push('muzzleFlash: true,');
   if (d.muzzle) lines.push(`muzzle: ${pt(d.muzzle)},`);
   const muzzles = Object.entries(d.muzzles ?? {});
   if (muzzles.length) {

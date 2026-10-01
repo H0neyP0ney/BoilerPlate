@@ -61,10 +61,8 @@ export class WorldView {
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
-  /** Rayons de soin des slimes jaunes (de l'id d'un alien à l'id d'un autre) ; renouvelés par la simulation toutes les 0,3 s. */
   /** Point de départ (au sol) du couloir de charge de chaque alien qui charge, figé le temps de la charge. */
   private readonly rushOrigins = new Map<number, { x: number; y: number }>();
-  private readonly healBeams: { from: number; to: number; t: number; dur: number }[] = [];
   /** Flaques de slimes morts (ressuscitables) et cailloux au sol, par id de simulation. */
   private readonly corpseImgs = new Map<number, Phaser.GameObjects.Image>();
   private readonly rockImgs = new Map<number, Phaser.GameObjects.Image>();
@@ -152,7 +150,7 @@ export class WorldView {
         break;
       }
       case 'shot':
-        if (e.cls === 'gunner' && nearCam(e.x, e.y)) {
+        if (sprites.get(`soldier_${e.cls}`)?.muzzleFlash && nearCam(e.x, e.y)) {
           const view = this.soldiers.get(e.id);
           const mp = view?.muzzlePoint();
           const p = mp ?? e;
@@ -169,6 +167,7 @@ export class WorldView {
         this.quietUntil = this.scene.time.now + 1000;
         // nouvelle partie : on efface tout ce qui reste au sol
         for (const img of this.corpseImgs.values()) img.destroy();
+        this.pendingWaves.length = 0;
         for (const img of this.rockImgs.values()) img.destroy();
         for (const f of this.fireImgs.values()) f.img.destroy();
         for (const f of this.fuses) f.img.destroy();
@@ -177,7 +176,6 @@ export class WorldView {
         this.fireImgs.clear();
         this.fuses.length = 0;
         this.tongues.length = 0;
-        this.healBeams.length = 0;
         break;
       }
       case 'fuse': {
@@ -238,9 +236,6 @@ export class WorldView {
       case 'release':
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
-        break;
-      case 'healBeam':
-        this.healBeams.push({ from: e.from, to: e.to, t: e.dur, dur: e.dur });
         break;
       case 'tongue':
         this.tongues.push({ alien: e.alien, target: e.target, t: e.dur, dur: e.dur });
@@ -308,8 +303,8 @@ export class WorldView {
         if (e.owner !== this.localPlayer) break;
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;
-        this.fx.ring(c.x, c.y, UPGRADE_REPEL.radius, 0x5aa8ff, UPGRADE_REPEL.reach * 1000); // onde de choc : les aliens sont repoussés quand le front les touche
-        this.fx.text(c.x, c.y - 80, t('levelUpTitle', { level: e.level }), '#9fd3ff', 30);
+        // l'onde de choc (repoussement, sim) ne démarre qu'à la fin de la pause de choix : l'effet attend donc lui aussi (voir fireLevelWaves)
+        this.pendingWaves.push({ x: c.x, y: c.y, level: e.level });
         break;
       }
       case 'squadWiped':
@@ -330,7 +325,23 @@ export class WorldView {
 
   // ---------- Rendu ----------
 
+  /** Ondes de montée de niveau en attente : elles partent quand la pause de choix d'upgrade est terminée (comme le repoussement). */
+  private readonly pendingWaves: { x: number; y: number; level: number }[] = [];
+
+  /** Lance l'effet d'onde (anneau + spirale + texte) une fois la popup d'upgrade fermée ; une seule onde même si plusieurs niveaux d'un coup. */
+  private fireLevelWaves(): void {
+    if (this.pendingWaves.length === 0 || this.sim.choiceT > 0) return;
+    const w = this.pendingWaves[0];
+    const level = this.pendingWaves[this.pendingWaves.length - 1].level;
+    this.pendingWaves.length = 0;
+    const ms = UPGRADE_REPEL.reach * 1000;
+    this.fx.ring(w.x, w.y, UPGRADE_REPEL.radius, 0x5aa8ff, ms); // onde de choc : les aliens sont repoussés quand le front les touche
+    this.fx.spiral(w.x, w.y, UPGRADE_REPEL.radius * 0.95, 0x3d9bff, ms * 1.5);
+    this.fx.text(w.x, w.y - 80, t('levelUpTitle', { level }), '#9fd3ff', 30);
+  }
+
   render(alpha: number, dt: number, time: number): void {
+    this.fireLevelWaves();
     this.syncUnits(alpha, dt, time);
     this.followFlashes();
     this.syncProjectiles(alpha);
@@ -494,7 +505,10 @@ export class WorldView {
   private syncOrbs(alpha: number, time: number): void {
     const orbs = this.sim.xp.orbs;
     const view = this.scene.cameras.main.worldView;
-    while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, 'fx_xp').setDepth(DEPTH.groundFx + 0.2)); // blend normal : en additif le bleu virait au blanc
+    // image fournie (assets/manifest.ts `xp_orb`) sinon orbe procédural ; blend normal : en additif le bleu virait au blanc
+    const orbTex = this.scene.textures.exists('xp_orb') ? 'xp_orb' : 'fx_xp';
+    const orbBase = orbTex === 'xp_orb' ? 32 / this.scene.textures.get('xp_orb').getSourceImage().width : 1;
+    while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, orbTex).setDepth(DEPTH.groundFx + 0.2));
     for (let i = 0; i < this.orbImgs.length; i++) {
       const img = this.orbImgs[i];
       const o = orbs[i];
@@ -511,7 +525,7 @@ export class WorldView {
       const size = o.value >= 8 ? 1.25 : o.value >= 3 ? 0.85 : 0.55;
       const bob = Math.sin(time * 4 + o.id) * 2.5;
       const blink = o.life < 5 && Math.sin(time * 18) > 0;
-      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
+      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * orbBase * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
     }
   }
 
@@ -600,30 +614,6 @@ export class WorldView {
     }
   }
 
-  /** Rayons de soin : faisceau vert qui ondule entre le soigneur et l'allié, avec un point lumineux qui voyage dessus. */
-  private drawHealBeams(l: Phaser.GameObjects.Graphics, dt: number, time: number): void {
-    for (let i = this.healBeams.length - 1; i >= 0; i--) {
-      const hb = this.healBeams[i];
-      hb.t -= dt;
-      const from = this.aliens.get(hb.from);
-      const to = this.aliens.get(hb.to);
-      if (hb.t <= 0 || !from || !to) {
-        this.healBeams.splice(i, 1);
-        continue;
-      }
-      const a = Math.min(1, hb.t / 0.12) * 0.9;
-      const x1 = from.rx;
-      const y1 = from.ry - from.state.radius * 0.6;
-      const x2 = to.rx;
-      const y2 = to.ry - to.state.radius * 0.5;
-      l.lineStyle(8, 0x3dff7a, 0.22 * a).lineBetween(x1, y1, x2, y2);
-      l.lineStyle(3, 0xc8ffd8, a).lineBetween(x1, y1, x2, y2);
-      const k = (time * 2.2 + hb.from * 0.37) % 1;
-      l.fillStyle(0xffffff, a).fillCircle(x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 4);
-      l.fillStyle(0x7dff9a, a).fillCircle(x2, y2, 5 + Math.sin(time * 14) * 1.5);
-    }
-  }
-
   /** Halos d'apparition : recalés chaque frame sur leur soldat / squad, retirés quand leur animation est finie. */
   private followHalos(): void {
     for (let i = this.followers.length - 1; i >= 0; i--) {
@@ -657,6 +647,7 @@ export class WorldView {
     this.pickups.drawGround(g, time);
     g.fillStyle(0x2a1d2e, 0.28);
     for (const v of this.aliens.values()) {
+      if (v.state.def.lurk && v.state.lurkPhase >= 2 && v.state.lurkPhase <= 4) continue; // enterré : pas d'ombre
       const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
       const r = v.state.radius * (v.state.def.floats ? 0.7 : 1) * k;
       g.fillEllipse(v.rx, v.ry, r * 2.1, r * 0.9);
@@ -688,6 +679,41 @@ export class WorldView {
       g.fillStyle(0x6a2aa8, 0.42 * a).fillEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
       g.fillStyle(0xb060e0, 0.3 * a).fillEllipse(p.x, p.y, p.r * 1.5, p.r * 0.95);
       g.lineStyle(2, 0xd9a0ff, 0.55 * a).strokeEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
+    }
+    // Lurker : trou dans le sol tant qu'il est enterré (il se creuse puis se rebouche), et ligne rouge avant les pics
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const L = a.def.lurk;
+      if (!L || a.lurkPhase === 0) continue;
+      const open = a.lurkPhase === 1 ? 1 - a.lurkT / L.digTime : a.lurkPhase === 5 ? a.lurkT / L.rise : 1;
+      const r = a.radius * 1.55 * open;
+      g.fillStyle(0x6a4a30, 0.9).fillEllipse(a.x, a.y + 4, r * 2.3, r * 1.25); // rebord de terre
+      g.fillStyle(0x1a0f0a, 0.95).fillEllipse(a.x, a.y + 5, r * 1.8, r * 0.95); // trou
+      g.fillStyle(0x000000, 0.7).fillEllipse(a.x, a.y + 7, r * 1.1, r * 0.55);
+      if (a.lurkPhase === 3) {
+        const k = 1 - a.lurkT / L.aim;
+        const cos = Math.cos(a.spikeAng);
+        const sin = Math.sin(a.spikeAng);
+        const hw = L.width / 2;
+        const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
+          [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(a.x + cos * u - sin * w, a.y + sin * u + cos * w));
+        g.fillStyle(0xff2a2a, 0.1 + 0.2 * k).fillPoints(quad(L.length, hw), true);
+        g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(quad(L.length * k, hw * k), true);
+        g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
+      }
+    }
+    // Murs du bâtisseur : télégraphe jaune (rectangle allongé qui se remplit) avant que les rochers ne surgissent
+    for (const w of this.sim.walls) {
+      const k = 1 - w.t / w.dur;
+      const cos = Math.cos(w.angle);
+      const sin = Math.sin(w.angle);
+      const hl = w.length / 2;
+      const hw = w.rockR;
+      const quad = (l: number, wd: number): Phaser.Math.Vector2[] =>
+        [[-l, -wd], [l, -wd], [l, wd], [-l, wd]].map(([u, v]) => new Phaser.Math.Vector2(w.x + cos * u - sin * v, w.y + sin * u + cos * v));
+      g.fillStyle(0xffd23a, 0.1 + 0.2 * k).fillPoints(quad(hl + hw * 0.6, hw), true);
+      g.fillStyle(0xffd23a, 0.15 + 0.25 * k).fillPoints(quad((hl + hw * 0.6) * k, hw * k), true);
+      g.lineStyle(3, 0xffe066, 0.5 + 0.4 * k).strokePoints(quad(hl + hw * 0.6, hw), true);
     }
     // Télégraphe : zone d'impact des boules ennemies, en rouge, pendant la dernière partie du vol (uniquement là où la
     // simulation tourne : le client réseau ne connaît ni la durée ni le rayon).
@@ -774,7 +800,7 @@ export class WorldView {
     }
     for (const v of this.aliens.values()) {
       const a = v.state;
-      if (a.hp >= a.maxHp) continue;
+      if (a.hp >= a.maxHp || (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4)) continue;
       const top = v.body.displayHeight * v.body.originY + 8;
       this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy);
     }
@@ -782,7 +808,7 @@ export class WorldView {
     const l = this.beams;
     l.clear();
     this.drawTongues(l, dt);
-    this.drawHealBeams(l, dt, time);
+    this.drawSpikes(l);
     this.drawCasts(l, time);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tr = this.tracers[i];
@@ -794,6 +820,33 @@ export class WorldView {
       const k = tr.life / 0.12;
       l.lineStyle(6 * k, 0x7dff9a, 0.35 * k).lineBetween(tr.x1, tr.y1, tr.x2, tr.y2);
       l.lineStyle(2.5 * k, 0xeaffea, k).lineBetween(tr.x1, tr.y1, tr.x2, tr.y2);
+    }
+  }
+
+  /** Lignes de pics du lurker : des pointes d'os qui jaillissent du sol de proche en proche, le front avance avec la phase 4. */
+  private drawSpikes(l: Phaser.GameObjects.Graphics): void {
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const L = a.def.lurk;
+      if (!L || a.lurkPhase !== 4) continue;
+      const p = 1 - a.lurkT / L.sweep;
+      const front = p * L.length;
+      const cos = Math.cos(a.spikeAng);
+      const sin = Math.sin(a.spikeAng);
+      const fade = p > 0.75 ? 1 - (p - 0.75) / 0.25 * 0.6 : 1;
+      const rows = [-L.width / 3, 0, L.width / 3];
+      for (let d = 18; d <= front; d += 22) {
+        const rise = Math.min(1, (front - d) / 70 + 0.25); // la pointe sort du sol quand le front passe
+        const h = 36 * rise;
+        for (let i = 0; i < rows.length; i++) {
+          const off = rows[i] + ((d / 22 + i) % 2 ? 4 : -4);
+          const x = a.x + cos * d - sin * off;
+          const y = a.y + sin * d + cos * off;
+          l.fillStyle(0x2a1d2e, 0.55 * fade).fillEllipse(x, y + 2, 14, 6);
+          l.fillStyle(0xe8dcc0, fade).fillTriangle(x - 6, y, x + 6, y, x + (i - 1) * 2, y - h);
+          l.lineStyle(1.5, 0x6a4a3a, fade).strokeTriangle(x - 6, y, x + 6, y, x + (i - 1) * 2, y - h);
+        }
+      }
     }
   }
 

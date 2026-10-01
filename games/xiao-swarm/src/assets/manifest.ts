@@ -33,6 +33,8 @@ export const ASSETS: AssetEntry[] = [
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n): AssetEntry => ({ type: 'image', id: `obstacle_${n}`, url: `decor/obstacle_${n}.webp` })),
   // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
+  // Globe d'XP — art-src/xp.png réduit en WebP (64 px). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.
+  { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_gunner` (art/recruits.ts).
   ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
   // Slime de base (`slime_basic`, vert) — art-src/slime_basic.png (1600 px) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_basic.pack.json.
@@ -128,6 +130,48 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
+  // Rhinocéros — art-src/rino.png (16 cases, cycle de marche, regarde vers la GAUCHE) réduit par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/rino.pack.json (cases de 125×96), puis converti en WebP. Sert au mini-boss
+  // « Rhinocéros Alpha » (taille d'origine) ; la variante jaune (`rino_yellow`, node tools/hue-shift.mjs … 28 1.05) sert au Rhinocéros
+  // qui charge (`charger`, plus petit). Placement (échelle, ancrage, ombre) : visionneuse d'unités.
+  {
+    type: 'sheet',
+    url: 'aliens/rino.webp',
+    frameWidth: 125,
+    frameHeight: 96,
+    sprites: {
+      alien_rhino_boss: {
+        originX: 0.517,
+        originY: 0.9,
+        scale: 1,
+        shadow: 1.2,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  {
+    type: 'sheet',
+    url: 'aliens/rino_yellow.webp',
+    frameWidth: 125,
+    frameHeight: 96,
+    sprites: {
+      alien_charger: {
+        originX: 0.517,
+        originY: 0.9,
+        scale: 0.55,
+        shadow: 1.1,
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
   // Kamikaze : araignée rouge — art-src/spider_red.png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/spider_red.pack.json
   // (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE). Même surface à l'écran que l'ancien slime kamikaze (plus plate).
   {
@@ -213,27 +257,6 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Slime soigneur — planche du slime recolorée en jaune pâle (node tools/hue-shift.mjs … slime_lemon.png 315 0.5).
-  {
-    type: 'sheet',
-    url: 'aliens/slime_lemon.png',
-    frameWidth: 64,
-    frameHeight: 64,
-    sprites: {
-      alien_healer: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 1,
-        shadow: 1.25,
-        anchors: { 'idle:right': [0.4885, 0.896], 'idle:left': [0.4823, 0.8929] },
-        facesLeft: true,
-        anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
-        },
-      },
-    },
-  },
   // Lanceur de cailloux — planche du slime recolorée en brun (node tools/hue-shift.mjs … slime_brown.png 285 0.4).
   {
     type: 'sheet',
@@ -290,6 +313,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.5975,
         originY: 0.8847,
         scale: 1.25,
+        muzzleFlash: true,
         muzzle: [0.8561, 0.6376],
         anchors: { 'idle:left': [0.6489, 0.8847], 'walk:left': [0.6559, 0.9088], 'walk:right': [0.3586, 0.9126], 'die:left': [0.5921, 0.8768], 'idle:right': [0.3566, 0.8907] },
         muzzles: {

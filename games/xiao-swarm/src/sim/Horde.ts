@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, GRAB_IMMUNE, ZOMBIE_MUL } from '../config';
+import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, GRAB_IMMUNE, ZOMBIE_MUL } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -17,7 +17,7 @@ const TONGUE_MAX_PULL = 100;
 /**
  * IA de la horde : chaque alien choisit une cible selon sa préférence (GDD §11),
  * se dirige vers elle en évitant ses congénères, et attaque au contact.
- * Charge (beast) et slam (crab) sont les seules attaques à knockback (GDD §19).
+ * Slam (crab) et charge (rhinocéros) sont les seules attaques à knockback (GDD §19).
  * Fonctionne avec N squads (battle royale) : chaque alien vise la plus proche.
  */
 export class Horde {
@@ -99,10 +99,6 @@ export class Horde {
       goalY: c.y,
       retarget: 0,
       attackCd: 0,
-      chargeT: 0,
-      chargeCd: 1,
-      chargeDx: 0,
-      chargeDy: 0,
       slamWind: 0,
       slamCd: 2,
       lobCd: 1 + rng.next() * 1.5,
@@ -125,6 +121,9 @@ export class Horde {
       captive: null,
       trailCd: 0,
       revived,
+      lurkPhase: 0,
+      lurkT: 0,
+      spikeAng: 0,
     };
   }
 
@@ -167,6 +166,10 @@ export class Horde {
         this.pickTarget(a, def.target);
         a.retarget = 0.4 + rng.next() * 0.3;
       }
+      if (def.lurk) {
+        this.updateLurker(a, dt);
+        continue;
+      }
       const goalX = a.target ? a.target.x : a.goalX;
       const goalY = a.target ? a.target.y : a.goalY;
       let gx = goalX - a.x;
@@ -176,7 +179,10 @@ export class Horde {
       gy /= gd;
 
       let speed = def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y);
+      if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
       const power = a.revived ? ZOMBIE_MUL : 1; // zombie : dégâts ×3
+      if (a.revived) speed *= ENRAGED_SPEED; // enragé : plus rapide, attaque plus vite
+      const rate = a.revived ? ENRAGED_ATTACK : 1; // cadence d'attaque (cooldowns écoulés plus vite)
       let contactOverride: number | undefined;
       // Slime de feu : sème des flammes derrière lui tant qu'il avance
       if (def.trail) {
@@ -229,20 +235,6 @@ export class Horde {
           gx /= gd;
           gy /= gd;
           contactOverride = r.range * 0.6;
-        }
-      }
-      if (def.charge) {
-        a.chargeCd -= dt;
-        if (a.chargeT > 0) {
-          a.chargeT -= dt;
-          gx = a.chargeDx;
-          gy = a.chargeDy;
-          speed *= def.charge.speedMul;
-        } else if (a.chargeCd <= 0 && a.target && gd < def.charge.trigger) {
-          a.chargeT = def.charge.duration;
-          a.chargeCd = def.charge.cooldown;
-          a.chargeDx = gx;
-          a.chargeDy = gy;
         }
       }
       if (def.slam) {
@@ -299,11 +291,9 @@ export class Horde {
           a.rushDy = gy;
         }
       }
-      // Soigneur : rayons de soin vers les alliés les plus blessés à portée
-      if (def.healBeam) this.healAllies(a, dt);
       // Langue : attrape le soldat visé et le tire vers lui
       if (def.tongue) {
-        a.tongueCd -= dt;
+        a.tongueCd -= dt * rate;
         if (a.tongueCd <= 0 && a.target && gd < def.tongue.range) {
           // cible déjà grabée (langue ou bulle) : immunisée, on retente bientôt
           a.tongueCd = this.tongue(a, a.target) ? def.tongue.cooldown * rng.range(0.85, 1.2) : 0.6;
@@ -311,7 +301,7 @@ export class Horde {
       }
       // Spray de boules qui repoussent
       if (def.spray) {
-        a.sprayCd -= dt;
+        a.sprayCd -= dt * rate;
         if (a.sprayCd <= 0 && a.target && gd < def.spray.range) {
           this.sim.combat.spray(a, a.target);
           a.sprayCd = def.spray.cooldown * rng.range(0.85, 1.2);
@@ -320,16 +310,24 @@ export class Horde {
 
       // Tireur en cloche : lance dès que la cible est à portée et se tient à distance au lieu de foncer dessus
       if (def.lob) {
-        a.lobCd -= dt;
+        a.lobCd -= dt * rate;
         if (a.lobCd <= 0 && a.target && gd < def.lob.range) {
           this.sim.combat.throwBlob(a, a.target);
           a.lobCd = def.lob.cooldown * rng.range(0.85, 1.2);
         }
       }
+      // Bâtisseur : télégraphe puis fait surgir des murs en arc autour de la squad, côté opposé au lanceur
+      if (def.wall) {
+        a.lobCd -= dt * rate;
+        if (a.lobCd <= 0 && a.target && gd < def.wall.range) {
+          this.castWalls(a, a.target);
+          a.lobCd = def.wall.cooldown * rng.range(0.85, 1.2);
+        }
+      }
       // les tireurs (cloche, langue, spray) se tiennent à distance au lieu de foncer sur leur cible
-      const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.healBeam?.hold);
+      const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.wall?.range);
       const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + 4 : 0);
-      const go = (gd > contact && a.rushWind <= 0) || a.chargeT > 0 || a.rushT > 0;
+      const go = (gd > contact && a.rushWind <= 0) || a.rushT > 0;
       const desiredX = go ? gx * speed : 0;
       const desiredY = go ? gy * speed : 0;
 
@@ -363,7 +361,7 @@ export class Horde {
       a.ky = damp(a.ky, 0, 6, dt);
 
       // Collisions avec les soldats (poussée pondérée par la masse) + attaque
-      a.attackCd -= dt;
+      a.attackCd -= dt * rate;
       for (const s of soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
         if (!s.alive || s.capturedBy) continue;
         const dx = s.x - a.x;
@@ -389,14 +387,7 @@ export class Horde {
           s.x += dx * overlap * (a.mass / total);
           s.y += dy * overlap * (a.mass / total);
         }
-        if (a.chargeT > 0 && def.charge) {
-          const d = Math.sqrt(d2) || 1;
-          s.kx += (dx / d) * def.charge.knockback;
-          s.ky += (dy / d) * def.charge.knockback;
-          this.sim.damageSoldier(s, def.damage * power);
-          a.chargeT = 0;
-          a.attackCd = def.attackCooldown;
-        } else if (a.attackCd <= 0) {
+        if (a.attackCd <= 0) {
           this.sim.damageSoldier(s, def.damage * power);
           a.attackCd = def.attackCooldown;
         }
@@ -406,22 +397,126 @@ export class Horde {
     }
   }
 
-  /** Soigneur : soigne en continu les `targets` alliés blessés les plus abîmés à portée ; un événement par rayon toutes les 0,3 s (affichage). */
-  private healAllies(a: AlienState, dt: number): void {
-    const hb = a.def.healBeam!;
-    const near = this.sim.alienHash.query(a.x, a.y, hb.range + 60, this.scratch);
-    const wounded: AlienState[] = [];
-    for (const o of near) {
-      if (o === a || !o.alive || o.hp >= o.maxHp || Math.hypot(o.x - a.x, o.y - a.y) > hb.range) continue;
-      wounded.push(o);
+  /**
+   * Lurker : en route vers le point où la squad SERA, s'enterre, attend qu'elle passe à portée, vise puis lance une ligne de pics
+   * qui s'étend progressivement (chaque soldat est blessé une fois quand le front passe sur lui).
+   */
+  private updateLurker(a: AlienState, dt: number): void {
+    const L = a.def.lurk!;
+    const { arena, soldierHash } = this.sim;
+    a.attackCd -= dt; // délai entre deux lignes de pics
+    switch (a.lurkPhase) {
+      case 0: {
+        const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (!sq) break;
+        let vx = 0;
+        let vy = 0;
+        let n = 0;
+        for (const s of sq.soldiers) {
+          if (!s.alive) continue;
+          vx += s.vx;
+          vy += s.vy;
+          n++;
+        }
+        const px = sq.center.x + (n ? vx / n : 0) * L.lead;
+        const py = sq.center.y + (n ? vy / n : 0) * L.lead;
+        const d = Math.hypot(px - a.x, py - a.y) || 1;
+        const dSquad = Math.hypot(sq.center.x - a.x, sq.center.y - a.y);
+        if (d < L.digRange || dSquad < L.trigger * 0.7) {
+          a.lurkPhase = 1;
+          a.lurkT = L.digTime;
+          a.vx = a.vy = 0;
+          break;
+        }
+        const speed = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y);
+        a.vx = damp(a.vx, ((px - a.x) / d) * speed, 8, dt);
+        a.vy = damp(a.vy, ((py - a.y) / d) * speed, 8, dt);
+        this.steerV.x = a.vx;
+        this.steerV.y = a.vy;
+        arena.steer(a.x, a.y, a.radius, this.steerV);
+        a.vx = this.steerV.x;
+        a.vy = this.steerV.y;
+        break;
+      }
+      case 1:
+        if ((a.lurkT -= dt) <= 0) {
+          a.lurkPhase = 2;
+          a.lurkT = L.wait;
+        }
+        break;
+      case 2: {
+        a.lurkT -= dt;
+        let prey: SoldierState | null = null;
+        let bestD = L.trigger;
+        if (a.attackCd <= 0) {
+          for (const s of soldierHash.query(a.x, a.y, L.trigger, this.scratchS)) {
+            if (!s.alive || s.capturedBy) continue;
+            const d = Math.hypot(s.x - a.x, s.y - a.y);
+            if (d < bestD) {
+              bestD = d;
+              prey = s;
+            }
+          }
+        }
+        if (prey) {
+          a.spikeAng = Math.atan2(prey.y + prey.vy * L.aim - a.y, prey.x + prey.vx * L.aim - a.x);
+          a.lurkPhase = 3;
+          a.lurkT = L.aim;
+        } else if (a.lurkT <= 0) {
+          a.lurkPhase = 5;
+          a.lurkT = L.rise;
+        }
+        break;
+      }
+      case 3:
+        if ((a.lurkT -= dt) <= 0) {
+          a.lurkPhase = 4;
+          a.lurkT = L.sweep;
+        }
+        break;
+      case 4: {
+        const prevF = a.lurkT >= L.sweep ? -30 : (1 - a.lurkT / L.sweep) * L.length;
+        a.lurkT -= dt;
+        const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
+        const cos = Math.cos(a.spikeAng);
+        const sin = Math.sin(a.spikeAng);
+        const power = a.revived ? ZOMBIE_MUL : 1;
+        for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
+          if (!s.alive) continue;
+          const dx = s.x - a.x;
+          const dy = s.y - a.y;
+          const along = dx * cos + dy * sin;
+          const across = Math.abs(-dx * sin + dy * cos);
+          if (along > prevF && along <= curF && across <= L.width / 2 + s.radius * 0.6) this.sim.damageSoldier(s, L.damage * power);
+        }
+        if (a.lurkT <= 0) {
+          a.lurkPhase = 2;
+          a.lurkT = L.wait;
+          a.attackCd = L.cooldown;
+        }
+        break;
+      }
+      default: // 5 : ressort
+        if ((a.lurkT -= dt) <= 0) a.lurkPhase = 0;
     }
-    wounded.sort((p, q) => p.hp / p.maxHp - q.hp / q.maxHp);
-    a.sprayCd -= dt; // sert ici de minuteur d'affichage des rayons
-    const show = a.sprayCd <= 0;
-    if (show) a.sprayCd = 0.3;
-    for (const o of wounded.slice(0, hb.targets)) {
-      o.hp = Math.min(o.maxHp, o.hp + o.maxHp * hb.pct * dt);
-      if (show) this.sim.events.push({ t: 'healBeam', from: a.id, to: o.id, dur: 0.38 });
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    arena.constrain(a);
+  }
+
+  /** Murs autour de la squad visée : `count` murs tangents à un arc de rayon `ring`, devant elle (sa direction de fuite : celle où elle court, sinon à l'opposé du lanceur). */
+  private castWalls(a: AlienState, target: SoldierState): void {
+    const w = a.def.wall!;
+    const { rng } = this.sim;
+    const cx = target.x + target.vx * w.windup;
+    const cy = target.y + target.vy * w.windup;
+    const moving = Math.hypot(target.vx, target.vy) > 40;
+    const away = moving ? Math.atan2(target.vy, target.vx) : Math.atan2(cy - a.y, cx - a.x);
+    for (let i = 0; i < w.count; i++) {
+      const ang = away + (i - (w.count - 1) / 2) * w.spread + rng.range(-0.12, 0.12);
+      const px = cx + Math.cos(ang) * w.ring;
+      const py = cy + Math.sin(ang) * w.ring;
+      this.sim.addWall(px, py, ang + Math.PI / 2, w.length, w.windup, w.rock.radius, w.rock.ttl);
     }
   }
 
@@ -533,9 +628,7 @@ export class Horde {
       const d = Math.hypot(s.x - a.x, s.y - a.y);
       if (d > SEEK_RADIUS) continue;
       let score = d;
-      if (pref === 'medic' && s.def.id === 'medic') score -= 600;
-      else if (pref === 'tank' && s.def.id === 'tank') score -= 600;
-      else if (pref === 'weakest') score -= (1 - s.hp / s.maxHp) * 400;
+      if (pref === 'specialist' && s.def.id !== 'gunner') score -= 600;
       if (score < bestScore) {
         bestScore = score;
         a.target = s;

@@ -42,7 +42,7 @@ Slime vert = 1 planche 4×4 de 1024 px (cycle de marche) réduite à 64 px → `
 il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycle, plus lent.
 
 **Ennemis actifs** : seul le slime (`ACTIVE_ALIENS` dans `data/aliens.ts`) ; les vagues des autres sont filtrées.
-**Bordure de carte** : de l'eau animée (texture procédurale `water`) avec une frange d'écume, plus de palmiers.
+**Bordure de carte** : de la lave animée (texture procédurale `lava`) avec un liseré incandescent, plus de palmiers.
 
 ## Conventions
 

@@ -1,0 +1,7 @@
+{
+  "output": "../public/assets/aliens/slime_explosion.png",
+  "scale": 0.5,
+  "sheets": [
+    { "name": "explosion", "input": "slime_explosion.png", "cols": 4, "rows": 4 }
+  ]
+}

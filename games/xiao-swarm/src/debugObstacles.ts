@@ -1,3 +1,5 @@
+import { sprites } from '@xiao/engine';
+import { saveToCode } from './dev/devSave';
 import { OBSTACLES, STAIN_IDS, type HitCircle, type ObstacleId, type StainDef } from './data/obstacles';
 
 /**
@@ -35,6 +37,8 @@ function apply(id: ObstacleId, t: Tuning): void {
   OBSTACLES[id].scale = c.scale;
   OBSTACLES[id].hitbox = c.hitbox;
   OBSTACLES[id].stains = c.stains;
+  // Le jeu lit l'échelle dans le catalogue de sprites (copiée au démarrage) : on le resynchronise.
+  if (sprites.has(id)) sprites.define(id, { ...sprites.get(id), scale: c.scale });
 }
 
 /** À appeler au démarrage, avant l'enregistrement des sprites et la création de la partie. */
@@ -77,6 +81,17 @@ export function resetObstacle(id: ObstacleId): void {
 }
 
 const n = (v: number): number => Math.round(v * 10) / 10;
+
+/** Save : écrit l'entrée de l'obstacle (échelle, hitbox, taches) dans data/obstacles.ts. */
+export async function saveObstacleToCode(id: ObstacleId): Promise<string> {
+  const msg = await saveToCode('obstacle', { id, code: obstacleSnippet(id) });
+  if (msg.startsWith('✔')) {
+    base.set(id, snapshot(id)); // « Reset » ramène maintenant à cette sauvegarde
+    delete overrides[id];
+    persist();
+  }
+  return msg;
+}
 
 /** Entrée à coller dans OBSTACLES (data/obstacles.ts), hitbox et taches comprises. */
 export function obstacleSnippet(id: ObstacleId): string {

@@ -1,5 +1,5 @@
-import type { Point, Rng, WaveEvent } from '@xiao/engine/sim';
-import { onlyActive, WAVE_SCRIPT, WAVES, type AlienId } from './aliens';
+import type { Point, Rng } from '@xiao/engine/sim';
+import { WAVE_SCRIPT, WAVE_SCRIPT_END, type WaveScript, type TimelineEntry } from './waves';
 import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
 
 /**
@@ -7,13 +7,16 @@ import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
  * simulation ; seuls la carte, les points de départ, le PvP et la fin changent.
  */
 export interface ModeDef {
-  id: 'survival' | 'royale' | 'versus';
+  id: 'survival' | 'royale' | 'versus' | 'coop';
   map: (seed: number) => MapDef;
   /** Les soldats de squads différentes se tirent dessus. */
   pvp: boolean;
+  /** Un joueur mort laisse une zone de réanimation au sol (coop), au lieu de réapparaître tout seul. */
+  reviveZones?: boolean;
   /** Durée du run (s). Survival : victoire à la fin. */
   duration: number;
-  waves: WaveEvent<AlienId>[];
+  /** Script de vagues (niveaux + timeline, voir data/waves.ts). */
+  waves: WaveScript;
   /** Plafond d'aliens = base + perPlayer × joueurs. */
   maxAliens: { base: number; perPlayer: number };
   spawnPoints(map: MapDef, players: number, rng: Rng): Point[];
@@ -23,10 +26,32 @@ export const SURVIVAL: ModeDef = {
   id: 'survival',
   map: () => JUNGLE_ARENA,
   pvp: false,
-  duration: 300,
-  waves: WAVES,
+  duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
+  waves: WAVE_SCRIPT,
   maxAliens: { base: 0, perPlayer: 90 },
   spawnPoints: (map) => [{ x: map.width / 2, y: map.height / 2 }],
+};
+
+/**
+ * Coopération en ligne (2-4 joueurs) : la carte et les vagues du solo (boss compris), pas de tir ami, difficulté qui
+ * grandit avec le nombre de joueurs vivants. Un joueur mort regarde ses équipiers ; quand tous sont morts (ou que le boss
+ * final est tombé), la partie recommence.
+ */
+export const COOP: ModeDef = {
+  id: 'coop',
+  map: () => JUNGLE_ARENA,
+  pvp: false,
+  reviveZones: true,
+  duration: Infinity,
+  waves: WAVE_SCRIPT,
+  maxAliens: { base: 0, perPlayer: 90 },
+  spawnPoints(map, players) {
+    return Array.from({ length: players }, (_, i) => {
+      const a = (i / Math.max(1, players)) * Math.PI * 2;
+      const r = players > 1 ? 110 : 0;
+      return { x: map.width / 2 + Math.cos(a) * r, y: map.height / 2 + Math.sin(a) * r };
+    });
+  },
 };
 
 /**
@@ -38,7 +63,7 @@ export const ROYALE: ModeDef = {
   map: (seed) => makeRoyaleMap(seed),
   pvp: true,
   duration: 480,
-  waves: WAVES,
+  waves: WAVE_SCRIPT,
   maxAliens: { base: 40, perPlayer: 30 },
   spawnPoints(map, players, rng) {
     const m = map.border + 260;
@@ -72,11 +97,17 @@ export const ROYALE: ModeDef = {
   },
 };
 
-/** Vagues du mode versus : celles du solo, mais sans fin, avec un crabe toutes les minutes. */
-const VERSUS_WAVES: WaveEvent<AlienId>[] = onlyActive([
-  ...WAVE_SCRIPT.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
-  { from: 300, to: 36000, every: 60, type: 'crab', count: 1, label: '6' },
-]);
+/**
+ * Vagues du mode versus : celles du solo (script courant), mais sans fin — les boucles qui s'arrêtaient à 300 s
+ * continuent — avec un boss (niveau 9) toutes les minutes ensuite. Recalculé à chaque partie (le script est éditable).
+ */
+const versusWaves = (): WaveScript => ({
+  levels: WAVE_SCRIPT.levels,
+  timeline: [
+    ...WAVE_SCRIPT.timeline.map((e): TimelineEntry => (e.until === WAVE_SCRIPT_END ? { ...e, until: 36000 } : e)),
+    { at: WAVE_SCRIPT_END, level: 8, every: 10, until: 36000 },
+  ],
+});
 
 /**
  * PvPvE en ligne (2 joueurs et plus) : la carte du solo, des aliens qui
@@ -88,7 +119,9 @@ export const VERSUS: ModeDef = {
   map: () => JUNGLE_ARENA,
   pvp: true,
   duration: Infinity,
-  waves: VERSUS_WAVES,
+  get waves() {
+    return versusWaves();
+  },
   maxAliens: { base: 30, perPlayer: 70 },
   spawnPoints(map, players) {
     const r = Math.min(map.width, map.height) * 0.3;
@@ -99,4 +132,4 @@ export const VERSUS: ModeDef = {
   },
 };
 
-export const MODES = { survival: SURVIVAL, royale: ROYALE, versus: VERSUS } as const;
+export const MODES = { survival: SURVIVAL, royale: ROYALE, versus: VERSUS, coop: COOP } as const;

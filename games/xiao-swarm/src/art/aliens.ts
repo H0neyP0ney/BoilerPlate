@@ -35,19 +35,19 @@ function radial(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, 
 }
 
 /** Slime/poulpe vert à un oeil. */
-function slime(ctx: CanvasRenderingContext2D): void {
+function slime(ctx: CanvasRenderingContext2D, light = '#c4f07a', dark = '#6fb03a'): void {
   // tentacules
   for (let i = 0; i < 5; i++) {
     const x = 11 + i * 6.5;
     ctx.beginPath();
     ctx.ellipse(x, 38, 4, 7, (i - 2) * 0.25, 0, Math.PI * 2);
-    outlined(ctx, '#6fb03a', 2.5);
+    outlined(ctx, dark, 2.5);
   }
   ctx.beginPath();
   ctx.moveTo(6, 36);
   ctx.bezierCurveTo(4, 4, 44, 4, 42, 36);
   ctx.closePath();
-  outlined(ctx, radial(ctx, 24, 22, 20, '#c4f07a', '#6fb03a'));
+  outlined(ctx, radial(ctx, 24, 22, 20, light, dark));
   eye(ctx, 24, 21, 8);
 }
 
@@ -120,17 +120,17 @@ function spider(ctx: CanvasRenderingContext2D): void {
 }
 
 /** Bête orange à cornes (charge). */
-function beast(ctx: CanvasRenderingContext2D): void {
+function beast(ctx: CanvasRenderingContext2D, light = '#ffc27a', dark = '#e0741f', legs = '#c0621a'): void {
   // pattes
   for (const x of [14, 24, 40, 50]) {
     ctx.beginPath();
     ctx.roundRect(x - 4, 38, 8, 12, 3);
-    outlined(ctx, '#c0621a', 2.5);
+    outlined(ctx, legs, 2.5);
   }
   // corps
   ctx.beginPath();
   ctx.ellipse(32, 30, 26, 16, 0, 0, Math.PI * 2);
-  outlined(ctx, radial(ctx, 32, 30, 26, '#ffc27a', '#e0741f'));
+  outlined(ctx, radial(ctx, 32, 30, 26, light, dark));
   // piquants dos
   for (let i = 0; i < 4; i++) {
     const x = 16 + i * 9;
@@ -219,9 +219,55 @@ function crab(ctx: CanvasRenderingContext2D): void {
 }
 
 export function makeAlienTextures(scene: Phaser.Scene): void {
-  canvasTexture(scene, 'alien_slime', 48, 48, slime);
+  canvasTexture(scene, 'alien_slime', 48, 48, (ctx) => slime(ctx));
+  canvasTexture(scene, 'alien_slime_blue', 72, 72, (ctx) => {
+    ctx.scale(1.5, 1.5);
+    slime(ctx, '#b8dcff', '#3a78d8');
+  });
+  canvasTexture(scene, 'alien_slime_pink', 48, 48, (ctx) => slime(ctx, '#ffc4e0', '#e0559a'));
   canvasTexture(scene, 'alien_squid', 48, 58, squid);
   canvasTexture(scene, 'alien_spider', 36, 32, spider);
-  canvasTexture(scene, 'alien_beast', 66, 52, beast);
+  canvasTexture(scene, 'alien_beast', 66, 52, (ctx) => beast(ctx));
+  canvasTexture(scene, 'alien_charger', 66, 52, (ctx) => beast(ctx, '#e09a9a', '#a33030', '#7a2020'));
+  canvasTexture(scene, 'alien_kamikaze', 48, 48, (ctx) => slime(ctx, '#ffd9a8', '#e0702a'));
+  canvasTexture(scene, 'alien_frog', 48, 48, (ctx) => slime(ctx, '#c0f5e4', '#2aa88a'));
+  // Bulle flottante : sphère translucide à reflets (le soldat avalé se voit à travers).
+  canvasTexture(scene, 'alien_bubble', 60, 60, (ctx) => {
+    const g = ctx.createRadialGradient(24, 22, 4, 30, 30, 29);
+    g.addColorStop(0, 'rgba(230,250,255,0.55)');
+    g.addColorStop(0.65, 'rgba(120,210,255,0.28)');
+    g.addColorStop(1, 'rgba(70,170,255,0.5)');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = 'rgba(210,245,255,0.95)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(30, 30, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(30, 30, 19, Math.PI * 1.05, Math.PI * 1.4);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.ellipse(40, 41, 3.5, 2.2, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  // Boss : le rhinocéros et le crabe agrandis (le sprite suit le rayon de l'alien).
+  canvasTexture(scene, 'alien_rhino_boss', 119, 94, (ctx) => {
+    ctx.scale(1.8, 1.8);
+    beast(ctx, '#d98a8a', '#8c1f1f', '#5a1414');
+  });
+  canvasTexture(scene, 'alien_crab_king', 182, 157, (ctx) => {
+    ctx.scale(1.4, 1.4);
+    crab(ctx);
+  });
+  canvasTexture(scene, 'alien_fire', 48, 48, (ctx) => slime(ctx, '#ffd9a0', '#e04a10'));
+  canvasTexture(scene, 'alien_shaman', 48, 48, (ctx) => slime(ctx, '#fff6b0', '#d8a020'));
+  canvasTexture(scene, 'alien_healer', 48, 48, (ctx) => slime(ctx, '#fffbd0', '#e8d030'));
+  canvasTexture(scene, 'alien_thrower', 48, 48, (ctx) => slime(ctx, '#d8c8b0', '#8a6a48'));
+  canvasTexture(scene, 'alien_spitter', 48, 48, (ctx) => slime(ctx, '#e3c8ff', '#8a3fd0'));
   canvasTexture(scene, 'alien_crab', 130, 112, crab);
 }

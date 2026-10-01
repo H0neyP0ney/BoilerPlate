@@ -1,48 +1,47 @@
 # Roadmap — Xiao Swarm Attack & engine
 
-État au 30/09/2026 (fin de session). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Référence design : [Xiao_Swarm_Attack_Game_Design.md](Xiao_Swarm_Attack_Game_Design.md),
-DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
+État au 30/09/2026 (fin de session). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Multijoueur : [MULTIJOUEUR.md](MULTIJOUEUR.md). Référence design :
+[Xiao_Swarm_Attack_Game_Design.md](Xiao_Swarm_Attack_Game_Design.md), DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
 
 ## Fait
 
 | Étape | Contenu |
 |---|---|
 | **M0 — Monorepo** | `@xiao/engine` + `games/_starter` + `games/xiao-swarm`, workspaces npm, typecheck global |
-| **Boilerplate Poki** | SDK sûr (adblock, pas de double event, mute/input off pendant les pubs), `RunFlow`, responsive `Scale.EXPAND` (16:9 desktop, plein écran mobile), incognito, i18n, zip + budgets de taille |
+| **Boilerplate Poki** | SDK sûr (adblock, pas de double event, mute/input off pendant les pubs), `RunFlow`, responsive `Scale.EXPAND`, incognito, i18n, zip + budgets de taille |
 | **M1 — Squad** | ancre réactive + formation tournesol organique, laisse, séparation, obstacles, caméra robuste |
-| **M2 — Horde** | 5 aliens en données (slime, araignée, calmar, bête qui charge, crabe à slam), ciblage par préférence, vagues scriptées 5 min |
-| **M3 — Combat** | 5 classes (Gunner, Medic, Flammeur, Sniper, Tank), tir auto indépendant du déplacement, soin à l'arrêt, explosion du Flammeur, knockback spécial |
-| **Recrutement** | drop selon taille de squad + composition cible, cap de squad |
-| **Réseau-ready** | simulation pure (`sim/`, sans Phaser/DOM, vérifiée par tsconfig), pas fixe 30 Hz + interpolation, inputs par joueur, événements, ids, RNG seedé, multi-squads + PvP, modes/cartes en données, sol en morceaux, bots, simulation headless dans Node |
-| **Multijoueur P2P** | mode `versus` PvPvE 2–4 joueurs : `HostSession` / `ClientSession` derrière une interface `Transport` (Netlib branché), rejoindre en cours de partie, respawn, `npm run sim:net` — voir [MULTIJOUEUR.md](MULTIJOUEUR.md) |
-| **Pipeline sprites** | catalogue de sprites + manifeste (grille, Aseprite, atlas, PNG), animations directionnelles, repli procédural, outils `tools/slice-sheet.mjs` (planche libre) et `tools/pack-grids.mjs` (planches en grille → une planche) |
-| **Contenu actuel (30/09)** | **Gunner + Grenadier violet** (`ACTIVE_CLASSES`) et **slime vert seul** (`ACTIVE_ALIENS`) ; Medic, Flammeur, Sniper, Tank et les autres aliens sont définis mais désactivés. Le Gunner tire un blaster bleu en ligne droite ; le Grenadier (recrue, pas dans l'escouade de départ) lance une grenade en cloche (tir lent, petite zone, explosion au sol). Sol = texture répétée, eau animée, **8 obstacles volcaniques** (images `obstacle_N`, hitbox en cercles multiples, taches sombres dessous, taille ±10 %) |
-| **Outils de dev (30/09)** | menu Réglages, panneaux Foule et Triche, visionneuses Unités (ancrage par séquence / direction, canon par frame), Particules, Obstacles, Divers — voir [OUTILS_DEV.md](OUTILS_DEV.md) |
-| **Divers (30/09)** | joystick flottant qui suit le doigt au-delà d'une marge, bouton « Recommencer » dans le menu pause, pubs Poki désactivées (`ADS_ENABLED = false`) |
-| **Mouvement de foule réglable** | `CROWD` dans `config.ts` (défauts plus réactifs), panneau Foule avec sliders (bouton du HUD), menu Réglages (bouton curseurs du HUD ou `²`/F2), config de travail F8 / F9, `npm run sim:crowd` |
-| **Insertion des recrues** | une recrue prend dans la formation la place la plus proche de son point de ramassage (`Squad.recruit`), affectation optimale des places (`assignSlotsOptimal`), `npm run sim:recruit` |
+| **M2 — Horde** | 16 aliens en données (voir ci-dessous), ciblage par préférence, **script de vagues** (niveaux 1-9 + timeline, `data/waves.ts`) |
+| **M3 — Combat** | 6 classes en données (5 + Grenadier), tir auto indépendant du déplacement, muzzle flash du Gunner qui suit le canon, impacts, knockback |
+| **Recrutement** | drop selon taille de squad + composition cible (modulé par l'upgrade « Appel aux armes »), cap de squad |
+| **M4 — Progression (30/09)** | globes d'XP (3 tailles) laissés par les aliens, aimant, niveaux (`data/progression.ts`), **choix de 3 upgrades sans pause** (9 upgrades), barre d'XP, fonctionne solo, bots et coop en ligne |
+| **Ennemis (30/09)** | slime vert (55 PV), rose (rapide), bleu (lance des boules en cloche, zone rouge télégraphiée), kamikaze (corps + mèche + explosion), grenouille (langue qui tire un soldat), rhinocéros (charge télégraphiée), cracheur (spray qui repousse), lanceur de cailloux (obstacles temporaires), chaman (ressuscite les slimes depuis leur flaque), bulle (capture et digère un soldat), slime de feu (traînée de flammes) ; **boss** : Rhinocéros Alpha (2:00), Crabe géant (5:00), Roi Crabe (10:00, boss final) avec bandeau, flèche et barre de vie |
+| **Partie de 10 min (30/09)** | timeline en dents de scie (montée ~90 s → pic → creux à ~60 %), mini-boss à 2:00 et 5:00, boss final à 10:00 obligatoire pour gagner, vagues continues tant qu'il vit |
+| **Session du 01/10** | **difficulté globale** (`DIFFICULTY` : PV soldats ×0,7, PV aliens ×1,5, boss ×11, aliens ×1,5, vitesse ×1,25) ; **coop** : zone de **réanimation** verte (flèche HUD, escouade à 60 % de la taille max, relance en 3 s) ; **upgrades** : prismatiques (5 %, bonus ×2), portée, renforts +2 gunners, PV max + soin fusionnés, onde de choc au level up ; **power-ups** (`sim/PowerUps.ts` : stimpack, aimant à XP en coup unique, globes de soin et de stase, rafale de roquettes) ; **cracheur** en boules en cloche + flaques ralentissantes ; **slime jaune soigneur**, zombies (ressuscités ×3), crabe géant ×3 qui lance des blobs, bulle plus lourde ; grab de la langue (sans stun, ralentissement, immunité) ; carte carrée **dans l'espace** (étoiles en parallaxe) ; HUD : camembert « Prochain boss », capsule « n/max » d'escouade ; dents de scie de 75 s ; protocole réseau v10 |
+| **Réseau-ready** | simulation pure (`sim/`, vérifiée par tsconfig), pas fixe 30 Hz + interpolation, inputs par joueur, événements, ids, RNG seedé, multi-squads, modes/cartes en données, bots, simulation headless dans Node |
+| **Multijoueur P2P (30/09)** | mode **coop** 2–4 joueurs par défaut (`pvp: false`, difficulté dynamique selon les squads vivantes, boss unique à PV × joueurs, spectateur, fin + relance automatique `Sim.restart`) ; mode `versus` PvP conservé ; XP / level up / globes / ennemis spéciaux répliqués (protocole v3) ; `HostSession` / `ClientSession` derrière `Transport` (Netlib) ; `npm run sim:net` |
+| **Décor et mouvement (30/09)** | bordure de **lave** animée, obstacles en cercles rangés dans une **grille** (`Arena`), **zone douce** autour des hitbox (les unités glissent : `wallMargin` / `wallPush` / `wallNudge`, panneau Foule), cailloux temporaires |
+| **Pipeline sprites** | catalogue de sprites + manifeste, animations directionnelles, repli procédural, `tools/slice-sheet.mjs`, `tools/pack-grids.mjs`, `tools/hue-shift.mjs` (recolorer une planche) ; Gunner = planches « gunner 2 » (idle + walk, pas de mort) |
+| **Outils de dev** | menu Réglages, panneaux Foule et Triche (XP, niveau de vague), visionneuses Unités (+ échelle et ombre par unité), Particules, Obstacles, Divers, **Gestionnaire de vagues** (`?waves`) ; **Save / Reset** dans chaque vue (plugin Vite `dev-save.ts` qui réécrit les valeurs par défaut dans le code) — voir [OUTILS_DEV.md](OUTILS_DEV.md) |
+| **Divers** | déplacement flèches / ZQSD / WASD / pavé numérique, joystick flottant, barres de vie masquées à pleine vie, Grenadier désactivé du recrutement, pubs Poki désactivées (`ADS_ENABLED = false`) |
 
 ## À faire
 
-0. **Panneau Équilibrage (balance)** : créer le panneau dev qui regroupe les réglages d'équilibrage (délai de soin `CROWD.stillDelay`, dégâts, PV, cadences, vagues…), puis y traiter M5.
-   **Muzzle flash** : le jeu ne joue encore aucun flash de tir ; brancher les points de canon réglés dans la visionneuse d'unités (`sprites.muzzleFor`) sur un effet au tir, à la place du décalage fixe de `Combat.fire`.
-   **Pubs Poki** : remettre `ADS_ENABLED = true` (`packages/engine/src/poki/poki.ts`) avant la soumission ; le revive « rewarded » est gratuit tant que c'est désactivé.
-   **Obstacles** : affiner hitbox et taches dans la visionneuse puis coller le code dans `data/obstacles.ts` (valeurs de départ = estimations) ; le zoom du jeu n'est plus un réglage joueur (menu Réglages, dev).
-
-1. **Contenu** : réactiver les autres classes (Medic, Flammeur, Sniper, Tank) et aliens (araignée, calmar, bête, crabe) avec leurs sprites (même pipeline `pack-grids`), décor. Avec un seul ennemi, la pression est plus faible qu'avant.
-2. **M4 — Progression** : cristaux d'XP + aimant, level-up avec 3 choix, upgrades (Damage/Fire Rate/Health +10 %, Max Squad +3, bonus conditionnels) — `Stats` par squad déjà en place.
-3. **M5 — Équilibrage** : une squad immobile survit aujourd'hui aux 5 min (soin du Medic trop fort) ; début plus facile, montée de pression, boss final.
-4. **M6 — Onboarding & polish Poki** : tuto intégré, écran de fin, audio, traductions EN/FR/IT/DE/ES/TR, Poki Inspector, miniatures.
-5. **Battle royale** : zone qui rétrécit, UI de fin (classement), puis serveur Node autoritaire pour ~10 joueurs (snapshots delta, interest management, prédiction de l'ancre) — le P2P 2–4 joueurs est fait.
-6. **Boilerplate** : faire évoluer `games/_starter` avec les modules génériques, script `npm run new-game`.
+0. **Boilerplate (priorité)** : extraire dans `@xiao/engine` les briques génériques nées dans Xiao Swarm — plugin dev-save + outils de dev (`devUi`, panneaux), moteur de vagues (`WaveRunner` + éditeur), XP / upgrades / `LevelUpScene`, grille d'obstacles + glisse (`Arena`) — puis compléter `games/_starter` (exemple de chaque brique), écrire `docs/NOUVEAU_JEU.md`, vérifier en CI que le starter compile avec l'engine seul, script `npm run new-game`.
+1. **Équilibrage** : la difficulté (PV des ennemis, effectifs par niveau ×1,15 → ×2,3, boss) a été réglée avec un bot ; à affiner en jeu, puis panneau **Équilibrage** dev (`CROWD.stillDelay`, dégâts, PV, cadences). Le Rhinocéros Alpha (45 PV par soldat touché) est à surveiller.
+2. **Test à deux joueurs** en vrai (latence réelle, 3-4 joueurs) : seul le test automatique en mémoire (`sim:net`) a été exécuté.
+3. **Contenu** : réactiver Medic, Flammeur, Sniper, Tank, Grenadier ; aliens araignée / calmar / bête (définis, hors vagues) ; sprites dédiés pour les nouveaux ennemis (aujourd'hui recolorés du slime, ou procéduraux pour rhinocéros et crabes).
+4. **Perf rendu** : Phaser n'écarte pas les sprites hors caméra ; ajouter un culling dans `WorldView` (aliens, décor, flaques) puis mesurer les fps avec 300-600 aliens.
+5. **Pubs Poki** : remettre `ADS_ENABLED = true` (`packages/engine/src/poki/poki.ts`) avant la soumission.
+6. **M6 — Onboarding & polish Poki** : tuto, écran de fin hors ligne, audio, traductions EN/FR/IT/DE/ES/TR, Poki Inspector, miniatures.
+7. **Battle royale** : zone qui rétrécit, UI de fin, puis serveur Node autoritaire pour ~10 joueurs (snapshots delta, interest management).
+8. **Obstacles** : affiner hitbox et taches dans la visionneuse (puis Save).
 
 ## Points d'attention
 
-- **Protocole réseau v2** : le snapshot des projectiles porte un indicateur de grenade (`lob`) ; hôte et client de versions différentes se refusent. Les cartes (obstacles, tailles ±10 %) viennent de la seed et des données : mêmes fichiers `data/` chez tous les joueurs.
-- **Projectiles recyclés** (`Pool`) : un champ ajouté à `Projectile` doit être remis à zéro à la libération (`Combat`), sinon un tir hérite du comportement du précédent (bug grenade → balle de Gunner corrigé).
-- **Navigateur du panneau de test** : boucle de jeu très lente, voir [OUTILS_DEV.md](OUTILS_DEV.md).
-
-- **Phaser 4 / WebGL** : au-delà de ~5 grandes textures distinctes dans un même lot, certaines s'affichent en noir →
-  sol en morceaux de 2048 px + masquage hors caméra (`view/ArenaView.ts`).
+- **Protocole réseau v3** : le snapshot porte XP / niveau / propositions / upgrades par squad, globes d'XP, état des charges, chaman et bulle ; hôte et client de versions différentes se refusent. Les cartes viennent de la seed et des données : mêmes fichiers `data/` chez tous.
+- **Projectiles recyclés** (`Pool`) : un champ ajouté à `Projectile` doit être remis à zéro à la libération (`Combat`).
+- **Script de vagues en dev** : le navigateur mémorise le script édité (localStorage) ; après une modification de `data/waves.ts`, faire **Reset** dans le Gestionnaire de vagues.
+- **Navigateur du panneau de test** : boucle de jeu très lente ; `window.__game.step(t, dt)` pour avancer à la main, voir [OUTILS_DEV.md](OUTILS_DEV.md).
+- **Phaser 4 / WebGL** : au-delà de ~5 grandes textures distinctes dans un même lot, certaines s'affichent en noir → sol en morceaux de 2048 px + masquage hors caméra (`view/ArenaView.ts`).
 - **Windows PowerShell** : `npm` peut être bloqué par la politique d'exécution → utiliser `npm.cmd`.
 - **Poki** : toute requête externe (serveur multi, analytics) doit être approuvée (Settings → CSP).

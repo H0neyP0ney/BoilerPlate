@@ -120,7 +120,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
  * mais ne sont ni dans les squads de départ ni recrutées. Pour en réactiver une : l'ajouter ici et
  * dans START_SQUADS.
  */
-export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner', 'grenadier'];
+export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner'];
 
 /**
  * Compositions de départ viables (GDD §7) : randomisation contrainte.

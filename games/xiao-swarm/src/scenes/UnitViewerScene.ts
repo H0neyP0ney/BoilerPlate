@@ -4,7 +4,7 @@ import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import { PALETTE, SCENES } from '../config';
 import { header } from '../dev/devUi';
-import { fillMuzzle, placementSnippet, resetPlacement, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
+import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
 
 /**
  * Visionneuse d'unités (dev uniquement) : affiche une ou toutes les unités du jeu et joue leurs animations.
@@ -65,6 +65,10 @@ export class UnitViewerScene extends Phaser.Scene {
   // Éditeur de placement (une seule unité affichée)
   private editorBox!: HTMLDivElement;
   private fields!: Record<'ox' | 'oy' | 'mx' | 'my', HTMLInputElement>;
+  private shadowSlider!: HTMLInputElement;
+  private shadowLabel!: HTMLSpanElement;
+  private scaleSlider!: HTMLInputElement;
+  private scaleLabel!: HTMLSpanElement;
   private scopeSelect!: HTMLSelectElement;
   private status!: HTMLDivElement;
   private pauseBox!: HTMLInputElement;
@@ -137,7 +141,12 @@ export class UnitViewerScene extends Phaser.Scene {
 
   private makeEntry(kind: Kind, prefix: string, unit: string, x: number, y: number): Entry {
     const id = `${prefix}${unit}`;
-    const shadow = this.add.ellipse(x, y, 44, 14, 0x000000, 0.3);
+    // mêmes proportions qu'en jeu (WorldView.drawOverlay) ; la taille réglable s'applique en échelle
+    const radius = kind === 'alien' ? ALIENS[unit as AlienId].radius : CLASSES[unit as keyof typeof CLASSES].radius;
+    const shadow =
+      kind === 'alien'
+        ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, 0.3)
+        : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, 0.3);
     const sprite = sprites.add(this, id, x, y);
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
@@ -209,6 +218,7 @@ export class UnitViewerScene extends Phaser.Scene {
   /** Mouvement procédural (rebond, squash) — même logique que view/UnitViews.ts — pour les unités sans planche. */
   private animate(e: Entry, t: number): void {
     const s = e.sprite;
+    e.baseScale = sprites.scaleOf(e.id); // relue chaque frame : réglable avec le curseur Échelle
     const moving = e.playing === 'walk';
     let bob = 0;
     let lift = 0;
@@ -230,7 +240,8 @@ export class UnitViewerScene extends Phaser.Scene {
     const [ax, ay] = sprites.anchorFor(e.id, e.playing, sprites.dirOf(e.id, s.flipX));
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
-    e.shadow.setScale(e.floats ? 0.7 : 1, 1).setAlpha(e.floats ? 0.2 : 0.3);
+    const k = sprites.get(e.id).shadow ?? 1;
+    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(e.floats ? 0.2 : 0.3);
 
     if (e.gun) {
       const aim = this.facing > 0 ? 0 : Math.PI;
@@ -354,6 +365,36 @@ export class UnitViewerScene extends Phaser.Scene {
       setAnchor(t.id, key, null);
     });
 
+    // --- Échelle ---
+    this.scaleSlider = document.createElement('input');
+    this.scaleSlider.type = 'range';
+    this.scaleSlider.min = '0.2';
+    this.scaleSlider.max = '3';
+    this.scaleSlider.step = '0.01';
+    this.scaleSlider.style.cssText = 'flex:1;min-width:80px';
+    this.scaleLabel = document.createElement('span');
+    this.scaleLabel.style.cssText = 'min-width:44px;text-align:right';
+    this.scaleSlider.addEventListener('input', () => {
+      const t = this.target;
+      if (t) setPlacement(t.id, { scale: Number(this.scaleSlider.value) });
+    });
+    this.scaleSlider.addEventListener('change', () => this.scaleSlider.blur());
+
+    // --- Ombre ---
+    this.shadowSlider = document.createElement('input');
+    this.shadowSlider.type = 'range';
+    this.shadowSlider.min = '0';
+    this.shadowSlider.max = '3';
+    this.shadowSlider.step = '0.05';
+    this.shadowSlider.style.cssText = 'flex:1;min-width:80px';
+    this.shadowLabel = document.createElement('span');
+    this.shadowLabel.style.cssText = 'min-width:36px;text-align:right';
+    this.shadowSlider.addEventListener('input', () => {
+      const t = this.target;
+      if (t) setPlacement(t.id, { shadow: Number(this.shadowSlider.value) });
+    });
+    this.shadowSlider.addEventListener('change', () => this.shadowSlider.blur());
+
     // --- Frames + canon ---
     this.pauseBox = document.createElement('input');
     this.pauseBox.type = 'checkbox';
@@ -406,11 +447,15 @@ export class UnitViewerScene extends Phaser.Scene {
       void navigator.clipboard?.writeText(code).catch(() => {});
       this.info.textContent = `Copié — à coller dans ${t.id} de assets/manifest.ts :\n${code}`;
     });
-    const reset = this.button("Réinitialiser l'unité", () => {
+    const save = this.button('Save', () => {
+      const t = this.target;
+      if (t) void saveSpriteToCode(t.id).then((msg) => (this.info.textContent = msg));
+    });
+    const reset = this.button('Reset', () => {
       const t = this.target;
       if (!t) return;
       resetPlacement(t.id);
-      this.updateInfo();
+      this.info.textContent = 'Retour à la dernière sauvegarde.';
     });
 
     box.append(
@@ -420,13 +465,19 @@ export class UnitViewerScene extends Phaser.Scene {
       this.status,
       line(ox.row, oy.row),
       line(clearAnchor),
+      title('Échelle'),
+      note("Taille d'affichage de l'unité (1 = planche telle quelle). Ne change pas la hitbox."),
+      line(this.scaleSlider, this.scaleLabel),
+      title('Ombre portée'),
+      note("Taille de l'ombre sous l'unité (1 = défaut). Appliquée aussi en jeu."),
+      line(this.shadowSlider, this.shadowLabel),
       title('Bouche du canon (par frame)'),
       note('Glisse le point rouge (met en pause). ← → : frame précédente / suivante.'),
       line(this.pauseBox, 'Pause', this.frameSlider, this.frameLabel),
       line(mx.row, my.row),
       line(allFrames, clearFrame, unitDefault),
       flash,
-      line(copy, reset),
+      line(save, reset, copy),
     );
     this.editorBox = box;
     return box;
@@ -555,6 +606,12 @@ export class UnitViewerScene extends Phaser.Scene {
       const text = v === undefined ? '' : String(r3(v));
       if (document.activeElement !== i && i.value !== text) i.value = text;
     };
+    const sc = sprites.scaleOf(t.id);
+    if (document.activeElement !== this.scaleSlider) this.scaleSlider.value = String(sc);
+    this.scaleLabel.textContent = `×${r3(sc)}`;
+    const sh = sprites.get(t.id).shadow ?? 1;
+    if (document.activeElement !== this.shadowSlider) this.shadowSlider.value = String(sh);
+    this.shadowLabel.textContent = `×${r3(sh)}`;
     set(this.fields.ox, t.sprite.originX);
     set(this.fields.oy, t.sprite.originY);
     set(this.fields.mx, m?.[0]);

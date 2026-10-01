@@ -41,12 +41,21 @@ export const iconMisc: Icon = (g) => {
   g.fillStyle(0xffd166, 1).fillRoundedRect(2, 2, 10, 10, 2);
 };
 
+/** Vagues : une timeline avec des barres de hauteurs différentes. */
+export const iconWaves: Icon = (g) => {
+  g.fillStyle(0x6fdc6f, 1).fillRect(-12, 4, 5, 8);
+  g.fillStyle(0xffd166, 1).fillRect(-5, -2, 5, 14);
+  g.fillStyle(0xff8a4a, 1).fillRect(2, -8, 5, 20);
+  g.fillStyle(0xff4a4a, 1).fillRect(9, -13, 5, 25);
+};
+
 /** Les visionneuses, dans l'ordre d'affichage des boutons du HUD. */
 export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.viewer, icon: iconUnit, label: 'Unités' },
   { scene: SCENES.particles, icon: iconParticles, label: 'Particules' },
   { scene: SCENES.obstacles, icon: iconObstacle, label: 'Obstacles' },
   { scene: SCENES.misc, icon: iconMisc, label: 'Divers' },
+  { scene: SCENES.waves, icon: iconWaves, label: 'Vagues' },
 ];
 
 /** Bouton carré de 44 px centré sur (0, 0). */

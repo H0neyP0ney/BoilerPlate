@@ -1,3 +1,4 @@
+import { saveToCode } from './dev/devSave';
 import { FX, FX_DEFAULTS, type FxName, type FxParams } from './fxParams';
 
 /**
@@ -40,6 +41,13 @@ export function setFx<N extends FxName>(name: N, key: keyof FxParams[N], value: 
 export function resetFx(name: FxName): void {
   Object.assign(FX[name], FX_DEFAULTS[name]);
   persist();
+}
+
+/** Save : écrit les réglages de TOUS les effets dans `FX_DEFAULTS` (fxParams.ts) ; Reset ramène ensuite à cette sauvegarde. */
+export async function saveFxToCode(): Promise<string> {
+  const msg = await saveToCode('fx', FX);
+  if (msg.startsWith('✔')) for (const name of Object.keys(FX_DEFAULTS) as FxName[]) Object.assign(FX_DEFAULTS[name], FX[name]);
+  return msg;
 }
 
 /** Bloc à coller dans FX_DEFAULTS (fxParams.ts). */

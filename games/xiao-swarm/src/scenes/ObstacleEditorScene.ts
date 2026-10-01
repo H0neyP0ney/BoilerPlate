@@ -3,7 +3,7 @@ import { clamp, sprites } from '@xiao/engine';
 import { OBSTACLES, OBSTACLE_IDS, STAIN_IDS, type HitCircle, type ObstacleId, type StainDef, type StainId } from '../data/obstacles';
 import { SCENES, VISUAL } from '../config';
 import { header } from '../dev/devUi';
-import { obstacleSnippet, resetObstacle, setObstacle } from '../debugObstacles';
+import { obstacleSnippet, resetObstacle, saveObstacleToCode, setObstacle } from '../debugObstacles';
 
 /**
  * Visionneuse d'obstacles (dev uniquement) : règle, pour chaque obstacle, sa hitbox (cercles de collision) et son
@@ -500,10 +500,11 @@ export class ObstacleEditorScene extends Phaser.Scene {
       void navigator.clipboard?.writeText(code).catch(() => {});
       this.info.textContent = `Copié — à coller dans OBSTACLES (data/obstacles.ts) :\n${code}`;
     });
-    const reset = this.button("Réinitialiser l'obstacle", () => {
+    const save = this.button('Save', () => void saveObstacleToCode(this.id).then((msg) => (this.info.textContent = msg)));
+    const reset = this.button('Reset', () => {
       resetObstacle(this.id);
       this.show(this.id);
-      this.info.textContent = 'Valeurs du fichier de données restaurées.';
+      this.info.textContent = 'Retour à la dernière sauvegarde.';
     });
 
     p.append(
@@ -527,7 +528,7 @@ export class ObstacleEditorScene extends Phaser.Scene {
       allStains,
       heading('Divers'),
       showGunner,
-      line(copy, reset),
+      line(save, reset, copy),
       this.info,
     );
     document.body.append(p);

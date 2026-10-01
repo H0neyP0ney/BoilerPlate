@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, poki, RunFlow, storage } from '@xiao/engine';
 import { SCENES } from '../config';
-import { WAVE_MARKS } from '../data/aliens';
 import type { SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
+import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
 import { CheatPanel } from '../dev/cheatPanel';
 import { setDocked } from '../dev/dock';
@@ -38,6 +38,10 @@ export class GameScene extends Phaser.Scene {
   private timeScale = 1;
   private revived = false;
   private ended = false;
+  /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
+  private upgradeOpen = false;
+  /** Proposition déjà choisie mais pas encore remplacée par l'hôte (évite de la rouvrir le temps de l'aller-retour réseau). */
+  private dismissedOffer = '';
   private readonly camTarget = { x: 0, y: 0 };
 
   constructor() {
@@ -47,6 +51,9 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.revived = false;
     this.ended = false;
+    this.upgradeOpen = false;
+    this.dismissedOffer = '';
+    this.scene.stop(SCENES.levelUp); // une fenêtre d'upgrade restée ouverte d'une partie précédente
     if (import.meta.env.DEV) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
       loadSavedCrowd();
@@ -69,7 +76,7 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     const map = this.session.sim.map;
-    cam.setBounds(0, 0, map.width, map.height);
+    cam.setBounds(-320, -320, map.width + 640, map.height + 640); // marge : on voit l'espace autour de l'île
     const c = this.localSquad.center;
     this.camTarget.x = c.x;
     this.camTarget.y = c.y;
@@ -99,12 +106,19 @@ export class GameScene extends Phaser.Scene {
     this.session.setLocalInput(dir.x, dir.y);
     if (this.flow.state === 'ready' && this.move.active) this.flow.begin();
 
+    // Montée de niveau : le choix d'upgrade s'affiche par-dessus le jeu, qui continue de tourner.
+    const squad = this.localSquad;
+    const offer = squad?.offer;
+    if (this.upgradeOpen && !offer) this.closeUpgrade();
+    else if (!this.upgradeOpen && !this.ended && this.session.sim.xpEnabled && offer && this.offerKey(squad) !== this.dismissedOffer) this.openUpgrade();
+
     // En ligne, le monde ne s'arrête jamais : l'hôte fait tourner la partie de tout le monde.
-    if (this.flow.isPlaying || this.session.online) {
+    const running = this.flow.isPlaying || this.session.online;
+    if (running) {
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.checkEnd();
     }
-    this.view.render(this.flow.isPlaying || this.session.online ? this.session.alpha : 1, dt, secs);
+    this.view.render(running ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
     const sim = this.session.sim;
@@ -139,9 +153,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   get waveNumber(): number {
-    let n = 0;
-    for (const m of WAVE_MARKS) if (this.runTime >= m) n++;
-    return n;
+    // plus haut niveau de vague déjà envoyé par la timeline (le script de vagues fait foi)
+    return levelAt(this.session.sim.mode.waves, this.runTime);
   }
 
   get squadsAlive(): number {
@@ -158,6 +171,12 @@ export class GameScene extends Phaser.Scene {
 
   private readonly onEvent = (e: SimEvent): void => {
     this.view.handle(e);
+    if (e.t === 'boss' || e.t === 'bossDown') this.events.emit('boss', e); // bandeau / flèche du HUD
+    if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
+    if (e.t === 'restart') {
+      this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
+      this.dismissedOffer = '';
+    }
     if (e.t === 'recruited' && e.owner === this.session.localPlayer) poki.measure('recruit', e.cls, 'complete');
   };
 
@@ -168,14 +187,38 @@ export class GameScene extends Phaser.Scene {
     // En ligne, une squad anéantie réapparaît toute seule (voir HostSession) : jamais d'écran de fin.
     if (this.session.online) return;
     if (!this.localSquad.alive) return this.endRun(false);
-    if (this.mode.id === 'survival' && sim.time >= this.mode.duration) return this.endRun(true);
+    if (this.mode.id === 'survival' && sim.finalBossDead) return this.endRun(true); // victoire : le boss final est tombé
     if (this.mode.id === 'royale' && sim.squads.length > 1 && sim.aliveSquads.length === 1) return this.endRun(true);
   }
 
   // ---------- Flow Poki ----------
 
+  private openUpgrade(): void {
+    const squad = this.localSquad;
+    if (!squad.offer) return;
+    this.upgradeOpen = true;
+    this.scene.launch(SCENES.levelUp, { offer: [...squad.offer], prism: [...squad.offerPrism], level: squad.level });
+  }
+
+  private offerKey(squad: Squad): string {
+    const picks = Object.values(squad.picked).reduce((n, v) => n + (v ?? 0), 0);
+    return `${(squad.offer ?? []).join(',')}|${picks}`;
+  }
+
+  private closeUpgrade(): void {
+    this.upgradeOpen = false;
+    this.scene.stop(SCENES.levelUp);
+  }
+
+  /** Appelé par le choix de niveau : envoie l'upgrade (hôte ou client) ; un niveau en attente ouvre le choix suivant. */
+  chooseUpgrade(index: number): void {
+    this.dismissedOffer = this.offerKey(this.localSquad);
+    this.session.chooseUpgrade(index);
+    this.closeUpgrade();
+  }
+
   readonly pauseGame = (): void => {
-    if (this.session.online) return; // pause impossible : les autres joueurs continuent
+    if (this.session.online || this.upgradeOpen) return; // pause impossible : les autres joueurs continuent
     if (!this.scene.isActive() || !this.flow.interrupt()) return;
     this.scene.pause();
     this.scene.pause(SCENES.hud);
@@ -238,8 +281,15 @@ export class GameScene extends Phaser.Scene {
   // ---------- Caméra ----------
 
   /** Suit le coeur de la squad locale et dézoome un peu quand elle grossit. */
+  /** Squad que la caméra suit : la nôtre, ou — si elle est anéantie — celle d'un équipier vivant (spectateur). */
+  get spectated(): string {
+    const me = this.session.localPlayer;
+    if (this.localSquad?.alive) return me;
+    return this.session.sim.aliveSquads[0]?.owner ?? me;
+  }
+
   private updateCamera(dt: number): void {
-    const focus = this.view.squadFocus(this.session.localPlayer);
+    const focus = this.view.squadFocus(this.spectated);
     const cam = this.cameras.main;
     if (focus) {
       // Réapparition à l'autre bout de la carte : on saute au lieu de traverser la carte en glissant.
@@ -253,7 +303,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Zoom auto (dézoome quand la squad grossit) × réglage du joueur. */
   private targetZoom(): number {
-    return clamp(1 - (this.localSquad.size - 4) * 0.009, 0.8, 1) * settings.zoom;
+    const watched = this.session.sim.squadOf(this.spectated) ?? this.localSquad;
+    return clamp(1 - (watched.size - 4) * 0.009, 0.8, 1) * settings.zoom;
   }
 
   /** Applique le réglage de zoom immédiatement (menu Réglages : sans attendre le lissage de la caméra). */

@@ -21,6 +21,8 @@ export const MAX_PLAYERS = 4;
 const INPUT_TIMEOUT = 1.5;
 /** Délai (s) entre l'anéantissement d'une squad et sa réapparition. */
 const RESPAWN_DELAY = 2.5;
+/** Coop : temps (s) d'affichage de l'écran de fin (victoire / défaite) avant de relancer la partie. */
+const END_DELAY = 3;
 
 export interface HostSessionOptions {
   mode: ModeDef;
@@ -55,12 +57,15 @@ export class HostSession implements Session {
   private outbound: SimEvent[] = [];
   /** Tick d'anéantissement des squads en attente de réapparition. */
   private readonly deadSince = new Map<PlayerId, number>();
+  /** Coop : ticks restants avant la relance de la partie (> 0 = écran de fin, simulation figée). */
+  private endTicks = 0;
+  private frame = 0;
 
   constructor(opts: HostSessionOptions) {
     this.transport = opts.transport;
     this.roomCode = opts.roomCode;
     this.localPlayer = opts.transport.localId;
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer] });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
 
@@ -84,19 +89,40 @@ export class HostSession implements Session {
         const stale = this.sim.tick - r.lastInputTick > INPUT_TIMEOUT * TICK_RATE;
         this.inputs.set(id, stale ? NO_INPUT : r.input);
       }
-      this.sim.step(dt, this.inputs);
-      this.respawnDead();
+      this.frame++;
+      if (this.endTicks > 0) {
+        // écran de fin : le monde est figé jusqu'à la relance
+        if (--this.endTicks === 0) this.sim.restart();
+      } else {
+        this.sim.step(dt, this.inputs);
+        if (this.sim.mode.id === 'coop') this.checkCoopEnd();
+        else this.respawnDead();
+      }
       const share = this.remotes.size > 0;
       this.sim.events.drain((e) => {
         onEvent(e);
         if (share) this.outbound.push(e);
       });
-      if (share && this.sim.tick % SNAPSHOT_EVERY === 0) this.broadcast();
+      if (share && this.frame % SNAPSHOT_EVERY === 0) this.broadcast();
     });
   }
 
   /** Pas de revive par pub en ligne : la réapparition est automatique. */
   reviveLocal(): void {}
+
+  chooseUpgrade(index: number): void {
+    this.sim.chooseUpgrade(this.localPlayer, index);
+  }
+
+  /** Coop : fin de partie quand toutes les squads sont mortes (défaite) ou que le boss final est tombé (victoire). */
+  private checkCoopEnd(): void {
+    const sim = this.sim;
+    if (sim.squads.length === 0) return;
+    const victory = sim.finalBossDead;
+    if (!victory && sim.aliveSquads.length > 0) return;
+    sim.events.push({ t: 'gameEnd', victory, delay: END_DELAY });
+    this.endTicks = END_DELAY * TICK_RATE;
+  }
 
   close(): void {
     this.transport.close();
@@ -139,6 +165,9 @@ export class HostSession implements Session {
     switch (msg.t) {
       case 'hello':
         return this.onHello(peer, msg.v);
+      case 'upgrade':
+        if (this.remotes.has(peer) && typeof msg.index === 'number') this.sim.chooseUpgrade(peer, Math.floor(msg.index));
+        return;
       case 'input': {
         const r = this.remotes.get(peer);
         if (!r) return;

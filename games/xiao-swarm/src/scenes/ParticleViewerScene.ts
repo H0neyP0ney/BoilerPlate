@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { sprites } from '@xiao/engine';
 import { SCENES, VISUAL } from '../config';
-import { fxSnippet, resetFx, setFx } from '../debugFx';
+import { fxSnippet, resetFx, saveFxToCode, setFx } from '../debugFx';
 import { button, checkbox, colorInput, header, heading, line, note, panel, select, slider } from '../dev/devUi';
 import { FX, type FxName, type FxParams } from '../fxParams';
 import { Fx } from '../view/Fx';
@@ -248,11 +248,12 @@ export class ParticleViewerScene extends Phaser.Scene {
           void navigator.clipboard?.writeText(code).catch(() => {});
           this.info.textContent = `Copié — à coller dans FX_DEFAULTS (fxParams.ts) :\n${code}`;
         }),
-        button("Réinitialiser l'effet", () => {
+        button('Save', () => void saveFxToCode().then((msg) => (this.info.textContent = `${msg}\n(tous les effets sont enregistrés)`))),
+        button('Reset', () => {
           resetFx(this.effect.id);
           this.fx.build();
           for (const s of this.syncs) s();
-          this.info.textContent = 'Valeurs du fichier restaurées.';
+          this.info.textContent = "Retour à la dernière sauvegarde (cet effet).";
         }),
       ),
       this.info,

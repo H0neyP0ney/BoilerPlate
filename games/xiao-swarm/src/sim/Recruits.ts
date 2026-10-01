@@ -7,6 +7,9 @@ import type { Squad } from './Squad';
 const PICK_RADIUS = 34;
 const MAGNET_RADIUS = 120;
 const LIFETIME = 18;
+/** Accélération (px/s²) et vitesse max (px/s) d'une recrue attirée par une escouade. */
+const RECRUIT_ACCEL = 1500;
+const RECRUIT_MAX_SPEED = 1400;
 
 /**
  * Recrutement sur le terrain (GDD §13-14) :
@@ -23,10 +26,9 @@ export class Recruits {
     const squad = killer ?? this.sim.nearestSquad(a.x, a.y);
     if (!squad) return;
     const size = squad.size;
-    if (size >= squad.maxSize) return;
     // petite squad = beaucoup d'aide ; grosse squad = recrutement ralenti
     const sizeFactor = clamp(1.8 - (size - 4) * 0.12, 0.25, 1.8);
-    if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor)) return;
+    if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor * squad.stats.get('recruit'))) return;
     this.drop(this.chooseClass(squad), a.x, a.y);
   }
 
@@ -47,9 +49,12 @@ export class Recruits {
       // aimant vers le soldat le plus proche (toutes squads confondues, si pas pleine)
       const s = this.sim.soldierHash.nearest(r.x, r.y, MAGNET_RADIUS, (o) => {
         const sq = this.sim.squadOf(o.owner);
-        return o.alive && !!sq && sq.size < sq.maxSize;
+        return o.alive && !!sq && sq.size < sq.maxSize; // escouade pleine : la recrue reste au sol, on ne la ramasse pas
       });
-      if (!s) continue;
+      if (!s) {
+        r.spd = 0;
+        continue;
+      }
       const d = Math.hypot(s.x - r.x, s.y - r.y);
       if (d < PICK_RADIUS) {
         const squad = this.sim.squadOf(s.owner)!;
@@ -59,9 +64,11 @@ export class Recruits {
         this.items.splice(i, 1);
         continue;
       }
-      const k = Math.min(1, dt * 6);
-      r.x += (s.x - r.x) * k;
-      r.y += (s.y - r.y) * k;
+      // accélère de plus en plus vite : la recrue rattrape une escouade qui s'éloigne au lieu de se faire distancer
+      r.spd = Math.min(RECRUIT_MAX_SPEED, (r.spd ?? 0) + RECRUIT_ACCEL * dt);
+      const step = Math.min(d, Math.max(r.spd * dt, d * Math.min(1, dt * 6)));
+      r.x += ((s.x - r.x) / d) * step;
+      r.y += ((s.y - r.y) / d) * step;
     }
   }
 

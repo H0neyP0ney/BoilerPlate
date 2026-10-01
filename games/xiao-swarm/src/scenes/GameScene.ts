@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { clamp, damp, DebugOverlay, MoveInput, poki, RunFlow, storage } from '@xiao/engine';
+import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
 import { SCENES } from '../config';
 import type { SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
@@ -10,7 +10,7 @@ import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
-import { settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
+import { MUSIC, MUSIC_STEPS, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
@@ -41,7 +41,8 @@ export class GameScene extends Phaser.Scene {
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
   private upgradeOpen = false;
   /** Proposition déjà choisie mais pas encore remplacée par l'hôte (évite de la rouvrir le temps de l'aller-retour réseau). */
-  private dismissedOffer = '';
+  /** Proposition affichée dans la fenêtre de choix (pour la rouvrir quand elle change). */
+  private shownOffer = '';
   private readonly camTarget = { x: 0, y: 0 };
 
   constructor() {
@@ -52,7 +53,7 @@ export class GameScene extends Phaser.Scene {
     this.revived = false;
     this.ended = false;
     this.upgradeOpen = false;
-    this.dismissedOffer = '';
+    this.shownOffer = '';
     this.scene.stop(SCENES.levelUp); // une fenêtre d'upgrade restée ouverte d'une partie précédente
     if (import.meta.env.DEV) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
@@ -97,6 +98,8 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch(SCENES.hud);
     this.setupDebug();
+    music.play(this, MUSIC.key, MUSIC.url, settings.musicVolume / MUSIC_STEPS); // en boucle, sans relance si elle joue déjà
+    sfx.setVolume(settings.sfxVolume / MUSIC_STEPS);
   }
 
   update(time: number, delta: number): void {
@@ -106,11 +109,16 @@ export class GameScene extends Phaser.Scene {
     this.session.setLocalInput(dir.x, dir.y);
     if (this.flow.state === 'ready' && this.move.active) this.flow.begin();
 
-    // Montée de niveau : le choix d'upgrade s'affiche par-dessus le jeu, qui continue de tourner.
+    // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
+    // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.
     const squad = this.localSquad;
     const offer = squad?.offer;
-    if (this.upgradeOpen && !offer) this.closeUpgrade();
-    else if (!this.upgradeOpen && !this.ended && this.session.sim.xpEnabled && offer && this.offerKey(squad) !== this.dismissedOffer) this.openUpgrade();
+    const sim = this.session.sim;
+    const choosing = sim.xpEnabled && sim.choiceT > 0 && !this.ended && (!!offer || this.session.online);
+    const key = !choosing ? '' : offer ? this.offerKey(squad) : 'wait';
+    if (!choosing) {
+      if (this.upgradeOpen) this.closeUpgrade();
+    } else if (!this.upgradeOpen || key !== this.shownOffer) this.openUpgrade(key);
 
     // En ligne, le monde ne s'arrête jamais : l'hôte fait tourner la partie de tout le monde.
     const running = this.flow.isPlaying || this.session.online;
@@ -121,7 +129,6 @@ export class GameScene extends Phaser.Scene {
     this.view.render(running ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
-    const sim = this.session.sim;
     this.debug?.set('tick', sim.tick);
     this.debug?.set('squads', sim.aliveSquads.length);
     this.debug?.set('soldiers', this.localSquad.size);
@@ -175,7 +182,7 @@ export class GameScene extends Phaser.Scene {
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
     if (e.t === 'restart') {
       this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
-      this.dismissedOffer = '';
+      this.shownOffer = '';
     }
     if (e.t === 'recruited' && e.owner === this.session.localPlayer) poki.measure('recruit', e.cls, 'complete');
   };
@@ -193,11 +200,13 @@ export class GameScene extends Phaser.Scene {
 
   // ---------- Flow Poki ----------
 
-  private openUpgrade(): void {
+  /** Ouvre (ou rouvre, nouvelle manche / passage en attente) la fenêtre de choix d'upgrade. */
+  private openUpgrade(key: string): void {
     const squad = this.localSquad;
-    if (!squad.offer) return;
     this.upgradeOpen = true;
-    this.scene.launch(SCENES.levelUp, { offer: [...squad.offer], prism: [...squad.offerPrism], level: squad.level });
+    this.shownOffer = key;
+    this.scene.stop(SCENES.levelUp);
+    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level });
   }
 
   private offerKey(squad: Squad): string {
@@ -210,11 +219,9 @@ export class GameScene extends Phaser.Scene {
     this.scene.stop(SCENES.levelUp);
   }
 
-  /** Appelé par le choix de niveau : envoie l'upgrade (hôte ou client) ; un niveau en attente ouvre le choix suivant. */
+  /** Appelé par la fenêtre de choix : envoie l'upgrade (hôte ou client). La fenêtre se ferme quand la pause de choix se termine. */
   chooseUpgrade(index: number): void {
-    this.dismissedOffer = this.offerKey(this.localSquad);
     this.session.chooseUpgrade(index);
-    this.closeUpgrade();
   }
 
   readonly pauseGame = (): void => {
@@ -225,8 +232,9 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch(SCENES.pause);
   };
 
-  async resumeGame(): Promise<void> {
-    await this.flow.resume({ ad: true });
+  /** Reprise après une pause : `ad` = pub de sortie de pause (écran Pause) ; non pour le menu Options. */
+  async resumeGame({ ad = true }: { ad?: boolean } = {}): Promise<void> {
+    await this.flow.resume({ ad });
     this.scene.resume();
     this.scene.resume(SCENES.hud);
   }
@@ -320,6 +328,17 @@ export class GameScene extends Phaser.Scene {
   // ---------- Debug (dev uniquement) ----------
 
   /** Bouton du HUD : ouvre / ferme le menu Réglages (comme la touche ² / F2). */
+  /** Bouton Options du HUD : en solo la partie se met en pause le temps du menu (en ligne, impossible : le jeu continue). */
+  openOptions(): void {
+    if (this.scene.isActive(SCENES.options) || this.scene.isActive(SCENES.pause)) return;
+    const paused = !this.session.online && !this.upgradeOpen && this.scene.isActive() && this.flow.interrupt();
+    if (paused) {
+      this.scene.pause();
+      this.scene.pause(SCENES.hud);
+    }
+    this.scene.launch(SCENES.options, { resumeGame: paused });
+  }
+
   toggleDebug(): void {
     this.debug?.toggleMenu();
   }
@@ -362,6 +381,11 @@ export class GameScene extends Phaser.Scene {
         this.applyZoomNow();
       },
     });
+    const dbg = this.debug;
+    const onOff = (label: string, hint: string, get: () => boolean, set: (v: boolean) => void): void =>
+      dbg.slider(label, { min: 0, max: 1, step: 1, hint, get: () => (get() ? 1 : 0), set: (v) => set(v >= 0.5) });
+    onOff('Compteur FPS (0/1)', "1 = affiché en haut à gauche. Sans menu (téléphone) : ?fps=0 / ?fps=1 dans l'URL.", () => settings.showFps, (v) => settings.setShowFps(v));
+    onOff('Fond étoilé (0/1)', "0 = fond noir uni, bien plus léger sur mobile. Sans menu (téléphone) : ?space=0 / ?space=1 dans l'URL.", () => settings.starfield, (v) => settings.setStarfield(v));
     addVisualMenu(this.debug);
     // Panneaux dédiés (boutons du HUD) : mouvement de foule, et triche / tests (hors ligne seulement).
     this.crowdPanel = new CrowdPanel(this);

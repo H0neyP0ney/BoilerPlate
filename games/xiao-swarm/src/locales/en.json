@@ -7,6 +7,13 @@
   "paused": "Paused",
   "resume": "Resume",
   "restart": "Restart",
+  "options": "Options",
+  "music": "Music",
+  "sfx": "Sound effects",
+  "debugMode": "Debug mode",
+  "on": "ON",
+  "off": "OFF",
+  "close": "Close",
   "gameOver": "Squad wiped out!",
   "victory": "Extraction successful!",
   "survived": "Survived {time} · {kills} kills",
@@ -40,7 +47,7 @@
   "up_fireRate": "Quick triggers",
   "up_fireRate_desc": "Fire rate +{value}%",
   "up_hp": "Reinforced vests",
-  "up_hp_desc": "Max HP +{value}% and heals 50%",
+  "up_hp_desc": "Max HP +{value}%",
   "up_speed": "Light boots",
   "up_speed_desc": "Squad speed +{value}%",
   "up_maxSquad": "Reinforcements",
@@ -76,5 +83,6 @@
   "coopWin": "VICTORY!",
   "coopLose": "DEFEAT…",
   "restartIn": "New game in {value} s",
-  "chooseUpgradeShort": "Pick: 1 / 2 / 3"
+  "chooseUpgradeShort": "Pick: 1 / 2 / 3",
+  "waitingPlayers": "Waiting for the other players…"
 }

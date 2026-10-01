@@ -4,7 +4,9 @@ import { PALETTE, SCENES } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { nextBoss } from '../data/waves';
 import { t } from '../i18n';
+import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
+import { xpBarLayout } from '../view/hudLayout';
 import { iconCheat, iconCrowd, makeSquareButton, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
@@ -15,6 +17,10 @@ import type { GameScene } from './GameScene';
 export class HudScene extends Phaser.Scene {
   private game_!: GameScene;
   private pauseBtn!: Phaser.GameObjects.Container;
+  /** Bouton Options (roue crantée, à gauche de la pause) : volume de la musique, mode debug. */
+  private optionsBtn!: Phaser.GameObjects.Container;
+  /** Boutons de dev visibles (mode debug du menu Options) ? */
+  private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
   private roomText!: Phaser.GameObjects.Text;
   private debugBtn?: Phaser.GameObjects.Container;
@@ -23,6 +29,9 @@ export class HudScene extends Phaser.Scene {
   /** Boutons des panneaux de dev (foule, triche), avant les visionneuses. */
   private panelBtns: Phaser.GameObjects.Container[] = [];
   private respawnText!: Phaser.GameObjects.Text;
+  /** Compteur de FPS (haut gauche), rafraîchi deux fois par seconde. */
+  private fpsText!: Phaser.GameObjects.Text;
+  private fpsAt = 0;
   /** Haut centre : compte à rebours avant le prochain boss (mini ou final), dès le début de la partie. */
   private bossTimer!: Phaser.GameObjects.Text;
   /** Camembert du compte à rebours : secteur orange (rouge pour le boss final) qui se vide dans le sens inverse des aiguilles. */
@@ -60,6 +69,9 @@ export class HudScene extends Phaser.Scene {
       stroke: '#13233a',
       strokeThickness: 4,
     });
+    // Compteur de FPS, toujours affiché pour l'instant
+    this.fpsText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
+    this.fpsAt = 0;
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
@@ -73,6 +85,7 @@ export class HudScene extends Phaser.Scene {
       ];
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene)));
     }
+    this.applyDebugMode();
     this.bossLabelShown = ''; // la scène est réutilisée à chaque partie : le nouveau texte est vide, il faut le remplir
     this.bossPie = this.add.graphics();
     this.bossCapsule = this.add.graphics();
@@ -83,7 +96,7 @@ export class HudScene extends Phaser.Scene {
     this.xpBar = this.add.graphics();
     this.xpLabel = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
-      .setOrigin(0, 0.5);
+      .setOrigin(1, 0.5); // « Niv. X » à gauche de la jauge
     this.bossBanner = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '44px', fontStyle: 'bold', color: '#ff6a4a', stroke: '#2a0a08', strokeThickness: 8, align: 'center' })
       .setOrigin(0.5)
@@ -105,6 +118,7 @@ export class HudScene extends Phaser.Scene {
       this.game_.events.off('netEnd', this.onNetEnd);
     });
     this.pauseBtn = this.makePauseButton().setVisible(!this.game_.session.online);
+    this.optionsBtn = this.makeOptionsButton();
     this.hint = this.makeHint();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout);
@@ -112,7 +126,16 @@ export class HudScene extends Phaser.Scene {
     this.layout();
   }
 
-  update(): void {
+  update(time: number): void {
+    if (settings.debugMode !== this.debugShown) {
+      this.applyDebugMode();
+      this.layout();
+    }
+    this.fpsText.setVisible(settings.showFps);
+    if (settings.showFps && time - this.fpsAt > 500) {
+      this.fpsAt = time;
+      this.fpsText.setText(`${Math.round(this.game.loop.actualFps)} FPS`);
+    }
     const g = this.game_;
     const s = g.session;
     this.roomText.setText(
@@ -152,7 +175,7 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: this.bossBanner, alpha: 0, delay: 2600, duration: 700 });
   };
 
-  /** Boss vivant : barre de vie en haut de l'écran, et flèche au bord de l'écran quand il est hors champ. */
+  /** Boss vivant : barre de vie en bas de l'écran, et flèche au bord de l'écran quand il est hors champ. */
   private drawBoss(): void {
     const g = this.game_;
     const boss = g.session.sim.aliens.find((a) => a.alive && a.def.boss);
@@ -161,16 +184,16 @@ export class HudScene extends Phaser.Scene {
     this.bossName.setVisible(!!boss);
     if (!boss) return;
     const { width, height } = this.scale;
-    const top = device.isTouch ? 76 : 18;
-    const w = Math.min(460, width - 260);
+    const w = Math.min(460, width - 80);
     const x = (width - w) / 2;
+    const barY = height - 34; // haut de la barre (bas de l'écran)
     const final = boss.def.boss!.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_crab')).setPosition(width / 2, top + 4);
-    this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(x, top + 18, w, 16, 8);
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_crab')).setPosition(width / 2, barY - 14);
+    this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(x, barY, w, 16, 8);
     const ratio = Math.max(0, boss.hp / boss.maxHp);
-    if (ratio > 0) this.bossBar.fillStyle(color, 1).fillRoundedRect(x + 2, top + 20, Math.max(12, (w - 4) * ratio), 12, 6);
-    this.bossBar.lineStyle(2, 0xffffff, 0.4).strokeRoundedRect(x, top + 18, w, 16, 8);
+    if (ratio > 0) this.bossBar.fillStyle(color, 1).fillRoundedRect(x + 2, barY + 2, Math.max(12, (w - 4) * ratio), 12, 6);
+    this.bossBar.lineStyle(2, 0xffffff, 0.4).strokeRoundedRect(x, barY, w, 16, 8);
     this.bossBanner.setPosition(width / 2, height * 0.3);
 
     // flèche vers le boss quand il est hors de l'écran
@@ -250,17 +273,17 @@ export class HudScene extends Phaser.Scene {
     const next = nextBoss(sim.mode.waves, g.runTime);
     const bossAlive = sim.aliens.some((a) => a.alive && a.def.boss);
     const left = next ? Math.max(0, next.at - g.runTime) : 0;
-    // Caché pendant un combat de boss (barre de vie en haut), sauf s'il reste moins d'une minute : alors il passe SOUS la barre.
+    // Caché pendant un combat de boss, sauf s'il reste moins d'une minute avant le suivant.
     const show = !!next && !this.endText.visible && (!bossAlive || left < 60);
     this.bossTimer.setVisible(show);
     this.bossLabel.setVisible(show);
     this.bossPie.clear();
     this.bossCapsule.clear();
     if (!show || !next) return;
-    const { width } = this.scale;
+    const { height } = this.scale;
     const R = 30;
-    const cx = width / 2;
-    const cy = bossAlive ? (device.isTouch ? 76 : 18) + 44 + R : (device.isTouch ? 70 : 12) + R;
+    const cx = 14 + R + 16; // bord gauche (la capsule « Prochain boss » dépasse un peu du disque)
+    const cy = height / 3; // à un tiers de la hauteur depuis le haut
     // part restante = temps restant / durée écoulée entre le boss précédent (ou le début) et celui-ci
     const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= g.runTime ? Math.max(m, e.at) : m), 0);
     const frac = Math.max(0, Math.min(1, left / Math.max(1, next.at - prev)));
@@ -302,16 +325,13 @@ export class HudScene extends Phaser.Scene {
     this.xpBar.setVisible(on);
     this.xpLabel.setVisible(on);
     if (!on) return;
-    const { width, height } = this.scale;
-    const w = Math.min(520, width - 150);
-    const x = (width - w) / 2 + 40;
-    const y = height - 26;
+    const { x, y, w } = xpBarLayout(this.scale.width); // tout en haut de l'écran
     const ratio = Math.min(1, squad.xp / squad.xpNeeded);
     this.xpBar.clear();
-    this.xpBar.fillStyle(0x0a1422, 0.75).fillRoundedRect(x, y - 9, w - 40, 18, 9);
-    if (ratio > 0) this.xpBar.fillStyle(0x4aa8ff, 1).fillRoundedRect(x + 2, y - 7, Math.max(14, (w - 44) * ratio), 14, 7);
-    this.xpBar.lineStyle(2, 0xffffff, 0.35).strokeRoundedRect(x, y - 9, w - 40, 18, 9);
-    this.xpLabel.setText(t('xpLevel', { value: squad.level })).setPosition(x - 76, y);
+    this.xpBar.fillStyle(0x0a1422, 0.75).fillRoundedRect(x, y - 9, w, 18, 9);
+    if (ratio > 0) this.xpBar.fillStyle(0x4aa8ff, 1).fillRoundedRect(x + 2, y - 7, Math.max(14, (w - 4) * ratio), 14, 7);
+    this.xpBar.lineStyle(2, 0xffffff, 0.35).strokeRoundedRect(x, y - 9, w, 18, 9);
+    this.xpLabel.setText(t('xpLevel', { value: squad.level })).setPosition(x - 8, y);
   }
 
   /** Bouton « curseurs » en haut à gauche : ouvre / ferme le menu Réglages (zoom du jeu, visuel, stats). */
@@ -327,6 +347,32 @@ export class HudScene extends Phaser.Scene {
     });
     const hit = this.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
     hit.on('pointerup', () => this.game_.toggleDebug());
+    c.add([g, hit]);
+    return c;
+  }
+
+  /** Mode debug (menu Options) : affiche ou masque les boutons des outils de dev en haut à gauche. */
+  private applyDebugMode(): void {
+    this.debugShown = settings.debugMode;
+    const show = this.debugShown && !!this.debugBtn;
+    for (const b of [this.debugBtn, ...this.panelBtns, ...this.viewerBtns]) b?.setVisible(show);
+  }
+
+  /** Roue crantée : ouvre le menu Options. */
+  private makeOptionsButton(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    const g = this.add.graphics();
+    g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-30, -30, 60, 60, 12);
+    g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-30, -30, 60, 60, 12);
+    g.fillStyle(0xffffff, 1);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.fillCircle(Math.cos(a) * 13, Math.sin(a) * 13, 4.5); // dents
+    }
+    g.fillCircle(0, 0, 13);
+    g.fillStyle(PALETTE.panel, 1).fillCircle(0, 0, 5.5);
+    const hit = this.add.zone(0, 0, 60, 60).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => this.game_.openOptions());
     c.add([g, hit]);
     return c;
   }
@@ -374,9 +420,11 @@ export class HudScene extends Phaser.Scene {
     this.debugBtn?.setPosition(14 + 22, top + 22);
     const devBtns = [...this.panelBtns, ...this.viewerBtns];
     devBtns.forEach((b, i) => b.setPosition(14 + (1 + i) * (44 + 8) + 22, top + 22));
-    const buttons = this.debugBtn ? 1 + devBtns.length : 0; // menu Réglages + panneaux + visionneuses (dev)
+    const buttons = this.debugBtn && this.debugShown ? 1 + devBtns.length : 0; // menu Réglages + panneaux + visionneuses (dev, mode debug)
     this.roomText.setPosition(buttons ? 14 + buttons * (44 + 8) + 10 : 14, buttons ? top + 10 : top);
+    this.fpsText.setPosition(14, top + (buttons ? 54 : 30)); // sous les boutons de dev / le code de salle
     this.pauseBtn.setPosition(width - 44, top + 34);
+    this.optionsBtn.setPosition(this.pauseBtn.visible ? width - 44 - 70 : width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height * 0.22);
     this.endText.setPosition(width / 2, height * 0.4);

@@ -1,0 +1,7 @@
+{
+  "output": "../public/assets/aliens/slime_grenadier.png",
+  "scale": 0.0625,
+  "sheets": [
+    { "name": "walk", "input": "slime_grenadier.png", "cols": 4, "rows": 4 }
+  ]
+}

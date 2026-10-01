@@ -113,6 +113,24 @@ function saveFx(fx: Record<string, Record<string, number>>): Result {
   return { ok: true, message: `Effets enregistrés dans ${rel}${missing.length ? ` (effets absents : ${missing.join(', ')})` : ''}` };
 }
 
+/** Noms des unités (visionneuse d'unités) : clés écrites dans locales/<langue>.json (ajoutées à la fin si absentes). */
+function saveNames(data: Record<string, Record<string, string>>): Result {
+  let count = 0;
+  for (const [lang, values] of Object.entries(data)) {
+    if (!/^[a-z]{2}$/.test(lang)) continue;
+    const rel = `locales/${lang}.json`;
+    const src = readSrc(rel);
+    const json = JSON.parse(src) as Record<string, string>;
+    for (const [key, v] of Object.entries(values)) {
+      if (typeof v !== 'string' || !/^(class|alien)_[a-z0-9_]+$/.test(key)) continue;
+      json[key] = v;
+      count++;
+    }
+    writeSrc(rel, src, JSON.stringify(json, null, 2) + '\n');
+  }
+  return { ok: true, message: count ? `${count} nom(s) enregistré(s) dans locales/fr.json et en.json` : 'Aucun nom modifié à enregistrer' };
+}
+
 /** Remplace le bloc `marker ... };` (toute la déclaration) par `code`. */
 function replaceDeclaration(rel: string, marker: RegExp, code: string, label: string): Result {
   const src = readSrc(rel);
@@ -240,6 +258,8 @@ function handle(target: string, data: any): Result {
       return saveNumbers('config.ts', /export const VISUAL_DEFAULTS = \{/, data, 'Réglages visuels');
     case 'fx':
       return saveFx(data);
+    case 'names':
+      return saveNames(data as Record<string, Record<string, string>>);
     case 'waves':
       return replaceDeclaration('data/waves.ts', /export const DEFAULT_WAVE_SCRIPT: WaveScript = \{/, String(data.code), 'Script de vagues');
     case 'obstacle':

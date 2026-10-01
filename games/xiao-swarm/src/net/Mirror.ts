@@ -40,6 +40,7 @@ export class Mirror {
     const { sim } = this;
     sim.tick = snap.tick;
     sim.waves.setTime(snap.time);
+    sim.choiceT = snap.choiceT;
 
     const seenSoldiers = new Set<number>();
     for (const sq of snap.squads) {
@@ -225,6 +226,12 @@ export class Mirror {
         rushT: 0,
         rushDx: 0,
         rushDy: 0,
+        leapCd: 0,
+        leapT: 0,
+        leapFromX: a.x,
+        leapFromY: a.y,
+        leapX: a.x,
+        leapY: a.y,
         reviveCd: 0,
         castT: 0,
         castCorpse: 0,
@@ -244,6 +251,9 @@ export class Mirror {
     s.rushT = a.rushing ? 1 : 0;
     s.rushDx = a.rushDx;
     s.rushDy = a.rushDy;
+    s.leapT = a.leapT;
+    s.leapX = a.leapX;
+    s.leapY = a.leapY;
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
     s.revived = a.zombie;

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getName, nameKey } from '../debugNames';
 import { clamp, sprites, theme } from '@xiao/engine';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES } from '../data/classes';
@@ -139,6 +140,13 @@ export class UnitViewerScene extends Phaser.Scene {
     this.fit();
   }
 
+  /** Libellé sous l'unité : son nom affiché en jeu (FR) puis son id de visuel. */
+  private labelOf(kind: Kind, unit: string, id: string): string {
+    const name = getName(nameKey(kind, unit), 'fr');
+    return name ? `${name}
+${id}` : id;
+  }
+
   private makeEntry(kind: Kind, prefix: string, unit: string, x: number, y: number): Entry {
     const id = `${prefix}${unit}`;
     // mêmes proportions qu'en jeu (WorldView.drawOverlay) ; la taille réglable s'applique en échelle
@@ -151,7 +159,7 @@ export class UnitViewerScene extends Phaser.Scene {
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
     const label = this.add
-      .text(x, y + 26, id, { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim })
+      .text(x, y + 26, this.labelOf(kind, unit, id), { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim, align: 'center' })
       .setOrigin(0.5, 0);
     return {
       id,

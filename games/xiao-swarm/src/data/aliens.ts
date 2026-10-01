@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'spider' | 'squid' | 'beast' | 'crab' | 'slime_pink' | 'slime_blue' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'healer' | 'rhino_boss' | 'crab_king';
+export type AlienId = 'slime_basic' | 'spider' | 'squid' | 'beast' | 'crab' | 'slime_pink' | 'slime_bombardier' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'healer' | 'rhino_boss' | 'crab_king';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'medic' | 'weakest' | 'center' | 'tank';
@@ -41,6 +41,12 @@ export interface AlienDef {
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
   rush?: { cooldown: number; windup: number; length: number; width: number; speed: number; damage: number; knockback: number };
+  /**
+   * Saut écrasant : toutes les `every` s, vise l'endroit où la squad ciblée SERA à l'impact (centre + vitesse × durée), à `maxDist` px
+   * au plus. Préparation `windup` (télégraphe rouge au sol), vol `flight`, écrasement (tout soldat sous la zone de rayon `radius`
+   * meurt), puis récupération `recover` sur place.
+   */
+  leap?: { every: number; windup: number; flight: number; recover: number; radius: number; maxDist: number };
   /** Crachat : quelques boules en cloche (chacune télégraphiée) qui blessent et laissent une flaque ralentissante. */
   spray?: {
     range: number;
@@ -70,8 +76,9 @@ export interface AlienDef {
 }
 
 export const ALIENS: Record<AlienId, AlienDef> = {
-  slime: {
-    id: 'slime',
+  /** Slime de base (vert). */
+  slime_basic: {
+    id: 'slime_basic',
     hp: 55,
     speed: 72,
     radius: 16,
@@ -85,7 +92,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0x8fd14f,
     hpBarWidth: 30,
   },
-  /** Petit slime rose : rapide, fragile, arrive en essaims. */
+  /** Petit cafard (id historique `slime_pink`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
   slime_pink: {
     id: 'slime_pink',
     hp: 14,
@@ -98,12 +105,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     revivable: true,
     xp: 1,
     recruitChance: 0.02,
-    color: 0xff7fb8,
+    color: 0xa982e8, // violet du cafard (éclaboussure à la mort)
     hpBarWidth: 22,
   },
-  /** Gros slime bleu : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
-  slime_blue: {
-    id: 'slime_blue',
+  /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
+  slime_bombardier: {
+    id: 'slime_bombardier',
     hp: 90,
     speed: 55,
     radius: 24,
@@ -115,7 +122,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     revivable: true,
     xp: 6,
     recruitChance: 0.1,
-    color: 0x5aa8ff,
+    color: 0x4aa8ff,
     hpBarWidth: 40,
   },
   /** Kamikaze : fonce sur les soldats ; le tuer déclenche une explosion retardée (il faut le tuer de loin). */
@@ -131,7 +138,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 560 },
     xp: 3,
     recruitChance: 0.03,
-    color: 0xff7a3a,
+    color: 0xe8333a, // rouge de l'araignée (éclaboussure à la mort)
     hpBarWidth: 28,
   },
   /** Grenouille : reste à distance, tire la langue sur un soldat et le tire vers elle. */
@@ -343,7 +350,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   crab: {
     id: 'crab',
-    hp: 2700, // ×3
+    hp: 900, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
     speed: 48,
     radius: 150, // 3× plus gros (affichage et collision)
     scale: 3,
@@ -351,7 +358,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 25,
     attackCooldown: 1.2,
     target: 'center',
-    slam: { radius: 330, damage: 20, cooldown: 3.2, knockback: 520 },
+    leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900 },
     lob: { range: 620, cooldown: 3, flight: 1.15, damage: 22, aoe: 85, texture: 'fx_blob_green', count: 3, keepMoving: true },
     boss: { kind: 'mini' },
     xp: 60,
@@ -365,4 +372,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'slime_pink', 'slime_blue', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'healer', 'thrower', 'bubble', 'fire'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime_basic', 'slime_pink', 'slime_bombardier', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'healer', 'thrower', 'bubble', 'fire'];

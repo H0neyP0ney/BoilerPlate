@@ -3,6 +3,7 @@ import { Rng, sprites } from '@xiao/engine';
 import { DEPTH, VISUAL } from '../config';
 import type { MapDef, PlacedObstacle } from '../data/maps';
 import { OBSTACLES } from '../data/obstacles';
+import { settings } from '../settings';
 import { buildGround, drawGroundChunk, type GroundFeature } from '../art/ground';
 
 /**
@@ -33,6 +34,9 @@ export class ArenaView {
   /** Couches d'étoiles et facteur de parallaxe (plus petit = plus loin). */
   private readonly starLayers: { sprite: Phaser.GameObjects.TileSprite; factor: number }[] = [];
   private ground?: Phaser.GameObjects.TileSprite;
+  /** Halos de nébuleuse du fond d'espace (masqués avec les étoiles quand `settings.starfield` est désactivé). */
+  private readonly nebulas: Phaser.GameObjects.Image[] = [];
+  private spaceOn = true;
   /** Taches sombres et leur échelle (largeur et échelle Y de la variante, vue Obstacles) ; opacité : VISUAL.stainAlpha (config.ts). */
   private readonly stains: { img: Phaser.GameObjects.Image }[] = [];
 
@@ -68,7 +72,8 @@ export class ArenaView {
     const cam = this.scene.cameras.main;
     cam.setBackgroundColor(0x04050f);
     const nebula = (x: number, y: number, tint: number, scale: number, factor: number): void => {
-      this.scene.add.image(x, y, 'fx_glow').setTint(tint).setAlpha(0.22).setScale(scale).setScrollFactor(factor).setDepth(DEPTH.ground - 3).setBlendMode(Phaser.BlendModes.ADD);
+      const img = this.scene.add.image(x, y, 'fx_glow').setTint(tint).setAlpha(0.22).setScale(scale).setScrollFactor(factor).setDepth(DEPTH.ground - 3).setBlendMode(Phaser.BlendModes.ADD);
+      this.nebulas.push(img);
     };
     nebula(300, 500, 0x4a2a9a, 22, 0.08);
     nebula(2100, 1700, 0x1a5a9a, 26, 0.1);
@@ -80,16 +85,27 @@ export class ArenaView {
     }
   }
 
+  /** Fond d'espace complet, ou fond noir uni (aucun objet dessiné : presque gratuit pour le GPU). */
+  private setSpace(on: boolean): void {
+    this.spaceOn = on;
+    this.scene.cameras.main.setBackgroundColor(on ? 0x04050f : 0x000000);
+    for (const n of this.nebulas) n.setVisible(on);
+    for (const l of this.starLayers) l.sprite.setVisible(on);
+  }
+
   /** À appeler chaque frame avec la zone visible de la caméra. */
   update(view: Phaser.Geom.Rectangle): void {
     this.ground?.setTileScale(VISUAL.groundScale);
+    if (settings.starfield !== this.spaceOn) this.setSpace(settings.starfield);
     for (const s of this.stains) s.img.setAlpha(VISUAL.stainAlpha);
     // les étoiles dérivent très lentement (en plus du décalage de parallaxe dû à la caméra)
     const drift = this.scene.time.now * 0.004;
     const cam = this.scene.cameras.main;
-    for (const l of this.starLayers) {
-      l.sprite.setPosition(cam.width / 2, cam.height / 2);
-      l.sprite.setTilePosition(cam.scrollX * l.factor + drift * l.factor, cam.scrollY * l.factor + drift * l.factor * 0.4);
+    if (this.spaceOn) {
+      for (const l of this.starLayers) {
+        l.sprite.setPosition(cam.width / 2, cam.height / 2);
+        l.sprite.setTilePosition(cam.scrollX * l.factor + drift * l.factor, cam.scrollY * l.factor + drift * l.factor * 0.4);
+      }
     }
     if (this.tiled) return;
     const x0 = Math.max(0, Math.floor((view.x - PRELOAD) / CHUNK));

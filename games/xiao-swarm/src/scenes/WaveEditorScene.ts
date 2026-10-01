@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
+import { DEFAULT_WAVE_MODEL, generateTimeline, simulatePressure, targetAt, type TargetPoint, type WaveModel } from '../data/waveModel';
 import { entryTimes, WAVE_LEVELS, WAVE_SCRIPT, WAVE_SCRIPT_END, type TimelineEntry, type WaveConfig } from '../data/waves';
 import { SCENES } from '../config';
 import { resetWaves, saveWaves, saveWavesToCode, waveSnippet } from '../debugWaves';
@@ -53,6 +54,7 @@ export class WaveEditorScene extends Phaser.Scene {
   /** Entrée de la timeline survolée dans le tableau (ses envois sont mis en évidence). */
   private hot = -1;
   private timelineBox!: HTMLDivElement;
+  private curveBox!: HTMLDivElement;
   private tableBox!: HTMLDivElement;
   private levelsBox!: HTMLDivElement;
   private configsBox!: HTMLDivElement;
@@ -98,6 +100,7 @@ export class WaveEditorScene extends Phaser.Scene {
     );
 
     this.timelineBox = el('div');
+    this.curveBox = el('div');
     this.tableBox = el('div', 'display:flex;flex-direction:column;gap:4px');
     this.levelsBox = el('div', 'display:flex;gap:6px;flex-wrap:wrap');
     this.configsBox = el('div', 'display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start');
@@ -118,8 +121,22 @@ export class WaveEditorScene extends Phaser.Scene {
         'Timeline',
         'Quel niveau de vague est envoyé à quel moment. Hauteur et couleur = niveau. Clic dans la timeline : ajoute un envoi du niveau sélectionné plus bas.',
         this.timelineBox,
-        this.tableBox,
       ),
+      section(
+        'Courbe de pression (estimation)',
+        "PV d'aliens vivants au fil du run : chaque envoi ajoute les PV de sa vague (moyenne des configurations du niveau ; boss : configuration exacte, avec les multiplicateurs de difficulté), la squad en retire un DPS qui croît avec le temps. " +
+          "« Retard » = secondes qu'il faudrait pour tout nettoyer. Estimation grossière (un seul tas de PV, ni portée ni déplacements, ni soin des aliens) : sert à comparer des scripts, pas à prédire le jeu.",
+        this.buildModelRow(),
+        el(
+          'div',
+          'font-size:11px;color:#9cf',
+          'Cible (pointillés bleus) : glisser un point pour le déplacer, clic droit (ou double-clic) dans la courbe pour en ajouter un, clic droit sur un point pour le supprimer. ' +
+            "« Générer » recompose la timeline (pas les configurations) pour suivre la cible : boss gardés à leur heure, chaque niveau n'arrive qu'à partir de sa première apparition actuelle.",
+        ),
+        this.buildTargetRow(),
+        this.curveBox,
+      ),
+      section('Envois', 'Une ligne par entrée de la timeline (survol : ses barres sont mises en évidence).', this.tableBox),
       section(
         'Niveaux de vague',
         "Chaque niveau regroupe plusieurs configurations ; quand un niveau est envoyé (timeline, ou bouton « Envoyer » du panneau Triche), l'une d'elles est tirée au hasard.",
@@ -141,6 +158,8 @@ export class WaveEditorScene extends Phaser.Scene {
 
   private renderAll(): void {
     this.renderTimeline();
+    this.renderCurve();
+    this.syncModelInputs();
     this.renderTable();
     this.renderLevels();
     this.renderConfigs();
@@ -148,6 +167,235 @@ export class WaveEditorScene extends Phaser.Scene {
 
   private commit(): void {
     saveWaves();
+    this.renderCurve();
+  }
+
+  // ---------- Courbe de pression ----------
+
+  private modelInputs: Partial<Record<keyof WaveModel, HTMLInputElement>> = {};
+
+  private model(): WaveModel {
+    return (WAVE_SCRIPT.model ??= { ...DEFAULT_WAVE_MODEL });
+  }
+
+  private buildModelRow(): HTMLElement {
+    const field = (key: keyof WaveModel, label: string, hint: string, o: { min: number; max?: number; step: number }): HTMLElement => {
+      const input = numInput(this.model()[key], { min: o.min, step: o.step, width: 70 }, (v) => {
+        if (v === undefined) return;
+        this.model()[key] = o.max !== undefined ? Math.min(o.max, Math.max(o.min, v)) : Math.max(o.min, v);
+        this.commit();
+      });
+      this.modelInputs[key] = input;
+      const row = el('label', 'display:flex;gap:5px;align-items:center', label, input);
+      row.title = hint;
+      return row;
+    };
+    return el(
+      'div',
+      'display:flex;gap:16px;flex-wrap:wrap;align-items:center',
+      field('dpsStart', 'DPS de départ', '4 gunners : 4 × 10 dégâts / 0,32 s ≈ 125', { min: 1, step: 5 }),
+      field('growthPerMin', 'Croissance / min', 'Hausse du DPS par minute (upgrades, recrues) : 0,35 = +35 % du DPS de départ par minute', { min: 0, step: 0.05 }),
+      field('efficiency', 'Efficacité', "Part du DPS réellement utile (portée, déplacements, overkill) : 0,05 → 1", { min: 0.05, max: 1, step: 0.05 }),
+      field('bossWeight', 'Poids des boss', "Part des PV d'un boss comptée dans la pression (0 → 1) : un gros boss seul est facile à gérer, ses escortes comptent normalement", { min: 0, max: 1, step: 0.05 }),
+    );
+  }
+
+  private syncModelInputs(): void {
+    const m = this.model();
+    for (const key of Object.keys(this.modelInputs) as (keyof WaveModel)[]) this.modelInputs[key]!.value = String(m[key]);
+  }
+
+  /** Timeline d'avant la dernière génération (bouton « Annuler la génération »). */
+  private beforeGenerate: TimelineEntry[] | null = null;
+
+  private buildTargetRow(): HTMLElement {
+    return el(
+      'div',
+      'display:flex;gap:8px;flex-wrap:wrap;align-items:center',
+      btn('Cible = courbe actuelle', () => {
+        const end = this.timelineEnd();
+        const sim = simulatePressure(WAVE_SCRIPT, this.model(), end, 0.5);
+        const points: TargetPoint[] = [];
+        for (let t = 0; t <= end; t += 20) points.push({ t, hp: Math.round(sim.hp[Math.round(t / sim.dt)] ?? 0) });
+        WAVE_SCRIPT.target = points;
+        this.commit();
+        this.say('Cible copiée depuis la courbe actuelle (un point toutes les 20 s) : déplace les points puis « Générer ».');
+      }),
+      btn(
+        'Générer',
+        () => {
+          const target = WAVE_SCRIPT.target;
+          if (!target || target.length < 2) {
+            this.say("Pas de cible : clique d'abord « Cible = courbe actuelle », puis déplace ses points.");
+            return;
+          }
+          this.beforeGenerate = JSON.parse(JSON.stringify(WAVE_SCRIPT.timeline)) as TimelineEntry[];
+          const res = generateTimeline(WAVE_SCRIPT, this.model(), target, this.timelineEnd());
+          WAVE_SCRIPT.timeline = res.timeline;
+          this.hot = -1;
+          this.commit();
+          this.renderTimeline();
+          this.renderTable();
+          this.say(
+            `Timeline générée : ${res.timeline.length} entrées · écart moyen ${Math.round(res.meanError).toLocaleString('fr-FR')} PV ` +
+              `(${Math.round(res.relError * 100)} % du pic de la cible) · écart max ${Math.round(res.maxError).toLocaleString('fr-FR')} PV. « Annuler la génération » pour revenir.`,
+          );
+        },
+        'font-weight:bold',
+      ),
+      btn('Annuler la génération', () => {
+        if (!this.beforeGenerate) {
+          this.say('Rien à annuler.');
+          return;
+        }
+        WAVE_SCRIPT.timeline = this.beforeGenerate;
+        this.beforeGenerate = null;
+        this.hot = -1;
+        this.commit();
+        this.renderTimeline();
+        this.renderTable();
+        this.say('Timeline d\'avant la génération restaurée.');
+      }),
+      btn('Effacer la cible', () => {
+        WAVE_SCRIPT.target = undefined;
+        this.commit();
+        this.say('Cible effacée.');
+      }),
+    );
+  }
+
+  private renderCurve(): void {
+    const end = this.timelineEnd();
+    const sim = simulatePressure(WAVE_SCRIPT, this.model(), end, 0.5);
+    const n = sim.hp.length;
+    const target = WAVE_SCRIPT.target && WAVE_SCRIPT.target.length >= 2 ? WAVE_SCRIPT.target : null;
+    const peak = Math.max(1, ...sim.hp);
+    const scale = Math.max(peak, ...(target ?? []).map((p) => p.hp)) * 1.08;
+    const peakBacklog = Math.max(...sim.backlog);
+    const avgBacklog = sim.backlog.reduce((a, b) => a + b, 0) / n;
+    const W = 1000;
+    const H = 170; // hauteur du tracé en px (= unités du viewBox) ; 14 px de graduations dessous
+    const pts = sim.hp.map((v, i) => `${((i / (n - 1)) * W).toFixed(1)},${(H - (v / scale) * H).toFixed(1)}`);
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.style.cssText = 'position:absolute;inset:0 0 14px 0;width:100%;height:calc(100% - 14px)';
+    const add = (tag: string, attrs: Record<string, string>): void => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      svg.append(e);
+    };
+    for (let t = 0; t <= end; t += 30) {
+      const x = (t / end) * W;
+      add('line', { x1: String(x), x2: String(x), y1: '0', y2: String(H), stroke: 'rgba(255,255,255,0.12)', 'stroke-width': '1', 'vector-effect': 'non-scaling-stroke' });
+    }
+    add('polygon', { points: `0,${H} ${pts.join(' ')} ${W},${H}`, fill: 'rgba(255,110,80,0.28)' });
+    add('polyline', { points: pts.join(' '), fill: 'none', stroke: '#ff7a55', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke' });
+
+    const area = el('div', `position:relative;height:${H + 14}px;background:#10161c;border-radius:4px;overflow:hidden;user-select:none`);
+    area.append(svg);
+    for (let t = 0; t <= end; t += 30) {
+      area.append(el('div', `position:absolute;left:${(t / end) * 100}%;bottom:0;font-size:10px;color:#889;transform:translateX(${t === 0 ? 2 : -50}%);pointer-events:none`, clock(t)));
+    }
+    area.append(el('div', 'position:absolute;left:4px;top:2px;font-size:10px;color:#889;pointer-events:none', `échelle : ${Math.round(scale).toLocaleString('fr-FR')} PV`));
+
+    // Cible : pointillés bleus + poignées déplaçables (même échelle que la courbe estimée).
+    const toPoint = (ev: MouseEvent): TargetPoint => {
+      const r = area.getBoundingClientRect();
+      const kx = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      const ky = Math.min(1, Math.max(0, (ev.clientY - r.top) / H));
+      return { t: Math.round(kx * end * 2) / 2, hp: Math.round((1 - ky) * scale) };
+    };
+    if (target) {
+      const line = document.createElementNS(NS, 'polyline');
+      const linePoints = (): string => target.map((p) => `${((p.t / end) * W).toFixed(1)},${(H - (p.hp / scale) * H).toFixed(1)}`).join(' ');
+      line.setAttribute('points', linePoints());
+      for (const [k, v] of Object.entries({ fill: 'none', stroke: '#5ab0ff', 'stroke-width': '2', 'stroke-dasharray': '6 4', 'vector-effect': 'non-scaling-stroke' })) line.setAttribute(k, v);
+      svg.append(line);
+      target.forEach((p, i) => {
+        const handle = el(
+          'div',
+          'position:absolute;width:10px;height:10px;margin:-7px 0 0 -7px;border-radius:50%;background:#5ab0ff;border:2px solid #fff;cursor:grab;z-index:2',
+        );
+        const place = (): void => {
+          handle.style.left = `${(p.t / end) * 100}%`;
+          handle.style.top = `${H - (p.hp / scale) * H}px`;
+        };
+        place();
+        handle.title = 'Glisser pour déplacer · clic droit pour supprimer';
+        handle.addEventListener('pointerdown', (ev) => {
+          ev.stopPropagation();
+          handle.setPointerCapture(ev.pointerId);
+          handle.style.cursor = 'grabbing';
+        });
+        handle.addEventListener('pointermove', (ev) => {
+          if (!handle.hasPointerCapture(ev.pointerId)) return;
+          const q = toPoint(ev);
+          const lo = i > 0 ? target[i - 1].t + 0.5 : 0;
+          const hi = i < target.length - 1 ? target[i + 1].t - 0.5 : end;
+          p.t = Math.min(hi, Math.max(lo, q.t));
+          p.hp = q.hp;
+          place();
+          line.setAttribute('points', linePoints());
+        });
+        handle.addEventListener('pointerup', (ev) => {
+          if (!handle.hasPointerCapture(ev.pointerId)) return;
+          handle.releasePointerCapture(ev.pointerId);
+          this.commit();
+        });
+        handle.addEventListener('dblclick', (ev) => ev.stopPropagation());
+        handle.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (target.length <= 2) {
+            this.say('La cible garde au moins 2 points.');
+            return;
+          }
+          target.splice(i, 1);
+          this.commit();
+        });
+        area.append(handle);
+      });
+      const addPoint = (ev: MouseEvent): void => {
+        const q = toPoint(ev);
+        target.push(q);
+        target.sort((a, b) => a.t - b.t);
+        this.commit();
+      };
+      area.addEventListener('dblclick', addPoint);
+      // clic droit dans la courbe (hors d'un point) = ajouter un point ; sur un point, le clic droit le supprime
+      area.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault();
+        addPoint(ev);
+      });
+    }
+    const cursor = el('div', 'position:absolute;top:0;bottom:14px;width:1px;background:#fff;opacity:0.6;display:none;pointer-events:none');
+    const tip = el('div', 'position:absolute;top:14px;padding:3px 6px;font-size:11px;background:rgba(0,0,0,0.85);border:1px solid #556;border-radius:3px;white-space:nowrap;display:none;pointer-events:none');
+    area.append(cursor, tip);
+    area.addEventListener('mousemove', (ev) => {
+      const r = area.getBoundingClientRect();
+      const k = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      const i = Math.round(k * (n - 1));
+      cursor.style.cssText += `;display:block;left:${k * 100}%`;
+      tip.textContent =
+        `${clock(i * sim.dt)} · ${Math.round(sim.hp[i]).toLocaleString('fr-FR')} PV vivants` +
+        (target ? ` (cible ${Math.round(targetAt(target, i * sim.dt)).toLocaleString('fr-FR')})` : '') +
+        ` · retard ${sim.backlog[i].toFixed(1)} s · DPS ${Math.round(sim.dps[i])}`;
+      tip.style.display = 'block';
+      tip.style.left = k > 0.6 ? '' : `${k * 100 + 1}%`;
+      tip.style.right = k > 0.6 ? `${(1 - k) * 100 + 1}%` : '';
+    });
+    area.addEventListener('mouseleave', () => {
+      cursor.style.display = 'none';
+      tip.style.display = 'none';
+    });
+    const summary = el(
+      'div',
+      'font-size:12px;color:#cdd',
+      `Pic : ${Math.round(peak).toLocaleString('fr-FR')} PV · retard max ${peakBacklog.toFixed(1)} s · retard moyen ${avgBacklog.toFixed(1)} s`,
+    );
+    this.curveBox.replaceChildren(summary, area);
   }
 
   // ---------- Timeline ----------
@@ -327,7 +575,7 @@ export class WaveEditorScene extends Phaser.Scene {
     const configs = this.configsOf(this.level);
     const cards = configs.map((c, i) => this.configCard(c, i, configs));
     const add = btn('+ Nouvelle configuration', () => {
-      configs.push({ name: '', groups: [{ type: 'slime', count: 3 }] });
+      configs.push({ name: '', groups: [{ type: 'slime_basic', count: 3 }] });
       this.commit();
       this.renderLevels();
       this.renderConfigs();
@@ -385,7 +633,7 @@ export class WaveEditorScene extends Phaser.Scene {
     fillGroups();
     refresh();
     const addGroup = btn('+ ennemi', () => {
-      c.groups.push({ type: 'slime', count: 1 });
+      c.groups.push({ type: 'slime_basic', count: 1 });
       fillGroups();
       refresh();
     });

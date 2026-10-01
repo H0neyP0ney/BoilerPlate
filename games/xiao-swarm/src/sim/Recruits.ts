@@ -1,14 +1,15 @@
 import { clamp } from '@xiao/engine/sim';
 import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
-import type { AlienState, RecruitState } from './entities';
+import type { AlienState, RecruitState, SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
 const PICK_RADIUS = 34;
 const MAGNET_RADIUS = 120;
 const LIFETIME = 18;
-/** Accélération (px/s²) et vitesse max (px/s) d'une recrue attirée par une escouade. */
-const RECRUIT_ACCEL = 1500;
+/** Soin d'une recrue en trop (escouade pleine) : rayon (px, ~2-3 soldats de large) et part des PV max rendue aux soldats autour. */
+const HEAL_AREA = { radius: 75, otherPct: 0.5 };
+/** Vitesse max (px/s) d'une recrue attirée par une escouade. */
 const RECRUIT_MAX_SPEED = 1400;
 
 /**
@@ -46,29 +47,41 @@ export class Recruits {
         this.items.splice(i, 1);
         continue;
       }
-      // aimant vers le soldat le plus proche (toutes squads confondues, si pas pleine)
+      // aimant vers le soldat le plus proche (toutes squads confondues) qui peut en profiter : place libre, ou blessé (escouade pleine)
       const s = this.sim.soldierHash.nearest(r.x, r.y, MAGNET_RADIUS, (o) => {
         const sq = this.sim.squadOf(o.owner);
-        return o.alive && !!sq && sq.size < sq.maxSize; // escouade pleine : la recrue reste au sol, on ne la ramasse pas
+        return o.alive && !!sq && (sq.size < sq.maxSize || o.hp < o.maxHp);
       });
-      if (!s) {
-        r.spd = 0;
-        continue;
-      }
+      if (!s) continue;
       const d = Math.hypot(s.x - r.x, s.y - r.y);
       if (d < PICK_RADIUS) {
         const squad = this.sim.squadOf(s.owner)!;
-        const recruit = squad.recruit(r.cls, { x: r.x, y: r.y });
-        recruit.invulnerable = 1;
-        this.sim.events.push({ t: 'recruited', owner: squad.owner, cls: r.cls, x: r.x, y: r.y });
+        if (squad.size < squad.maxSize) {
+          const recruit = squad.recruit(r.cls, { x: r.x, y: r.y });
+          recruit.invulnerable = 1;
+          this.sim.events.push({ t: 'recruited', owner: squad.owner, cls: r.cls, x: r.x, y: r.y });
+        } else {
+          // escouade pleine : la recrue en trop soigne en zone (le soldat qui l'a ramassée à fond, ses voisins à moitié)
+          this.healArea(s, squad);
+        }
         this.items.splice(i, 1);
         continue;
       }
-      // accélère de plus en plus vite : la recrue rattrape une escouade qui s'éloigne au lieu de se faire distancer
-      r.spd = Math.min(RECRUIT_MAX_SPEED, (r.spd ?? 0) + RECRUIT_ACCEL * dt);
-      const step = Math.min(d, Math.max(r.spd * dt, d * Math.min(1, dt * 6)));
+      // comme les globes d'XP : plus elle est proche, plus elle accélère vers le soldat
+      const k = Math.min(1, dt * (5 + (1 - d / MAGNET_RADIUS) * 10));
+      const step = Math.min(d * k, RECRUIT_MAX_SPEED * dt); // vitesse plafonnée
       r.x += ((s.x - r.x) / d) * step;
       r.y += ((s.y - r.y) / d) * step;
+    }
+  }
+
+  /** Soin en zone centré sur `main` : 100 % des PV max pour lui, `HEAL_AREA.otherPct` pour les soldats de sa squad à portée. L'affichage détecte la hausse de PV. */
+  private healArea(main: SoldierState, squad: Squad): void {
+    main.hp = main.maxHp;
+    for (const o of squad.soldiers) {
+      if (o === main || !o.alive || o.hp >= o.maxHp) continue;
+      if ((o.x - main.x) ** 2 + (o.y - main.y) ** 2 > HEAL_AREA.radius ** 2) continue;
+      o.hp = Math.min(o.maxHp, o.hp + o.maxHp * HEAL_AREA.otherPct);
     }
   }
 

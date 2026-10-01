@@ -35,8 +35,34 @@ export const FX_DEFAULTS = {
   ring: { durationMs: 350, startScaleX: 0.1, startScaleY: 0.07, alpha: 0.9, squash: 0.7 },
   /** Petit « + » qui monte : soin du Medic (fx_plus). */
   heal: { rise: 34, durationMs: 700, jitter: 10 },
+  /** Roquettes du power-up (fx_rocket, ligne droite) et leur traînée de fumée blanche opaque qui rétrécit jusqu'à 0 (fx_smoke). */
+  rocket: { scale: 1.1, smokeScale: 0.55, smokeLifeMin: 300, smokeLifeMax: 520, smokeSpeed: 18, smokeSpread: 3 },
   /** Texte flottant : « +1 Gunner ! », « BOSS DOWN! » (taille fixée par l'appelant). */
   text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 500, rise: 46 },
+  /**
+   * Recrue « bonus +1 » composée (art/recruits.ts) : position (en part de la taille du globe, depuis son centre), taille
+   * (part de la taille du globe) et opacité de chaque pièce ; taille affichée ; étoiles qui scintillent autour (recruit/star).
+   */
+  recruit: {
+    displayScale: 0.34,
+    globeScale: 1,
+    globeAlpha: 1,
+    ringScale: 1,
+    ringAlpha: 1,
+    headX: 0,
+    headY: 0.02,
+    headScale: 0.58,
+    plusX: 0.25,
+    plusY: 0.18,
+    plusScale: 0.48,
+    starEvery: 120,
+    starLifeMin: 390,
+    starLifeMax: 850,
+    starRadius: 23,
+    starScale: 0.21,
+    starRise: 35,
+    starY: 6,
+  },
 };
 
 export type FxParams = typeof FX_DEFAULTS;

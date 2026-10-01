@@ -1,5 +1,6 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { CAPTIVE_VULN, DIFFICULTY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME } from '../config';
+import { CAPTIVE_VULN, DIFFICULTY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
@@ -25,8 +26,13 @@ export interface SimConfig {
   mode: ModeDef;
   seed: number;
   players: PlayerId[];
-  /** Globes d'XP et montées de niveau (solo / bots). Faux en ligne : pas de pause possible pour choisir une upgrade. */
+  /** Globes d'XP et montées de niveau. */
   xp?: boolean;
+  /**
+   * Choix d'upgrade limité dans le temps (`UPGRADE_CHOICE_TIME`, puis choix au hasard) : en ligne, pour ne pas bloquer les
+   * autres joueurs. Faux en solo : le jeu reste en pause jusqu'au choix du joueur.
+   */
+  choiceTimeout?: boolean;
 }
 
 /** Durée (s) pendant laquelle la flaque d'un slime mort peut encore être ressuscitée. */
@@ -56,7 +62,7 @@ export class Sim {
   /** Coop : zones où un joueur mort peut être ramené par un équipier. */
   readonly reviveZones: ReviveZone[] = [];
   /** Ondes de choc en cours d'application (montée de niveau). */
-  private readonly shockwaves: { x: number; y: number; r: number; speed: number; left: number }[] = [];
+  private readonly shockwaves: { x: number; y: number; r: number; speed: number; duration: number; reach: number; t: number; hit: Map<number, { dx: number; dy: number; k: number; left: number }> }[] = [];
   /** Flaques de crachat : ralentissent les soldats dedans. */
   readonly puddles: Puddle[] = [];
   private burnCd = 0;
@@ -120,6 +126,9 @@ export class Sim {
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
+    this.choiceT = 0;
+    this.sharedXpPool = 0;
+    this.sharedLevel = 1;
     this.waves.reset();
     for (const sq of this.squads) sq.resetRun();
     this.spawnSquads(() => this.rng.pick(START_SQUADS));
@@ -131,9 +140,69 @@ export class Sim {
     return this.config.xp === true;
   }
 
+  // ---------- Progression : XP partagée (coop) et pause du choix d'upgrade ----------
+
+  /**
+   * Choix d'upgrade en cours : temps restant (s). Tant qu'il est > 0, le monde est en PAUSE pour tout le monde (solo comme
+   * en ligne) : chaque joueur choisit parmi ses 3 propositions ; à la fin du temps, choix au hasard pour ceux qui n'ont pas choisi.
+   */
+  choiceT = 0;
+  /** Coop : une seule barre d'XP pour tous les joueurs (réserve et niveau communs). */
+  private sharedXpPool = 0;
+  private sharedLevel = 1;
+
+  /** XP mutualisée : en coop, tous les joueurs remplissent la même barre, plus longue (× nombre de joueurs). */
+  get sharedXp(): boolean {
+    return this.mode.id === 'coop';
+  }
+
+  /** Multiplicateur du seuil de niveau (XP partagée : × nombre de joueurs). */
+  get xpScale(): number {
+    return this.sharedXp ? Math.max(1, this.squads.length) : 1;
+  }
+
+  /** XP gagnée par `from` (bonus `xpGain` de ce joueur compris) versée dans la barre commune ; un niveau franchi = tous montent. */
+  gainSharedXp(from: Squad, value: number): void {
+    this.sharedXpPool += value * from.stats.get('xpGain');
+    let levels = 0;
+    while (this.sharedXpPool >= xpToNext(this.sharedLevel) * this.xpScale) {
+      this.sharedXpPool -= xpToNext(this.sharedLevel) * this.xpScale;
+      this.sharedLevel++;
+      levels++;
+    }
+    for (const sq of this.squads) sq.syncSharedXp(this.sharedXpPool, this.sharedLevel, levels);
+  }
+
+  /** Une squad vient d'avoir des propositions : ouvre la pause de choix si elle n'est pas déjà en cours. */
+  beginUpgradeChoice(): void {
+    if (this.choiceT <= 0) this.choiceT = UPGRADE_CHOICE_TIME;
+  }
+
   /** Le joueur `owner` choisit l'upgrade `index` parmi celles qui lui sont proposées. */
   chooseUpgrade(owner: PlayerId, index: number): boolean {
-    return this.squadOf(owner)?.chooseUpgrade(index) ?? false;
+    const ok = this.squadOf(owner)?.chooseUpgrade(index) ?? false;
+    if (ok) this.afterChoice();
+    return ok;
+  }
+
+  /** Quand plus personne n'a de choix ouvert : niveaux encore en attente → nouvelle manche de choix (temps plein), sinon reprise. */
+  private afterChoice(): void {
+    if (this.squads.some((sq) => sq.offer)) return;
+    let more = false;
+    for (const sq of this.squads) if (sq.rollPending()) more = true;
+    this.choiceT = more ? UPGRADE_CHOICE_TIME : 0;
+  }
+
+  /** Pendant la pause de choix : le temps s'écoule (en ligne) ; à zéro, choix au hasard pour les retardataires. Solo : pas de limite. */
+  private stepChoice(dt: number): void {
+    if (this.config.choiceTimeout) this.choiceT -= dt;
+    if (this.choiceT > 0) {
+      if (!this.squads.some((sq) => sq.offer)) this.afterChoice();
+      return;
+    }
+    for (const sq of this.squads) if (sq.offer) sq.chooseUpgrade(Math.floor(this.rng.next() * sq.offer.length));
+    this.choiceT = 0;
+    this.afterChoice();
   }
 
   get mode(): ModeDef {
@@ -181,6 +250,7 @@ export class Sim {
     if (!sq) {
       sq = new Squad(this, owner);
       this.squads.push(sq);
+      if (this.sharedXp) sq.syncSharedXp(this.sharedXpPool, this.sharedLevel, 0); // arrive au niveau commun
     }
     return sq;
   }
@@ -241,6 +311,11 @@ export class Sim {
     for (const a of this.aliens) {
       a.px = a.x;
       a.py = a.y;
+    }
+    // choix d'upgrade : monde en pause (ni vagues, ni déplacements, ni tirs) jusqu'à ce que tout le monde ait choisi
+    if (this.choiceT > 0) {
+      this.stepChoice(dt);
+      return;
     }
 
     this.waves.update(dt);
@@ -312,29 +387,40 @@ export class Sim {
   }
 
   /**
-   * Onde de choc : pendant `duration` s, tous les aliens du rayon `r` autour de (x, y) reculent à `speed` px/s (plus vite au
-   * centre). Déplacement direct, pas une impulsion : un alien lourd (masse élevée) ou rapide est repoussé comme un léger.
+   * Onde de choc : un front part de (x, y) et atteint le rayon `r` en `reach` s (Cubic.Out, comme l'anneau affiché). Chaque alien
+   * touché par le front recule ensuite pendant `duration` s à `speed` px/s (plus vite au centre) : ils ne sont donc pas tous repoussés
+   * au même moment, mais quand l'onde passe. Déplacement direct, pas une impulsion : un alien lourd ou rapide est repoussé comme un léger.
    */
-  shockwave(x: number, y: number, r: number, speed: number, duration: number): void {
-    this.shockwaves.push({ x, y, r, speed, left: duration });
+  shockwave(x: number, y: number, r: number, speed: number, duration: number, reach = 0): void {
+    this.shockwaves.push({ x, y, r, speed, duration, reach, t: 0, hit: new Map() });
   }
 
   private updateShockwaves(dt: number): void {
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
       const w = this.shockwaves[i];
-      const step = Math.min(dt, w.left);
+      w.t += dt;
+      const p = w.reach > 0 ? Math.min(1, w.t / w.reach) : 1;
+      const front = w.r * (1 - (1 - p) ** 3);
       for (const a of this.aliens) {
-        const dx = a.x - w.x;
-        const dy = a.y - w.y;
-        const d = Math.hypot(dx, dy) || 1;
-        if (d > w.r) continue;
-        const k = (1 - (d / w.r) * 0.6) * w.speed * step * (a.def.capture ? 0.35 : 1); // les bulles sont difficiles à repousser
-        a.x += (dx / d) * k;
-        a.y += (dy / d) * k;
+        if (!a.alive) continue;
+        let h = w.hit.get(a.id);
+        if (!h) {
+          if (w.t - dt > w.reach) continue; // front arrivé au bout : un alien apparu après n'est pas repoussé
+          const dx = a.x - w.x;
+          const dy = a.y - w.y;
+          const d = Math.hypot(dx, dy) || 1;
+          if (d > front) continue;
+          h = { dx: dx / d, dy: dy / d, k: (1 - (d / w.r) * 0.6) * w.speed * (a.def.capture ? 0.35 : 1), left: w.duration }; // les bulles sont difficiles à repousser
+          w.hit.set(a.id, h);
+        }
+        if (h.left <= 0) continue;
+        const step = Math.min(dt, h.left);
+        h.left -= step;
+        a.x += h.dx * h.k * step;
+        a.y += h.dy * h.k * step;
         this.arena.constrain(a);
       }
-      w.left -= step;
-      if (w.left <= 1e-6) this.shockwaves.splice(i, 1);
+      if (p >= 1 && w.t >= w.reach + w.duration) this.shockwaves.splice(i, 1);
     }
   }
 

@@ -14,6 +14,8 @@ export class Fx {
   private gloopSmall!: Phaser.GameObjects.Particles.ParticleEmitter;
   private spark!: Phaser.GameObjects.Particles.ParticleEmitter;
   private fire!: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Traînée des roquettes (fx_smoke, FX.rocket). */
+  private smoke!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -36,6 +38,17 @@ export class Fx {
     this.gloopBig?.destroy();
     this.gloopSmall?.destroy();
     this.fire?.destroy();
+    this.smoke?.destroy();
+    const k = FX.rocket;
+    this.smoke = this.scene.add
+      .particles(0, 0, 'fx_smoke', {
+        speed: { min: 0, max: k.smokeSpeed },
+        scale: { start: k.smokeScale, end: 0 },
+        alpha: 1,
+        lifespan: { min: k.smokeLifeMin, max: Math.max(k.smokeLifeMin, k.smokeLifeMax) },
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx - 2);
     const b = FX.burst;
     this.splat = this.scene.add
       .particles(0, 0, 'fx_dot', {
@@ -84,6 +97,12 @@ export class Fx {
         emitting: false,
       })
       .setDepth(DEPTH.fx);
+  }
+
+  /** Une bouffée de fumée de roquette en (x, y) (traînée : appelée à chaque frame derrière la fusée). */
+  rocketSmoke(x: number, y: number): void {
+    const s = FX.rocket.smokeSpread;
+    this.smoke.emitParticleAt(x + Phaser.Math.FloatBetween(-s, s), y + Phaser.Math.FloatBetween(-s, s), 1);
   }
 
   burst(x: number, y: number, color: number, count = 10): void {
@@ -146,7 +165,7 @@ export class Fx {
     if (shake && e.shakeAmount > 0) this.scene.cameras.main.shake(e.shakeMs, e.shakeAmount);
   }
 
-  ring(x: number, y: number, radius: number, color: number): Phaser.GameObjects.Image {
+  ring(x: number, y: number, radius: number, color: number, durationMs = FX.ring.durationMs): Phaser.GameObjects.Image {
     const r = FX.ring;
     const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(r.startScaleX, r.startScaleY).setAlpha(r.alpha);
     this.scene.tweens.add({
@@ -154,7 +173,7 @@ export class Fx {
       scaleX: (radius * 2) / 128,
       scaleY: (radius * 2 * r.squash) / 128,
       alpha: 0,
-      duration: r.durationMs,
+      duration: durationMs,
       ease: 'Cubic.Out',
       onComplete: () => img.destroy(),
     });
@@ -217,5 +236,6 @@ export class Fx {
     this.gloopBig.destroy();
     this.gloopSmall.destroy();
     this.fire.destroy();
+    this.smoke.destroy();
   }
 }

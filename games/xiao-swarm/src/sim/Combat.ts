@@ -10,6 +10,10 @@ import type { PlayerId, Team } from './types';
 const MAX_UNIT_RADIUS = 55;
 /** Rafale de roquettes : délai (s) entre deux roquettes (30 roquettes ≈ 3,6 s). */
 const BARRAGE_INTERVAL = 0.12;
+/** Roquettes du power-up : vitesse (px/s, ligne droite), rayon d'explosion, sprite (art/fx.ts). */
+const ROCKET_SPEED = 720;
+const ROCKET_AOE = 58;
+export const ROCKET_TEXTURE = 'fx_rocket';
 
 /**
  * Tir automatique : chaque soldat vise l'ennemi le plus proche dans sa portée
@@ -193,8 +197,8 @@ export class Combat {
 
   /**
    * Rafale de roquettes (power-up) : `count` roquettes tirées par les gunners de la squad, l'une après l'autre (une toutes les
-   * `BARRAGE_INTERVAL` s : c'est le tir qui est étalé dans le temps, pas la vitesse des roquettes) vers des aliens proches
-   * (ou éparpillées devant la squad s'il n'y en a pas) ; elles explosent en zone.
+   * `BARRAGE_INTERVAL` s : c'est le tir qui est étalé dans le temps, pas la vitesse des roquettes) en LIGNE DROITE vers des aliens
+   * proches (ou éparpillées autour de la squad s'il n'y en a pas) ; elles explosent en zone au premier alien touché ou au point visé.
    */
   barrage(squad: Squad, count: number): void {
     this.barrages.push({ owner: squad.owner, left: count, total: count, t: 0 });
@@ -228,9 +232,28 @@ export class Combat {
     const t = targets.length > 0 ? rng.pick(targets) : undefined;
     const ang = rng.range(0, Math.PI * 2);
     const r = rng.range(80, 300);
-    const lx = (t ? t.x : squad.center.x + Math.cos(ang) * r) + rng.range(-18, 18);
-    const ly = (t ? t.y : squad.center.y + Math.sin(ang) * r) + rng.range(-18, 18);
-    this.launchLob(src.x, src.y - 17, lx, ly, rng.range(0.35, 0.75), 20 * squad.stats.get('damage'), 58, 'fx_grenade', src.team, src.owner);
+    const mx = src.x;
+    const my = src.y - 17;
+    // roquette en ligne droite : vise où sera la cible à l'arrivée ; explose au premier alien touché ou au point visé
+    const reach = t ? Math.hypot(t.x - mx, t.y - my) / ROCKET_SPEED : 0;
+    const lx = (t ? t.x + t.vx * reach : squad.center.x + Math.cos(ang) * r) + rng.range(-12, 12);
+    const ly = (t ? t.y + t.vy * reach : squad.center.y + Math.sin(ang) * r) + rng.range(-12, 12);
+    const flight = Math.max(0.08, Math.hypot(lx - mx, ly - my) / ROCKET_SPEED);
+    const p = this.projectiles.acquire();
+    p.x = p.px = mx;
+    p.y = p.py = my;
+    p.vx = (lx - mx) / flight;
+    p.vy = (ly - my) / flight;
+    p.life = p.maxLife = flight;
+    p.damage = 20 * squad.stats.get('damage');
+    p.pierce = 0;
+    p.flame = false;
+    p.lob = false;
+    p.aoe = ROCKET_AOE;
+    p.knock = 0;
+    p.texture = ROCKET_TEXTURE;
+    p.team = src.team;
+    p.owner = src.owner;
   }
 
   private launchLob(mx: number, my: number, lx: number, ly: number, flight: number, damage: number, aoe: number, texture: string, team: Team, owner: PlayerId): Projectile {
@@ -258,7 +281,7 @@ export class Combat {
     this.projectiles.releaseWhere((p) => {
       if (!this.stepProjectile(p, dt, pvp, alienHash, soldierHash)) return false;
       // fin de course (touche, cible disparue, portée max) : l'affichage joue un petit impact
-      if (!p.lob && !p.flame) this.sim.events.push({ t: 'impact', x: p.x, y: p.y, texture: p.texture });
+      if (!p.lob && !p.flame && p.aoe <= 0) this.sim.events.push({ t: 'impact', x: p.x, y: p.y, texture: p.texture });
       return true;
     });
   }
@@ -268,7 +291,7 @@ export class Combat {
     {
       p.life -= dt;
       if (p.life <= 0) {
-        if (p.lob) {
+        if (p.lob || p.aoe > 0) {
           // dernier pas jusqu'au point d'impact, puis explosion (dégâts de zone aux ennemis de son camp adverse)
           p.x += p.vx * (dt + p.life);
           p.y += p.vy * (dt + p.life);
@@ -295,6 +318,11 @@ export class Combat {
       if (!fromAlien) {
         for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
           if (!this.overlaps(p, a, hitR)) continue;
+          if (p.aoe > 0) {
+            // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris)
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300);
+            return true;
+          }
           this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
           if (p.pierce-- <= 0) return true;
         }

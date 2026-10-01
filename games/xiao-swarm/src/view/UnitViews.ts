@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
 import { DEPTH } from '../config';
+import { FX } from '../fxParams';
+import { hasComposedRecruit, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 
 /**
@@ -11,6 +13,10 @@ import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
  * Les visuels viennent du catalogue `sprites` : planche fournie (avec ses
  * animations idle / walk / shoot) ou dessin procédural (bob, squash).
  */
+/** Particules de soin sur un soldat soigné : durée (s) pendant laquelle elles le suivent, et délai entre deux « + ». */
+const HEAL_FX_TIME = 1;
+const HEAL_FX_EVERY = 0.12;
+
 export class SoldierView {
   /** Position affichée (interpolée), utilisée par l'overlay et la caméra. */
   rx = 0;
@@ -18,6 +24,11 @@ export class SoldierView {
   flash = 0;
   seen = true;
   private walk = 0;
+  /** Soin : PV vus à la frame précédente, durée restante des particules de soin (s) et cadence d'émission. */
+  private lastHp: number;
+  private lastMaxHp: number;
+  private healT = 0;
+  private healAcc = 0;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly bodyId: string;
   private readonly gunId: string;
@@ -31,12 +42,31 @@ export class SoldierView {
     readonly state: SoldierState,
     readonly ringColor: number,
   ) {
+    this.lastHp = state.hp;
+    this.lastMaxHp = state.maxHp;
     this.bodyId = `soldier_${state.def.id}`;
     this.gunId = `gun_${state.def.id}`;
     this.body = sprites.add(scene, this.bodyId, state.x, state.y);
     this.gun = sprites.add(scene, this.gunId, state.x, state.y);
     this.hasGun = !sprites.get(this.gunId).hidden;
     this.animated = sprites.hasAnim(this.bodyId, 'walk') || sprites.hasAnim(this.bodyId, 'idle');
+  }
+
+  /**
+   * À appeler chaque frame : vrai quand il faut émettre une particule de soin sur ce soldat. Dès que ses PV montent (soin de toute
+   * origine : soigneur, globe, recrue…) à PV max constants, les particules le suivent pendant `HEAL_FX_TIME` s.
+   */
+  healTick(dt: number): boolean {
+    const s = this.state;
+    if (s.maxHp === this.lastMaxHp && s.hp > this.lastHp + 0.01) this.healT = HEAL_FX_TIME;
+    this.lastHp = s.hp;
+    this.lastMaxHp = s.maxHp;
+    if (this.healT <= 0 || !s.alive) return false;
+    this.healT -= dt;
+    this.healAcc += dt;
+    if (this.healAcc < HEAL_FX_EVERY) return false;
+    this.healAcc = 0;
+    return true;
   }
 
   sync(alpha: number, dt: number, time: number): void {
@@ -118,6 +148,8 @@ export class SoldierView {
 }
 
 export class AlienView {
+  /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
+  private attackStarted = false;
   rx = 0;
   ry = 0;
   flash = 0;
@@ -155,8 +187,11 @@ export class AlienView {
     const lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
     const wind = a.slamWind > 0 ? 1 - a.slamWind * 1.2 : 0;
     if (this.animated) {
-      const attacking = (a.slamWind > 0 || a.chargeT > 0) && sprites.play(this.body, this.id, 'attack');
-      if (!attacking) sprites.play(this.body, this.id, moving ? 'walk' : 'idle') || sprites.play(this.body, this.id, 'idle');
+      // attaque (slam, charge, saut) : la séquence « attack » est lancée UNE fois puis reste sur sa dernière frame jusqu'à la fin de l'action
+      const attackNow = a.slamWind > 0 || a.chargeT > 0 || a.leapT > 0;
+      if (!attackNow) this.attackStarted = false;
+      else if (!this.attackStarted) this.attackStarted = sprites.play(this.body, this.id, 'attack');
+      if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, moving ? 'walk' : 'idle') || sprites.play(this.body, this.id, 'idle');
     }
     this.spawnT = Math.min(1, this.spawnT + dt * 4);
     const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
@@ -221,6 +256,7 @@ export class RecruitView {
   seen = true;
   private readonly img: Phaser.GameObjects.Sprite;
   private readonly glow: Phaser.GameObjects.Image;
+  private readonly stars?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(
     scene: Phaser.Scene,
@@ -237,6 +273,24 @@ export class RecruitView {
     const id = `recruit_${state.cls}`;
     this.img = sprites.add(scene, id, state.x, state.y);
     sprites.play(this.img, id, 'idle');
+    // Étoiles qui scintillent autour d'une recrue composée : apparaissent, grossissent puis s'éteignent en tournant (FX.recruit).
+    if (hasComposedRecruit(scene, state.cls) && scene.textures.exists(RECRUIT_STAR)) {
+      const f = FX.recruit;
+      const r = f.starRadius;
+      this.stars = scene.add
+        .particles(state.x, state.y, RECRUIT_STAR, {
+          x: { min: -r, max: r },
+          y: { min: -r * 1.2, max: r * 0.6 },
+          speedY: { min: -f.starRise * 1.5, max: -f.starRise * 0.5 },
+          scale: { values: [0, f.starScale, f.starScale * 0.6, 0], interpolation: 'catmull' }, // pop puis extinction
+          alpha: { values: [0.4, 1, 1, 0], interpolation: 'linear' },
+          rotate: { start: 0, end: 90 },
+          lifespan: { min: f.starLifeMin, max: Math.max(f.starLifeMin, f.starLifeMax) },
+          frequency: f.starEvery,
+          blendMode: 'ADD',
+        })
+        .setDepth(DEPTH.actors + state.y + 1);
+    }
   }
 
   sync(alpha: number, time: number): void {
@@ -247,10 +301,14 @@ export class RecruitView {
     const blink = r.life < 4 && Math.sin(time * 20) > 0;
     this.img.setPosition(x, y + bob).setDepth(DEPTH.actors + y).setAlpha(blink ? 0.3 : 1);
     this.glow.setPosition(x, y).setScale(1.1 + Math.sin(time * 6) * 0.1, 0.6);
+    // centre du globe : l'image est ancrée vers son bas (originY 0.82)
+    // centre du globe : l'image est ancrée sous lui (ses pieds)
+    this.stars?.setPosition(x, y + bob - this.img.displayHeight * (this.img.originY - 0.5) + FX.recruit.starY).setDepth(DEPTH.actors + y + 1);
   }
 
   destroy(): void {
     this.img.destroy();
     this.glow.destroy();
+    this.stars?.destroy();
   }
 }

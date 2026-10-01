@@ -1,14 +1,17 @@
 import Phaser from 'phaser';
-import { lerp, sprites } from '@xiao/engine';
+import { lerp, sfx, sprites } from '@xiao/engine';
 import { DEPTH, PALETTE, REVIVE_TIME, UPGRADE_REPEL } from '../config';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import { t } from '../i18n';
+import { SFX } from '../settings';
 import type { Projectile } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
 import { Fx } from './Fx';
+import { FX } from '../fxParams';
+import { ROCKET_TEXTURE } from '../sim/Combat';
 import { PickupViews, POWERUP_INFO } from './PickupViews';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
@@ -129,11 +132,12 @@ export class WorldView {
       case 'alienDied': {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'crab' ? 40 : 10);
-        if (e.alien.startsWith('slime')) {
-          const size = e.alien === 'slime_pink' ? 0.5 : e.alien === 'slime_blue' ? 1.6 : 1;
-          const light = e.alien === 'slime_pink' ? 0xffd6ea : e.alien === 'slime_blue' ? 0xcfe6ff : 0xc8ffb0;
+        // gelée et flaques : vrais slimes seulement (`slime_pink` est désormais un petit cafard : simple éclaboussure)
+        if (e.alien === 'slime_basic' || e.alien === 'slime_bombardier') {
+          const size = e.alien === 'slime_bombardier' ? 1.6 : 1;
+          const light = e.alien === 'slime_bombardier' ? 0xcfe6ff : 0xc8ffb0;
           this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
-          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size === 0.5 ? 0.6 : size);
+          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size);
         }
         if (e.alien === 'crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
@@ -155,6 +159,7 @@ export class WorldView {
           if (mp) this.shiftFreshBullets(e.x, e.y, mp.x - e.x, mp.y - e.y);
           const img = this.fx.muzzleFlash(p.x, p.y);
           if (view) this.flashes.push({ img, view, dx: e.x - view.rx, dy: e.y - view.ry });
+          sfx.play(this.scene, SFX.blaster.key, SFX.blaster); // cadence limitée : une escouade entière ne sature pas le son
         }
         break;
       case 'impact':
@@ -303,7 +308,7 @@ export class WorldView {
         if (e.owner !== this.localPlayer) break;
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;
-        this.fx.ring(c.x, c.y, UPGRADE_REPEL.radius, 0x5aa8ff); // onde de choc : les aliens sont repoussés
+        this.fx.ring(c.x, c.y, UPGRADE_REPEL.radius, 0x5aa8ff, UPGRADE_REPEL.reach * 1000); // onde de choc : les aliens sont repoussés quand le front les touche
         this.fx.text(c.x, c.y - 80, t('levelUpTitle', { level: e.level }), '#9fd3ff', 30);
         break;
       }
@@ -367,6 +372,7 @@ export class WorldView {
         }
         v.seen = true;
         v.sync(alpha, dt, time);
+        if (v.healTick(dt)) this.fx.heal(v.rx, v.ry - 30);
       }
     }
     this.prune(this.soldiers);
@@ -444,8 +450,11 @@ export class WorldView {
             by += sh.dy * k;
           } else this.muzzleShift.delete(p);
         }
-        img.setVisible(true).setPosition(bx, by).setRotation(Math.atan2(p.vy, p.vx));
-        img.setScale(1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        const rot = Math.atan2(p.vy, p.vx);
+        img.setVisible(true).setPosition(bx, by).setRotation(rot);
+        const rocket = p.texture === ROCKET_TEXTURE;
+        img.setScale(rocket ? FX.rocket.scale : 1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        if (rocket) this.fx.rocketSmoke(bx - Math.cos(rot) * 16, by - Math.sin(rot) * 16); // fumée sortant de la tuyère
       }
     }
   }
@@ -697,6 +706,19 @@ export class WorldView {
       g.fillStyle(0xff2a2a, 0.1 + 0.22 * k).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
       g.fillStyle(0xff2a2a, 0.12 + 0.2 * k).fillEllipse(f.x, f.y, f.r * 2 * k, f.r * 1.4 * k);
       g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
+    }
+    // Saut écrasant (crabe) : zone d'impact qui se remplit jusqu'à l'atterrissage
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const L = a.def.leap;
+      if (!L || a.leapT <= 0) continue;
+      const toLand = a.leapT - L.recover; // s avant l'impact (négatif : déjà atterri)
+      if (toLand <= 0) continue;
+      const k = 1 - toLand / (L.windup + L.flight);
+      const pulse = toLand < 0.35 && Math.sin(this.scene.time.now / 45) > 0 ? 0.15 : 0;
+      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k + pulse).fillEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
+      g.fillStyle(0xff2a2a, 0.15 + 0.25 * k).fillEllipse(a.leapX, a.leapY, L.radius * 2 * k, L.radius * 1.4 * k);
+      g.lineStyle(4, 0xff4a3a, 0.6 + 0.4 * k).strokeEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
     }
     for (const v of this.aliens.values()) {
       const a = v.state;

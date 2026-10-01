@@ -21,7 +21,7 @@ import { range, type AssetEntry } from '@xiao/engine';
  *
  *   // Export Aseprite (tags "idle", "walk"…)
  *   { type: 'aseprite', url: 'aliens/slime.png', json: 'aliens/slime.json',
- *     sprites: { alien_slime: { originY: 0.9, tags: { idle: 'idle', walk: 'walk' } } } },
+ *     sprites: { alien_slime_basic: { originY: 0.9, tags: { idle: 'idle', walk: 'walk' } } } },
  *
  *   // Un PNG isolé
  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
@@ -33,20 +33,22 @@ export const ASSETS: AssetEntry[] = [
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n): AssetEntry => ({ type: 'image', id: `obstacle_${n}`, url: `decor/obstacle_${n}.webp` })),
   // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
-  // Slime vert — art-src/sprite--9px-frames-16-rows-4-cols-4 (1).png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json.
-  // 16 cases de 64×64 (cycle de marche) ; le dessin regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_gunner` (art/recruits.ts).
+  ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
+  // Slime de base (`slime_basic`, vert) — art-src/slime_basic.png (1600 px) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_basic.pack.json.
+  // 16 cases de 82×78 (cycle de marche) ; le dessin regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/slime_basic.png',
+    frameWidth: 82,
+    frameHeight: 78,
     sprites: {
-      alien_slime: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.9,
-        shadow: 1.35,
-        anchors: { 'walk:left': [0.4888, 0.8834], 'idle:left': [0.4854, 0.863], 'walk:right': [0.5024, 0.8732], 'idle:right': [0.499, 0.8562] },
+      alien_slime_basic: {
+        originX: 0.4807,
+        originY: 0.7891,
+        scale: 0.73,
+        shadow: 1.1,
+        anchors: { 'walk:left': [0.4728, 0.808], 'idle:left': [0.4701, 0.7913], 'walk:right': [0.4834, 0.7996], 'idle:right': [0.484, 0.796] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 5 },
@@ -55,20 +57,24 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Petit slime rose — la planche du slime vert recolorée (node tools/hue-shift.mjs public/assets/aliens/slime.png public/assets/aliens/slime_pink.png 235),
-  // plus petit (rayon 11 contre 16) et qui marche plus vite.
+  // Petit cafard (id `slime_pink`, l'ancien petit slime rose) — art-src/cafard.png réduit par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/cafard.pack.json (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE).
+  // Même surface à l'écran que le petit slime rose (~37×28 px, plus plat que le slime) ; rayon 11 et marche rapide inchangés.
   {
     type: 'sheet',
-    url: 'aliens/slime_pink.png',
+    url: 'aliens/cafard.png',
     frameWidth: 64,
-    frameHeight: 64,
+    frameHeight: 55,
     sprites: {
       alien_slime_pink: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.6,
-        shadow: 1.25,
-        anchors: { 'idle:right': [0.5058, 0.8868], 'idle:left': [0.4956, 0.8715] },
+        originX: 0.4188,
+        originY: 0.7446,
+        scale: 0.7,
+        shadow: 1.45,
+        anchors: { 'walk:right': [0.4057, 0.7497], 'walk:left': [0.445, 0.7547] },
+        muzzles: {
+          idle: [null, [0.4585, 0.5726]],
+        },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
@@ -77,15 +83,15 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Gros slime bleu — la planche du slime vert recolorée (node tools/hue-shift.mjs public/assets/aliens/slime.png public/assets/aliens/slime_blue.png 118),
-  // plus gros (rayon 24 contre 16) et plus lent.
+  // Slime bombardier (`slime_bombardier`, gros et bleu, lance des boules de gelée) — art-src/slime_grenadier.png (4096 px) réduit par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_grenadier.pack.json (16 cases de 64×64). Plus gros (rayon 24 contre 16) et plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_blue.png',
+    url: 'aliens/slime_grenadier.png',
     frameWidth: 64,
     frameHeight: 64,
     sprites: {
-      alien_slime_blue: {
+      alien_slime_bombardier: {
         originX: 0.516,
         originY: 0.948,
         scale: 1.35,
@@ -99,23 +105,47 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Kamikaze — la planche du slime vert recolorée en orange (node tools/hue-shift.mjs … slime_orange.png 285).
+  // Crabe géant (mini-boss de 5:00) — art-src/crab_idle.png, crab_walk.png et crab_attack.png (cases de 800×651) assemblés par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/crab.pack.json (8 colonnes pour rester sous 2048 px), puis convertis en WebP
+  // (qualité 90). Vu de face. Taille à l'écran ≈ celle du crabe procédural (~390 px de large) ; « attack » = saut + écrasement,
+  // joué une fois par saut écrasant (data/aliens.ts `leap`, sim/Horde.ts).
   {
     type: 'sheet',
-    url: 'aliens/slime_orange.png',
+    url: 'aliens/crab.webp',
+    frameWidth: 255,
+    frameHeight: 197,
+    sprites: {
+      alien_crab: {
+        originX: 0.533,
+        originY: 0.892,
+        scale: 2.1,
+        shadow: 1,
+        anims: {
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(16, 31), fps: 12 },
+          attack: { frames: range(32, 47), fps: 7, repeat: 0 }, // saut : écrasement (frame ~11) à l'impact (0,6 s + 0,9 s), récupération ensuite
+        },
+      },
+    },
+  },
+  // Kamikaze : araignée rouge — art-src/spider_red.png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/spider_red.pack.json
+  // (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE). Même surface à l'écran que l'ancien slime kamikaze (plus plate).
+  {
+    type: 'sheet',
+    url: 'aliens/spider_red.png',
     frameWidth: 64,
-    frameHeight: 64,
+    frameHeight: 55,
     sprites: {
       alien_kamikaze: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.85,
-        shadow: 1.3,
-        anchors: { 'idle:right': [0.4872, 0.876], 'idle:left': [0.498, 0.858] },
+        originX: 0.4873,
+        originY: 1.6505,
+        scale: 1.63,
+        shadow: 1.95,
+        anchors: { 'walk:right': [0.498, 0.635], 'walk:left': [0.5015, 0.6375], 'idle:right': [0.497, 0.635], 'idle:left': [0.4966, 0.6325] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(0, 15), fps: 16 },
         },
       },
     },
@@ -257,13 +287,14 @@ export const ASSETS: AssetEntry[] = [
     frameHeight: 52,
     sprites: {
       soldier_gunner: {
-        originX: 0.3478,
-        originY: 0.9134,
+        originX: 0.5975,
+        originY: 0.8847,
         scale: 1.25,
-        anchors: { 'idle:right': [0.3624, 0.8946], 'idle:left': [0.6401, 0.8983], 'walk:left': [0.6576, 0.8946] },
+        muzzle: [0.8561, 0.6376],
+        anchors: { 'idle:left': [0.6489, 0.8847], 'walk:left': [0.6559, 0.9088], 'walk:right': [0.3586, 0.9126], 'die:left': [0.5921, 0.8768], 'idle:right': [0.3566, 0.8907] },
         muzzles: {
-          idle: [[0.8968, 0.4058], [0.9055, 0.3908], [0.9026, 0.3983], [0.9055, 0.4134], [0.9143, 0.4171], [0.9143, 0.4397], [0.9202, 0.4397], [0.9289, 0.4435], [0.9231, 0.4397], [0.926, 0.4284], [0.926, 0.4134], [0.9231, 0.4021], [0.9202, 0.3983], [0.9143, 0.3908], [0.9085, 0.3832], [0.9114, 0.3908]],
-          walk: [[0.9026, 0.4209], [0.9026, 0.4284], [0.9026, 0.4548], [0.9026, 0.436], [0.9026, 0.4171], [0.9114, 0.4247], [0.9085, 0.4322], [0.9114, 0.4171], [0.9055, 0.4134], [0.9026, 0.4322], [0.9055, 0.4548], [0.9114, 0.4209], [0.9085, 0.3945], [0.9114, 0.3983], [0.9085, 0.4171], [0.9143, 0.4209]],
+          idle: [[0.9031, 0.4113], [0.9142, 0.3925], [0.8982, 0.4015], [0.909, 0.4204], [0.9135, 0.4261], [0.9103, 0.4307], [0.9258, 0.4431], [0.9265, 0.4431], [0.9227, 0.4351], [0.9198, 0.4193], [0.929, 0.4193], [0.9276, 0.3952], [0.9142, 0.3983], [0.9135, 0.3992], [0.9121, 0.3891], [0.9198, 0.3958]],
+          walk: [[0.8653, 0.6403], [0.8653, 0.6509], [0.8653, 0.6456], [0.8684, 0.6376], [0.8561, 0.6482], [0.8684, 0.6641], null, null, [0.8684, 0.6403], null, [0.8684, 0.6403], [0.8653, 0.6429], [0.8714, 0.6588], [0.8745, 0.6641], [0.8653, 0.6403], [0.8622, 0.6323]],
         },
         anims: {
           idle: { frames: range(0, 15), fps: 8 },

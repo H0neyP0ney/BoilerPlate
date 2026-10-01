@@ -1,0 +1,10 @@
+{
+  "output": "../public/assets/aliens/crab.png",
+  "scale": 0.295,
+  "cols": 8,
+  "sheets": [
+    { "name": "idle", "input": "crab_idle.png", "cols": 4, "rows": 4 },
+    { "name": "walk", "input": "crab_walk.png", "cols": 4, "rows": 4 },
+    { "name": "attack", "input": "crab_attack.png", "cols": 4, "rows": 4 }
+  ]
+}

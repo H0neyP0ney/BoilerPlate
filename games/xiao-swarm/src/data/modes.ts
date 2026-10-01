@@ -11,6 +11,8 @@ export interface ModeDef {
   map: (seed: number) => MapDef;
   /** Les soldats de squads différentes se tirent dessus. */
   pvp: boolean;
+  /** Un joueur mort laisse une zone de réanimation au sol (coop), au lieu de réapparaître tout seul. */
+  reviveZones?: boolean;
   /** Durée du run (s). Survival : victoire à la fin. */
   duration: number;
   /** Script de vagues (niveaux + timeline, voir data/waves.ts). */
@@ -39,6 +41,7 @@ export const COOP: ModeDef = {
   id: 'coop',
   map: () => JUNGLE_ARENA,
   pvp: false,
+  reviveZones: true,
   duration: Infinity,
   waves: WAVE_SCRIPT,
   maxAliens: { base: 0, perPlayer: 90 },

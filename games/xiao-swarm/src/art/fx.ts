@@ -74,6 +74,22 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 64, 64);
   });
+  // Colonne de lumière verticale (arrivée d'une recrue) : claire au pied, transparente en haut, fondue sur les côtés.
+  canvasTexture(scene, 'fx_column', 48, 220, (ctx) => {
+    const v = ctx.createLinearGradient(0, 0, 0, 220);
+    v.addColorStop(0, 'rgba(255,255,255,0)');
+    v.addColorStop(0.7, 'rgba(255,255,255,0.55)');
+    v.addColorStop(1, 'rgba(255,255,255,0.95)');
+    const h = ctx.createLinearGradient(0, 0, 48, 0);
+    h.addColorStop(0, 'rgba(255,255,255,0)');
+    h.addColorStop(0.5, 'rgba(255,255,255,1)');
+    h.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, 48, 220);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = h;
+    ctx.fillRect(0, 0, 48, 220);
+  });
   canvasTexture(scene, 'fx_dot', 12, 12, (ctx) => {
     ctx.fillStyle = '#fff';
     ctx.beginPath();
@@ -124,11 +140,11 @@ export function makeFxTextures(scene: Phaser.Scene): void {
   // Globe d'XP : orbe bleu lumineux à reflet clair (taille réglée à l'affichage selon sa valeur).
   canvasTexture(scene, 'fx_xp', 28, 28, (ctx) => {
     const g = ctx.createRadialGradient(11, 10, 1, 14, 14, 13);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.3, '#8fe3ff');
-    g.addColorStop(1, '#2b7bf0');
+    g.addColorStop(0, '#d8f2ff');
+    g.addColorStop(0.25, '#3fa8ff');
+    g.addColorStop(1, '#0b3fd0');
     ctx.fillStyle = g;
-    ctx.strokeStyle = '#173a8c';
+    ctx.strokeStyle = '#06227a';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(14, 14, 11.5, 0, Math.PI * 2);
@@ -136,6 +152,24 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.stroke();
   });
   // Boule de gelée bleue lancée par le gros slime : blob sombre cerclé, reflet clair.
+  // Blob de gelée verte (crabe géant) : plus gros que la boule bleue, vert acide, reflet clair.
+  canvasTexture(scene, 'fx_blob_green', 34, 34, (ctx) => {
+    const g = ctx.createRadialGradient(13, 12, 1, 17, 17, 16);
+    g.addColorStop(0, '#f0ffd0');
+    g.addColorStop(0.35, '#7be23a');
+    g.addColorStop(1, '#2f8a1a');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#17420d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(17, 18, 13.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(12, 12, 4, 2.6, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
   canvasTexture(scene, 'fx_slime_ball', 26, 26, (ctx) => {
     const g = ctx.createRadialGradient(10, 9, 1, 13, 13, 12);
     g.addColorStop(0, '#d6ecff');

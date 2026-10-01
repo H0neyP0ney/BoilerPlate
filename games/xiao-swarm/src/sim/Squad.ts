@@ -1,12 +1,12 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
-import { CROWD, SQUAD } from '../config';
+import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
-import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
+import { HP_UPGRADE_HEAL, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { PlayerId, PlayerInput } from './types';
 
-export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain';
+export type SquadStat = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -22,18 +22,27 @@ export class Squad {
   private readonly slotTarget = { x: 0, y: 0, radius: 0 };
   readonly center: Point = { x: 0, y: 0 };
   /** Upgrades propres à ce joueur. */
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1 });
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
   /** Les 3 upgrades à choisir, ou null. */
   offer: UpgradeId[] | null = null;
+  /** Pour chaque upgrade proposée : prismatique (bonus doublé) ? */
+  offerPrism: boolean[] = [];
+  /** Plus grande taille atteinte par la squad depuis le début de la partie (la réanimation en rend 60 %). */
+  peakSize = 0;
+  /** Bonus temporaires (s restantes) des power-ups : stimpack (vitesse et cadence ×2),  */
+  readonly buffs = { stim: 0 };
   private pendingLevels = 0;
   readonly picked: Partial<Record<UpgradeId, number>> = {};
   moving = false;
   stillTime = 0;
   kills = 0;
   private slots: Point[] = [];
+  /** Soldats qui comptent pour le mouvement de foule (hors prisonniers d'une bulle et unités tirées par une langue). */
+  private readonly crowd: SoldierState[] = [];
+  private crowdSize = 0;
   /** Recrues qui viennent d'arriver : elles gardent leur place (voir `recruit`). */
   private readonly newcomers: SoldierState[] = [];
   private slotSpacing: number = CROWD.spacing;
@@ -60,11 +69,15 @@ export class Squad {
   /** Nouvelle partie : plus de soldats, progression (XP, niveau, upgrades) et bonus remis à zéro. */
   resetRun(): void {
     this.soldiers.length = 0;
+    this.crowd.length = 0;
     this.newcomers.length = 0;
     this.stats.reset();
     this.xp = 0;
     this.level = 1;
     this.offer = null;
+    this.offerPrism = [];
+    this.peakSize = 0;
+    this.buffs.stim = 0;
     this.pendingLevels = 0;
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
     this.kills = 0;
@@ -90,37 +103,52 @@ export class Squad {
   }
 
   private rollOffer(): void {
-    const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
-    this.offer = eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null;
-    if (!this.offer) this.pendingLevels = 0;
+    const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size < this.maxSize));
+    const offer = eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null;
+    this.offer = offer;
+    if (!offer) {
+      this.pendingLevels = 0;
+      this.offerPrism = [];
+        return;
+    }
+    this.offerPrism = offer.map(() => this.sim.rng.chance(PRISM_CHANCE));
+    // onde de choc unique : les aliens proches sont repoussés le temps de choisir
+    this.sim.shockwave(this.center.x, this.center.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration);
   }
 
   /** Choisit l'upgrade `index` parmi les propositions ; enchaîne sur le niveau suivant s'il y en a un en attente. */
   chooseUpgrade(index: number): boolean {
     const id = this.offer?.[index];
     if (!id) return false;
-    this.applyUpgrade(id);
+    this.applyUpgrade(id, this.offerPrism[index] === true);
     this.offer = null;
+    this.offerPrism = [];
     this.pendingLevels--;
     if (this.pendingLevels > 0) this.rollOffer();
     return true;
   }
 
-  private applyUpgrade(id: UpgradeId): void {
+  /** `prism` : upgrade prismatique, bonus habituel doublé. */
+  private applyUpgrade(id: UpgradeId, prism: boolean): void {
     const def = UPGRADES[id];
+    const mult = prism ? 2 : 1;
     this.picked[id] = (this.picked[id] ?? 0) + 1;
-    if (def.stat && def.mod) this.stats.add(def.stat, def.mod);
+    if (def.stat && def.mod) for (let i = 0; i < mult; i++) this.stats.add(def.stat, def.mod);
     if (id === 'hp') {
-      // les soldats déjà là gagnent aussi les PV supplémentaires
+      // les soldats déjà là gagnent les PV max supplémentaires, puis sont soignés (PV max et soin fusionnés)
       for (const s of this.soldiers) {
-        const max = s.def.hp * this.stats.get('hp');
+        const max = s.def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
         s.hp += max - s.maxHp;
         s.maxHp = max;
-      }
-    } else if (id === 'heal') {
-      for (const s of this.soldiers) {
-        s.hp = Math.min(s.maxHp, s.hp + s.maxHp * (def.value / 100));
+        s.hp = Math.min(s.maxHp, s.hp + s.maxHp * HP_UPGRADE_HEAL * mult);
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
+      }
+    } else if (id === 'reinforce') {
+      const n = Math.min(def.value * mult, this.maxSize - this.size); // la squad a pu se remplir entre la proposition et le choix
+      for (let i = 0; i < n; i++) {
+        const a = this.sim.rng.range(0, Math.PI * 2);
+        const r = this.radius * 0.5;
+        this.recruit('gunner', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r }).invulnerable = 1;
       }
     }
   }
@@ -144,6 +172,7 @@ export class Squad {
     this.anchor.x = at.x;
     this.anchor.y = at.y;
     this.stillTime = 0;
+    this.crowd.length = 0; // repère de la vie précédente (joueur réanimé)
     const slots = sunflowerSlots(ids.length, CROWD.spacing);
     ids.forEach((id, i) => this.add(id, { x: at.x + slots[i].x, y: at.y + slots[i].y }));
     this.updateCenter();
@@ -152,7 +181,7 @@ export class Squad {
 
   add(id: SoldierClassId, at: Point): SoldierState {
     const def = CLASSES[id];
-    const maxHp = def.hp * this.stats.get('hp');
+    const maxHp = def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
     const s: SoldierState = {
       kind: 'soldier',
       id: this.sim.ids.get(),
@@ -182,8 +211,10 @@ export class Squad {
       aim: 0,
       invulnerable: 0,
       capturedBy: 0,
+      grabbed: 0,
     };
     this.soldiers.push(s);
+    if (this.soldiers.length > this.peakSize) this.peakSize = this.soldiers.length;
     this.dirty = true;
     return s;
   }
@@ -211,15 +242,29 @@ export class Squad {
     return dead;
   }
 
+  /** Hors formation : avalé par une bulle, ou fraîchement tiré par une langue (il ne compte alors ni pour le centre, ni pour les slots). */
+  private isOut(s: SoldierState): boolean {
+    return s.capturedBy !== 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT;
+  }
+
   update(dt: number, input: PlayerInput): void {
-    const n = this.soldiers.length;
-    if (n === 0) return;
+    if (this.buffs.stim > 0) this.buffs.stim -= dt;
+    const total = this.soldiers.length;
+    if (total === 0) return;
+    this.crowd.length = 0;
+    for (const s of this.soldiers) if (!this.isOut(s)) this.crowd.push(s);
+    if (this.crowd.length === 0) this.crowd.push(...this.soldiers); // tous hors formation : on garde la squad entière comme repère
+    const n = this.crowd.length;
+    if (n !== this.crowdSize) {
+      this.crowdSize = n;
+      this.dirty = true; // la formation change de taille : slots recalculés
+    }
     const len = Math.hypot(input.mx, input.my);
     const mx = len > 1 ? input.mx / len : input.mx;
     const my = len > 1 ? input.my / len : input.my;
     this.moving = len > 0.1;
     this.stillTime = this.moving ? 0 : this.stillTime + dt;
-    const speed = CROWD.speed * this.stats.get('speed');
+    const speed = CROWD.speed * this.stats.get('speed') * (this.buffs.stim > 0 ? STIM_SPEED : 1);
 
     // 1. Ancre : réponse immédiate à l'input
     this.steerV.x = mx * speed;
@@ -251,6 +296,7 @@ export class Squad {
         if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
         s.capturedBy = 0;
       }
+      if (s.grabbed > 0) s.grabbed -= dt;
       const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;
       // le slot visé est ramené hors du décor : un slot dans un obstacle plaquerait le soldat contre lui
       this.slotTarget.x = this.anchor.x + s.slotX;
@@ -264,6 +310,10 @@ export class Squad {
         desiredX = (desiredX / l) * maxSpeed;
         desiredY = (desiredY / l) * maxSpeed;
       }
+      const slow = this.sim.puddles.length > 0 ? this.sim.slowAt(s.x, s.y, s.radius) : 1; // flaque de crachat
+      const grabSlow = s.grabbed > GRAB_IMMUNE - GRAB_SLOW_TIME ? GRAB_SLOW : 1; // vient de se faire grab : ralentie un moment
+      desiredX *= slow * grabSlow;
+      desiredY *= slow * grabSlow;
       s.vx = damp(s.vx, desiredX, CROWD.velDamp, dt);
       s.vy = damp(s.vy, desiredY, CROWD.velDamp, dt);
       this.steerV.x = s.vx;
@@ -279,9 +329,9 @@ export class Squad {
     }
 
     // 5. Séparation douce entre soldats (n ≤ ~30 : O(n²) suffit)
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < total; i++) {
       const a = this.soldiers[i];
-      for (let j = i + 1; j < n; j++) {
+      for (let j = i + 1; j < total; j++) {
         const b = this.soldiers[j];
         if (a.capturedBy || b.capturedBy) continue;
         const ddx = b.x - a.x;
@@ -324,20 +374,21 @@ export class Squad {
   }
 
   private updateCenter(): void {
-    robustCentroid(this.soldiers, this.radius * 1.6, this.center);
+    robustCentroid(this.crowd.length > 0 ? this.crowd : this.soldiers, this.radius * 1.6, this.center);
   }
 
   private reassign(): void {
     this.dirty = false;
     this.slotSpacing = CROWD.spacing;
-    this.slots = sunflowerSlots(this.soldiers.length, CROWD.spacing, this.slots);
+    const members = this.crowd.length > 0 ? this.crowd : this.soldiers;
+    this.slots = sunflowerSlots(members.length, CROWD.spacing, this.slots);
     const relOf = (s: SoldierState): Point => ({ x: s.x - this.anchor.x, y: s.y - this.anchor.y });
 
     // 1. Les recrues prennent d'abord la place libre la plus proche de leur point de ramassage.
     const slotOf = new Map<SoldierState, number>();
     const taken = new Set<number>();
     for (const s of this.newcomers) {
-      if (!this.soldiers.includes(s)) continue;
+      if (!members.includes(s)) continue;
       const p = relOf(s);
       let best = -1;
       let bestD = Infinity;
@@ -355,7 +406,7 @@ export class Squad {
     this.newcomers.length = 0;
 
     // 2. Les autres soldats se répartissent les places restantes en se déplaçant le moins possible.
-    const others = this.soldiers.filter((s) => !slotOf.has(s));
+    const others = members.filter((s) => !slotOf.has(s));
     const free = this.slots.map((_, i) => i).filter((i) => !taken.has(i));
     const assignment = assignSlotsOptimal(
       others.map(relOf),
@@ -363,7 +414,7 @@ export class Squad {
     );
     others.forEach((s, i) => slotOf.set(s, free[assignment[i]]));
 
-    for (const s of this.soldiers) {
+    for (const s of members) {
       const slot = this.slots[slotOf.get(s)!];
       s.slotX = slot.x;
       s.slotY = slot.y;

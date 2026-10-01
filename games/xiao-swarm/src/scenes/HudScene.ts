@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { device, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
-import type { AlienId } from '../data/aliens';
+import { ALIENS, type AlienId } from '../data/aliens';
+import { nextBoss } from '../data/waves';
 import { t } from '../i18n';
 import type { SimEvent } from '../sim/types';
 import { iconCheat, iconCrowd, makeSquareButton, VIEWER_BUTTONS } from '../dev/hudButtons';
@@ -22,6 +23,14 @@ export class HudScene extends Phaser.Scene {
   /** Boutons des panneaux de dev (foule, triche), avant les visionneuses. */
   private panelBtns: Phaser.GameObjects.Container[] = [];
   private respawnText!: Phaser.GameObjects.Text;
+  /** Haut centre : compte à rebours avant le prochain boss (mini ou final), dès le début de la partie. */
+  private bossTimer!: Phaser.GameObjects.Text;
+  /** Camembert du compte à rebours : secteur orange (rouge pour le boss final) qui se vide dans le sens inverse des aiguilles. */
+  private bossPie!: Phaser.GameObjects.Graphics;
+  /** Capsule « Prochain boss » sous le camembert (chevauche un peu son bas). */
+  private bossCapsule!: Phaser.GameObjects.Graphics;
+  private bossLabel!: Phaser.GameObjects.Text;
+  private bossLabelShown = '';
   /** Barre d'XP en bas de l'écran (hors ligne). */
   private xpBar!: Phaser.GameObjects.Graphics;
   private xpLabel!: Phaser.GameObjects.Text;
@@ -30,6 +39,8 @@ export class HudScene extends Phaser.Scene {
   private bossBar!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
   private bossArrow!: Phaser.GameObjects.Graphics;
+  /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
+  private reviveArrow!: Phaser.GameObjects.Graphics;
   /** Coop : écran de fin (victoire / défaite) avec compte à rebours avant la nouvelle partie. */
   private endText!: Phaser.GameObjects.Text;
   private endVictory = false;
@@ -62,6 +73,13 @@ export class HudScene extends Phaser.Scene {
       ];
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene)));
     }
+    this.bossLabelShown = ''; // la scène est réutilisée à chaque partie : le nouveau texte est vide, il faut le remplir
+    this.bossPie = this.add.graphics();
+    this.bossCapsule = this.add.graphics();
+    this.bossLabel = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '12px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
+    this.bossTimer = this.add
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '19px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
+      .setOrigin(0.5)
     this.xpBar = this.add.graphics();
     this.xpLabel = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
@@ -75,6 +93,7 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
       .setOrigin(0.5);
     this.bossArrow = this.add.graphics();
+    this.reviveArrow = this.add.graphics();
     this.endText = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 9, align: 'center' })
       .setOrigin(0.5)
@@ -102,6 +121,8 @@ export class HudScene extends Phaser.Scene {
     this.hint.setVisible(g.flow.state === 'ready');
     this.drawXp();
     this.drawBoss();
+    this.drawBossTimer();
+    this.drawReviveArrow();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
     const coop = g.mode.id === 'coop';
     this.respawnText.setVisible(dead && !this.endText.visible).setText(coop ? t('spectating') : t('respawning')).setFontSize(coop ? 24 : 34);
@@ -172,6 +193,106 @@ export class HudScene extends Phaser.Scene {
       px - c * 4 - s * 10, py - s * 4 + c * 10,
       px - c * 4 + s * 10, py - s * 4 - c * 10,
     );
+  }
+
+  /**
+   * Flèche verte vers chaque zone de réanimation (équipier mort) tant que le joueur local est en vie : collée au bord de l'écran
+   * quand la zone est hors champ, sinon elle rebondit juste au-dessus de la zone en pointant vers elle.
+   */
+  private drawReviveArrow(): void {
+    const g = this.game_;
+    const a = this.reviveArrow;
+    a.clear();
+    const me = g.localSquad;
+    if (!me?.alive) return;
+    const { width, height } = this.scale;
+    const cam = g.cameras.main;
+    const wv = cam.worldView;
+    const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
+    for (const z of g.session.sim.reviveZones) {
+      if (z.owner === me.owner) continue;
+      const sx = ((z.x - wv.x) / wv.width) * width;
+      const sy = ((z.y - wv.y) / wv.height) * height;
+      const m = 46;
+      const inside = sx > m && sx < width - m && sy > m && sy < height - m;
+      let px: number;
+      let py: number;
+      let ang: number;
+      if (inside) {
+        ang = Math.PI / 2; // pointe vers le bas, vers la zone
+        px = sx;
+        py = sy - 70 - beat * 14;
+      } else {
+        ang = Math.atan2(sy - height / 2, sx - width / 2);
+        const c = Math.cos(ang);
+        const s = Math.sin(ang);
+        const k = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
+        px = width / 2 + c * k;
+        py = height / 2 + s * k;
+      }
+      const c = Math.cos(ang);
+      const s = Math.sin(ang);
+      const pulse = 1 + beat * 0.14;
+      a.fillStyle(0x0a2210, 0.75).fillCircle(px, py, 25 * pulse);
+      a.lineStyle(3, 0x5dff84, 1).strokeCircle(px, py, 25 * pulse);
+      a.fillStyle(0x5dff84, 1).fillTriangle(
+        px + c * 15 + c * 6, py + s * 15 + s * 6,
+        px - c * 4 - s * 11, py - s * 4 + c * 11,
+        px - c * 4 + s * 11, py - s * 4 - c * 11,
+      );
+    }
+  }
+
+  /** Compte à rebours avant le prochain boss annoncé par la timeline ; masqué quand il n'y en a plus ou que l'écran de fin est affiché. */
+  private drawBossTimer(): void {
+    const g = this.game_;
+    const sim = g.session.sim;
+    const next = nextBoss(sim.mode.waves, g.runTime);
+    const bossAlive = sim.aliens.some((a) => a.alive && a.def.boss);
+    const left = next ? Math.max(0, next.at - g.runTime) : 0;
+    // Caché pendant un combat de boss (barre de vie en haut), sauf s'il reste moins d'une minute : alors il passe SOUS la barre.
+    const show = !!next && !this.endText.visible && (!bossAlive || left < 60);
+    this.bossTimer.setVisible(show);
+    this.bossLabel.setVisible(show);
+    this.bossPie.clear();
+    this.bossCapsule.clear();
+    if (!show || !next) return;
+    const { width } = this.scale;
+    const R = 30;
+    const cx = width / 2;
+    const cy = bossAlive ? (device.isTouch ? 76 : 18) + 44 + R : (device.isTouch ? 70 : 12) + R;
+    // part restante = temps restant / durée écoulée entre le boss précédent (ou le début) et celui-ci
+    const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= g.runTime ? Math.max(m, e.at) : m), 0);
+    const frac = Math.max(0, Math.min(1, left / Math.max(1, next.at - prev)));
+    const final = ALIENS[next.type].boss?.kind === 'final';
+    const color = final ? 0xff3a3a : 0xff9a4a;
+    const urgent = left < 10 && Math.sin(this.time.now / 90) > 0;
+    const pie = this.bossPie;
+    pie.fillStyle(0x0a1422, 0.82).fillCircle(cx, cy, R);
+    if (frac > 0) {
+      const start = -Math.PI / 2;
+      pie.fillStyle(urgent ? 0xffffff : color, 0.9);
+      pie.beginPath();
+      pie.moveTo(cx, cy);
+      pie.arc(cx, cy, R - 3, start, start + Math.PI * 2 * frac, false);
+      pie.closePath();
+      pie.fillPath();
+    }
+    pie.fillStyle(0x0a1422, 0.78).fillCircle(cx, cy, R - 12); // centre sombre : le temps y est lisible
+    pie.lineStyle(3, 0xffffff, 0.45).strokeCircle(cx, cy, R);
+    // capsule bleu foncé sous le camembert : son bord haut recouvre un peu le bas du disque
+    const label = t('nextBoss'); // toujours « Next boss », même pour le boss final
+    if (label !== this.bossLabelShown) {
+      this.bossLabelShown = label;
+      this.bossLabel.setText(label);
+    }
+    const lw = this.bossLabel.width + 20;
+    const ly = cy + R + 1;
+    this.bossCapsule.fillStyle(0x0b1a4d, 0.95).fillRoundedRect(cx - lw / 2, ly - 10, lw, 20, 10);
+    this.bossCapsule.lineStyle(2, 0x3f6fe0, 0.9).strokeRoundedRect(cx - lw / 2, ly - 10, lw, 20, 10);
+    this.bossLabel.setPosition(cx, ly);
+    const secs = Math.ceil(left);
+    this.bossTimer.setPosition(cx, cy).setText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`).setFontSize(15);
   }
 
   /** Jauge d'XP de la squad locale : niveau à gauche, barre qui se remplit jusqu'à la prochaine upgrade. */

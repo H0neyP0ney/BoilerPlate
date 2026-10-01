@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
-import { entryTimes, WAVE_LEVELS, WAVE_SCRIPT, type TimelineEntry, type WaveConfig } from '../data/waves';
+import { entryTimes, WAVE_LEVELS, WAVE_SCRIPT, WAVE_SCRIPT_END, type TimelineEntry, type WaveConfig } from '../data/waves';
 import { SCENES } from '../config';
 import { resetWaves, saveWaves, saveWavesToCode, waveSnippet } from '../debugWaves';
 import { header } from '../dev/devUi';
@@ -152,10 +152,9 @@ export class WaveEditorScene extends Phaser.Scene {
 
   // ---------- Timeline ----------
 
+  /** Zoom sur les 10 minutes de jeu : les envois en boucle après le boss final (jusqu'à 36000 s) ne sont pas dessinés. */
   private timelineEnd(): number {
-    let max = 300;
-    for (const e of WAVE_SCRIPT.timeline) for (const t of entryTimes(e)) max = Math.max(max, t);
-    return Math.ceil((max + 10) / 30) * 30;
+    return WAVE_SCRIPT_END;
   }
 
   private renderTimeline(): void {
@@ -170,6 +169,7 @@ export class WaveEditorScene extends Phaser.Scene {
     }
     WAVE_SCRIPT.timeline.forEach((e, i) => {
       for (const t of entryTimes(e)) {
+        if (t > end) break;
         const bar = el(
           'div',
           `position:absolute;left:${(t / end) * 100}%;bottom:14px;width:5px;margin-left:-2px;height:${(e.level / 9) * 100}px;` +

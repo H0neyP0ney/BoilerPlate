@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
-import { DEPTH, PALETTE } from '../config';
+import { DEPTH, PALETTE, REVIVE_TIME, UPGRADE_REPEL } from '../config';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import { t } from '../i18n';
@@ -9,6 +9,7 @@ import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
 import { Fx } from './Fx';
+import { PickupViews, POWERUP_INFO } from './PickupViews';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
@@ -57,6 +58,10 @@ export class WorldView {
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
+  /** Rayons de soin des slimes jaunes (de l'id d'un alien à l'id d'un autre) ; renouvelés par la simulation toutes les 0,3 s. */
+  /** Point de départ (au sol) du couloir de charge de chaque alien qui charge, figé le temps de la charge. */
+  private readonly rushOrigins = new Map<number, { x: number; y: number }>();
+  private readonly healBeams: { from: number; to: number; t: number; dur: number }[] = [];
   /** Flaques de slimes morts (ressuscitables) et cailloux au sol, par id de simulation. */
   private readonly corpseImgs = new Map<number, Phaser.GameObjects.Image>();
   private readonly rockImgs = new Map<number, Phaser.GameObjects.Image>();
@@ -67,6 +72,10 @@ export class WorldView {
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly beams: Phaser.GameObjects.Graphics;
   private readonly colors = new Map<PlayerId, number>();
+  /** Bulles d'upgrade, power-ups, globes, compteurs d'escouade. */
+  private readonly pickups: PickupViews;
+  /** Halos d'apparition en cours : ils suivent leur soldat / leur squad au lieu de rester à l'endroit où ils sont nés. */
+  private readonly followers: { parts: { img: Phaser.GameObjects.Image; dy: number }[]; pos: () => { x: number; y: number } | null }[] = [];
   private nextRival = 0;
 
   constructor(
@@ -79,8 +88,16 @@ export class WorldView {
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
     this.beams = scene.add.graphics().setDepth(DEPTH.fx);
+    this.pickups = new PickupViews(scene, sim, (id) => {
+      const v = this.soldiers.get(id);
+      return v ? { x: v.rx, y: v.ry } : undefined;
+    });
     for (const sq of sim.squads) this.colorOf(sq.owner);
+    this.quietUntil = scene.time.now + 1000; // les soldats déjà présents au chargement n'ont pas de colonne d'arrivée
   }
+
+  /** Pas de colonne d'arrivée avant cet instant (ms) : départ de partie, réapparition, relance. */
+  private quietUntil = 0;
 
   /** Couleur d'anneau d'un joueur, attribuée à sa première apparition (arrivée en cours de partie comprise). */
   colorOf(owner: PlayerId): number {
@@ -126,8 +143,8 @@ export class WorldView {
       }
       case 'soldierDied': {
         this.corpse(e.id, e.cls, e.x, e.y);
-        this.fx.burst(e.x, e.y - 20, CLASSES[e.cls].color, 14);
-        if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(90, 0.004);
+        this.fx.death(e.x, e.y, CLASSES[e.cls].color);
+        if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(160, 0.009);
         break;
       }
       case 'shot':
@@ -144,6 +161,7 @@ export class WorldView {
         if (e.texture === 'fx_blaster_blue' && nearCam(e.x, e.y)) this.fx.impact(e.x, e.y, 0x5ab4ff);
         break;
       case 'restart': {
+        this.quietUntil = this.scene.time.now + 1000;
         // nouvelle partie : on efface tout ce qui reste au sol
         for (const img of this.corpseImgs.values()) img.destroy();
         for (const img of this.rockImgs.values()) img.destroy();
@@ -154,6 +172,7 @@ export class WorldView {
         this.fireImgs.clear();
         this.fuses.length = 0;
         this.tongues.length = 0;
+        this.healBeams.length = 0;
         break;
       }
       case 'fuse': {
@@ -171,7 +190,7 @@ export class WorldView {
           .image(e.x, e.y, 'fx_puddle')
           .setTint(color)
           .setDepth(DEPTH.groundFx - 0.3)
-          .setScale(0.85 * (ALIENS[e.alien].radius / 16), 0.55 * (ALIENS[e.alien].radius / 16))
+          .setScale(1.105 * (ALIENS[e.alien].radius / 16), 0.715 * (ALIENS[e.alien].radius / 16)) // flaque +30 %
           .setFlipX(Math.random() < 0.5)
           .setAlpha(0.8);
         this.corpseImgs.set(e.id, img);
@@ -189,21 +208,10 @@ export class WorldView {
         }
         break;
       }
-      case 'rock': {
-        const img = this.scene.add.image(e.x, e.y, 'fx_rock').setOrigin(0.5, 0.6).setDepth(DEPTH.actors + e.y);
-        const target = (e.r * 2.1) / 48;
-        img.setScale(target * 0.4);
-        this.scene.tweens.add({ targets: img, scale: target, duration: 160, ease: 'Back.Out' });
-        this.rockImgs.set(e.id, img);
+      case 'rock':
+        // l'image du caillou est créée / retirée par `syncRocks` (qui suit la liste de la simulation) ; ici, seulement la poussière
         if (nearCam(e.x, e.y)) this.fx.burst(e.x, e.y, 0x8a7d74, 8);
         break;
-      }
-      case 'rockEnd': {
-        const img = this.rockImgs.get(e.id);
-        this.rockImgs.delete(e.id);
-        if (img) this.scene.tweens.add({ targets: img, alpha: 0, scale: img.scale * 0.6, duration: 350, onComplete: () => img.destroy() });
-        break;
-      }
       case 'fire': {
         const img = this.scene.add.image(e.x, e.y - 6, 'fx_flame').setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.groundFx + 0.3);
         const base = (e.r * 2.4) / 40;
@@ -226,10 +234,26 @@ export class WorldView {
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
         break;
+      case 'healBeam':
+        this.healBeams.push({ from: e.from, to: e.to, t: e.dur, dur: e.dur });
+        break;
       case 'tongue':
         this.tongues.push({ alien: e.alien, target: e.target, t: e.dur, dur: e.dur });
         break;
       case 'explosion':
+        if (e.style === 'spit') {
+          // crachat du cracheur : éclaboussure violette (la flaque ralentissante est dessinée par drawOverlay)
+          this.fx.gloop(e.x, e.y, 0xb060e0, 0xf2dcff, e.r / 50);
+          this.fx.ring(e.x, e.y, e.r, 0xb060e0);
+          break;
+        }
+        if (e.style === 'acid') {
+          // blob du crabe : éclaboussure verte acide
+          this.fx.gloop(e.x, e.y, 0x5ed02a, 0xe6ffb8, e.r / 55);
+          this.fx.puddles(e.x, e.y, 0x5ed02a, e.r / 70);
+          this.fx.ring(e.x, e.y, e.r, 0x7be23a);
+          break;
+        }
         if (e.style === 'slime') {
           // boule de slime : éclaboussure bleue au sol plutôt que des flammes
           this.fx.gloop(e.x, e.y, 0x5aa8ff, 0xcfe6ff, e.r / 60);
@@ -245,21 +269,41 @@ export class WorldView {
         if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(220, 0.01);
         break;
       case 'recruited':
+        // le halo d'arrivée (colonne) est créé avec le nouveau soldat et le suit ; ici, éclat et texte
         this.fx.burst(e.x, e.y - 20, CLASSES[e.cls].color, 16);
-        this.fx.ring(e.x, e.y, 60, CLASSES[e.cls].color);
         if (e.owner === this.localPlayer) this.fx.text(e.x, e.y - 60, t('recruit', { name: t(`class_${e.cls}`) }), '#ffe066', 24);
         break;
+      case 'upgradePicked': {
+        const col = e.prism ? 0xfff3a0 : 0x7fc8ff;
+        this.fx.burst(e.x, e.y - 20, col, 30);
+        this.fx.ring(e.x, e.y, 120, col);
+        this.fx.column(e.x, e.y, col, 150, 700);
+        if (e.owner === this.localPlayer) this.scene.cameras.main.shake(80, 0.003);
+        break;
+      }
+      case 'powerup': {
+        const info = POWERUP_INFO[e.kind as keyof typeof POWERUP_INFO];
+        if (!info) break;
+        this.fx.ring(e.x, e.y, 110, info.color);
+        this.fx.burst(e.x, e.y - 14, info.color, 22);
+        this.fx.text(e.x, e.y - 46, `${info.icon} ${t(`pu_${e.kind}` as 'pu_stim')}`, '#ffffff', 22);
+        break;
+      }
       case 'heal':
         if (nearCam(e.x, e.y)) this.fx.heal(e.x, e.y);
         break;
-      case 'squadSpawned':
-        this.fx.ring(e.x, e.y, 200, this.colorOf(e.owner));
+      case 'squadSpawned': {
+        this.quietUntil = this.scene.time.now + 1000;
+        const ring = this.fx.ring(e.x, e.y, 200, this.colorOf(e.owner));
+        const owner = e.owner;
+        this.followers.push({ parts: [{ img: ring, dy: 0 }], pos: () => this.squadFocus(owner) }); // l'onde suit la squad qui bouge
         break;
+      }
       case 'levelUp': {
         if (e.owner !== this.localPlayer) break;
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;
-        this.fx.ring(c.x, c.y, 150, 0x5aa8ff);
+        this.fx.ring(c.x, c.y, UPGRADE_REPEL.radius, 0x5aa8ff); // onde de choc : les aliens sont repoussés
         this.fx.text(c.x, c.y - 80, t('levelUpTitle', { level: e.level }), '#9fd3ff', 30);
         break;
       }
@@ -286,10 +330,17 @@ export class WorldView {
     this.followFlashes();
     this.syncProjectiles(alpha);
     this.syncOrbs(alpha, time);
+    this.syncRocks();
+    this.pickups.sync(time);
+    this.followHalos();
     this.updateFuses(dt, time);
     this.updateFires(time);
     this.drawOverlay(time, dt);
     this.arena.update(this.scene.cameras.main.worldView);
+  }
+
+  destroyPickups(): void {
+    this.pickups.destroy();
   }
 
   /** Centre affiché (interpolé) de la squad d'un joueur, pour la caméra. */
@@ -308,6 +359,11 @@ export class WorldView {
         if (!v) {
           v = new SoldierView(this.scene, s, this.colorOf(s.owner));
           this.soldiers.set(s.id, v);
+          if (this.scene.time.now > this.quietUntil) {
+            // nouvelle unité dans une squad : la colonne bleue suit le soldat
+            const view = v;
+            this.followers.push({ parts: this.fx.column(s.x, s.y, 0x4aa8ff), pos: () => ({ x: view.rx, y: view.ry }) });
+          }
         }
         v.seen = true;
         v.sync(alpha, dt, time);
@@ -363,12 +419,16 @@ export class WorldView {
       const x = lerp(p.px, p.x, alpha);
       const y = lerp(p.py, p.y, alpha);
       if (img.texture.key !== p.texture) img.setTexture(p.texture);
+      img.setDepth(DEPTH.fx - 1);
       if (p.lob) {
         // grenade : trajectoire au sol + arc vertical ; l'ombre reste au sol
         const k = Math.min(1, Math.max(0, 1 - p.life / p.maxLife));
         const h = 4 * LOB_HEIGHT * k * (1 - k);
         this.lobShadows.push({ x, y, h });
-        img.setVisible(true).setPosition(x, y - h).setRotation(k * 14).setScale(1 + (h / LOB_HEIGHT) * 0.3).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        // les boules ennemies passent au-dessus des acteurs (le crabe géant les cachait) ; le blob vert du crabe est plus gros
+        const big = p.texture === 'fx_blob_green' ? 1.9 : 1;
+        img.setVisible(true).setPosition(x, y - h).setRotation(k * 14).setScale((1 + (h / LOB_HEIGHT) * 0.3) * big).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        if (p.team === 'aliens') img.setDepth(DEPTH.fx + 3);
       } else if (p.flame) {
         img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
         const k = 1 - p.life / p.maxLife;
@@ -399,11 +459,33 @@ export class WorldView {
     }
   }
 
+  /**
+   * Cailloux lancés par les aliens : les images suivent la liste de la simulation (snapshot en ligne), jamais les événements
+   * seuls — un événement perdu ou une éviction silencieuse laissait un visuel sans collision.
+   */
+  private syncRocks(): void {
+    const live = new Set<number>();
+    for (const k of this.sim.arena.rocks) {
+      live.add(k.id);
+      if (this.rockImgs.has(k.id)) continue;
+      const img = this.scene.add.image(k.x, k.y, 'fx_rock').setOrigin(0.5, 0.6).setDepth(DEPTH.actors + k.y);
+      const target = (k.radius * 2.1) / 48;
+      img.setScale(target * 0.4);
+      this.scene.tweens.add({ targets: img, scale: target, duration: 160, ease: 'Back.Out' });
+      this.rockImgs.set(k.id, img);
+    }
+    for (const [id, img] of this.rockImgs) {
+      if (live.has(id)) continue;
+      this.rockImgs.delete(id);
+      this.scene.tweens.add({ targets: img, alpha: 0, scale: img.scale * 0.6, duration: 350, onComplete: () => img.destroy() });
+    }
+  }
+
   /** Globes d'XP : taille selon la valeur, léger flottement, clignote avant de disparaître ; masqués hors caméra. */
   private syncOrbs(alpha: number, time: number): void {
     const orbs = this.sim.xp.orbs;
     const view = this.scene.cameras.main.worldView;
-    while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, 'fx_xp').setDepth(DEPTH.groundFx + 0.2).setBlendMode(Phaser.BlendModes.ADD));
+    while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, 'fx_xp').setDepth(DEPTH.groundFx + 0.2)); // blend normal : en additif le bleu virait au blanc
     for (let i = 0; i < this.orbImgs.length; i++) {
       const img = this.orbImgs[i];
       const o = orbs[i];
@@ -509,6 +591,45 @@ export class WorldView {
     }
   }
 
+  /** Rayons de soin : faisceau vert qui ondule entre le soigneur et l'allié, avec un point lumineux qui voyage dessus. */
+  private drawHealBeams(l: Phaser.GameObjects.Graphics, dt: number, time: number): void {
+    for (let i = this.healBeams.length - 1; i >= 0; i--) {
+      const hb = this.healBeams[i];
+      hb.t -= dt;
+      const from = this.aliens.get(hb.from);
+      const to = this.aliens.get(hb.to);
+      if (hb.t <= 0 || !from || !to) {
+        this.healBeams.splice(i, 1);
+        continue;
+      }
+      const a = Math.min(1, hb.t / 0.12) * 0.9;
+      const x1 = from.rx;
+      const y1 = from.ry - from.state.radius * 0.6;
+      const x2 = to.rx;
+      const y2 = to.ry - to.state.radius * 0.5;
+      l.lineStyle(8, 0x3dff7a, 0.22 * a).lineBetween(x1, y1, x2, y2);
+      l.lineStyle(3, 0xc8ffd8, a).lineBetween(x1, y1, x2, y2);
+      const k = (time * 2.2 + hb.from * 0.37) % 1;
+      l.fillStyle(0xffffff, a).fillCircle(x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 4);
+      l.fillStyle(0x7dff9a, a).fillCircle(x2, y2, 5 + Math.sin(time * 14) * 1.5);
+    }
+  }
+
+  /** Halos d'apparition : recalés chaque frame sur leur soldat / squad, retirés quand leur animation est finie. */
+  private followHalos(): void {
+    for (let i = this.followers.length - 1; i >= 0; i--) {
+      const f = this.followers[i];
+      const alive = f.parts.filter((p) => p.img.active);
+      if (alive.length === 0) {
+        this.followers.splice(i, 1);
+        continue;
+      }
+      const p = f.pos();
+      if (!p) continue;
+      for (const part of alive) part.img.setPosition(p.x, p.y + part.dy);
+    }
+  }
+
   private followFlashes(): void {
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i];
@@ -524,6 +645,7 @@ export class WorldView {
   private drawOverlay(time: number, dt: number): void {
     const g = this.ground;
     g.clear();
+    this.pickups.drawGround(g, time);
     g.fillStyle(0x2a1d2e, 0.28);
     for (const v of this.aliens.values()) {
       const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
@@ -540,6 +662,23 @@ export class WorldView {
         g.fillStyle(0x5eff8a, 0.08).fillEllipse(v.rx, v.ry, r * 2, r * 1.4);
         g.lineStyle(2, 0x5eff8a, 0.35).strokeEllipse(v.rx, v.ry, r * 2, r * 1.4);
       }
+    }
+    // Zones de réanimation (coop) : cercle au sol qui se remplit tant qu'un équipier y reste
+    for (const z of this.sim.reviveZones) {
+      const k = z.progress / REVIVE_TIME;
+      const beat = 0.5 + 0.5 * Math.sin(time * 6); // pulsation 0 → 1
+      const rr = z.r * (1 + beat * 0.12);
+      g.fillStyle(0x3dff6a, 0.12 + 0.16 * beat + 0.12 * k).fillEllipse(z.x, z.y, rr * 2, rr * 1.4);
+      g.fillStyle(0x7dff9a, 0.2 + 0.25 * k).fillEllipse(z.x, z.y, z.r * 2 * k, z.r * 1.4 * k);
+      g.lineStyle(4, 0x8dffa8, 0.5 + 0.5 * beat).strokeEllipse(z.x, z.y, rr * 2, rr * 1.4);
+      g.lineStyle(2, 0xffffff, 0.25 + 0.3 * beat).strokeEllipse(z.x, z.y, z.r * 2 * 0.6, z.r * 1.4 * 0.6);
+    }
+    // Flaques de crachat : violettes, elles ralentissent les soldats dedans ; s'effacent dans la dernière seconde
+    for (const p of this.sim.puddles) {
+      const a = Math.min(1, p.ttl);
+      g.fillStyle(0x6a2aa8, 0.42 * a).fillEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
+      g.fillStyle(0xb060e0, 0.3 * a).fillEllipse(p.x, p.y, p.r * 1.5, p.r * 0.95);
+      g.lineStyle(2, 0xd9a0ff, 0.55 * a).strokeEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
     }
     // Télégraphe : zone d'impact des boules ennemies, en rouge, pendant la dernière partie du vol (uniquement là où la
     // simulation tourne : le client réseau ne connaît ni la durée ni le rayon).
@@ -562,15 +701,24 @@ export class WorldView {
     for (const v of this.aliens.values()) {
       const a = v.state;
       const rush = a.def.rush;
-      if (!rush || !(a.rushWind > 0 || a.rushT > 0)) continue;
+      if (!rush || !(a.rushWind > 0 || a.rushT > 0)) {
+        this.rushOrigins.delete(a.id);
+        continue;
+      }
       const k = a.rushWind > 0 ? 1 - a.rushWind / rush.windup : 1;
       const dx = a.rushDx;
       const dy = a.rushDy;
       const nx = -dy * (rush.width / 2);
       const ny = dx * (rush.width / 2);
       const L = rush.length;
-      const x0 = v.rx; // la zone part de l'alien
-      const y0 = v.ry;
+      // La zone reste au sol à l'endroit où la charge a été annoncée : elle ne suit pas l'alien pendant la charge.
+      let origin = this.rushOrigins.get(a.id);
+      if (!origin) {
+        origin = { x: v.rx, y: v.ry };
+        this.rushOrigins.set(a.id, origin);
+      }
+      const x0 = origin.x;
+      const y0 = origin.y;
       const V = (x: number, y: number) => new Phaser.Math.Vector2(x, y);
       const lane = (len: number) => [V(x0 + nx, y0 + ny), V(x0 - nx, y0 - ny), V(x0 - nx + dx * len, y0 - ny + dy * len), V(x0 + nx + dx * len, y0 + ny + dy * len)];
       g.fillStyle(0xff2a2a, a.rushWind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
@@ -612,6 +760,7 @@ export class WorldView {
     const l = this.beams;
     l.clear();
     this.drawTongues(l, dt);
+    this.drawHealBeams(l, dt, time);
     this.drawCasts(l, time);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tr = this.tracers[i];

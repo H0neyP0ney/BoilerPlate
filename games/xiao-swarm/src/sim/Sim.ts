@@ -1,12 +1,14 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
+import { CAPTIVE_VULN, DIFFICULTY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME } from '../config';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
 import { Combat } from './Combat';
-import type { AlienState, Corpse, FirePatch, SoldierState, Unit } from './entities';
+import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Unit } from './entities';
 import { Horde } from './Horde';
+import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
 import { Xp } from './Xp';
 import { WaveRunner } from './WaveRunner';
@@ -51,6 +53,12 @@ export class Sim {
   readonly corpses: Corpse[] = [];
   /** Flaques de flammes laissées par les slimes de feu. */
   readonly fires: FirePatch[] = [];
+  /** Coop : zones où un joueur mort peut être ramené par un équipier. */
+  readonly reviveZones: ReviveZone[] = [];
+  /** Ondes de choc en cours d'application (montée de niveau). */
+  private readonly shockwaves: { x: number; y: number; r: number; speed: number; left: number }[] = [];
+  /** Flaques de crachat : ralentissent les soldats dedans. */
+  readonly puddles: Puddle[] = [];
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
@@ -59,13 +67,14 @@ export class Sim {
   readonly horde: Horde;
   readonly combat: Combat;
   readonly recruits: Recruits;
+  readonly powerups: PowerUps;
   readonly xp: Xp;
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
   readonly scratchSoldiers: SoldierState[] = [];
   readonly waves: WaveRunner;
   alienHpMul = 1;
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   private readonly fuses: { x: number; y: number; t: number; r: number; dmg: number; knock: number }[] = [];
 
@@ -76,6 +85,7 @@ export class Sim {
     this.horde = new Horde(this);
     this.combat = new Combat(this);
     this.recruits = new Recruits(this);
+    this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
     this.waves = new WaveRunner(
@@ -88,7 +98,7 @@ export class Sim {
         if (squads.length === 0) return;
         if (ALIENS[type].boss) {
           this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, squads.length);
-        } else for (const sq of squads) this.horde.spawnNear(sq, type, count, SPAWN_DISTANCE);
+        } else for (const sq of squads) this.horde.spawnNear(sq, type, Math.round(count * DIFFICULTY.alienCountMul), SPAWN_DISTANCE);
       },
       this.rng,
     );
@@ -99,11 +109,15 @@ export class Sim {
     this.aliens.length = 0;
     this.corpses.length = 0;
     this.fires.length = 0;
+    this.reviveZones.length = 0;
+    this.puddles.length = 0;
+    this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
     this.fuses.length = 0;
     this.combat.clear();
     this.recruits.clear();
+    this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
     this.waves.reset();
@@ -177,6 +191,7 @@ export class Sim {
     if (i === -1) return;
     for (const s of this.squads[i].soldiers) s.alive = false;
     this.squads.splice(i, 1);
+    this.removeReviveZone(owner);
     this.events.push({ t: 'squadWiped', owner });
   }
 
@@ -237,6 +252,10 @@ export class Sim {
     if (this.xpEnabled) this.xp.update(dt);
     this.updateCorpsesAndRocks(dt);
     this.updateFires(dt);
+    this.updateReviveZones(dt);
+    for (let i = this.puddles.length - 1; i >= 0; i--) if ((this.puddles[i].ttl -= dt) <= 0) this.puddles.splice(i, 1);
+    this.powerups.update(dt);
+    this.updateShockwaves(dt);
     for (let i = this.fuses.length - 1; i >= 0; i--) {
       const f = this.fuses[i];
       f.t -= dt;
@@ -263,6 +282,7 @@ export class Sim {
       return;
     }
     if (!u.alive) return;
+    if (u.captive) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     u.hp -= amount;
     u.kx += (dirX * 40) / u.mass;
     u.ky += (dirY * 40) / u.mass;
@@ -288,7 +308,55 @@ export class Sim {
     const rock = { id: this.ids.get(), x, y, radius, ttl };
     this.arena.rocks.push(rock);
     this.events.push({ t: 'rock', id: rock.id, x, y, r: radius, ttl });
-    if (this.arena.rocks.length > 40) this.arena.rocks.shift();
+    if (this.arena.rocks.length > 40) this.arena.rocks.shift(); // l'affichage se cale sur la liste (snapshot) : le visuel disparaît avec la collision
+  }
+
+  /**
+   * Onde de choc : pendant `duration` s, tous les aliens du rayon `r` autour de (x, y) reculent à `speed` px/s (plus vite au
+   * centre). Déplacement direct, pas une impulsion : un alien lourd (masse élevée) ou rapide est repoussé comme un léger.
+   */
+  shockwave(x: number, y: number, r: number, speed: number, duration: number): void {
+    this.shockwaves.push({ x, y, r, speed, left: duration });
+  }
+
+  private updateShockwaves(dt: number): void {
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const w = this.shockwaves[i];
+      const step = Math.min(dt, w.left);
+      for (const a of this.aliens) {
+        const dx = a.x - w.x;
+        const dy = a.y - w.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d > w.r) continue;
+        const k = (1 - (d / w.r) * 0.6) * w.speed * step * (a.def.capture ? 0.35 : 1); // les bulles sont difficiles à repousser
+        a.x += (dx / d) * k;
+        a.y += (dy / d) * k;
+        this.arena.constrain(a);
+      }
+      w.left -= step;
+      if (w.left <= 1e-6) this.shockwaves.splice(i, 1);
+    }
+  }
+
+  /** Facteur de vitesse d'un alien à cet endroit (1 = libre ; globe de stase : très lent). */
+  stasisAt(x: number, y: number): number {
+    return this.powerups.fields.length > 0 ? this.powerups.stasisAt(x, y) : 1;
+  }
+
+  /** Flaque de crachat : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s. */
+  addPuddle(x: number, y: number, r: number, ttl: number, slow: number): void {
+    this.puddles.push({ id: this.ids.get(), x, y, r, ttl, slow });
+    if (this.puddles.length > 40) this.puddles.shift();
+  }
+
+  /** Facteur de vitesse d'un soldat à cet endroit (1 = libre ; les flaques ne se cumulent pas : la plus forte l'emporte). */
+  slowAt(x: number, y: number, radius: number): number {
+    let k = 1;
+    for (const p of this.puddles) {
+      const rr = p.r + radius * 0.5;
+      if ((x - p.x) ** 2 + (y - p.y) ** 2 < rr * rr) k = Math.min(k, p.slow);
+    }
+    return k;
   }
 
   /** Flaque de flammes : brûle les soldats dedans pendant `ttl` s. */
@@ -329,6 +397,40 @@ export class Sim {
     }
   }
 
+  private removeReviveZone(owner: PlayerId): void {
+    const i = this.reviveZones.findIndex((z) => z.owner === owner);
+    if (i >= 0) this.reviveZones.splice(i, 1);
+  }
+
+  /** Un équipier vivant resté `REVIVE_TIME` s dans la zone ramène le joueur mort, avec une escouade de base (sa progression est conservée). */
+  private updateReviveZones(dt: number): void {
+    for (let i = this.reviveZones.length - 1; i >= 0; i--) {
+      const z = this.reviveZones[i];
+      const sq = this.squadOf(z.owner);
+      if (!sq || sq.alive) {
+        this.reviveZones.splice(i, 1);
+        continue;
+      }
+      let inside = false;
+      for (const mate of this.squads) {
+        if (!mate.alive || mate === sq) continue;
+        if (mate.soldiers.some((s) => s.alive && (s.x - z.x) ** 2 + (s.y - z.y) ** 2 <= (z.r + s.radius) ** 2)) {
+          inside = true;
+        }
+      }
+      z.progress = inside ? Math.min(REVIVE_TIME, z.progress + dt) : Math.max(0, z.progress - dt);
+      if (z.progress < REVIVE_TIME) continue;
+      this.reviveZones.splice(i, 1);
+      // escouade de base, ramenée (ou complétée en gunners) à 60 % de la taille max atteinte par ce joueur
+      const target = Math.max(1, Math.min(sq.maxSize, Math.round(sq.peakSize * REVIVE_SQUAD_RATIO)));
+      const base = this.rng.pick(START_SQUADS);
+      const comp = base.slice(0, target);
+      while (comp.length < target) comp.push('gunner');
+      sq.spawn(comp, { x: z.x, y: z.y });
+      for (const s of sq.soldiers) s.invulnerable = 2.5;
+    }
+  }
+
   private updateCorpsesAndRocks(dt: number): void {
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       const c = this.corpses[i];
@@ -346,7 +448,7 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
-  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire'): void {
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid'): void {
     this.blasts.push({ x, y, r, dmg, team, owner, knock, style });
   }
 
@@ -419,10 +521,17 @@ export class Sim {
 
     for (const sq of this.squads) {
       const hadSoldiers = sq.size > 0;
-      for (const s of sq.removeDead()) {
+      const deadOfSquad = sq.removeDead();
+      for (const s of deadOfSquad) {
         this.events.push({ t: 'soldierDied', id: s.id, x: s.x, y: s.y, cls: s.def.id, owner: s.owner });
       }
-      if (hadSoldiers && sq.size === 0) this.events.push({ t: 'squadWiped', owner: sq.owner });
+      if (hadSoldiers && sq.size === 0) {
+        this.events.push({ t: 'squadWiped', owner: sq.owner });
+        if (this.mode.reviveZones && !this.reviveZones.some((z) => z.owner === sq.owner)) {
+          const last = deadOfSquad[deadOfSquad.length - 1];
+          this.reviveZones.push({ owner: sq.owner, x: last.x, y: last.y, r: REVIVE_RADIUS, progress: 0 });
+        }
+      }
     }
   }
 

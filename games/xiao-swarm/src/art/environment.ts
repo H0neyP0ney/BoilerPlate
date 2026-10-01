@@ -147,7 +147,30 @@ function lava(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   for (let i = 0; i < 12; i++) glow(rng.range(0, w), rng.range(0, h), rng.range(12, 26), 'rgba(255,225,110,0.85)', 2.5);
 }
 
+/** Champ d'étoiles (texture qui se raccorde) : `count` points de rayon ≤ `maxR`, aléa fixé par `seed`. */
+function stars(ctx: CanvasRenderingContext2D, size: number, count: number, maxR: number, seed: number): void {
+  let s = seed >>> 0;
+  const rnd = (): number => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < count; i++) {
+    const x = rnd() * size;
+    const y = rnd() * size;
+    const r = 0.5 + rnd() * maxR;
+    const tint = rnd();
+    ctx.fillStyle = tint < 0.6 ? 'rgba(235,240,255,' : tint < 0.85 ? 'rgba(170,200,255,' : 'rgba(255,220,190,';
+    ctx.globalAlpha = 0.35 + rnd() * 0.65;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    if (r > maxR * 0.8) ctx.fillRect(x - r * 2.2, y - 0.4, r * 4.4, 0.8), ctx.fillRect(x - 0.4, y - r * 2.2, 0.8, r * 4.4); // scintillement des plus grosses
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function makeEnvironmentTextures(scene: Phaser.Scene): void {
+  canvasTexture(scene, 'stars_far', 512, 512, (ctx) => stars(ctx, 512, 140, 1.1, 11));
+  canvasTexture(scene, 'stars_mid', 512, 512, (ctx) => stars(ctx, 512, 70, 1.7, 23));
+  canvasTexture(scene, 'stars_near', 512, 512, (ctx) => stars(ctx, 512, 28, 2.6, 37));
   canvasTexture(scene, 'lava', 128, 128, lava);
   canvasTexture(scene, 'palm', 160, 172, palm);
   canvasTexture(scene, 'bush', 112, 78, (ctx) => bush(ctx, false, 1));

@@ -54,9 +54,12 @@ export class SoldierView {
     if (this.animated) {
       const id = this.bodyId;
       const b = this.body;
+      // Avec une cible, le sprite regarde toujours vers elle (même en marchant dans l'autre sens) : direction du tir, pas du déplacement.
+      const dirX = s.target ? Math.cos(s.aim) : s.vx;
+      const dirY = s.target ? 0 : s.vy;
       const played =
         (s.target && sprites.playDirectional(b, id, 'shoot', Math.cos(s.aim), 0)) ||
-        (moving && sprites.playDirectional(b, id, 'walk', s.vx, s.vy)) ||
+        (moving && sprites.playDirectional(b, id, 'walk', dirX, dirY)) ||
         sprites.playDirectional(b, id, 'idle', facing, 0);
       if (!played) b.setFlipX(sprites.flipFor(id, facing));
     } else {
@@ -92,9 +95,11 @@ export class SoldierView {
   /** Bouche du canon en monde (planche : point de la frame en cours, comme dans la visionneuse), sinon null. */
   muzzlePoint(): { x: number; y: number } | null {
     const b = this.body;
-    const key = b.anims.currentAnim?.key;
+    const anims = (b as Partial<Phaser.GameObjects.Sprite>).anims;
+    if (!anims) return null; // visuel statique (dessin procédural / image) : pas de bouche par frame
+    const key = anims.currentAnim?.key;
     const anim = key?.startsWith(this.bodyId + ':') ? key.slice(this.bodyId.length + 1) : 'shoot';
-    const frame = b.anims.currentFrame ? b.anims.currentFrame.index - 1 : 0;
+    const frame = anims.currentFrame ? anims.currentFrame.index - 1 : 0;
     const m = sprites.muzzleFor(this.bodyId, anim, frame);
     if (!m) return null;
     const fx = b.flipX ? 1 - m[0] : m[0];
@@ -124,8 +129,11 @@ export class AlienView {
   private readonly animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
 
+  /** Zombie (ressuscité par un chaman) : flammes rouges qui montent du corps. */
+  private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
+
   constructor(
-    scene: Phaser.Scene,
+    private readonly scene: Phaser.Scene,
     readonly state: AlienState,
   ) {
     this.id = `alien_${state.def.id}`;
@@ -166,18 +174,46 @@ export class AlienView {
       if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
     }
 
+    if (a.revived) this.syncZombieFx();
+
     if (this.flash > 0) {
       this.flash -= dt;
       this.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
     } else if (a.chargeT > 0 || a.rushWind > 0) {
       this.body.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
+    } else if (a.revived) {
+      this.body.setTint(0xff8a8a).setTintMode(Phaser.TintModes.MULTIPLY); // teinte rougeâtre du zombie
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
   }
 
+  /** Émetteur de flammes rouges (ADD) qui suit le zombie ; créé à la première frame où il est ressuscité. */
+  private syncZombieFx(): void {
+    const a = this.state;
+    if (!this.zombieFx) {
+      const r = a.radius;
+      this.zombieFx = this.scene.add
+        .particles(0, 0, 'fx_flame', {
+          x: { min: -r * 0.7, max: r * 0.7 },
+          y: { min: -r * 0.3, max: r * 0.5 },
+          speedY: { min: -90, max: -40 },
+          speedX: { min: -14, max: 14 },
+          scale: { start: 0.75, end: 0 },
+          alpha: { start: 0.9, end: 0 },
+          lifespan: { min: 380, max: 650 },
+          frequency: 28,
+          tint: [0xff2a0a, 0xff5a1a, 0xc01008],
+          blendMode: 'ADD',
+        })
+        .setDepth(DEPTH.actors + 5000);
+    }
+    this.zombieFx.setPosition(this.rx, this.ry - a.radius * 0.4);
+  }
+
   destroy(): void {
     this.body.destroy();
+    this.zombieFx?.destroy();
   }
 }
 

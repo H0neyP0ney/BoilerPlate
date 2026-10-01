@@ -45,6 +45,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.9,
+        shadow: 1.35,
+        anchors: { 'walk:left': [0.4888, 0.8834], 'idle:left': [0.4854, 0.863], 'walk:right': [0.5024, 0.8732], 'idle:right': [0.499, 0.8562] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 5 },
@@ -65,6 +67,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.6,
+        shadow: 1.25,
+        anchors: { 'idle:right': [0.5058, 0.8868], 'idle:left': [0.4956, 0.8715] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
@@ -85,6 +89,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 1.35,
+        shadow: 1.35,
+        anchors: { 'idle:left': [0.4956, 0.8596], 'idle:right': [0.4865, 0.8573] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 4 },
@@ -104,6 +110,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.85,
+        shadow: 1.3,
+        anchors: { 'idle:right': [0.4872, 0.876], 'idle:left': [0.498, 0.858] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 6 },
@@ -123,6 +131,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.95,
+        shadow: 1.35,
+        anchors: { 'idle:left': [0.4902, 0.8965], 'idle:right': [0.4934, 0.8836] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 6 },
@@ -142,6 +152,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.95,
+        shadow: 1.2,
+        anchors: { 'idle:left': [0.4806, 0.8965], 'idle:right': [0.4902, 0.89] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 6 },
@@ -161,6 +173,29 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 1,
+        shadow: 1.25,
+        anchors: { 'idle:right': [0.4885, 0.896], 'idle:left': [0.4823, 0.8929] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 6 },
+          walk: { frames: range(0, 15), fps: 12 },
+        },
+      },
+    },
+  },
+  // Slime soigneur — planche du slime recolorée en jaune pâle (node tools/hue-shift.mjs … slime_lemon.png 315 0.5).
+  {
+    type: 'sheet',
+    url: 'aliens/slime_lemon.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    sprites: {
+      alien_healer: {
+        originX: 0.516,
+        originY: 0.948,
+        scale: 1,
+        shadow: 1.25,
+        anchors: { 'idle:right': [0.4885, 0.896], 'idle:left': [0.4823, 0.8929] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 6 },
@@ -180,6 +215,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.95,
+        shadow: 1.3,
+        anchors: { 'idle:right': [0.4967, 0.8739], 'idle:left': [0.4967, 0.89] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 6 },
@@ -199,6 +236,8 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.516,
         originY: 0.948,
         scale: 0.9,
+        shadow: 1.3,
+        anchors: { 'idle:right': [0.4956, 0.9004], 'idle:left': [0.5058, 0.9004] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 15), fps: 7 },
@@ -218,9 +257,14 @@ export const ASSETS: AssetEntry[] = [
     frameHeight: 52,
     sprites: {
       soldier_gunner: {
-        originX: 0.339,
-        originY: 0.936,
-        scale: 1,
+        originX: 0.3478,
+        originY: 0.9134,
+        scale: 1.25,
+        anchors: { 'idle:right': [0.3624, 0.8946], 'idle:left': [0.6401, 0.8983], 'walk:left': [0.6576, 0.8946] },
+        muzzles: {
+          idle: [[0.8968, 0.4058], [0.9055, 0.3908], [0.9026, 0.3983], [0.9055, 0.4134], [0.9143, 0.4171], [0.9143, 0.4397], [0.9202, 0.4397], [0.9289, 0.4435], [0.9231, 0.4397], [0.926, 0.4284], [0.926, 0.4134], [0.9231, 0.4021], [0.9202, 0.3983], [0.9143, 0.3908], [0.9085, 0.3832], [0.9114, 0.3908]],
+          walk: [[0.9026, 0.4209], [0.9026, 0.4284], [0.9026, 0.4548], [0.9026, 0.436], [0.9026, 0.4171], [0.9114, 0.4247], [0.9085, 0.4322], [0.9114, 0.4171], [0.9055, 0.4134], [0.9026, 0.4322], [0.9055, 0.4548], [0.9114, 0.4209], [0.9085, 0.3945], [0.9114, 0.3983], [0.9085, 0.4171], [0.9143, 0.4209]],
+        },
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
           walk: { frames: range(16, 31), fps: 16 },

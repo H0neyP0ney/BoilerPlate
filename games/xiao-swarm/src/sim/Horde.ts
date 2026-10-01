@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CROWD } from '../config';
+import { CROWD, DIFFICULTY, GRAB_IMMUNE, ZOMBIE_MUL } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -11,6 +11,8 @@ const SEEK_RADIUS = 700;
 const ELITE_RESERVE = 12;
 /** La formation ramène vite le soldat à son slot : l'impulsion de la langue est majorée pour que la traction soit visible. */
 const TONGUE_BOOST = 2.6;
+/** Traction maximale de la langue (px avant majoration) : assez pour sortir l'unité de l'escouade, pas pour l'isoler. */
+const TONGUE_MAX_PULL = 100;
 
 /**
  * IA de la horde : chaque alien choisit une cible selon sa préférence (GDD §11),
@@ -27,7 +29,7 @@ export class Horde {
 
   get maxAliens(): number {
     const m = this.sim.mode.maxAliens;
-    return m.base + m.perPlayer * this.sim.aliveSquads.length;
+    return Math.round((m.base + m.perPlayer * this.sim.aliveSquads.length) * DIFFICULTY.alienCountMul);
   }
 
   /**
@@ -45,12 +47,20 @@ export class Horde {
     const def = ALIENS[type];
     const c = squad.center;
     let origin: Point | null = null;
-    for (let tries = 0; tries < 40 && !origin; tries++) {
+    // Jamais sur un joueur : hors de vue de TOUTES les squads vivantes (pas seulement celle qui reçoit la vague).
+    const safe = distance * 0.85;
+    const others = this.sim.aliveSquads;
+    const farFromPlayers = (p: Point): boolean => others.every((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) - o.radius >= safe);
+    let fallback: Point | null = null;
+    for (let tries = 0; tries < 60 && !origin; tries++) {
       const a = rng.range(0, Math.PI * 2);
       const d = distance + rng.range(60, 180);
       const p = { x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d };
-      if (arena.isFree(p, def.radius + 20)) origin = p;
+      if (!arena.isFree(p, def.radius + 20)) continue;
+      if (farFromPlayers(p)) origin = p;
+      else fallback ??= p;
     }
+    origin ??= fallback;
     if (!origin) return;
     for (let i = 0; i < count && this.canSpawn(type); i++) {
       const p = { x: origin.x + rng.range(-50, 50), y: origin.y + rng.range(-50, 50), radius: def.radius };
@@ -65,7 +75,7 @@ export class Horde {
   private create(def: (typeof ALIENS)[AlienId], x: number, y: number, hpFrac: number, revived: boolean, hpMul = 1): AlienState {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
-    const maxHp = def.hp * this.sim.alienHpMul * hpMul;
+    const maxHp = def.hp * this.sim.alienHpMul * (def.boss ? DIFFICULTY.bossHpMul : DIFFICULTY.alienHpMul) * hpMul * (revived ? ZOMBIE_MUL : 1);
     return {
       kind: 'alien',
       id: this.sim.ids.get(),
@@ -159,7 +169,8 @@ export class Horde {
       gx /= gd;
       gy /= gd;
 
-      let speed = def.speed;
+      let speed = def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y);
+      const power = a.revived ? ZOMBIE_MUL : 1; // zombie : dégâts ×3
       let contactOverride: number | undefined;
       // Slime de feu : sème des flammes derrière lui tant qu'il avance
       if (def.trail) {
@@ -260,12 +271,14 @@ export class Horde {
           a.rushDy = gy;
         }
       }
+      // Soigneur : rayons de soin vers les alliés les plus blessés à portée
+      if (def.healBeam) this.healAllies(a, dt);
       // Langue : attrape le soldat visé et le tire vers lui
       if (def.tongue) {
         a.tongueCd -= dt;
         if (a.tongueCd <= 0 && a.target && gd < def.tongue.range) {
-          this.tongue(a, a.target);
-          a.tongueCd = def.tongue.cooldown * rng.range(0.85, 1.2);
+          // cible déjà grabée (langue ou bulle) : immunisée, on retente bientôt
+          a.tongueCd = this.tongue(a, a.target) ? def.tongue.cooldown * rng.range(0.85, 1.2) : 0.6;
         }
       }
       // Spray de boules qui repoussent
@@ -286,7 +299,7 @@ export class Horde {
         }
       }
       // les tireurs (cloche, langue, spray) se tiennent à distance au lieu de foncer sur leur cible
-      const hold = def.revive ? 380 : (def.lob?.range ?? def.spray?.range ?? def.tongue?.range);
+      const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.healBeam?.hold);
       const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + 4 : 0);
       const go = (gd > contact && a.rushWind <= 0) || a.chargeT > 0 || a.rushT > 0;
       const desiredX = go ? gx * speed : 0;
@@ -332,7 +345,7 @@ export class Horde {
         if (d2 >= (min + 4) * (min + 4)) continue;
         if (def.capture) {
           // au contact : avale le soldat (un seul à la fois) ; sans prisonnier elle ne fait rien d'autre
-          if (!a.captive && s.invulnerable <= 0) {
+          if (!a.captive && s.invulnerable <= 0 && s.grabbed <= 0) {
             a.captive = s;
             s.capturedBy = a.id;
             this.sim.events.push({ t: 'capture', alien: a.id, soldier: s.id });
@@ -352,16 +365,35 @@ export class Horde {
           const d = Math.sqrt(d2) || 1;
           s.kx += (dx / d) * def.charge.knockback;
           s.ky += (dy / d) * def.charge.knockback;
-          this.sim.damageSoldier(s, def.damage);
+          this.sim.damageSoldier(s, def.damage * power);
           a.chargeT = 0;
           a.attackCd = def.attackCooldown;
         } else if (a.attackCd <= 0) {
-          this.sim.damageSoldier(s, def.damage);
+          this.sim.damageSoldier(s, def.damage * power);
           a.attackCd = def.attackCooldown;
         }
       }
 
       arena.constrain(a);
+    }
+  }
+
+  /** Soigneur : soigne en continu les `targets` alliés blessés les plus abîmés à portée ; un événement par rayon toutes les 0,3 s (affichage). */
+  private healAllies(a: AlienState, dt: number): void {
+    const hb = a.def.healBeam!;
+    const near = this.sim.alienHash.query(a.x, a.y, hb.range + 60, this.scratch);
+    const wounded: AlienState[] = [];
+    for (const o of near) {
+      if (o === a || !o.alive || o.hp >= o.maxHp || Math.hypot(o.x - a.x, o.y - a.y) > hb.range) continue;
+      wounded.push(o);
+    }
+    wounded.sort((p, q) => p.hp / p.maxHp - q.hp / q.maxHp);
+    a.sprayCd -= dt; // sert ici de minuteur d'affichage des rayons
+    const show = a.sprayCd <= 0;
+    if (show) a.sprayCd = 0.3;
+    for (const o of wounded.slice(0, hb.targets)) {
+      o.hp = Math.min(o.maxHp, o.hp + o.maxHp * hb.pct * dt);
+      if (show) this.sim.events.push({ t: 'healBeam', from: a.id, to: o.id, dur: 0.38 });
     }
   }
 
@@ -383,16 +415,19 @@ export class Horde {
   }
 
   /** Langue : tire le soldat vers l'alien d'une fraction de la distance (le recul est amorti par `CROWD.knockDamp`, donc déplacement = impulsion / amortissement). */
-  private tongue(a: AlienState, s: SoldierState): void {
+  private tongue(a: AlienState, s: SoldierState): boolean {
+    if (s.capturedBy || s.grabbed > 0) return false;
     const t = a.def.tongue!;
     const dx = a.x - s.x;
     const dy = a.y - s.y;
     const d = Math.hypot(dx, dy) || 1;
-    const pull = Math.min(d * t.pull, Math.max(0, d - (a.radius + s.radius + 22)));
+    const pull = Math.min(d * t.pull, TONGUE_MAX_PULL, Math.max(0, d - (a.radius + s.radius + 22)));
     s.kx += (dx / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
     s.ky += (dy / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
+    s.grabbed = GRAB_IMMUNE;
     this.sim.damageSoldier(s, t.damage);
     this.sim.events.push({ t: 'tongue', alien: a.id, target: s.id, dur: 0.5 });
+    return true;
   }
 
   private slam(a: AlienState): void {

@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, SQUAD } from '../config';
+import { CROWD, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
@@ -48,6 +48,8 @@ export class Mirror {
       squad.level = sq.level;
       squad.xp = sq.xp;
       squad.offer = sq.offer.length ? sq.offer.map((i) => UPGRADE_IDS[i]) : null;
+      squad.offerPrism = sq.offerPrism;
+      squad.buffs.stim = sq.stim;
       UPGRADE_IDS.forEach((id, i) => (squad.picked[id] = sq.picked[i]));
       squad.stats.reset();
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
@@ -86,6 +88,19 @@ export class Mirror {
 
     sim.xp.orbs.length = 0;
     snap.orbs.forEach((o, i) => sim.xp.orbs.push({ id: i, x: o.x, y: o.y, px: o.x, py: o.y, value: o.value, life: 10 }));
+
+    sim.reviveZones.length = 0;
+    for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
+
+    sim.powerups.items.length = 0;
+    for (const p of snap.powerups) sim.powerups.items.push({ ...p });
+    sim.powerups.fields.length = 0;
+    for (const f of snap.fields) sim.powerups.fields.push({ ...f });
+
+    sim.puddles.length = 0;
+    for (const p of snap.puddles) sim.puddles.push({ ...p });
+    sim.arena.rocks.length = 0;
+    for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
 
     sim.combat.projectiles.releaseAll();
     for (const p of snap.projectiles) this.addProjectile(p);
@@ -151,6 +166,7 @@ export class Mirror {
         aim: u.aim,
         invulnerable: 0,
         capturedBy: 0,
+        grabbed: 0,
       };
       this.soldiers.set(u.id, s);
     }
@@ -230,6 +246,7 @@ export class Mirror {
     s.rushDy = a.rushDy;
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
+    s.revived = a.zombie;
     this.setGoal(s, a.x, a.y);
     return s;
   }

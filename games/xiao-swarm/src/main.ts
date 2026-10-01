@@ -5,11 +5,11 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { HudScene } from './scenes/HudScene';
+import { LevelUpScene } from './scenes/LevelUpScene';
 import { PauseScene } from './scenes/PauseScene';
 import { MiscViewerScene } from './scenes/MiscViewerScene';
 import { ObstacleEditorScene } from './scenes/ObstacleEditorScene';
 import { ParticleViewerScene } from './scenes/ParticleViewerScene';
-import { LevelUpScene } from './scenes/LevelUpScene';
 import { WaveEditorScene } from './scenes/WaveEditorScene';
 import { UnitViewerScene } from './scenes/UnitViewerScene';
 

@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'spider' | 'squid' | 'beast' | 'crab' | 'slime_pink' | 'slime_blue' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'rhino_boss' | 'crab_king';
+export type AlienId = 'slime' | 'spider' | 'squid' | 'beast' | 'crab' | 'slime_pink' | 'slime_blue' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'healer' | 'rhino_boss' | 'crab_king';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'medic' | 'weakest' | 'center' | 'tank';
@@ -21,8 +21,8 @@ export interface AlienDef {
   charge?: { trigger: number; speedMul: number; duration: number; cooldown: number; knockback: number };
   /** Slam de zone : knockback + dégâts autour de lui. */
   slam?: { radius: number; damage: number; cooldown: number; knockback: number };
-  /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible et lance une boule qui explose au sol (zone `aoe`). */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; rock?: { radius: number; ttl: number } };
+  /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui explosent au sol (zone `aoe`). */
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; rock?: { radius: number; ttl: number }; count?: number; keepMoving?: boolean };
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -41,8 +41,28 @@ export interface AlienDef {
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
   rush?: { cooldown: number; windup: number; length: number; width: number; speed: number; damage: number; knockback: number };
-  /** Crachat en spray : `pellets` petites boules en éventail (`spread` rad), peu de dégâts mais elles repoussent (`push`). */
-  spray?: { range: number; cooldown: number; pellets: number; spread: number; speed: number; damage: number; push: number; life: number; texture: string };
+  /** Crachat : quelques boules en cloche (chacune télégraphiée) qui blessent et laissent une flaque ralentissante. */
+  spray?: {
+    range: number;
+    cooldown: number;
+    /** Nombre de boules (peu, mais chacune est télégraphiée). */
+    pellets: number;
+    /** Dispersion (px) autour du point visé. */
+    scatter: number;
+    /** Durée du vol (s). */
+    flight: number;
+    /** Part du déplacement de la cible anticipée (0 = vise où elle est, 1 = anticipation complète). */
+    lead: number;
+    damage: number;
+    /** Rayon de l'impact (px). Aucun recul : l'impact laisse une flaque qui ralentit. */
+    aoe: number;
+    puddle: { radius: number; ttl: number; slow: number };
+    texture: string;
+  };
+  /** Soigneur : rayons de soin vers les `targets` alliés les plus blessés à portée (`pct` de leurs PV max par seconde) ; reste à `hold` px des soldats. */
+  healBeam?: { range: number; targets: number; pct: number; hold: number };
+  /** Échelle d'affichage (1 par défaut) ; le rayon de collision (`radius`) est à régler en conséquence. */
+  scale?: number;
   /** Probabilité de base de lâcher une recrue. */
   recruitChance: number;
   color: number;
@@ -69,7 +89,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   slime_pink: {
     id: 'slime_pink',
     hp: 14,
-    speed: 128,
+    speed: 180, // +40 %
     radius: 11,
     mass: 0.6,
     damage: 5,
@@ -91,7 +111,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 10,
     attackCooldown: 1,
     target: 'nearest',
-    lob: { range: 300, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball' },
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball' }, // portée -20 %
     revivable: true,
     xp: 6,
     recruitChance: 0.1,
@@ -108,7 +128,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4,
     attackCooldown: 0.8,
     target: 'nearest',
-    deathBlast: { delay: 1, radius: 95, damage: 26, knockback: 560 },
+    deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 560 },
     xp: 3,
     recruitChance: 0.03,
     color: 0xff7a3a,
@@ -146,7 +166,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xb03a3a,
     hpBarWidth: 44,
   },
-  /** Cracheur : crache un spray de petites boules qui repoussent les soldats. */
+  /** Cracheur : crache quelques boules violettes en cloche qui laissent une flaque ralentissante. */
   spitter: {
     id: 'spitter',
     hp: 34,
@@ -156,10 +176,26 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4,
     attackCooldown: 0.9,
     target: 'nearest',
-    spray: { range: 330, cooldown: 2.4, pellets: 11, spread: 0.7, speed: 330, damage: 2, push: 300, life: 1.2, texture: 'fx_spit' },
+    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, puddle: { radius: 46, ttl: 6, slow: 0.45 }, texture: 'fx_spit' },
     xp: 4,
     recruitChance: 0.04,
     color: 0xb060e0,
+    hpBarWidth: 30,
+  },
+  /** Slime jaune soigneur : reste en retrait et soigne ses alliés blessés avec des rayons de soin (tuez-le en priorité). */
+  healer: {
+    id: 'healer',
+    hp: 45,
+    speed: 70,
+    radius: 17,
+    mass: 1.1,
+    damage: 3,
+    attackCooldown: 1,
+    target: 'nearest',
+    healBeam: { range: 270, targets: 2, pct: 0.12, hold: 320 },
+    xp: 6,
+    recruitChance: 0.06,
+    color: 0xf2e24a,
     hpBarWidth: 30,
   },
   /** Chaman : slime magique qui reste en retrait et ressuscite les slimes morts depuis leur flaque (une fois chacun). */
@@ -172,7 +208,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 3,
     attackCooldown: 1,
     target: 'nearest',
-    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 0.6 },
+    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1 }, // le ressuscité est un ZOMBIE (×3 PV et dégâts, voir config.ZOMBIE_MUL)
     xp: 8,
     recruitChance: 0.1,
     color: 0xffd84a,
@@ -197,10 +233,10 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
     id: 'bubble',
-    hp: 600,
-    speed: 175,
+    hp: 720,
+    speed: 210,
     radius: 22,
-    mass: 0.8,
+    mass: 3,
     damage: 0,
     attackCooldown: 1,
     target: 'nearest',
@@ -221,7 +257,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 6,
     attackCooldown: 0.8,
     target: 'nearest',
-    trail: { every: 0.22, radius: 24, ttl: 5, dps: 14 },
+    trail: { every: 0.22, radius: 24, ttl: 9, dps: 24 },
     xp: 4,
     recruitChance: 0.03,
     color: 0xff5a1a,
@@ -237,7 +273,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 14,
     attackCooldown: 1,
     target: 'nearest',
-    rush: { cooldown: 4.5, windup: 0.9, length: 430, width: 120, speed: 780, damage: 45, knockback: 850 },
+    rush: { cooldown: 4.5, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 850 },
     boss: { kind: 'mini' },
     xp: 70,
     recruitChance: 1,
@@ -307,19 +343,21 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   crab: {
     id: 'crab',
-    hp: 900,
+    hp: 2700, // ×3
     speed: 48,
-    radius: 50,
+    radius: 150, // 3× plus gros (affichage et collision)
+    scale: 3,
     mass: 30,
     damage: 25,
     attackCooldown: 1.2,
     target: 'center',
-    slam: { radius: 140, damage: 20, cooldown: 3.2, knockback: 520 },
+    slam: { radius: 330, damage: 20, cooldown: 3.2, knockback: 520 },
+    lob: { range: 620, cooldown: 3, flight: 1.15, damage: 22, aoe: 85, texture: 'fx_blob_green', count: 3, keepMoving: true },
     boss: { kind: 'mini' },
     xp: 60,
     recruitChance: 1,
     color: 0xd9435a,
-    hpBarWidth: 90,
+    hpBarWidth: 200,
   },
 };
 
@@ -327,4 +365,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'slime_pink', 'slime_blue', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'thrower', 'bubble', 'fire'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime', 'slime_pink', 'slime_blue', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'healer', 'thrower', 'bubble', 'fire'];

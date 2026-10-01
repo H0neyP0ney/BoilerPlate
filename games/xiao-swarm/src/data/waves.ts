@@ -43,8 +43,7 @@ export const WAVE_SCRIPT_END = 600;
 export const WAVE_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 /**
- * Script de départ : 10 minutes en DENTS DE SCIE — la pression monte pendant ~1 min 30, culmine, puis retombe à ~60 % avant de
- * remonter plus haut. Boss : mini-boss à 2:00 (Rhinocéros Alpha) et 5:00 (Crabe géant), boss final à 10:00 (Roi Crabe) ;
+ * Script de départ : 10 minutes en DENTS DE SCIE COURTES (cycles de 75 s : ~55 s de montée, ~20 s de creux plus doux). Boss : mini-boss à 2:00 (Rhinocéros Alpha) et 5:00 (Crabe géant), boss final à 10:00 (Roi Crabe) ;
  * les vagues continuent tant que le boss final n'est pas mort. Chaque niveau 1-8 introduit un nouveau type d'ennemi
  * (1 slime · 2 rose · 3 kamikaze · 4 grenouille · 5 slime bleu · 6 cracheur, feu, chaman · 7 rhinocéros, lanceur, bulle ·
  * 8 gros mélanges). Niveau 9 = boss (configuration forcée par la timeline via `config`).
@@ -79,16 +78,16 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     6: [
       { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'fire', count: 4 }, { type: 'slime', count: 6 }] },
       { name: 'Brasier', groups: [{ type: 'fire', count: 6 }, { type: 'slime_pink', count: 10 }] },
-      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'slime', count: 10 }, { type: 'slime_pink', count: 6 }] },
+      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'healer', count: 2 }, { type: 'slime', count: 10 }, { type: 'slime_pink', count: 6 }] },
     ],
     7: [
-      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'thrower', count: 4 }, { type: 'slime', count: 6 }] },
+      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'thrower', count: 4 }, { type: 'healer', count: 2 }, { type: 'slime', count: 6 }] },
       { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 4 }, { type: 'slime_pink', count: 11 }] },
       { name: 'Barrage', groups: [{ type: 'thrower', count: 6 }, { type: 'frog', count: 4 }, { type: 'fire', count: 4 }] },
     ],
     8: [
       { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'slime', count: 12 }, { type: 'slime_pink', count: 9 }] },
-      { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'kamikaze', count: 7 }] },
+      { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'healer', count: 3 }, { type: 'kamikaze', count: 7 }] },
       { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'fire', count: 7 }, { type: 'bubble', count: 2 }] },
     ],
     9: [
@@ -98,32 +97,48 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     ],
   },
   timeline: [
-    // ---- Dent de scie : montée (~90 s) → pic + mini-boss → creux (~60 % du pic) ----
-    // 0:00 → 2:00 : apprentissage, pic vers 1:50, mini-boss à 2:00
+    // ---- Dents de scie COURTES : un cycle de 75 s = montée (~55 s) puis creux (~20 s, niveau plus doux). 8 cycles = 10 min.
+    // Chaque cycle empile 2-3 niveaux qui montent ; le niveau le plus haut change d'un cycle à l'autre. Mini-boss à 2:00 et 5:00.
+    // cycle 1 (0:00)
     { at: 1, level: 1, every: 4, until: 40 },
-    { at: 20, level: 2, every: 9, until: 70 },
-    { at: 50, level: 3, every: 9, until: 95 },
-    { at: 85, level: 4, every: 8, until: 118 },
+    { at: 12, level: 2, every: 8, until: 55 },
+    { at: 30, level: 3, every: 9, until: 55 },
+    { at: 58, level: 1, every: 10, until: 72 },
+    // cycle 2 (1:15)
+    { at: 75, level: 2, every: 8, until: 130 },
+    { at: 85, level: 3, every: 8, until: 130 },
+    { at: 100, level: 4, every: 9, until: 130 },
     { at: 120, level: 9, config: 1 },
-    // creux 2:10 → 2:45
-    { at: 130, level: 3, every: 10, until: 165 },
-    // 2:45 → 5:00 : montée, pic vers 4:50, mini-boss à 5:00
-    { at: 165, level: 4, every: 9, until: 215 },
-    { at: 200, level: 5, every: 8, until: 255 },
-    { at: 245, level: 6, every: 8, until: 298 },
+    { at: 133, level: 2, every: 10, until: 147 },
+    // cycle 3 (2:30)
+    { at: 150, level: 3, every: 8, until: 205 },
+    { at: 162, level: 4, every: 8, until: 205 },
+    { at: 178, level: 5, every: 9, until: 205 },
+    { at: 208, level: 3, every: 10, until: 222 },
+    // cycle 4 (3:45)
+    { at: 225, level: 4, every: 8, until: 280 },
+    { at: 237, level: 5, every: 8, until: 280 },
+    { at: 252, level: 6, every: 9, until: 280 },
+    { at: 283, level: 4, every: 10, until: 297 },
     { at: 300, level: 9, config: 2 },
-    // creux 5:10 → 5:45
-    { at: 310, level: 4, every: 10, until: 345 },
-    // 5:45 → 8:00 : montée, pic vers 7:50
-    { at: 345, level: 5, every: 9, until: 395 },
-    { at: 385, level: 6, every: 8, until: 435 },
-    { at: 425, level: 7, every: 8, until: 478 },
-    // creux 8:10 → 8:45
-    { at: 490, level: 5, every: 10, until: 525 },
-    // 8:45 → 10:00 : dernière montée, boss final à 10:00 puis vagues continues tant qu'il n'est pas mort
-    { at: 525, level: 6, every: 8, until: 560 },
-    { at: 555, level: 7, every: 8, until: 590 },
-    { at: 580, level: 8, every: 8, until: 598 },
+    // cycle 5 (5:00)
+    { at: 300, level: 5, every: 8, until: 355 },
+    { at: 312, level: 6, every: 8, until: 355 },
+    { at: 328, level: 7, every: 9, until: 355 },
+    { at: 358, level: 5, every: 10, until: 372 },
+    // cycle 6 (6:15)
+    { at: 375, level: 6, every: 8, until: 430 },
+    { at: 387, level: 7, every: 8, until: 430 },
+    { at: 403, level: 8, every: 10, until: 430 },
+    { at: 433, level: 6, every: 10, until: 447 },
+    // cycle 7 (7:30)
+    { at: 450, level: 7, every: 8, until: 505 },
+    { at: 462, level: 8, every: 9, until: 505 },
+    { at: 508, level: 6, every: 10, until: 522 },
+    // cycle 8 (8:45) : dernière montée, boss final à 10:00 puis vagues continues tant qu'il n'est pas mort
+    { at: 525, level: 7, every: 8, until: 580 },
+    { at: 537, level: 8, every: 8, until: 598 },
+    { at: 555, level: 8, every: 9, until: 598 },
     { at: 600, level: 9, config: 3 },
     { at: 600, level: 8, every: 10, until: 36000 },
     { at: 605, level: 7, every: 7, until: 36000 },
@@ -146,4 +161,15 @@ export function levelAt(script: WaveScript, time: number): number {
   let level = 1;
   for (const e of script.timeline) if (e.config === undefined && e.at <= time && e.level > level) level = e.level; // les boss (configuration forcée) ne comptent pas
   return level;
+}
+
+/** Prochain boss (mini ou final) après l'instant `time` : moment du spawn et type du boss ; null s'il n'y en a plus. */
+export function nextBoss(script: WaveScript, time: number): { at: number; type: AlienId } | null {
+  let best: { at: number; type: AlienId } | null = null;
+  for (const e of script.timeline) {
+    if (e.config === undefined || e.at <= time || (best && e.at >= best.at)) continue;
+    const type = script.levels?.[e.level]?.[e.config - 1]?.groups[0]?.type;
+    if (type) best = { at: e.at, type };
+  }
+  return best;
 }

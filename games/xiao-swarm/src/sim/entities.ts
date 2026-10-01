@@ -43,6 +43,11 @@ export interface SoldierState extends Body {
   invulnerable: number;
   /** Id de la bulle qui le tient captif (0 = libre) : il ne bouge ni ne tire, et seule la bulle peut le blesser. */
   capturedBy: number;
+  /**
+   * Temps restant (s) d'un « grab » (langue) : tant qu'il est > GRAB_HOLD il est tiré hors de la formation (il ne rejoint pas son
+   * slot), et jusqu'à 0 il est immunisé contre tout autre grab (langue ou bulle).
+   */
+  grabbed: number;
 }
 
 export interface AlienState extends Body {
@@ -104,6 +109,10 @@ export interface Projectile {
   /** Caillou : rayon de l'obstacle laissé au sol à l'atterrissage (0 = aucun) et sa durée de vie (s). */
   rock: number;
   rockTtl: number;
+  /** Flaque ralentissante laissée à l'impact (rayon 0 = aucune), durée (s) et facteur de vitesse des soldats dedans. */
+  puddle: number;
+  puddleTtl: number;
+  puddleSlow: number;
   texture: string;
   team: Team;
   owner: PlayerId;
@@ -111,6 +120,47 @@ export interface Projectile {
 }
 
 /** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
+export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets';
+
+/** Power-up au sol : petit boost immédiat ramassé par une squad ; disparaît vite si personne ne le prend. */
+export interface PowerUpState {
+  id: number;
+  kind: PowerUpKind;
+  x: number;
+  y: number;
+  life: number;
+}
+
+/** Zone persistante laissée par un power-up : globe de soin (soigne les soldats dedans) ou de stase (ralentit énormément les aliens). */
+export interface Field {
+  id: number;
+  kind: 'heal' | 'stasis';
+  x: number;
+  y: number;
+  r: number;
+  ttl: number;
+}
+
+/** Flaque laissée par un crachat : ralentit les soldats qui s'y trouvent (`slow` = facteur de vitesse, < 1). */
+export interface Puddle {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  ttl: number;
+  slow: number;
+}
+
+/** Zone laissée au sol par un joueur mort (coop) : un équipier qui y reste `REVIVE_TIME` s le ramène avec une escouade de base. */
+export interface ReviveZone {
+  owner: PlayerId;
+  x: number;
+  y: number;
+  r: number;
+  /** Secondes passées dedans par un équipier (0 → REVIVE_TIME). */
+  progress: number;
+}
+
 export interface FirePatch {
   id: number;
   x: number;
@@ -139,6 +189,8 @@ export interface XpOrb {
   py: number;
   value: number;
   life: number;
+  /** Aimant (power-up) : joueur vers qui le globe est aspiré (sim seulement). */
+  pulled?: string;
 }
 
 export interface RecruitState {
@@ -149,6 +201,8 @@ export interface RecruitState {
   px: number;
   py: number;
   life: number;
+  /** Vitesse actuelle (px/s) quand la recrue est attirée : elle accélère tant qu'elle n'a pas rejoint l'escouade (sim seulement). */
+  spd?: number;
 }
 
 export const hpRatio = (b: Body): number => b.hp / b.maxHp;

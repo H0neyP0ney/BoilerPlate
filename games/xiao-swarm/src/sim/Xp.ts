@@ -1,10 +1,14 @@
 import { splitXp } from '../data/progression';
 import type { AlienState, XpOrb } from './entities';
 import type { Sim } from './Sim';
+import type { Squad } from './Squad';
 
 const PICK_RADIUS = 26;
 /** Rayon d'attraction de base (px), multiplié par la stat `magnet` de la squad. */
 const MAGNET_RADIUS = 110;
+/** Power-up aimant (coup unique) : rayon (px) dans lequel tout l'XP est aspiré à son ramassage, et vitesse d'aspiration. */
+const MAGNET_BUFF_RADIUS = 1000;
+const MAGNET_BUFF_PULL = 2.5;
 const LIFETIME = 45;
 /** Au-delà, les plus vieux globes disparaissent (garde l'affichage et la simulation légers). */
 const MAX_ORBS = 350;
@@ -58,6 +62,24 @@ export class Xp {
         bestD = d;
         bestMag = mag;
       }
+      // Globe aspiré par le power-up aimant (coup unique) : il vole vers le soldat le plus proche de sa squad jusqu'à être ramassé
+      if (o.pulled) {
+        const sq = this.sim.squadOf(o.pulled);
+        let near: (typeof best) | undefined;
+        let nearD = Infinity;
+        for (const s of sq?.soldiers ?? []) {
+          const d = Math.hypot(s.x - o.x, s.y - o.y);
+          if (s.alive && d < nearD) {
+            near = s;
+            nearD = d;
+          }
+        }
+        if (near) {
+          best = near;
+          bestD = nearD;
+          bestMag = MAGNET_BUFF_RADIUS;
+        } else o.pulled = undefined; // squad anéantie : le globe redevient un globe normal
+      }
       if (!best) continue;
       if (bestD < PICK_RADIUS) {
         this.sim.squadOf(best.owner)!.gainXp(o.value);
@@ -65,9 +87,18 @@ export class Xp {
         continue;
       }
       // plus il est proche, plus il accélère vers le soldat
-      const k = Math.min(1, dt * (5 + (1 - bestD / bestMag) * 10));
+      const k = Math.min(1, dt * (bestMag >= MAGNET_BUFF_RADIUS ? MAGNET_BUFF_PULL + (1 - bestD / bestMag) * 3.5 : 5 + (1 - bestD / bestMag) * 10));
       o.x += (best.x - o.x) * k;
       o.y += (best.y - o.y) * k;
+    }
+  }
+
+  /** Aimant (power-up, coup unique) : tout globe à moins de `radius` px du centre de la squad est aspiré vers elle, jusqu'à être ramassé. */
+  magnetize(squad: Squad, radius: number): void {
+    for (const o of this.orbs) {
+      if (Math.hypot(squad.center.x - o.x, squad.center.y - o.y) > radius) continue;
+      o.pulled = squad.owner;
+      o.life = Math.max(o.life, 10); // il ne disparaît pas en route
     }
   }
 

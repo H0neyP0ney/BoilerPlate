@@ -146,7 +146,7 @@ export class Fx {
     if (shake && e.shakeAmount > 0) this.scene.cameras.main.shake(e.shakeMs, e.shakeAmount);
   }
 
-  ring(x: number, y: number, radius: number, color: number): void {
+  ring(x: number, y: number, radius: number, color: number): Phaser.GameObjects.Image {
     const r = FX.ring;
     const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(r.startScaleX, r.startScaleY).setAlpha(r.alpha);
     this.scene.tweens.add({
@@ -158,6 +158,36 @@ export class Fx {
       ease: 'Cubic.Out',
       onComplete: () => img.destroy(),
     });
+    return img;
+  }
+
+  /** Colonne de lumière qui monte et s'estompe (nouvelle recrue dans la squad, mort d'un soldat…). */
+  column(x: number, y: number, color: number, height = 130, durationMs = 800): { img: Phaser.GameObjects.Image; dy: number }[] {
+    const img = this.scene.add.image(x, y + 6, 'fx_column').setOrigin(0.5, 1).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx);
+    const k = height / 220;
+    img.setScale(k * 1.5, k * 0.6).setAlpha(1);
+    this.scene.tweens.add({ targets: img, scaleX: k * 0.5, scaleY: k * 1.3, duration: durationMs, ease: 'Cubic.Out' });
+    this.scene.tweens.add({ targets: img, alpha: 0, delay: durationMs * 0.25, duration: durationMs * 0.75, onComplete: () => img.destroy() });
+    const glow = this.scene.add.image(x, y, 'fx_glow').setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx).setScale(1.2);
+    this.scene.tweens.add({ targets: glow, alpha: 0, scale: 2.4, duration: durationMs * 0.7, onComplete: () => glow.destroy() });
+    return [
+      { img, dy: 6 },
+      { img: glow, dy: 0 },
+    ];
+  }
+
+  /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */
+  death(x: number, y: number, color: number): void {
+    this.burst(x, y - 20, color, 44);
+    this.burst(x, y - 24, 0xffffff, 20);
+    this.gloop(x, y - 16, color, 0xffffff, 1.8);
+    this.puddles(x, y, color, 1.2);
+    this.ring(x, y, 130, color);
+    this.ring(x, y, 75, 0xffffff);
+    const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(3.4);
+    this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: 260, onComplete: () => flash.destroy() });
+    this.column(x, y, 0xff4a4a, 170, 700);
+    this.text(x, y - 46, '✖', '#ff5a5a', 34);
   }
 
   text(x: number, y: number, value: string, color = '#ffffff', size = 22): void {

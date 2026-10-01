@@ -1,11 +1,15 @@
 import { Pool } from '@xiao/engine/sim';
+import { STIM_FIRE, ZOMBIE_MUL } from '../config';
 import type { WeaponDef } from '../data/classes';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
 import type { Sim } from './Sim';
+import type { Squad } from './Squad';
 import type { PlayerId, Team } from './types';
 
 /** Plus grand rayon d'alien (crab) : marge de recherche dans la grille spatiale. */
 const MAX_UNIT_RADIUS = 55;
+/** Rafale de roquettes : délai (s) entre deux roquettes (30 roquettes ≈ 3,6 s). */
+const BARRAGE_INTERVAL = 0.12;
 
 /**
  * Tir automatique : chaque soldat vise l'ennemi le plus proche dans sa portée
@@ -31,6 +35,9 @@ export class Combat {
       knock: 0,
       rock: 0,
       rockTtl: 0,
+      puddle: 0,
+      puddleTtl: 0,
+      puddleSlow: 1,
       texture: '',
       team: 'aliens',
       owner: '',
@@ -44,9 +51,12 @@ export class Combat {
       p.aoe = 0;
       p.knock = 0;
       p.rock = 0;
+      p.puddle = 0;
       p.flame = false;
     },
   );
+  /** Rafales en cours (power-up roquettes) : roquettes restantes et délai avant la prochaine. */
+  private readonly barrages: { owner: PlayerId; left: number; total: number; t: number }[] = [];
   private readonly scratchA: AlienState[] = [];
   private readonly scratchS: SoldierState[] = [];
 
@@ -57,16 +67,17 @@ export class Combat {
     const pvp = this.sim.mode.pvp;
 
     for (const squad of this.sim.squads) {
-      const fireRate = squad.stats.get('fireRate');
+      const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
+      const rangeMul = squad.stats.get('range');
       for (const s of squad.soldiers) {
         if (s.capturedBy) continue; // avalé par une bulle : ne tire plus
         const weapon = s.def.weapon;
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;
         if (s.retarget <= 0 || (s.target && !s.target.alive)) {
-          let target: Unit | undefined = alienHash.nearest(s.x, s.y, weapon.range, (a) => a.alive, this.scratchA);
+          let target: Unit | undefined = alienHash.nearest(s.x, s.y, weapon.range * rangeMul, (a) => a.alive, this.scratchA);
           if (!target && pvp) {
-            target = soldierHash.nearest(s.x, s.y, weapon.range, (o) => o.alive && o.team !== s.team, this.scratchS);
+            target = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.team !== s.team, this.scratchS);
           }
           s.target = target ?? null;
           s.retarget = 0.15;
@@ -79,16 +90,17 @@ export class Combat {
         s.aim = Math.atan2(t.y - 10 - (s.y - 17), t.x - s.x);
         s.facing = Math.cos(s.aim) >= 0 ? 1 : -1;
         if (s.cooldown <= 0) {
-          this.fire(s, t, weapon, squad.stats.get('damage'));
+          this.fire(s, t, weapon, squad.stats.get('damage'), rangeMul);
           s.cooldown += weapon.cooldown;
           if (s.cooldown < 0) s.cooldown = 0;
         }
       }
     }
+    this.updateBarrages(dt);
     this.updateProjectiles(dt);
   }
 
-  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number): void {
+  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1): void {
     const { rng } = this.sim;
     const damage = weapon.damage * damageMul;
     const mx = s.x + s.facing * 4 + Math.cos(s.aim) * 30;
@@ -108,7 +120,7 @@ export class Combat {
     this.sim.events.push({ t: 'shot', id: s.id, cls: s.def.id, x: mx, y: my, aim: s.aim });
     const pellets = weapon.pellets ?? 1;
     const speed = weapon.projectileSpeed ?? 600;
-    const life = weapon.life ?? (weapon.range / speed) * 1.15;
+    const life = weapon.life ?? ((weapon.range * rangeMul) / speed) * 1.15;
     const spread = weapon.spread ?? 0;
     for (let i = 0; i < pellets; i++) {
       const a = pellets > 1 ? s.aim + (i / (pellets - 1) - 0.5) * spread + rng.range(-0.04, 0.04) : s.aim + rng.range(-spread, spread);
@@ -146,41 +158,79 @@ export class Combat {
   throwBlob(a: AlienState, target: SoldierState): void {
     const lob = a.def.lob!;
     const { rng } = this.sim;
-    const lx = target.x + target.vx * lob.flight + rng.range(-22, 22);
-    const ly = target.y + target.vy * lob.flight + rng.range(-22, 22);
-    const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight, lob.damage, lob.aoe, lob.texture, a.team, 'aliens');
-    if (lob.rock) {
-      p.rock = lob.rock.radius;
-      p.rockTtl = lob.rock.ttl;
+    const n = lob.count ?? 1;
+    const scatter = n > 1 ? 70 : 22; // plusieurs blobs : ils retombent éparpillés autour de la cible
+    for (let i = 0; i < n; i++) {
+      const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
+      const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
+      if (lob.rock) {
+        p.rock = lob.rock.radius;
+        p.rockTtl = lob.rock.ttl;
+      }
     }
   }
 
-  /** Cracheur : un éventail de petites boules vers le soldat visé (elles blessent peu mais repoussent). */
+  /**
+   * Cracheur : quelques boules en cloche autour de la position du soldat visé (anticipation réduite : `lead`). Chacune a son
+   * télégraphe ; l'impact blesse sans repousser et laisse une flaque qui ralentit les soldats.
+   */
   spray(a: AlienState, target: SoldierState): void {
     const sp = a.def.spray!;
     const { rng } = this.sim;
-    const ox = a.x;
-    const oy = a.y - a.radius * 0.5;
-    const base = Math.atan2(target.y - 10 - oy, target.x - ox);
     for (let i = 0; i < sp.pellets; i++) {
-      const ang = base + rng.range(-sp.spread / 2, sp.spread / 2);
-      const speed = sp.speed * rng.range(0.75, 1.15);
-      const p = this.projectiles.acquire();
-      p.x = p.px = ox + Math.cos(ang) * a.radius * 0.8;
-      p.y = p.py = oy + Math.sin(ang) * a.radius * 0.8;
-      p.vx = Math.cos(ang) * speed;
-      p.vy = Math.sin(ang) * speed;
-      p.life = p.maxLife = sp.life * rng.range(0.85, 1.1);
-      p.damage = sp.damage;
-      p.pierce = 0;
-      p.flame = false;
-      p.lob = false;
-      p.aoe = 0;
-      p.knock = sp.push;
-      p.texture = sp.texture;
-      p.team = a.team;
-      p.owner = 'aliens';
+      const ang = rng.range(0, Math.PI * 2);
+      const dist = Math.sqrt(rng.next()) * sp.scatter;
+      const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
+      const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
+      const flight = sp.flight * rng.range(0.92, 1.1);
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_MUL : 1), sp.aoe, sp.texture, a.team, 'aliens');
+      p.puddle = sp.puddle.radius;
+      p.puddleTtl = sp.puddle.ttl;
+      p.puddleSlow = sp.puddle.slow;
     }
+  }
+
+  /**
+   * Rafale de roquettes (power-up) : `count` roquettes tirées par les gunners de la squad, l'une après l'autre (une toutes les
+   * `BARRAGE_INTERVAL` s : c'est le tir qui est étalé dans le temps, pas la vitesse des roquettes) vers des aliens proches
+   * (ou éparpillées devant la squad s'il n'y en a pas) ; elles explosent en zone.
+   */
+  barrage(squad: Squad, count: number): void {
+    this.barrages.push({ owner: squad.owner, left: count, total: count, t: 0 });
+  }
+
+  private updateBarrages(dt: number): void {
+    for (let i = this.barrages.length - 1; i >= 0; i--) {
+      const b = this.barrages[i];
+      const squad = this.sim.squadOf(b.owner);
+      if (!squad || !squad.alive) {
+        this.barrages.splice(i, 1);
+        continue;
+      }
+      b.t -= dt;
+      while (b.t <= 0 && b.left > 0) {
+        this.fireRocket(squad, b.total - b.left);
+        b.left--;
+        b.t += BARRAGE_INTERVAL;
+      }
+      if (b.left <= 0) this.barrages.splice(i, 1);
+    }
+  }
+
+  private fireRocket(squad: Squad, index: number): void {
+    const { rng } = this.sim;
+    const gunners = squad.soldiers.filter((s) => s.alive && s.def.id === 'gunner');
+    const shooters = gunners.length > 0 ? gunners : squad.soldiers.filter((s) => s.alive);
+    if (shooters.length === 0) return;
+    const src = shooters[index % shooters.length];
+    const targets = this.sim.aliens.filter((a) => a.alive && Math.hypot(a.x - squad.center.x, a.y - squad.center.y) < 650);
+    const t = targets.length > 0 ? rng.pick(targets) : undefined;
+    const ang = rng.range(0, Math.PI * 2);
+    const r = rng.range(80, 300);
+    const lx = (t ? t.x : squad.center.x + Math.cos(ang) * r) + rng.range(-18, 18);
+    const ly = (t ? t.y : squad.center.y + Math.sin(ang) * r) + rng.range(-18, 18);
+    this.launchLob(src.x, src.y - 17, lx, ly, rng.range(0.35, 0.75), 20 * squad.stats.get('damage'), 58, 'fx_grenade', src.team, src.owner);
   }
 
   private launchLob(mx: number, my: number, lx: number, ly: number, flight: number, damage: number, aoe: number, texture: string, team: Team, owner: PlayerId): Projectile {
@@ -222,7 +272,9 @@ export class Combat {
           // dernier pas jusqu'au point d'impact, puis explosion (dégâts de zone aux ennemis de son camp adverse)
           p.x += p.vx * (dt + p.life);
           p.y += p.vy * (dt + p.life);
-          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner);
+          // crachat : pas de recul (la flaque ralentit à la place) ; les autres boules repoussent comme avant
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, p.puddle > 0 ? 0 : 300, p.puddle > 0 ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
+          if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
           if (p.rock > 0) this.sim.addRock(p.x, p.y, p.rock, p.rockTtl);
         }
         return true;
@@ -273,6 +325,7 @@ export class Combat {
   }
 
   clear(): void {
+    this.barrages.length = 0;
     this.projectiles.releaseAll();
   }
 }

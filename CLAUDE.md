@@ -37,6 +37,7 @@ recrues, vagues, vitesse du jeu, invincibilité ; hors ligne seulement). `npm ru
 - Modes (`data/modes.ts`) : `survival` (solo, 10 min, boss final obligatoire), `royale` (bots), `versus` (PvP), **`coop`** (multijoueur par défaut : pas de tir ami, difficulté dynamique, spectateur, relance).
 - Vagues : `data/waves.ts` (niveaux 1-9 → configurations tirées au hasard, timeline, boss via `config` forcée), exécutées par `sim/WaveRunner.ts`.
 - Ennemis : `data/aliens.ts` (capacités en données : `lob`, `tongue`, `rush`, `spray`, `deathBlast`, `revive`, `capture`, `trail`, `boss`). XP / upgrades : `data/progression.ts`, `sim/Xp.ts`.
+- Difficulté globale : `DIFFICULTY` dans `config.ts` ; power-ups : `sim/PowerUps.ts` ; zones de réanimation (coop) : `Sim.reviveZones`. Les cailloux, flaques, power-ups et zones passent par le **snapshot** (pas seulement des événements, qui sont non fiables).
 - Réseau : toute nouvelle donnée visible chez un client doit passer par `net/Protocol.ts` (snapshot) ou un `SimEvent`, et `Mirror` ; incrémenter `PROTOCOL_VERSION` si le format change.
 
 ## Règles d'architecture (multijoueur battle royale ~10 joueurs prévu)

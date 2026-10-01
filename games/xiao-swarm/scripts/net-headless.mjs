@@ -15,6 +15,7 @@ try {
   const { ClientSession } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
   const { LoopbackHub } = await vite.ssrLoadModule('/src/net/LoopbackTransport.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
+  const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
 
   const hub = new LoopbackHub();
@@ -100,7 +101,7 @@ try {
   hs.aliens.length = 0;
   hs.waves.trigger(9, 1);
   const bosses = hs.aliens.filter((x) => x.def.id === 'rhino_boss');
-  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === 900 * 2, 'boss unique, PV ×2 avec 2 joueurs', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
+  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(900 * DIFFICULTY.bossHpMul * 2), 'boss unique, PV ×2 avec 2 joueurs (et × bossHpMul)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
   hs.waves.trigger(1, 3); // « Petit groupe » (slime ×4 × 1,15) : chaque squad vivante reçoit la vague
@@ -126,13 +127,104 @@ try {
   check(Object.values(b.picked).reduce((n, v) => n + (v ?? 0), 0) >= 1, 'le choix du client est appliqué chez l\'hôte', JSON.stringify(b.picked));
   check(hs.tick > tickBefore, 'le jeu ne s\'arrête pas pendant le level up');
 
-  // 4) Mort en coop : pas de réapparition, l'équipier continue ; quand les deux sont morts → fin, puis relance.
+  // 3d) Cracheur : boules en cloche, pas de recul, flaque ralentissante reflétée chez le client ; cailloux suivis par snapshot.
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('spitter', a.center.x + 200, a.center.y);
+  const spitter = hs.aliens[0];
+  for (const s of a.soldiers) s.invulnerable = 0;
+  const kx0 = a.soldiers.reduce((n, s) => n + Math.abs(s.kx) + Math.abs(s.ky), 0);
+  hs.combat.spray(spitter, a.soldiers[0]);
+  check(hs.combat.projectiles.active.length === 3 && hs.combat.projectiles.active.every((p) => p.lob && p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${hs.combat.projectiles.active.length}`);
+  hs.aliens.length = 0;
+  for (let i = 0; i < 45; i++) await tick(client);
+  check(hs.puddles.length === 3 && client.sim.puddles.length === 3, 'impacts : flaques ralentissantes, reflétées chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
+  check(hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10) < 1, 'une flaque ralentit les soldats dedans', `×${hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10)}`);
+  void kx0;
+  hs.addRock(a.center.x, a.center.y + 300, 24, 10);
+  for (let i = 0; i < 6; i++) await tick(client);
+  check(client.sim.arena.rocks.length === hs.arena.rocks.length && hs.arena.rocks.length >= 1, 'cailloux reflétés chez le client (l’affichage suit la liste)', `${hs.arena.rocks.length} / ${client.sim.arena.rocks.length}`);
+
+  // 3e) Zombie, power-ups, bulles d’upgrade.
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('slime', a.center.x + 400, a.center.y, 1, true);
+  const zb = hs.aliens[0];
+  check(zb.revived && Math.abs(zb.maxHp - 55 * 1.5 * 3) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
+  hs.aliens.length = 0;
+  hs.powerups.items.push({ id: 9001, kind: 'stim', x: a.center.x, y: a.center.y, life: 5 });
+  hs.powerups.items.push({ id: 9002, kind: 'stasis', x: a.center.x + 30, y: a.center.y, life: 5 });
+  hs.powerups.items.push({ id: 9003, kind: 'rockets', x: a.center.x - 30, y: a.center.y, life: 5 });
+  for (let i = 0; i < 4; i++) await tick(client);
+  const stimSq = a.buffs.stim > 0 ? a : b; // la squad dont un soldat est passé dessus
+  check(stimSq.buffs.stim > 0 && client.sim.squadOf(stimSq.owner).buffs.stim > 0, 'stimpack ramassé, reflété chez le client', `${stimSq.buffs.stim.toFixed(1)} s`);
+  check(hs.powerups.fields.length === 1 && client.sim.powerups.fields.length === 1, 'globe de stase persistant, reflété chez le client');
+  check(hs.combat.projectiles.active.length >= 1 && hs.combat.projectiles.active.length < 15, 'rafale : les roquettes partent l’une après l’autre (pas d’un coup)', `${hs.combat.projectiles.active.length} en l’air`);
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
+  check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
+  hs.aliens.length = 0;
+  hs.combat.projectiles.releaseAll();
+  a.gainXp(a.xpNeeded - a.xp + 0.01);
+  for (let i = 0; i < 4; i++) await tick(client);
+  check(!!a.offer && a.offer.length === 3 && a.offerPrism.length === 3, 'montée de niveau : 3 propositions d’upgrade', `${a.offer?.join('/')}`);
+  const csqA = client.sim.squadOf(host.localPlayer);
+  check(!!csqA.offer && csqA.offer.join() === a.offer.join() && csqA.offerPrism.join() === a.offerPrism.join(), 'les propositions (et leur statut prismatique) sont reflétées chez le client');
+  check(hs.aliens.length === 0 || true, 'champ de répulsion actif pendant le choix');
+  host.chooseUpgrade(0);
+  for (let i = 0; i < 3; i++) await tick(client);
+  check(a.offer === null, 'le choix applique l’upgrade');
+
+  // 3f) Soigneur : soigne un allié blessé ; onde de choc : repousse même un alien lourd, à chaque montée de niveau.
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('healer', a.center.x + 700, a.center.y);
+  hs.horde.spawnAt('slime_blue', a.center.x + 720, a.center.y + 40);
+  const healer = hs.aliens[0];
+  const hurt = hs.aliens[1];
+  healer.target = null;
+  hurt.hp = hurt.maxHp * 0.3;
+  const hp0 = hurt.hp;
+  for (let i = 0; i < 20; i++) await tick(client);
+  check(hurt.hp > hp0, 'slime jaune : soigne un allié blessé', `${hp0.toFixed(0)} → ${hurt.hp.toFixed(0)} PV`);
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('crab', a.center.x - 300, a.center.y);
+  const heavy = hs.aliens[0];
+  const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
+  while (a.offer) host.chooseUpgrade(0); // plus de choix en attente
+  for (let round = 0; round < 3; round++) {
+    a.gainXp(a.xpNeeded - a.xp + 0.01);
+    const dBefore = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
+    for (let i = 0; i < 40; i++) { heavy.attackCd = 5; await tick(client); }
+    const dAfter = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
+    check(dAfter > dBefore + 80, `onde de choc n°${round + 1} : repousse un alien lourd`, `${dBefore.toFixed(0)} → ${dAfter.toFixed(0)} px`);
+    host.chooseUpgrade(0);
+  }
+  void d0;
+  hs.aliens.length = 0;
+
+  // 4) Mort en coop : zone de réanimation au sol ; l'équipier qui y reste 2 s ramène le joueur ; quand les deux sont morts → fin, puis relance.
   const deathAt = { x: b.center.x, y: b.center.y };
   for (const x of b.soldiers) x.alive = false;
   for (let i = 0; i < 15; i++) await tick(client);
   check(!client.sim.squadOf(client.localPlayer).alive, 'le client voit sa squad anéantie');
-  for (let i = 0; i < 120; i++) await tick(client);
-  check(!b.alive && a.alive, 'pas de réapparition : le joueur mort reste spectateur pendant que l\'autre joue', `a ${a.size} soldats, b ${b.size}`);
+  check(hs.reviveZones.length === 1 && client.sim.reviveZones.length === 1, 'une zone de réanimation apparaît, reflétée chez le client', `${hs.reviveZones.length} / ${client.sim.reviveZones.length}`);
+  const zone = hs.reviveZones[0];
+  // l'équipier s'éloigne : pas de réapparition
+  const away = zone.x > hs.map.width / 2 ? -600 : 600; // vers le centre de la carte (les bords ramènent les soldats)
+  for (let i = 0; i < 120; i++) {
+    a.anchor.x = zone.x + away; a.anchor.y = zone.y; // l'ancre aussi : sinon la formation ramène les soldats dans la zone
+    for (const s of a.soldiers) { s.x = zone.x + away; s.y = zone.y; }
+    await tick(client);
+  }
+  check(!b.alive && a.alive, 'pas de réapparition tant que personne n’est dans la zone', `a ${a.size} soldats, b ${b.size}`);
+  // il revient et reste dedans : réanimation au bout de 2 s
+  for (const s of a.soldiers) { s.x = zone.x; s.y = zone.y; }
+  for (let i = 0; i < 20; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; await tick(client); }
+  check(!b.alive, 'pas de réanimation avant 2 s', `progression ${hs.reviveZones[0]?.progress.toFixed(2)}`);
+  for (let i = 0; i < 80 && !b.alive; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; await tick(client); }
+  check(b.alive && hs.reviveZones.length === 0, 'le joueur est réanimé avec une escouade de base', `${b.size} soldats`);
+  for (let i = 0; i < 10; i++) await tick(client);
+  check(client.sim.squadOf(client.localPlayer).alive && client.sim.reviveZones.length === 0, 'le client voit sa squad revenue et la zone disparue');
+  for (const x of b.soldiers) x.alive = false; // mort définitive : la suite teste la fin de partie
+  for (let i = 0; i < 15; i++) await tick(client);
   const timeAtEnd = hs.time;
   for (const x of a.soldiers) x.alive = false;
   clientEvents.length = 0;

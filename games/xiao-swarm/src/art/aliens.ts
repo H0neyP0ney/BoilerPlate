@@ -266,6 +266,7 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
   });
   canvasTexture(scene, 'alien_fire', 48, 48, (ctx) => slime(ctx, '#ffd9a0', '#e04a10'));
   canvasTexture(scene, 'alien_shaman', 48, 48, (ctx) => slime(ctx, '#fff6b0', '#d8a020'));
+  canvasTexture(scene, 'alien_healer', 48, 48, (ctx) => slime(ctx, '#fffbd0', '#e8d030'));
   canvasTexture(scene, 'alien_thrower', 48, 48, (ctx) => slime(ctx, '#d8c8b0', '#8a6a48'));
   canvasTexture(scene, 'alien_spitter', 48, 48, (ctx) => slime(ctx, '#e3c8ff', '#8a3fd0'));
   canvasTexture(scene, 'alien_crab', 130, 112, crab);

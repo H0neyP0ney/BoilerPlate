@@ -30,9 +30,10 @@ export type SimEvent =
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
   | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
   | { t: 'impact'; x: number; y: number; texture: string }
-  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' }
+  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }
   | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
   | { t: 'tongue'; alien: number; target: number; dur: number }
+  | { t: 'healBeam'; from: number; to: number; dur: number }
   | { t: 'gameEnd'; victory: boolean; delay: number }
   | { t: 'restart' }
   | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }
@@ -47,6 +48,8 @@ export type SimEvent =
   | { t: 'rockEnd'; id: number }
   | { t: 'slam'; x: number; y: number; r: number }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }
+  | { t: 'upgradePicked'; owner: PlayerId; x: number; y: number; id: string; prism: boolean }
+  | { t: 'powerup'; owner: PlayerId; kind: string; x: number; y: number }
   | { t: 'heal'; x: number; y: number }
   | { t: 'levelUp'; owner: PlayerId; level: number }
   | { t: 'squadWiped'; owner: PlayerId }

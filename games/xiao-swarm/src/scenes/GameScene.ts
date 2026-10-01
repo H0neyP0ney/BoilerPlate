@@ -52,6 +52,8 @@ export class GameScene extends Phaser.Scene {
     this.revived = false;
     this.ended = false;
     this.upgradeOpen = false;
+    this.dismissedOffer = '';
+    this.scene.stop(SCENES.levelUp); // une fenêtre d'upgrade restée ouverte d'une partie précédente
     if (import.meta.env.DEV) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
       loadSavedCrowd();
@@ -74,7 +76,7 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     const map = this.session.sim.map;
-    cam.setBounds(0, 0, map.width, map.height);
+    cam.setBounds(-320, -320, map.width + 640, map.height + 640); // marge : on voit l'espace autour de l'île
     const c = this.localSquad.center;
     this.camTarget.x = c.x;
     this.camTarget.y = c.y;
@@ -171,6 +173,10 @@ export class GameScene extends Phaser.Scene {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown') this.events.emit('boss', e); // bandeau / flèche du HUD
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
+    if (e.t === 'restart') {
+      this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
+      this.dismissedOffer = '';
+    }
     if (e.t === 'recruited' && e.owner === this.session.localPlayer) poki.measure('recruit', e.cls, 'complete');
   };
 
@@ -191,7 +197,7 @@ export class GameScene extends Phaser.Scene {
     const squad = this.localSquad;
     if (!squad.offer) return;
     this.upgradeOpen = true;
-    this.scene.launch(SCENES.levelUp, { offer: [...squad.offer], level: squad.level });
+    this.scene.launch(SCENES.levelUp, { offer: [...squad.offer], prism: [...squad.offerPrism], level: squad.level });
   }
 
   private offerKey(squad: Squad): string {

@@ -47,29 +47,29 @@ export interface MapDef {
 }
 
 /**
- * Arène solo compacte (GDD §3). Seuls des obstacles volcaniques (data/obstacles.ts) font obstacle
+ * Arène solo : une île carrée flottant dans l'espace (GDD §3). Seuls des obstacles volcaniques (data/obstacles.ts) font obstacle
  * (`ponds` / `logs` restent disponibles dans MapDef). Un obstacle = ses cercles de collision (Arena) + son sprite (ArenaView).
  */
 export const JUNGLE_ARENA: MapDef = {
   id: 'jungle',
   width: 2400,
-  height: 1800,
+  height: 2400,
   border: 170,
   seed: 7,
   ponds: [],
   obstacles: withSizes(
     [
-      { x: 900, y: 560, kind: 'obstacle_3' },
-      { x: 980, y: 625, kind: 'obstacle_8' },
-      { x: 1560, y: 520, kind: 'obstacle_5' },
-      { x: 1500, y: 1250, kind: 'obstacle_1' },
-      { x: 1600, y: 1310, kind: 'obstacle_7' },
-      { x: 1150, y: 1000, kind: 'obstacle_2' },
-      { x: 1900, y: 900, kind: 'obstacle_6' },
-      { x: 700, y: 650, kind: 'obstacle_7' },
-      { x: 1200, y: 1420, kind: 'obstacle_4' },
-      { x: 620, y: 1150, kind: 'obstacle_3' },
-      { x: 1750, y: 1450, kind: 'obstacle_8' },
+      { x: 900, y: 860, kind: 'obstacle_3' },
+      { x: 980, y: 925, kind: 'obstacle_8' },
+      { x: 1560, y: 820, kind: 'obstacle_5' },
+      { x: 1500, y: 1550, kind: 'obstacle_1' },
+      { x: 1600, y: 1610, kind: 'obstacle_7' },
+      { x: 1150, y: 1300, kind: 'obstacle_2' },
+      { x: 1900, y: 1200, kind: 'obstacle_6' },
+      { x: 700, y: 950, kind: 'obstacle_7' },
+      { x: 1200, y: 1720, kind: 'obstacle_4' },
+      { x: 620, y: 1450, kind: 'obstacle_3' },
+      { x: 1750, y: 1750, kind: 'obstacle_8' },
     ],
     7,
   ),

@@ -54,7 +54,19 @@ export class WaveRunner {
     if (configs.length === 0) return null;
     const forced = configIndex !== undefined ? configs[configIndex - 1] : undefined;
     const config = forced ?? configs[Math.floor(this.rng.next() * configs.length)];
-    for (const g of config.groups) if (g.count > 0) this.spawn(g.type, Math.round(g.count));
-    return config;
+    const groups = config.groups.map((g) => ({ ...g }));
+    if (!forced && level < 9) {
+      // Mélange : un groupe « invité » tiré d'une configuration d'un niveau voisin (plus doux ou plus dur), en petit nombre.
+      const pool = [level - 1, level + 1].flatMap((l) => (l >= 1 && l < 9 ? (this.script.levels?.[l] ?? []).flatMap((c) => c.groups) : []));
+      if (pool.length > 0) {
+        const guest = pool[Math.floor(this.rng.next() * pool.length)];
+        const n = Math.max(1, Math.round(guest.count * 0.4));
+        const same = groups.find((g) => g.type === guest.type);
+        if (same) same.count += n;
+        else groups.push({ type: guest.type, count: n });
+      }
+    }
+    for (const g of groups) if (g.count > 0) this.spawn(g.type, Math.round(g.count));
+    return { ...config, groups };
   }
 }

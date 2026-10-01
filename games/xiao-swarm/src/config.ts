@@ -12,6 +12,49 @@ export const SQUAD = {
 } as const;
 
 /**
+ * Difficulté globale (multiplicateurs appliqués par sim/) : PV des soldats, PV des aliens et des boss, nombre d'aliens par vague (et plafond
+ * d'aliens simultanés, sinon le doublement serait bridé), vitesse des aliens. Les boss ne sont pas multipliés en nombre (mais leurs PV le sont, voir `bossHpMul`).
+ */
+/**
+ * Grab (langue) : l'unité tirée garde sa liberté de mouvement (aucun stun). Pendant `GRAB_OUT` s elle ne compte plus pour le
+ * mouvement de foule (centre, slots, laisse) ; elle reste immunisée contre tout autre grab pendant `GRAB_IMMUNE` s.
+ */
+export const GRAB_OUT = 0.7;
+
+/** Zone de réanimation (coop) : rayon (px) et temps (s) qu'un équipier doit y passer pour ramener un joueur mort. */
+export const REVIVE_RADIUS = 80;
+export const REVIVE_TIME = 2;
+/** Taille de l'escouade d'un joueur réanimé, en part de celle de l'équipier qui l'a ramené. */
+export const REVIVE_SQUAD_RATIO = 0.6;
+export const GRAB_IMMUNE = 2;
+/** Ralentissement de l'unité qui vient d'être grabée : facteur de vitesse et durée (s) depuis le grab. */
+export const GRAB_SLOW = 0.55;
+export const GRAB_SLOW_TIME = 1.2;
+
+/** Zombie (alien ressuscité par un chaman) : multiplicateur de PV et de dégâts par rapport à la version de base. */
+export const ZOMBIE_MUL = 3;
+/** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
+export const CAPTIVE_VULN = 3;
+/** Montée de niveau : onde de choc unique qui repousse les aliens (rayon, vitesse de recul en px/s au centre, durée en s). Déplacement direct : les aliens lourds sont repoussés comme les légers. */
+export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9 };
+/** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
+export const PRISM_CHANCE = 0.05;
+/** Power-ups : délai entre deux apparitions (s), durée de vie au sol (s), nombre max simultané. */
+/** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %). */
+export const STIM_SPEED = 1.25;
+export const STIM_FIRE = 1.5;
+export const POWERUPS = { every: [14, 22], life: 12, max: 3, first: 20 } as const;
+
+export const DIFFICULTY = {
+  soldierHpMul: 0.7,
+  alienHpMul: 1.5,
+  /** PV des boss (mini et final) : +1000 % = ×11. */
+  bossHpMul: 11,
+  alienCountMul: 1.5,
+  alienSpeedMul: 1.25,
+} as const;
+
+/**
  * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau Foule
  * (touche ² / F2, sliders) les change en direct ; `CROWD_DEFAULTS` est la référence de départ.
  * Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
@@ -23,7 +66,7 @@ export const CROWD_DEFAULTS = {
   /** Vitesse de l'ancre = vitesse max de la squad (px/s). */
   speed: 210,
   /** Distance entre voisins dans la formation (px). */
-  spacing: 50,
+  spacing: 39,
   /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad (px) : plus grand = la squad « tire » plus loin devant. */
   leash: 70,
   /** Laisse en plus par √(nombre de soldats). */
@@ -35,17 +78,17 @@ export const CROWD_DEFAULTS = {
   /** Vivacité de la vitesse vers la vitesse voulue (1/s) : plus grand = accélère / freine plus sec. */
   velDamp: 18,
   /** Vitesse max d'un soldat qui rattrape son slot, en multiple de `speed`. */
-  maxSpeedMul: 1.8,
+  maxSpeedMul: 1.35,
   /** Force de la séparation entre soldats (0 = ils se traversent, 1 = repoussés d'un coup). */
   separation: 0.5,
   /** Amortissement du knockback (1/s). */
   knockDamp: 5,
   /** Décor : largeur (px) de la zone douce autour des hitbox où les unités glissent au lieu de buter (0 = hitbox dure seule). */
-  wallMargin: 26,
+  wallMargin: 22,
   /** Décor : vitesse (px/s) qui écarte doucement de la hitbox, maximale au contact. */
   wallPush: 90,
   /** Décor : part de la vitesse « dans le mur » convertie en glissade le long du bord (0 = elle s'annule, 1 = tout glisse). */
-  wallNudge: 0.5,
+  wallNudge: 0.9,
   /** Temps à l'arrêt avant que le Medic soigne (s). */
   stillDelay: 0.5,
 };
@@ -91,6 +134,7 @@ export const PALETTE = {
 export const SCENES = {
   boot: 'Boot',
   game: 'Game',
+  levelUp: 'LevelUp',
   hud: 'Hud',
   pause: 'Pause',
   viewer: 'Viewer',
@@ -98,6 +142,5 @@ export const SCENES = {
   particles: 'Particles',
   misc: 'Misc',
   waves: 'Waves',
-  levelUp: 'LevelUp',
   gameOver: 'GameOver',
 } as const;

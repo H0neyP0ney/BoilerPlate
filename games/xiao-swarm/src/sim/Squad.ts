@@ -1,7 +1,7 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
 import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
-import { HP_UPGRADE_HEAL, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
+import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { PlayerId, PlayerInput } from './types';
@@ -85,21 +85,46 @@ export class Squad {
     this.dirty = true;
   }
 
-  /** XP nécessaire pour le prochain niveau. */
+  /** XP nécessaire pour le prochain niveau (XP partagée : × nombre de joueurs). */
   get xpNeeded(): number {
-    return xpToNext(this.level);
+    return xpToNext(this.level) * this.sim.xpScale;
   }
 
-  /** Ajoute de l'XP (bonus `xpGain` compris) ; chaque niveau franchi prépare un choix d'upgrade. */
+  /** Ajoute de l'XP (bonus `xpGain` compris) ; chaque niveau franchi prépare un choix d'upgrade. Coop : barre commune. */
   gainXp(value: number): void {
+    if (this.sim.sharedXp) {
+      this.sim.gainSharedXp(this, value);
+      return;
+    }
     this.xp += value * this.stats.get('xpGain');
+    const before = this.level;
     while (this.xp >= this.xpNeeded) {
       this.xp -= this.xpNeeded;
       this.level++;
       this.pendingLevels++;
       this.sim.events.push({ t: 'levelUp', owner: this.owner, level: this.level });
     }
+    // Onde de choc à CHAQUE montée de niveau (même si un choix d'upgrade est déjà ouvert ou qu'il n'y a plus rien à proposer) :
+    // calée sur l'anneau affiché par l'événement `levelUp` ; une seule onde même si plusieurs niveaux d'un coup.
+    if (this.level > before) this.sim.shockwave(this.center.x, this.center.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration, UPGRADE_REPEL.reach);
     if (this.pendingLevels > 0 && !this.offer) this.rollOffer();
+  }
+
+  /** XP partagée : recopie la barre commune ; `levels` niveaux viennent d'être franchis (un choix d'upgrade pour chacun). */
+  syncSharedXp(xp: number, level: number, levels: number): void {
+    this.xp = xp;
+    this.level = level;
+    if (levels <= 0) return;
+    this.pendingLevels += levels;
+    for (let l = level - levels + 1; l <= level; l++) this.sim.events.push({ t: 'levelUp', owner: this.owner, level: l });
+    if (this.alive) this.sim.shockwave(this.center.x, this.center.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration, UPGRADE_REPEL.reach);
+    if (!this.offer) this.rollOffer();
+  }
+
+  /** Niveau encore en attente sans proposition ouverte : en prépare une (nouvelle manche de choix). Vrai s'il y en a une. */
+  rollPending(): boolean {
+    if (this.pendingLevels > 0 && !this.offer) this.rollOffer();
+    return !!this.offer;
   }
 
   private rollOffer(): void {
@@ -112,11 +137,10 @@ export class Squad {
         return;
     }
     this.offerPrism = offer.map(() => this.sim.rng.chance(PRISM_CHANCE));
-    // onde de choc unique : les aliens proches sont repoussés le temps de choisir
-    this.sim.shockwave(this.center.x, this.center.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration);
+    this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 
-  /** Choisit l'upgrade `index` parmi les propositions ; enchaîne sur le niveau suivant s'il y en a un en attente. */
+  /** Choisit l'upgrade `index` parmi les propositions. Le niveau suivant éventuel est proposé à la manche suivante (Sim.afterChoice). */
   chooseUpgrade(index: number): boolean {
     const id = this.offer?.[index];
     if (!id) return false;
@@ -124,7 +148,6 @@ export class Squad {
     this.offer = null;
     this.offerPrism = [];
     this.pendingLevels--;
-    if (this.pendingLevels > 0) this.rollOffer();
     return true;
   }
 
@@ -135,12 +158,11 @@ export class Squad {
     this.picked[id] = (this.picked[id] ?? 0) + 1;
     if (def.stat && def.mod) for (let i = 0; i < mult; i++) this.stats.add(def.stat, def.mod);
     if (id === 'hp') {
-      // les soldats déjà là gagnent les PV max supplémentaires, puis sont soignés (PV max et soin fusionnés)
+      // les soldats déjà là gagnent les PV max supplémentaires, et autant de PV courants (50/100 + 20 % → 70/120)
       for (const s of this.soldiers) {
         const max = s.def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
         s.hp += max - s.maxHp;
         s.maxHp = max;
-        s.hp = Math.min(s.maxHp, s.hp + s.maxHp * HP_UPGRADE_HEAL * mult);
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
       }
     } else if (id === 'reinforce') {

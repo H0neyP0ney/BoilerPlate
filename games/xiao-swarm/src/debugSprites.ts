@@ -9,6 +9,8 @@ import { saveToCode } from './dev/devSave';
  * assets/manifest.ts (seule source livrée).
  */
 const STORAGE_KEY = 'xiao-debug-sprites';
+/** Version des ids de sprites mémorisés (3 : slimes renommés en slime_basic / slime_bombardier, voir loadSpriteOverrides). */
+const MIGRATION_KEY = 'xiao-debug-sprites-ids';
 
 type Point = [number, number];
 
@@ -53,6 +55,26 @@ export function loadSpriteOverrides(): void {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Record<string, Placement>;
   } catch {
     overrides = {};
+  }
+  // Migration (slimes renommés deux fois) :
+  //  v1 → : `alien_slime` (slime de base, ancienne planche verte : réglages abandonnés) ; `alien_slime_blue` (gros) → bombardier ;
+  //  v2 → : `alien_slime_blue` (base, planche bleue) → `alien_slime_basic` ; `alien_slime_green` (gros) → `alien_slime_bombardier`.
+  const version = localStorage.getItem(MIGRATION_KEY);
+  if (version !== '3') {
+    const o = overrides as Record<string, Placement | undefined>;
+    const move = (from: string, to: string): void => {
+      if (o[from]) o[to] = o[from];
+      delete o[from];
+    };
+    if (version === '2') {
+      move('alien_slime_blue', 'alien_slime_basic');
+      move('alien_slime_green', 'alien_slime_bombardier');
+    } else {
+      move('alien_slime_blue', 'alien_slime_bombardier');
+      delete o.alien_slime;
+    }
+    persist();
+    localStorage.setItem(MIGRATION_KEY, '3');
   }
   for (const [id, p] of Object.entries(overrides)) if (sprites.has(id)) apply(id, p);
 }

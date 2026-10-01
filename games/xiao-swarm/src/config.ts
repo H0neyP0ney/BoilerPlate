@@ -35,10 +35,16 @@ export const GRAB_SLOW_TIME = 1.2;
 export const ZOMBIE_MUL = 3;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
-/** Montée de niveau : onde de choc unique qui repousse les aliens (rayon, vitesse de recul en px/s au centre, durée en s). Déplacement direct : les aliens lourds sont repoussés comme les légers. */
-export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9 };
+/**
+ * Montée de niveau : onde de choc qui repousse les aliens. `radius` : portée (px) ; `reach` : temps (s) que le front met à
+ * l'atteindre (même courbe Cubic.Out que l'anneau affiché) ; chaque alien est repoussé quand le front le touche, à `speed` px/s
+ * (au centre, moins au bord) pendant `duration` s. Déplacement direct : les aliens lourds sont repoussés comme les légers.
+ */
+export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9, reach: 0.6 };
 /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
 export const PRISM_CHANCE = 0.05;
+/** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
+export const UPGRADE_CHOICE_TIME = 5;
 /** Power-ups : délai entre deux apparitions (s), durée de vie au sol (s), nombre max simultané. */
 /** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %). */
 export const STIM_SPEED = 1.25;
@@ -137,6 +143,7 @@ export const SCENES = {
   levelUp: 'LevelUp',
   hud: 'Hud',
   pause: 'Pause',
+  options: 'Options',
   viewer: 'Viewer',
   obstacles: 'Obstacles',
   particles: 'Particles',

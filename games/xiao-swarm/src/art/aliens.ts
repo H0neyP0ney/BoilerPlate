@@ -219,8 +219,8 @@ function crab(ctx: CanvasRenderingContext2D): void {
 }
 
 export function makeAlienTextures(scene: Phaser.Scene): void {
-  canvasTexture(scene, 'alien_slime', 48, 48, (ctx) => slime(ctx));
-  canvasTexture(scene, 'alien_slime_blue', 72, 72, (ctx) => {
+  canvasTexture(scene, 'alien_slime_basic', 48, 48, (ctx) => slime(ctx));
+  canvasTexture(scene, 'alien_slime_bombardier', 72, 72, (ctx) => {
     ctx.scale(1.5, 1.5);
     slime(ctx, '#b8dcff', '#3a78d8');
   });

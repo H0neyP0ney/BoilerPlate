@@ -66,6 +66,9 @@ le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS`.
 ## Gestionnaire de vagues (`?waves`, `src/scenes/WaveEditorScene.ts`, `src/data/waves.ts`, `src/debugWaves.ts`)
 Écrit le script de vagues : **9 niveaux** de vague, chacun avec plusieurs **configurations** (compositions d'aliens) dont une est tirée au hasard (`sim.rng`) à chaque envoi du niveau, et une **timeline** (quel niveau à quel moment, éventuellement répété toutes les X s jusqu'à Y s ; un clic dans la timeline ajoute un envoi du niveau sélectionné). Mémorisé dans le navigateur et joué tel quel ; « Copier le code » → coller dans `DEFAULT_WAVE_SCRIPT` (`data/waves.ts`). Le panneau Triche a un bouton « Envoyer » pour lancer un niveau à la demande. Exécution : `sim/WaveRunner.ts`.
 
+**Courbe de pression** (`src/data/waveModel.ts`) : estimation des PV d'aliens vivants au fil du run (chaque envoi ajoute les PV moyens de son niveau, la squad en retire un DPS qui croît avec le temps). Réglages : DPS de départ, croissance par minute, efficacité, poids des boss (un gros boss seul compte moins). Grossière (un seul tas de PV, ni portée ni déplacements) : sert à comparer des scripts.
+**Courbe cible + Générer** : « Cible = courbe actuelle » copie la courbe en points (toutes les 20 s) ; glisser un point, clic droit (ou double-clic) dans la courbe pour en ajouter, clic droit sur un point pour le supprimer. « Générer » recompose **la timeline seulement** (`generateTimeline`) pour suivre la cible : boss et boucles d'après 10:00 gardés, chaque niveau n'arrive qu'à partir de sa première apparition dans le script, au moins un envoi toutes les 8 s. « Annuler la génération » restaure la timeline d'avant. Réglages et cible suivent Save / Reset.
+
 ## Visionneuse divers (`?misc`, `src/scenes/MiscViewerScene.ts`)
 
 Consultation : projectiles (balle, blaster bleu, éclair vert, grenade en cloche, flamme, traçante), recrues à ramasser, barres de

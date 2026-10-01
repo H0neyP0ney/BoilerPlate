@@ -40,6 +40,51 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.ellipse(10, 5, 10, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
   });
+  canvasTexture(scene, 'fx_rocket', 34, 14, (ctx) => {
+    // fusée du power-up, pointe vers la DROITE (tournée selon sa vitesse) : ailerons, corps clair, bande, ogive rouge, tuyère
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#2a1d2e';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#d23a3a'; // ailerons
+    ctx.beginPath();
+    ctx.moveTo(4, 1.5);
+    ctx.lineTo(11, 5);
+    ctx.lineTo(11, 9);
+    ctx.lineTo(4, 12.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f2f2f5'; // corps
+    ctx.beginPath();
+    ctx.roundRect(6, 4, 19, 6, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffb938'; // bande
+    ctx.fillRect(14, 4.5, 3, 5);
+    ctx.fillStyle = '#d23a3a'; // ogive
+    ctx.beginPath();
+    ctx.moveTo(24, 3.5);
+    ctx.quadraticCurveTo(33, 7, 24, 10.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffe066'; // flamme de la tuyère
+    ctx.beginPath();
+    ctx.moveTo(6, 5);
+    ctx.lineTo(0, 7);
+    ctx.lineTo(6, 9);
+    ctx.closePath();
+    ctx.fill();
+  });
+  canvasTexture(scene, 'fx_smoke', 32, 32, (ctx) => {
+    // bouffée de fumée : disque blanc opaque au bord à peine adouci
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.75, '#f4f4f4');
+    g.addColorStop(1, 'rgba(240,240,240,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+  });
   canvasTexture(scene, 'fx_grenade', 18, 18, (ctx) => {
     // petite grenade violette : corps rond, reflet, goupille
     ctx.fillStyle = '#2a1d2e';

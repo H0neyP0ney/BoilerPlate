@@ -16,6 +16,11 @@ export { MoveInput } from './input/MoveInput';
 export { VirtualJoystick } from './ui/VirtualJoystick';
 export { Button, type ButtonOptions, type ButtonVariant } from './ui/Button';
 export { theme, setTheme, type Theme } from './ui/theme';
+export { StepSlider, type StepSliderOptions } from './ui/StepSlider';
+
+// Audio
+export { music } from './audio/music';
+export { sfx, type SfxOptions } from './audio/sfx';
 
 // Simulation (sans Phaser : aussi dispo via '@xiao/engine/sim' pour un serveur)
 export * from './sim/index';

@@ -13,11 +13,13 @@ répondre, commenter et documenter en français.
 - `npm run typecheck` — tout le monorepo + pureté des simulations. À lancer après chaque modification.
 - `npm run sim:headless -- royale 9 300` — simulation dans Node (sans navigateur)
 - `npm run sim:net` — test réseau hôte + client sans navigateur. En ligne : `?net=host`, `?net=join&room=CODE`, `?net=auto` (voir `docs/MULTIJOUEUR.md`)
-- `npm run sim:net` couvre aussi le coop (friendly fire, difficulté ×2, XP réseau, spectateur, relance).
+- `npm run sim:net` couvre aussi le coop (friendly fire, difficulté ×2, XP partagée et pause de choix d'upgrade, spectateur, relance).
 - `npm run zip` — build + zip Poki
+- `npm run deploy` — build + upload FTP vers `REMOTE_DIR/<version>/` (identifiants dans `.env.deploy`, modèle `.env.deploy.example`) ; `-- --bump` incrémente la version, `-- --force` écrase
 - `node tools/slice-sheet.mjs games/xiao-swarm/art-src/<nom>.slice.json` — découpe une planche de sprites
 
-Outils de dev (détail : `docs/OUTILS_DEV.md`). Visionneuses (boutons en haut à gauche du jeu, ou `?viewer` / `?particles` / `?obstacles` / `?misc` / `?waves`) : **unités**
+Menu **Options** (joueur : roue crantée en haut à droite, ou écran Pause, `scenes/OptionsScene.ts`) : volume de la musique (`settings.ts`, lecture via `music` de l'engine) et, en dev, **mode debug** qui affiche les boutons des outils de dev en haut à gauche. En dev : mode debug activé et musique coupée par défaut ; build Poki : musique à 5/10.
+Outils de dev (détail : `docs/OUTILS_DEV.md`). Visionneuses (boutons en haut à gauche du jeu en mode debug, ou `?viewer` / `?particles` / `?obstacles` / `?misc` / `?waves`) : **unités**
 (animations, ancrage par séquence / direction, bouche du canon par frame), **particules** (`fxParams.ts`), **obstacles**
 (hitbox en cercles, jeu de taches, taille : `data/obstacles.ts`) **vagues** (Gestionnaire de vagues : 9 niveaux de configurations tirées au hasard + timeline : `data/waves.ts`) et **divers** (projectiles, bonus, interface, terrain).
 Une croix en haut à droite du panneau de chaque vue ramène au jeu ; pour changer de vue, repasser par le jeu (boutons du HUD).
@@ -36,7 +38,8 @@ recrues, vagues, vitesse du jeu, invincibilité ; hors ligne seulement). `npm ru
 ## Jeu : structure actuelle
 - Modes (`data/modes.ts`) : `survival` (solo, 10 min, boss final obligatoire), `royale` (bots), `versus` (PvP), **`coop`** (multijoueur par défaut : pas de tir ami, difficulté dynamique, spectateur, relance).
 - Vagues : `data/waves.ts` (niveaux 1-9 → configurations tirées au hasard, timeline, boss via `config` forcée), exécutées par `sim/WaveRunner.ts`.
-- Ennemis : `data/aliens.ts` (capacités en données : `lob`, `tongue`, `rush`, `spray`, `deathBlast`, `revive`, `capture`, `trail`, `boss`). XP / upgrades : `data/progression.ts`, `sim/Xp.ts`.
+- Progression : à chaque niveau, le jeu se met en PAUSE pour tous les joueurs (`Sim.choiceT`, passé dans le snapshot). En ligne, 5 s (`UPGRADE_CHOICE_TIME`, option `choiceTimeout` de la Sim) puis choix au hasard ; en solo, pas de limite. En coop, une seule barre d'XP pour tous (seuil × nombre de joueurs).
+- Ennemis : `data/aliens.ts` (capacités en données : `lob`, `tongue`, `rush`, `leap`, `spray`, `deathBlast`, `revive`, `capture`, `trail`, `boss`). XP / upgrades : `data/progression.ts`, `sim/Xp.ts`.
 - Difficulté globale : `DIFFICULTY` dans `config.ts` ; power-ups : `sim/PowerUps.ts` ; zones de réanimation (coop) : `Sim.reviveZones`. Les cailloux, flaques, power-ups et zones passent par le **snapshot** (pas seulement des événements, qui sont non fiables).
 - Réseau : toute nouvelle donnée visible chez un client doit passer par `net/Protocol.ts` (snapshot) ou un `SimEvent`, et `Mirror` ; incrémenter `PROTOCOL_VERSION` si le format change.
 

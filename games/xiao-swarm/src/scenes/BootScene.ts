@@ -8,10 +8,13 @@ import { loadFxOverrides } from '../debugFx';
 import { loadObstacleOverrides } from '../debugObstacles';
 import { loadSpriteOverrides } from '../debugSprites';
 import { loadWaveOverrides } from '../debugWaves';
+import { loadNameOverrides } from '../debugNames';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
 import { makeSoldierTextures } from '../art/soldiers';
+import { makeRecruitTextures } from '../art/recruits';
 import { t } from '../i18n';
+import { SFX } from '../settings';
 import { createOnlineSession, OnlineError, readOnlineRequest } from '../online';
 
 /**
@@ -25,6 +28,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    for (const s of Object.values(SFX)) this.load.audio(s.key, s.url); // bruitages courts (quelques Ko)
     if (ASSETS.length === 0) return;
     const { width, height } = this.scale;
     const w = Math.min(420, width * 0.7);
@@ -41,17 +45,20 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     const applied = applyAssets(this, ASSETS);
     if (applied.length) log.info('[assets] visuels remplacés :', applied.join(', '));
+    if (import.meta.env.DEV) {
+      // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki.
+      // Avant les textures : la recrue composée dépend des réglages d'effets (FX.recruit).
+      loadFxOverrides();
+      loadObstacleOverrides();
+      loadWaveOverrides();
+      loadNameOverrides();
+    }
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
+    makeRecruitTextures(this); // recrues composées (pièces fournies) avant les recrues procédurales de repli
     makeSoldierTextures(this);
     makeAlienTextures(this);
     makeEnvironmentTextures(this);
     makeFxTextures(this);
-    if (import.meta.env.DEV) {
-      // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki
-      loadFxOverrides();
-      loadObstacleOverrides();
-      loadWaveOverrides();
-    }
     registerDefaultSprites();
     if (import.meta.env.DEV) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
 

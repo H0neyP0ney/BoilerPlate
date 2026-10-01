@@ -5,6 +5,9 @@ import { fxSnippet, resetFx, saveFxToCode, setFx } from '../debugFx';
 import { button, checkbox, colorInput, header, heading, line, note, panel, select, slider } from '../dev/devUi';
 import { FX, type FxName, type FxParams } from '../fxParams';
 import { Fx } from '../view/Fx';
+import { RecruitView } from '../view/UnitViews';
+import { makeRecruitTextures } from '../art/recruits';
+import { CLASSES } from '../data/classes';
 
 /**
  * Visionneuse de particules (dev uniquement) : joue chaque effet du jeu et permet d'en régler les paramètres
@@ -97,6 +100,31 @@ const EFFECTS: EffectDef[] = [
       { key: 'rise', label: 'Montée (px)', min: 0, max: 150, step: 1 },
     ],
   },
+  {
+    id: 'recruit',
+    label: 'Recrue gunner (bonus +1)',
+    where: "Recrue à ramasser : globe, anneau, tête et « +1 » assemblés en une image (art/recruits.ts), plus les étoiles qui scintillent autour. Position = part de la taille du globe, depuis son centre.",
+    specs: [
+      { key: 'displayScale', label: 'Taille affichée', min: 0.1, max: 1, step: 0.01, hint: "0,34 ≈ 55 px de globe à l'écran (zoom 1)" },
+      { key: 'globeScale', label: 'Globe : taille', min: 0.3, max: 1.3, step: 0.01 },
+      { key: 'globeAlpha', label: 'Globe : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'ringScale', label: 'Anneau : taille', min: 0.3, max: 1.3, step: 0.01 },
+      { key: 'ringAlpha', label: 'Anneau : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'headX', label: 'Tête : position X', min: -0.5, max: 0.5, step: 0.01 },
+      { key: 'headY', label: 'Tête : position Y', min: -0.5, max: 0.5, step: 0.01 },
+      { key: 'headScale', label: 'Tête : taille', min: 0.1, max: 1.2, step: 0.01 },
+      { key: 'plusX', label: '+1 : position X', min: -0.5, max: 0.5, step: 0.01 },
+      { key: 'plusY', label: '+1 : position Y', min: -0.5, max: 0.5, step: 0.01 },
+      { key: 'plusScale', label: '+1 : taille', min: 0.1, max: 1, step: 0.01 },
+      { key: 'starEvery', label: 'Étoiles : une toutes les (ms)', min: 30, max: 1000, step: 10 },
+      { key: 'starLifeMin', label: 'Étoiles : durée min (ms)', min: 100, max: 2000, step: 10 },
+      { key: 'starLifeMax', label: 'Étoiles : durée max (ms)', min: 100, max: 3000, step: 10 },
+      { key: 'starRadius', label: 'Étoiles : rayon de la zone (px)', min: 0, max: 80, step: 1 },
+      { key: 'starScale', label: 'Étoiles : taille', min: 0.05, max: 1, step: 0.01 },
+      { key: 'starRise', label: 'Étoiles : montée (px/s)', min: 0, max: 80, step: 1 },
+      { key: 'starY', label: 'Étoiles : position Y (px)', min: -60, max: 60, step: 1, hint: 'Décalage vertical de la zone des étoiles par rapport au centre du globe (négatif = plus haut)' },
+    ],
+  },
 ];
 
 const ZOOMS = [1, 1.5, 2, 3];
@@ -119,6 +147,9 @@ export class ParticleViewerScene extends Phaser.Scene {
   private radius = 100;
   private ringColor = 0xff6a6a;
   private shakePreview = true;
+  /** Aperçu de la recrue gunner composée (effet « recruit »). */
+  private recruit?: RecruitView;
+  private recruitAt = { x: 0, y: 0 };
 
   constructor() {
     super(SCENES.particles);
@@ -142,6 +173,7 @@ export class ParticleViewerScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fit);
       this.panel?.remove();
       this.loopTimer?.remove();
+      this.recruit?.destroy();
     });
     this.fit();
   }
@@ -166,7 +198,23 @@ export class ParticleViewerScene extends Phaser.Scene {
       case 'text':
         this.fx.text(x, y - 20, '+1 Gunner !', '#ffe066', 24);
         break;
+      case 'recruit':
+        this.showRecruit(x, y);
+        break;
     }
+  }
+
+  /** (Re)crée l'aperçu de la recrue en (x, y), avec les réglages courants (texture redessinée, étoiles recréées). */
+  private showRecruit(x: number, y: number): void {
+    this.recruit?.destroy();
+    this.recruitAt = { x, y };
+    makeRecruitTextures(this);
+    const state = { id: 1, cls: 'gunner' as const, x, y, px: x, py: y, life: 1e9 };
+    this.recruit = new RecruitView(this, state, CLASSES.gunner.color);
+  }
+
+  update(time: number): void {
+    this.recruit?.sync(1, time / 1000);
   }
 
   private setLoop(on: boolean): void {
@@ -178,6 +226,10 @@ export class ParticleViewerScene extends Phaser.Scene {
 
   private selectEffect(e: EffectDef): void {
     this.effect = e;
+    if (e.id !== 'recruit') {
+      this.recruit?.destroy();
+      this.recruit = undefined;
+    }
     this.paramBox.replaceChildren();
     this.syncs = [];
     this.paramBox.append(note(e.where));
@@ -204,6 +256,7 @@ export class ParticleViewerScene extends Phaser.Scene {
       const set = (v: number) => {
         setFx(e.id, s.key as keyof FxParams[typeof e.id], v);
         if (e.id === 'burst' || e.id === 'explosion') this.fx.build(); // émetteurs recréés avec les nouvelles valeurs
+        if (e.id === 'recruit') this.showRecruit(this.recruitAt.x, this.recruitAt.y); // image redessinée, étoiles recréées
       };
       const c = s.color ? colorInput(s.label, get, (v) => set(v)) : slider(s.label, { min: s.min, max: s.max, step: s.step, get, set, hint: s.hint });
       this.syncs.push(c.sync);
@@ -252,6 +305,7 @@ export class ParticleViewerScene extends Phaser.Scene {
         button('Reset', () => {
           resetFx(this.effect.id);
           this.fx.build();
+          if (this.effect.id === 'recruit') this.showRecruit(this.recruitAt.x, this.recruitAt.y);
           for (const s of this.syncs) s();
           this.info.textContent = "Retour à la dernière sauvegarde (cet effet).";
         }),

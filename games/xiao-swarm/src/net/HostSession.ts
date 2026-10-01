@@ -65,7 +65,7 @@ export class HostSession implements Session {
     this.transport = opts.transport;
     this.roomCode = opts.roomCode;
     this.localPlayer = opts.transport.localId;
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
 

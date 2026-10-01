@@ -75,6 +75,13 @@ export interface AlienState extends Body {
   rushT: number;
   rushDx: number;
   rushDy: number;
+  /** Saut écrasant (`def.leap`) : délai avant le prochain, temps restant de la séquence (0 = au sol), départ et point d'impact. */
+  leapCd: number;
+  leapT: number;
+  leapFromX: number;
+  leapFromY: number;
+  leapX: number;
+  leapY: number;
   /** Chaman : délai avant la prochaine incantation, incantation en cours (s restantes) et flaque visée. */
   reviveCd: number;
   castT: number;
@@ -201,8 +208,6 @@ export interface RecruitState {
   px: number;
   py: number;
   life: number;
-  /** Vitesse actuelle (px/s) quand la recrue est attirée : elle accélère tant qu'elle n'a pas rejoint l'escouade (sim seulement). */
-  spd?: number;
 }
 
 export const hpRatio = (b: Body): number => b.hp / b.maxHp;

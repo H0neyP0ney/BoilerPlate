@@ -7,6 +7,7 @@
 // {
 //   "output": "../public/assets/soldiers/gunner.png",     // relatif au config
 //   "scale": 0.6,                                          // réduction finale (moyenne de pixels)
+//   "cols": 8,                                             // optionnel : colonnes de la planche de sortie
 //   "sheets": [
 //     { "name": "idle",  "input": "gunner_idle.png",  "cols": 4, "rows": 4, "ref": 0 },
 //     { "name": "death", "input": "gunner_death.png", "cols": 4, "rows": 4 }
@@ -69,7 +70,8 @@ for (const s of sheets) {
 }
 const cellW = Math.max(...sheets.map((s) => s.dx + s.cw));
 const cellH = Math.max(...sheets.map((s) => s.dy + s.ch));
-const cols = Math.max(...sheets.map((s) => s.cols));
+// colonnes de la planche de sortie : `cols` du config (ex. 8 pour rester sous 2048 px de haut avec beaucoup de frames), sinon celles des planches
+const cols = cfg.cols ?? Math.max(...sheets.map((s) => s.cols));
 
 // ---------- 3. Assemblage (pleine résolution) ----------
 const totalRows = sheets.reduce((n, s) => n + Math.ceil((s.cols * s.rows) / cols), 0);

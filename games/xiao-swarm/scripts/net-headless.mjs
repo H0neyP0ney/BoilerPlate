@@ -111,21 +111,40 @@ try {
   // 3c) XP en réseau : globes visibles chez le client, choix d'upgrade envoyé à l'hôte, sans pause.
 
   check(hs.xpEnabled && client.sim.xpEnabled, 'XP active chez l\'hôte et chez le client');
-  hs.horde.spawnNear(a, 'slime', 3, 100);
+  hs.horde.spawnNear(a, 'slime_basic', 3, 100);
   for (const x of [...hs.aliens]) hs.damage(x, 9999, a.owner);
   await tick(client);
   await tick(client);
   await tick(client);
   check(hs.xp.orbs.length > 0 && Math.abs(client.sim.xp.orbs.length - hs.xp.orbs.length) <= 1, 'globes d\'XP reflétés chez le client', `${hs.xp.orbs.length} vs ${client.sim.xp.orbs.length}`);
+  // XP partagée (coop) : une seule barre, seuil × nombre de joueurs ; un niveau = tous les joueurs montent et choisissent
+  check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 2 joueurs)', `${a.xpNeeded}`);
+  const levelBefore = a.level;
   b.gainXp(b.xpNeeded - b.xp + 0.01);
   for (let i = 0; i < 6; i++) await tick(client);
   const csq = client.sim.squadOf(client.localPlayer);
+  check(a.level === levelBefore + 1 && b.level === a.level && !!a.offer && !!b.offer, 'XP partagée : l’XP de l’un fait monter tout le monde', `niv. ${a.level} / ${b.level}`);
   check(!!b.offer && !!csq.offer && csq.offer.join() === b.offer.join(), 'les propositions d\'upgrade arrivent chez le client', csq.offer?.join('/'));
-  const tickBefore = hs.tick;
+  check(hs.choiceT > 0 && client.sim.choiceT > 0, 'choix d’upgrade : jeu en pause, reflété chez le client', `${hs.choiceT.toFixed(2)} s / ${client.sim.choiceT.toFixed(2)} s`);
   client.chooseUpgrade(1);
+  const timeBefore = hs.time;
   for (let i = 0; i < 6; i++) await tick(client);
   check(Object.values(b.picked).reduce((n, v) => n + (v ?? 0), 0) >= 1, 'le choix du client est appliqué chez l\'hôte', JSON.stringify(b.picked));
-  check(hs.tick > tickBefore, 'le jeu ne s\'arrête pas pendant le level up');
+  check(hs.choiceT > 0 && Math.abs(hs.time - timeBefore) < 1e-6, 'le monde reste figé tant qu’un joueur n’a pas choisi');
+  host.chooseUpgrade(0);
+  for (let i = 0; i < 3; i++) await tick(client);
+  check(hs.choiceT === 0 && hs.time > timeBefore, 'tout le monde a choisi : la partie reprend');
+  // personne ne choisit : choix au hasard à la fin du temps
+  b.gainXp(b.xpNeeded - b.xp + 0.01);
+  const picks = (sq) => Object.values(sq.picked).reduce((n, v) => n + (v ?? 0), 0);
+  const pa = picks(a);
+  const pb = picks(b);
+  for (let i = 0; i < 30 * 6 && hs.choiceT > 0; i++) await tick(client);
+  check(hs.choiceT === 0 && picks(a) === pa + 1 && picks(b) === pb + 1, 'temps écoulé : une upgrade est choisie au hasard pour chacun', `${pa}→${picks(a)} / ${pb}→${picks(b)}`);
+
+  const resolveChoices = () => {
+    for (let guard = 0; guard < 20 && hs.squads.some((sq) => sq.offer); guard++) for (const sq of hs.squads) if (sq.offer) hs.chooseUpgrade(sq.owner, 0);
+  };
 
   // 3d) Cracheur : boules en cloche, pas de recul, flaque ralentissante reflétée chez le client ; cailloux suivis par snapshot.
   hs.aliens.length = 0;
@@ -146,7 +165,7 @@ try {
 
   // 3e) Zombie, power-ups, bulles d’upgrade.
   hs.aliens.length = 0;
-  hs.horde.spawnAt('slime', a.center.x + 400, a.center.y, 1, true);
+  hs.horde.spawnAt('slime_basic', a.center.x + 400, a.center.y, 1, true);
   const zb = hs.aliens[0];
   check(zb.revived && Math.abs(zb.maxHp - 55 * 1.5 * 3) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
@@ -159,7 +178,7 @@ try {
   check(hs.powerups.fields.length === 1 && client.sim.powerups.fields.length === 1, 'globe de stase persistant, reflété chez le client');
   check(hs.combat.projectiles.active.length >= 1 && hs.combat.projectiles.active.length < 15, 'rafale : les roquettes partent l’une après l’autre (pas d’un coup)', `${hs.combat.projectiles.active.length} en l’air`);
   hs.aliens.length = 0;
-  hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
+  hs.horde.spawnAt('slime_basic', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
   check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
   hs.aliens.length = 0;
   hs.combat.projectiles.releaseAll();
@@ -170,13 +189,35 @@ try {
   check(!!csqA.offer && csqA.offer.join() === a.offer.join() && csqA.offerPrism.join() === a.offerPrism.join(), 'les propositions (et leur statut prismatique) sont reflétées chez le client');
   check(hs.aliens.length === 0 || true, 'champ de répulsion actif pendant le choix');
   host.chooseUpgrade(0);
+  resolveChoices();
   for (let i = 0; i < 3; i++) await tick(client);
   check(a.offer === null, 'le choix applique l’upgrade');
 
+  // 3e bis) Recrue en trop (escouade pleine) : soin en zone — le ramasseur à 100 %, ses voisins proches à 50 %, les lointains pas du tout.
+  hs.aliens.length = 0;
+  const [m0, m1, m2] = a.soldiers;
+  const gap = a.maxSize - a.size;
+  a.stats.add('maxSquad', { flat: -gap }); // escouade pleine
+  const towardCenter = m0.x < hs.map.width / 2 ? 1 : -1; // vers le centre de la carte : un bord ramènerait le soldat « lointain » près des autres
+  for (const [sold, dx] of [[m0, 0], [m1, 30], [m2, 400]]) { sold.hp = sold.maxHp * 0.2; sold.x = m0.x + dx * towardCenter; sold.y = m0.y; }
+  const near0 = m1.hp;
+  const far0 = m2.hp;
+  hs.recruits.clear(); // recrues restées au sol des tests précédents (un autre soldat les ramasserait et soignerait ses voisins)
+  hs.recruits.drop('gunner', m0.x, m0.y);
+  for (let i = 0; i < 3; i++) await tick(client);
+  check(m0.hp === m0.maxHp, 'recrue en trop : le ramasseur est soigné à 100 %', `${m0.hp.toFixed(0)}/${m0.maxHp.toFixed(0)}`);
+  check(Math.abs(m1.hp - Math.min(m1.maxHp, near0 + m1.maxHp * 0.5)) < 0.5, 'recrue en trop : un voisin proche est soigné à 50 %', `${near0.toFixed(0)} → ${m1.hp.toFixed(0)}`);
+  check(m2.hp <= far0, 'recrue en trop : un soldat hors zone n’est pas soigné');
+  a.stats.add('maxSquad', { flat: gap });
+
   // 3f) Soigneur : soigne un allié blessé ; onde de choc : repousse même un alien lourd, à chaque montée de niveau.
   hs.aliens.length = 0;
-  hs.horde.spawnAt('healer', a.center.x + 700, a.center.y);
-  hs.horde.spawnAt('slime_blue', a.center.x + 720, a.center.y + 40);
+  hs.combat.clear(); // roquettes du power-up encore en vol (la pause de choix a étalé la rafale)
+  resolveChoices();
+  // loin des tirs de l'escouade, vers le centre de la carte (près d'un bord, ils seraient ramenés à portée)
+  const hdir = a.center.x < hs.map.width / 2 ? 1 : -1;
+  hs.horde.spawnAt('healer', a.center.x + 700 * hdir, a.center.y);
+  hs.horde.spawnAt('slime_bombardier', a.center.x + 720 * hdir, a.center.y + 40);
   const healer = hs.aliens[0];
   const hurt = hs.aliens[1];
   healer.target = null;
@@ -188,17 +229,48 @@ try {
   hs.horde.spawnAt('crab', a.center.x - 300, a.center.y);
   const heavy = hs.aliens[0];
   const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
-  while (a.offer) host.chooseUpgrade(0); // plus de choix en attente
+  resolveChoices(); // plus de choix en attente
   for (let round = 0; round < 3; round++) {
+    heavy.x = heavy.px = a.center.x - 300; // chaque tour repart à portée de l'onde (sinon les tours précédents l'ont déjà poussé hors de portée)
+    heavy.y = heavy.py = a.center.y;
     a.gainXp(a.xpNeeded - a.xp + 0.01);
+    resolveChoices(); // l'onde de choc se déroule une fois la pause de choix terminée
     const dBefore = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
     for (let i = 0; i < 40; i++) { heavy.attackCd = 5; await tick(client); }
     const dAfter = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
     check(dAfter > dBefore + 80, `onde de choc n°${round + 1} : repousse un alien lourd`, `${dBefore.toFixed(0)} → ${dAfter.toFixed(0)} px`);
-    host.chooseUpgrade(0);
   }
   void d0;
   hs.aliens.length = 0;
+
+  // 3g) Saut écrasant du crabe : point d'impact visé et reflété chez le client (télégraphe), soldat écrasé tué d'un coup.
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('crab', a.center.x + 400, a.center.y);
+  const jumper = hs.aliens[0];
+  jumper.leapCd = 0;
+  for (let i = 0; i < 3 && jumper.leapT <= 0; i++) await tick(client);
+  // impact déplacé à l'écart de l'escouade (sinon il l'écrase entière et fausse la suite des tests)
+  // vers le centre de la carte (près d'un bord, la victime serait ramenée dans l'arène, hors de la zone d'impact)
+  const cdx = hs.map.width / 2 - a.center.x;
+  const cdy = hs.map.height / 2 - a.center.y;
+  const cd = Math.hypot(cdx, cdy) || 1;
+  jumper.leapX = a.center.x + (cdx / cd) * 450;
+  jumper.leapY = a.center.y + (cdy / cd) * 450;
+  await tick(client);
+  await tick(client);
+  const cj = client.sim.aliens.find((x) => x.id === jumper.id);
+  check(jumper.leapT > 0 && !!cj && cj.leapT > 0 && Math.hypot(cj.leapX - jumper.leapX, cj.leapY - jumper.leapY) < 1, 'crabe : saut lancé, point d’impact reflété chez le client', `impact (${jumper.leapX.toFixed(0)}, ${jumper.leapY.toFixed(0)})`);
+  const victim = a.soldiers.find((x) => x.alive);
+  for (let i = 0; i < 90 && jumper.leapT > 0 && victim.alive; i++) {
+    resolveChoices(); // une montée de niveau en route mettrait le saut en pause
+    victim.x = victim.px = jumper.leapX;
+    victim.y = victim.py = jumper.leapY;
+    victim.invulnerable = 0;
+    await tick(client);
+  }
+  check(!victim.alive, 'crabe : le soldat sous la zone d’impact est tué d’un coup');
+  hs.aliens.length = 0;
+  for (let i = 0; i < 3; i++) await tick(client);
 
   // 4) Mort en coop : zone de réanimation au sol ; l'équipier qui y reste 2 s ramène le joueur ; quand les deux sont morts → fin, puis relance.
   const deathAt = { x: b.center.x, y: b.center.y };
@@ -211,15 +283,16 @@ try {
   const away = zone.x > hs.map.width / 2 ? -600 : 600; // vers le centre de la carte (les bords ramènent les soldats)
   for (let i = 0; i < 120; i++) {
     a.anchor.x = zone.x + away; a.anchor.y = zone.y; // l'ancre aussi : sinon la formation ramène les soldats dans la zone
+    hs.aliens.length = 0; // on teste la réanimation, pas la survie de l'équipier
     for (const s of a.soldiers) { s.x = zone.x + away; s.y = zone.y; }
     await tick(client);
   }
   check(!b.alive && a.alive, 'pas de réapparition tant que personne n’est dans la zone', `a ${a.size} soldats, b ${b.size}`);
   // il revient et reste dedans : réanimation au bout de 2 s
   for (const s of a.soldiers) { s.x = zone.x; s.y = zone.y; }
-  for (let i = 0; i < 20; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; await tick(client); }
+  for (let i = 0; i < 20; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; hs.aliens.length = 0; await tick(client); }
   check(!b.alive, 'pas de réanimation avant 2 s', `progression ${hs.reviveZones[0]?.progress.toFixed(2)}`);
-  for (let i = 0; i < 80 && !b.alive; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; await tick(client); }
+  for (let i = 0; i < 80 && !b.alive; i++) { a.anchor.x = zone.x; a.anchor.y = zone.y; hs.aliens.length = 0; await tick(client); } // pas d'aliens : on teste la réanimation, pas la survie de l'équipier
   check(b.alive && hs.reviveZones.length === 0, 'le joueur est réanimé avec une escouade de base', `${b.size} soldats`);
   for (let i = 0; i < 10; i++) await tick(client);
   check(client.sim.squadOf(client.localPlayer).alive && client.sim.reviveZones.length === 0, 'le client voit sa squad revenue et la zone disparue');

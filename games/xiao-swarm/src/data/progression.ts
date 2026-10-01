@@ -50,7 +50,7 @@ export interface UpgradeDef {
 export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   damage: { id: 'damage', stat: 'damage', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xff6a4a },
   fireRate: { id: 'fireRate', stat: 'fireRate', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xffd166 },
-  /** PV max +15 % ET soin de 50 % de leurs PV à tous les soldats (ancienne upgrade « soins » fusionnée). */
+  /** PV max +15 % ; les soldats déjà là gagnent aussi, à plat, les PV max supplémentaires (pas de soin en plus). */
   hp: { id: 'hp', stat: 'hp', mod: { pct: 0.15 }, maxStacks: 8, value: 15, color: 0x6fdc6f },
   range: { id: 'range', stat: 'range', mod: { pct: 0.05 }, maxStacks: 8, value: 5, color: 0xffa07a },
   speed: { id: 'speed', stat: 'speed', mod: { pct: 0.08 }, maxStacks: 5, value: 8, color: 0x7dd3ff },
@@ -63,9 +63,6 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
-
-/** Part des PV rendue par l'upgrade « PV » (en plus de la hausse des PV max). */
-export const HP_UPGRADE_HEAL = 0.5;
 
 /** Nombre d'upgrades proposées à chaque niveau. */
 export const OFFER_SIZE = 3;

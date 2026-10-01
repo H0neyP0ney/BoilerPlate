@@ -29,7 +29,22 @@ export class PauseScene extends Phaser.Scene {
       onClick: () => this.restart(),
     });
 
-    for (const key of ['ESC', 'P', 'SPACE', 'ENTER']) this.input.keyboard!.on(`keydown-${key}`, () => this.resume());
+    // Options par-dessus la pause : à la fermeture on revient ici (la partie reste en pause).
+    const options = new Button(this, width / 2, height / 2 + 190, {
+      label: t('options'),
+      variant: 'secondary',
+      width: 320,
+      height: 64,
+      onClick: () => {
+        if (!this.scene.isActive(SCENES.options)) this.scene.launch(SCENES.options, { resumeGame: false });
+      },
+    });
+
+    for (const key of ['ESC', 'P', 'SPACE', 'ENTER']) {
+      this.input.keyboard!.on(`keydown-${key}`, () => {
+        if (!this.scene.isActive(SCENES.options)) void this.resume(); // ESC / Entrée ferment d'abord le menu Options
+      });
+    }
 
     const layout = () => {
       const { width: w, height: h } = this.scale;
@@ -37,6 +52,7 @@ export class PauseScene extends Phaser.Scene {
       title.setPosition(w / 2, h / 2 - 120);
       resume.setPosition(w / 2, h / 2 + 10);
       restart.setPosition(w / 2, h / 2 + 110);
+      options.setPosition(w / 2, h / 2 + 190);
     };
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));

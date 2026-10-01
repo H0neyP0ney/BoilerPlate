@@ -1,5 +1,6 @@
 import { ALIENS, type AlienId } from './data/aliens';
 import { DEFAULT_WAVE_SCRIPT, WAVE_LEVELS, WAVE_SCRIPT, type WaveConfig, type WaveScript } from './data/waves';
+import { DEFAULT_WAVE_MODEL, type TargetPoint, type WaveModel } from './data/waveModel';
 import { saveToCode } from './dev/devSave';
 
 /**
@@ -8,6 +9,8 @@ import { saveToCode } from './dev/devSave';
  * `DEFAULT_WAVE_SCRIPT` (data/waves.ts), seule source livrée.
  */
 const STORAGE_KEY = 'xiao-debug-waves';
+/** Version des ids d'aliens du script mémorisé (3 : slime_basic / slime_bombardier, voir loadWaveOverrides). */
+const MIGRATION_KEY = 'xiao-debug-waves-ids';
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -35,19 +38,43 @@ function sanitize(raw: unknown): WaveScript | null {
       ...(num(e.every, 0) > 0 ? { every: e.every } : {}),
       ...(num(e.every, 0) > 0 && Number.isFinite(e.until) ? { until: e.until } : {}),
     }));
-  return { levels, timeline };
+  const m = r.model as Partial<WaveModel> | undefined;
+  const model: WaveModel = {
+    dpsStart: Math.max(1, num(m?.dpsStart, DEFAULT_WAVE_MODEL.dpsStart)),
+    growthPerMin: Math.max(0, num(m?.growthPerMin, DEFAULT_WAVE_MODEL.growthPerMin)),
+    efficiency: Math.min(1, Math.max(0.05, num(m?.efficiency, DEFAULT_WAVE_MODEL.efficiency))),
+    bossWeight: Math.min(1, Math.max(0, num(m?.bossWeight, DEFAULT_WAVE_MODEL.bossWeight))),
+  };
+  const target = (Array.isArray(r.target) ? r.target : [])
+    .filter((p) => p && Number.isFinite(p.t) && Number.isFinite(p.hp))
+    .map((p): TargetPoint => ({ t: Math.max(0, p.t), hp: Math.max(0, p.hp) }))
+    .sort((a, b) => a.t - b.t);
+  return { levels, timeline, model, ...(target.length >= 2 ? { target } : {}) };
 }
 
 function assign(script: WaveScript): void {
   WAVE_SCRIPT.levels = script.levels;
   WAVE_SCRIPT.timeline = script.timeline;
+  WAVE_SCRIPT.model = script.model ? { ...script.model } : { ...DEFAULT_WAVE_MODEL };
+  WAVE_SCRIPT.target = script.target ? clone(script.target) : undefined;
 }
 
 /** À appeler au démarrage, avant de créer la simulation : réapplique le script mémorisé. */
 export function loadWaveOverrides(): void {
   if (!import.meta.env.DEV) return;
   try {
-    const saved = sanitize(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'));
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as WaveScript | null;
+    // Migration (slimes renommés deux fois) vers 'slime_basic' (slime de base) et 'slime_bombardier' (gros qui lance de la gelée) :
+    // v1 : 'slime' = base, 'slime_blue' = gros ; v2 : 'slime_blue' = base, 'slime_green' = gros.
+    const version = localStorage.getItem(MIGRATION_KEY);
+    if (raw?.levels && version !== '3') {
+      const rename: Record<string, string> =
+        version === '2' ? { slime_blue: 'slime_basic', slime_green: 'slime_bombardier' } : { slime: 'slime_basic', slime_blue: 'slime_bombardier' };
+      for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) g.type = (rename[g.type] ?? g.type) as AlienId;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    }
+    localStorage.setItem(MIGRATION_KEY, '3');
+    const saved = sanitize(raw);
     if (saved) assign(saved);
   } catch {
     // script illisible : valeurs par défaut
@@ -75,6 +102,8 @@ export async function saveWavesToCode(): Promise<string> {
   if (msg.startsWith('✔')) {
     DEFAULT_WAVE_SCRIPT.levels = clone(WAVE_SCRIPT.levels);
     DEFAULT_WAVE_SCRIPT.timeline = clone(WAVE_SCRIPT.timeline);
+    DEFAULT_WAVE_SCRIPT.model = { ...(WAVE_SCRIPT.model ?? DEFAULT_WAVE_MODEL) };
+    DEFAULT_WAVE_SCRIPT.target = WAVE_SCRIPT.target ? clone(WAVE_SCRIPT.target) : undefined;
   }
   return msg;
 }
@@ -99,6 +128,10 @@ export function waveSnippet(): string {
     const cfg = e.config ? `, config: ${e.config}` : '';
     lines.push(`    { at: ${e.at}, level: ${e.level}${rep}${cfg} },`);
   }
-  lines.push('  ],', '};');
+  const m = WAVE_SCRIPT.model ?? DEFAULT_WAVE_MODEL;
+  lines.push('  ],', `  model: { dpsStart: ${m.dpsStart}, growthPerMin: ${m.growthPerMin}, efficiency: ${m.efficiency}, bossWeight: ${m.bossWeight} },`);
+  const target = WAVE_SCRIPT.target ?? [];
+  if (target.length >= 2) lines.push(`  target: [${target.map((p) => `{ t: ${Math.round(p.t * 2) / 2}, hp: ${Math.round(p.hp)} }`).join(', ')}],`);
+  lines.push('};');
   return lines.join('\n');
 }

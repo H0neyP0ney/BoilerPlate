@@ -1,0 +1,22 @@
+{
+  "frameWidth": 255,
+  "frameHeight": 197,
+  "originX": 0.533,
+  "originY": 0.892,
+  "cols": 8,
+  "frames": 48,
+  "anims": {
+    "idle": {
+      "first": 0,
+      "count": 16
+    },
+    "walk": {
+      "first": 16,
+      "count": 16
+    },
+    "attack": {
+      "first": 32,
+      "count": 16
+    }
+  }
+}

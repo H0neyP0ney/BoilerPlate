@@ -10,6 +10,7 @@
     "dev": "npm run dev -w @xiao/swarm-attack",
     "dev:starter": "npm run dev -w @xiao/starter",
     "zip": "npm run zip -w @xiao/swarm-attack",
+    "deploy": "node scripts/deploy.mjs",
     "typecheck": "tsc -p packages/engine && tsc -p packages/engine/tsconfig.sim.json && tsc -p games/_starter && tsc -p games/xiao-swarm && tsc -p games/xiao-swarm/tsconfig.sim.json",
     "new-game": "node scripts/new-game.mjs",
     "sim:headless": "npm run sim -w @xiao/swarm-attack --",
@@ -19,6 +20,7 @@
     "build:poki": "bash scripts/build-poki.sh"
   },
   "devDependencies": {
+    "basic-ftp": "^6.2.1",
     "fflate": "^0.8.2",
     "pngjs": "^7.0.0",
     "typescript": "^7.0.2",

@@ -15,6 +15,9 @@ try {
   let maxAliens = 0;
   while (sim.time < Number(seconds) && sim.aliveSquads.length > (mode === 'royale' ? 1 : 0)) {
     session.advance(1000 / 30, (e) => (counts[e.t] = (counts[e.t] ?? 0) + 1));
+    // personne ne joue le joueur local : il choisit ses upgrades au hasard (en solo, la pause de choix n'a pas de limite de temps)
+    const offer = sim.squadOf(session.localPlayer)?.offer;
+    if (offer) session.chooseUpgrade(Math.floor(Math.random() * offer.length));
     ticks++;
     maxAliens = Math.max(maxAliens, sim.aliens.length);
   }

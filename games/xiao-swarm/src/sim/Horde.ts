@@ -113,6 +113,12 @@ export class Horde {
       rushT: 0,
       rushDx: 0,
       rushDy: 0,
+      leapCd: def.leap ? def.leap.every / 2 : 0,
+      leapT: 0,
+      leapFromX: x,
+      leapFromY: y,
+      leapX: x,
+      leapY: y,
       reviveCd: 1 + rng.next() * 2,
       castT: 0,
       castCorpse: 0,
@@ -248,6 +254,28 @@ export class Horde {
         } else if (a.slamCd <= 0 && a.target && gd < def.slam.radius * 0.8) {
           a.slamWind = 0.45;
         }
+      }
+
+      // Saut écrasant : préparation (télégraphe), vol jusqu'au point d'impact, écrasement, récupération. Rien d'autre pendant la séquence.
+      if (def.leap) {
+        const L = def.leap;
+        if (a.leapT > 0) {
+          const total = L.windup + L.flight + L.recover;
+          const before = total - a.leapT;
+          a.leapT = Math.max(0, a.leapT - dt);
+          const elapsed = total - a.leapT;
+          const land = L.windup + L.flight;
+          if (elapsed > L.windup) {
+            const k = Math.min(1, (elapsed - L.windup) / L.flight);
+            a.x = a.leapFromX + (a.leapX - a.leapFromX) * k;
+            a.y = a.leapFromY + (a.leapY - a.leapFromY) * k;
+          }
+          if (before < land && elapsed >= land) this.leapImpact(a);
+          a.vx = a.vy = a.kx = a.ky = 0;
+          continue;
+        }
+        a.leapCd -= dt;
+        if (a.leapCd <= 0) this.startLeap(a); // vise la squad de sa cible, sinon la plus proche (le crabe vise un centre, pas un soldat)
       }
 
       // Charge télégraphiée : s'arrête, montre la zone (rushWind), puis fonce tout droit dans la direction verrouillée
@@ -394,6 +422,48 @@ export class Horde {
     for (const o of wounded.slice(0, hb.targets)) {
       o.hp = Math.min(o.maxHp, o.hp + o.maxHp * hb.pct * dt);
       if (show) this.sim.events.push({ t: 'healBeam', from: a.id, to: o.id, dur: 0.38 });
+    }
+  }
+
+  /** Début d'un saut : vise là où la squad ciblée sera à l'impact (centre + vitesse moyenne × temps avant l'impact). */
+  private startLeap(a: AlienState): void {
+    const L = a.def.leap!;
+    const squad = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    if (!squad) return;
+    let vx = 0;
+    let vy = 0;
+    let n = 0;
+    for (const s of squad.soldiers) {
+      if (!s.alive) continue;
+      vx += s.vx;
+      vy += s.vy;
+      n++;
+    }
+    const lead = L.windup + L.flight;
+    const p = { x: squad.center.x + (n ? vx / n : 0) * lead, y: squad.center.y + (n ? vy / n : 0) * lead, radius: a.radius };
+    const dx = p.x - a.x;
+    const dy = p.y - a.y;
+    const d = Math.hypot(dx, dy);
+    if (d > L.maxDist) {
+      p.x = a.x + (dx / d) * L.maxDist;
+      p.y = a.y + (dy / d) * L.maxDist;
+    }
+    this.sim.arena.constrain(p);
+    a.leapFromX = a.x;
+    a.leapFromY = a.y;
+    a.leapX = p.x;
+    a.leapY = p.y;
+    a.leapT = L.windup + L.flight + L.recover;
+    a.leapCd = L.every;
+  }
+
+  /** Atterrissage : onde de choc (affichage) et mort de tout soldat écrasé sous la zone d'impact. */
+  private leapImpact(a: AlienState): void {
+    const L = a.def.leap!;
+    this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: L.radius });
+    for (const s of this.sim.soldierHash.query(a.x, a.y, L.radius + 30, this.scratchS)) {
+      if (!s.alive || Math.hypot(s.x - a.x, s.y - a.y) > L.radius + s.radius) continue;
+      this.sim.damageSoldier(s, s.hp + s.maxHp); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
     }
   }
 

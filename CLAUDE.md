@@ -43,7 +43,7 @@ recrues, vagues, vitesse du jeu, invincibilité ; hors ligne seulement). `npm ru
 - Progression : à chaque niveau, le jeu se met en PAUSE pour tous les joueurs (`Sim.choiceT`, passé dans le snapshot). En ligne, 5 s (`UPGRADE_CHOICE_TIME`, option `choiceTimeout` de la Sim) puis choix au hasard ; en solo, pas de limite. En coop, une seule barre d'XP pour tous (seuil × nombre de joueurs).
 - Ennemis : `data/aliens.ts` (capacités en données : `lob`, `tongue`, `rush`, `leap`, `spray`, `deathBlast`, `revive`, `capture`, `trail`, `wall`, `lurk`, `dash`, `boss`). XP / upgrades : `data/progression.ts`, `sim/Xp.ts`.
 - Difficulté globale : `DIFFICULTY` dans `config.ts` ; power-ups : `sim/PowerUps.ts` ; zones de réanimation (coop) : `Sim.reviveZones`. Les cailloux (éléments des murs du `thrower`, télégraphe jaune dans `Sim.walls`), flaques, power-ups et zones passent par le **snapshot** (pas seulement des événements, qui sont non fiables).
-- Réseau : toute nouvelle donnée visible chez un client doit passer par `net/Protocol.ts` (snapshot) ou un `SimEvent`, et `Mirror` ; incrémenter `PROTOCOL_VERSION` si le format change.
+- Réseau : toute nouvelle donnée visible chez un client doit passer par `net/Protocol.ts` (snapshot) ou un `SimEvent`, et `Mirror` ; incrémenter `PROTOCOL_VERSION` si le format change. Un champ conditionnel de l'encodeur binaire doit tester l'octet **écrit** (borné), pas la valeur brute : sinon le décodeur se décale et tout le snapshot est faux (voir `docs/MULTIJOUEUR.md` § Pièges). La squad locale d'un client est prédite (`net/Prediction.ts`).
 
 ## Règles d'architecture (multijoueur battle royale ~10 joueurs prévu)
 1. `games/*/src/sim/`, `data/`, `net/`, `config.ts` sont **purs** : pas de Phaser ni DOM, imports depuis

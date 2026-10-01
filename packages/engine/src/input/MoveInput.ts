@@ -18,6 +18,7 @@ export class MoveInput {
   /** À appeler une fois par frame. */
   update(): Phaser.Math.Vector2 {
     const v = this.vector.reset();
+    this.joystick.update();
     if (this.joystick.active) return v.copy(this.joystick.vector);
     const k = this.keys;
     // pavé numérique : 8 2 4 6 = haut bas gauche droite, 7 9 1 3 = diagonales

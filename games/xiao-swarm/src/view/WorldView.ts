@@ -24,6 +24,8 @@ export const LOB_HEIGHT = 55;
 const TELEGRAPH_S = 0.8;
 /** Distance (px) de vol sur laquelle une balle rejoint sa trajectoire depuis la bouche du canon dessinée. */
 const MUZZLE_BLEND_PX = 40;
+/** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
+const ORB_SCALE = 1.3;
 
 interface Tracer {
   x1: number;
@@ -501,7 +503,7 @@ export class WorldView {
     }
   }
 
-  /** Globes d'XP : taille selon la valeur, léger flottement, clignote avant de disparaître ; masqués hors caméra. */
+  /** Globes d'XP : taille selon la valeur (× `ORB_SCALE`), léger flottement, clignote avant de disparaître ; masqués hors caméra. */
   private syncOrbs(alpha: number, time: number): void {
     const orbs = this.sim.xp.orbs;
     const view = this.scene.cameras.main.worldView;
@@ -525,7 +527,7 @@ export class WorldView {
       const size = o.value >= 8 ? 1.25 : o.value >= 3 ? 0.85 : 0.55;
       const bob = Math.sin(time * 4 + o.id) * 2.5;
       const blink = o.life < 5 && Math.sin(time * 18) > 0;
-      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * orbBase * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
+      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * ORB_SCALE * orbBase * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
     }
   }
 

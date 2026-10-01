@@ -38,13 +38,37 @@ export class VirtualJoystick {
     return this.pointerId !== null;
   }
 
-  private readonly onDown = (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void => {
-    if (this.pointerId !== null || over.length > 0) return; // ignore les clics sur l'UI
+  /**
+   * À appeler une fois par frame. Un relâchement manqué (bouton lâché pendant qu'une autre fenêtre captait les événements, hors de la
+   * page…) laisserait le joystick « actif » pour toujours : on le rend quand son pointeur n'est plus enfoncé.
+   */
+  update(): void {
+    if (this.pointerId === null) return;
+    const m = this.scene.input.manager;
+    const p = [m.mousePointer, ...m.pointers].find((q) => q && q.id === this.pointerId);
+    if (!p || !p.isDown) this.release();
+  }
+
+  private begin(p: Phaser.Input.Pointer): void {
+    if (this.pointerId !== null || !p.isDown) return;
     this.pointerId = p.id;
     this.origin.set(p.x, p.y);
     this.base.setPosition(p.x, p.y).setVisible(true);
     this.knob.setPosition(p.x, p.y).setVisible(true);
     this.vector.reset();
+  }
+
+  /** Relâche le joystick (direction nulle, visuels masqués). */
+  release(): void {
+    this.pointerId = null;
+    this.vector.reset();
+    this.base.setVisible(false);
+    this.knob.setVisible(false);
+  }
+
+  private readonly onDown = (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void => {
+    if (this.pointerId !== null || over.length > 0) return; // ignore les clics sur l'UI
+    this.begin(p);
   }
 
   private readonly onMove = (p: Phaser.Input.Pointer): void => {
@@ -70,10 +94,7 @@ export class VirtualJoystick {
 
   private readonly onUp = (p: Phaser.Input.Pointer): void => {
     if (p.id !== this.pointerId) return;
-    this.pointerId = null;
-    this.vector.reset();
-    this.base.setVisible(false);
-    this.knob.setVisible(false);
+    this.release();
   }
 
   destroy(): void {

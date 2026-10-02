@@ -154,7 +154,7 @@ export class CheatPanel {
         button('Reset (4 Gunners)', () => {
           const sq = squad();
           const old = [...sq.soldiers];
-          for (let i = 0; i < 4; i++) sq.recruit('gunner', { x: sq.center.x + 30 * i - 45, y: sq.center.y + 40 }).invulnerable = 1;
+          for (let i = 0; i < 4; i++) sq.recruit('trooper', { x: sq.center.x + 30 * i - 45, y: sq.center.y + 40 }).invulnerable = 1;
           old.forEach((s) => this.remove(s));
           this.say('Squad remise à 4 Gunners');
         }),

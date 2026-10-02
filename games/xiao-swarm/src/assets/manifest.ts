@@ -21,7 +21,7 @@ import { range, type AssetEntry } from '@xiao/engine';
  *
  *   // Export Aseprite (tags "idle", "walk"…)
  *   { type: 'aseprite', url: 'aliens/slime.png', json: 'aliens/slime.json',
- *     sprites: { alien_slime_basic: { originY: 0.9, tags: { idle: 'idle', walk: 'walk' } } } },
+ *     sprites: { alien_slime: { originY: 0.9, tags: { idle: 'idle', walk: 'walk' } } } },
  *
  *   // Un PNG isolé
  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
@@ -35,9 +35,9 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
-  // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_gunner` (art/recruits.ts).
+  // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).
   ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
-  // Slime de base (`slime_basic`, vert) — art-src/slime_basic.png (1600 px) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_basic.pack.json.
+  // Slime de base (`slime`, vert) — art-src/slime_basic.png (1600 px) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_basic.pack.json.
   // 16 cases de 82×78 (cycle de marche) ; le dessin regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
@@ -45,7 +45,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 82,
     frameHeight: 78,
     sprites: {
-      alien_slime_basic: {
+      alien_slime: {
         originX: 0.4807,
         originY: 0.7891,
         scale: 0.73,
@@ -59,7 +59,7 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Petit cafard (id `slime_pink`, l'ancien petit slime rose) — art-src/cafard.png réduit par
+  // Petit cafard (id `gling`, l'ancien petit slime rose) — art-src/cafard.png réduit par
   // node tools/pack-grids.mjs games/xiao-swarm/art-src/cafard.pack.json (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE).
   // Même surface à l'écran que le petit slime rose (~37×28 px, plus plat que le slime) ; rayon 11 et marche rapide inchangés.
   {
@@ -68,7 +68,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 64,
     frameHeight: 55,
     sprites: {
-      alien_slime_pink: {
+      alien_gling: {
         originX: 0.4188,
         originY: 0.7446,
         scale: 0.7,
@@ -85,7 +85,7 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Slime bombardier (`slime_bombardier`, gros et bleu, lance des boules de gelée) — art-src/slime_grenadier.png (4096 px) réduit par
+  // Slime bombardier (`shoot`, gros et bleu, lance des boules de gelée) — art-src/slime_grenadier.png (4096 px) réduit par
   // node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_grenadier.pack.json (16 cases de 64×64). Plus gros (rayon 24 contre 16) et plus lent.
   {
     type: 'sheet',
@@ -93,7 +93,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 64,
     frameHeight: 64,
     sprites: {
-      alien_slime_bombardier: {
+      alien_shoot: {
         originX: 0.516,
         originY: 0.948,
         scale: 1.35,
@@ -109,23 +109,32 @@ export const ASSETS: AssetEntry[] = [
   },
   // Crabe géant (mini-boss de 5:00) — art-src/crab_idle.png, crab_walk.png et crab_attack.png (cases de 800×651) assemblés par
   // node tools/pack-grids.mjs games/xiao-swarm/art-src/crab.pack.json (8 colonnes pour rester sous 2048 px), puis convertis en WebP
-  // (qualité 90). Vu de face. Taille à l'écran ≈ celle du crabe procédural (~390 px de large) ; « attack » = saut + écrasement,
-  // joué une fois par saut écrasant (data/aliens.ts `leap`, sim/Horde.ts).
+  // (qualité 90). Vu de face. Taille à l'écran ≈ celle du crabe procédural (~390 px de large).
+  // Giant Crab (boss final de 10:00). L'animation « attack » a été retirée : le saut écrasant reste en marche.
   {
     type: 'sheet',
     url: 'aliens/crab.webp',
     frameWidth: 255,
     frameHeight: 197,
     sprites: {
-      alien_crab: {
+      alien_boss_crab: {
         originX: 0.533,
         originY: 0.892,
-        scale: 2.1,
-        shadow: 1,
+        scale: 0.82,
+        shadow: 0.4,
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
           walk: { frames: range(16, 31), fps: 12 },
-          attack: { frames: range(32, 47), fps: 7, repeat: 0 }, // saut : écrasement (frame ~11) à l'impact (0,6 s + 0,9 s), récupération ensuite
+        },
+      },
+      // Scarab : en attendant son propre dessin, réutilise la marche du crabe (pas d'idle ni d'attaque). Échelle à régler dans la visionneuse.
+      alien_boss_scarab: {
+        originX: 0.533,
+        originY: 0.892,
+        scale: 0.55,
+        shadow: 0.4,
+        anims: {
+          walk: { frames: range(16, 31), fps: 12 },
         },
       },
     },
@@ -140,7 +149,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 125,
     frameHeight: 96,
     sprites: {
-      alien_rhino_boss: {
+      alien_boss_rhino: {
         originX: 0.517,
         originY: 0.9,
         scale: 1,
@@ -201,7 +210,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 64,
     frameHeight: 64,
     sprites: {
-      alien_frog: {
+      alien_toad: {
         originX: 0.516,
         originY: 0.948,
         scale: 0.95,
@@ -264,7 +273,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 64,
     frameHeight: 64,
     sprites: {
-      alien_thrower: {
+      alien_wall: {
         originX: 0.516,
         originY: 0.948,
         scale: 0.95,
@@ -309,23 +318,23 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 67,
     frameHeight: 52,
     sprites: {
-      soldier_gunner: {
-        originX: 0.5975,
-        originY: 0.8847,
+      soldier_trooper: {
+        originX: 0.3671,
+        originY: 0.8946,
         scale: 1.25,
         muzzleFlash: true,
         muzzle: [0.8561, 0.6376],
-        anchors: { 'idle:left': [0.6489, 0.8847], 'walk:left': [0.6559, 0.9088], 'walk:right': [0.3586, 0.9126], 'die:left': [0.5921, 0.8768], 'idle:right': [0.3566, 0.8907] },
+        anchors: { 'idle:right': [0.3515, 0.8886], 'idle:left': [0.6463, 0.8822], 'walk:left': [0.6514, 0.9107], 'walk:right': [0.339, 0.9147] },
         muzzles: {
-          idle: [[0.9031, 0.4113], [0.9142, 0.3925], [0.8982, 0.4015], [0.909, 0.4204], [0.9135, 0.4261], [0.9103, 0.4307], [0.9258, 0.4431], [0.9265, 0.4431], [0.9227, 0.4351], [0.9198, 0.4193], [0.929, 0.4193], [0.9276, 0.3952], [0.9142, 0.3983], [0.9135, 0.3992], [0.9121, 0.3891], [0.9198, 0.3958]],
-          walk: [[0.8653, 0.6403], [0.8653, 0.6509], [0.8653, 0.6456], [0.8684, 0.6376], [0.8561, 0.6482], [0.8684, 0.6641], null, null, [0.8684, 0.6403], null, [0.8684, 0.6403], [0.8653, 0.6429], [0.8714, 0.6588], [0.8745, 0.6641], [0.8653, 0.6403], [0.8622, 0.6323]],
+          idle: [[0.8968, 0.4058], [0.9055, 0.3908], [0.9026, 0.3983], [0.9055, 0.4134], [0.9143, 0.4171], [0.9143, 0.4397], [0.9202, 0.4397], [0.9289, 0.4435], [0.9231, 0.4397], [0.926, 0.4284], [0.926, 0.4134], [0.9231, 0.4021], [0.9062, 0.3983], [0.9143, 0.3908], [0.9085, 0.3832], [0.9114, 0.3908]],
+          walk: [[0.9026, 0.4209], [0.9026, 0.4284], [0.9026, 0.4548], [0.9026, 0.436], [0.9026, 0.4171], [0.9114, 0.4247], [0.9085, 0.4322], [0.9114, 0.4171], [0.9055, 0.4134], [0.9026, 0.4322], [0.9055, 0.4548], [0.9114, 0.4209], [0.9085, 0.3945], [0.9114, 0.3983], [0.9085, 0.4171], [0.9143, 0.4209]],
         },
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
           walk: { frames: range(16, 31), fps: 16 },
         },
       },
-      gun_gunner: { hidden: true }, // l'arme est dessinée dans la planche
+      gun_trooper: { hidden: true }, // l'arme est dessinée dans la planche
     },
   },
 ];

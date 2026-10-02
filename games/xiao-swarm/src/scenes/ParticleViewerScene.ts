@@ -160,9 +160,9 @@ export class ParticleViewerScene extends Phaser.Scene {
     this.fx = new Fx(this);
     this.buildPanel();
     this.setBackground(true);
-    if (this.textures.exists('soldier_gunner')) {
-      this.gunner = sprites.add(this, 'soldier_gunner', 190, 40).setDepth(5);
-      sprites.play(this.gunner, 'soldier_gunner', 'idle');
+    if (this.textures.exists('soldier_trooper')) {
+      this.gunner = sprites.add(this, 'soldier_trooper', 190, 40).setDepth(5);
+      sprites.play(this.gunner, 'soldier_trooper', 'idle');
     }
     this.selectEffect(this.effect);
 
@@ -209,8 +209,8 @@ export class ParticleViewerScene extends Phaser.Scene {
     this.recruit?.destroy();
     this.recruitAt = { x, y };
     makeRecruitTextures(this);
-    const state = { id: 1, cls: 'gunner' as const, x, y, px: x, py: y, life: 1e9 };
-    this.recruit = new RecruitView(this, state, CLASSES.gunner.color);
+    const state = { id: 1, cls: 'trooper' as const, x, y, px: x, py: y, life: 1e9 };
+    this.recruit = new RecruitView(this, state, CLASSES.trooper.color);
   }
 
   update(time: number): void {

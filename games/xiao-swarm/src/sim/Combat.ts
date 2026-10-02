@@ -226,7 +226,7 @@ export class Combat {
   /** Une seule roquette, tirée par UN soldat ; chacune vise un alien différent des dernières (jamais deux roquettes sur la même cible d'affilée). */
   private fireRocket(squad: Squad, index: number, recent: number[]): void {
     const { rng } = this.sim;
-    const gunners = squad.soldiers.filter((s) => s.alive && s.def.id === 'gunner');
+    const gunners = squad.soldiers.filter((s) => s.alive && s.def.id === 'trooper');
     const shooters = gunners.length > 0 ? gunners : squad.soldiers.filter((s) => s.alive);
     if (shooters.length === 0) return;
     const src = shooters[index % shooters.length];

@@ -62,7 +62,7 @@ export function loadSpriteOverrides(): void {
   //  v1 → : `alien_slime` (slime de base, ancienne planche verte : réglages abandonnés) ; `alien_slime_blue` (gros) → bombardier ;
   //  v2 → : `alien_slime_blue` (base, planche bleue) → `alien_slime_basic` ; `alien_slime_green` (gros) → `alien_slime_bombardier`.
   const version = localStorage.getItem(MIGRATION_KEY);
-  if (version !== '3') {
+  if (version !== '3' && version !== '4' && version !== '5') {
     const o = overrides as Record<string, Placement | undefined>;
     const move = (from: string, to: string): void => {
       if (o[from]) o[to] = o[from];
@@ -76,7 +76,44 @@ export function loadSpriteOverrides(): void {
       delete o.alien_slime;
     }
     persist();
-    localStorage.setItem(MIGRATION_KEY, '3');
+  }
+  // v4 : ids renommés (slime_basic → slime, slime_pink → gling, slime_bombardier → flower)
+  if (version !== '4' && version !== '5') {
+    const o = overrides as Record<string, Placement | undefined>;
+    for (const [from, to] of [['slime_basic', 'slime'], ['slime_pink', 'gling'], ['slime_bombardier', 'flower']]) {
+      if (o[`alien_${from}`]) o[`alien_${to}`] = o[`alien_${from}`];
+      delete o[`alien_${from}`];
+    }
+    persist();
+  }
+  // v5 : ids de boss renommés (rhino_boss → boss_rhino, crab_king → boss_slime, crab → boss_crab)
+  if (version !== '5') {
+    const o = overrides as Record<string, Placement | undefined>;
+    for (const [from, to] of [['rhino_boss', 'boss_rhino'], ['crab_king', 'boss_slime'], ['crab', 'boss_crab']]) {
+      if (o[`alien_${from}`]) o[`alien_${to}`] = o[`alien_${from}`];
+      delete o[`alien_${from}`];
+    }
+    persist();
+    localStorage.setItem(MIGRATION_KEY, '5');
+  }
+  // ids de classes renommés (gunner → trooper, tank → bruiser) : réglages mémorisés repris sous les nouveaux ids
+  {
+    const o = overrides as Record<string, Placement | undefined>;
+    for (const [from, to] of [['gunner', 'trooper'], ['tank', 'bruiser'], ['grenadier', 'bomber']]) {
+      for (const pre of ['soldier_', 'gun_']) {
+        if (o[`${pre}${from}`]) o[`${pre}${to}`] = o[`${pre}${from}`];
+        delete o[`${pre}${from}`];
+      }
+    }
+  }
+  {
+    const o = overrides as Record<string, Placement | undefined>; // flower → shoot
+    if (o.alien_flower) o.alien_shoot = o.alien_flower;
+    delete o.alien_flower;
+    for (const [from, to] of [['frog', 'toad'], ['thrower', 'wall'], ['boss_slime', 'boss_scarab']]) {
+      if (o[`alien_${from}`]) o[`alien_${to}`] = o[`alien_${from}`];
+      delete o[`alien_${from}`];
+    }
   }
   for (const [id, p] of Object.entries(overrides)) if (sprites.has(id)) apply(id, p);
 }

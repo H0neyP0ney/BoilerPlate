@@ -104,7 +104,7 @@ export class SoldierView {
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
       this.gun
-        .setPosition(this.rx + facing * 4, this.ry - 17 * (s.def.id === 'tank' ? 1.15 : 1) + bob)
+        .setPosition(this.rx + facing * 4, this.ry - 17 * (s.def.id === 'bruiser' ? 1.15 : 1) + bob)
         .setRotation(aim)
         .setFlipY(Math.cos(aim) < 0)
         .setDepth(depth + 0.5);
@@ -179,7 +179,6 @@ export class AlienView {
     const a = this.state;
     this.rx = lerp(a.px, a.x, alpha);
     this.ry = lerp(a.py, a.y, alpha);
-    const moving = Math.hypot(a.vx, a.vy) > 8;
     if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
 
     // Squash / lévitation procéduraux seulement sans planche animée.
@@ -192,13 +191,13 @@ export class AlienView {
       const attackNow = a.slamWind > 0 || a.leapT > 0;
       if (!attackNow) this.attackStarted = false;
       else if (!this.attackStarted) this.attackStarted = sprites.play(this.body, this.id, 'attack');
-      if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, moving ? 'walk' : 'idle') || sprites.play(this.body, this.id, 'idle');
+      if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, 'walk') || sprites.play(this.body, this.id, 'idle'); // pas d'idle dédié : toujours la marche (l'idle n'est qu'un repli)
     }
     this.spawnT = Math.min(1, this.spawnT + dt * 4);
     const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
     this.body.setScale(pop * (1 + squash + wind * 0.12), pop * (1 - squash - wind * 0.1));
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
-    const flips = this.animated || a.def.id === 'charger' || a.def.id === 'rhino_boss';
+    const flips = this.animated || a.def.id === 'charger' || a.def.id === 'boss_rhino';
     this.body
       .setPosition(this.rx, this.ry + lift)
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)

@@ -32,6 +32,17 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   rockets: { icon: '🚀', color: 0xff7a3a },
 };
 
+/** Pastille d'un power-up (disque coloré + emoji), centrée sur (0, 0) ; partagée avec la visionneuse d'unités. */
+export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.GameObjects.Container {
+  const info = POWERUP_INFO[kind];
+  const g = scene.add.graphics();
+  g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 22);
+  g.fillStyle(info.color, 0.3).fillCircle(0, 0, 22);
+  g.lineStyle(3, info.color, 1).strokeCircle(0, 0, 22);
+  const icon = scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: '26px' }).setOrigin(0.5);
+  return scene.add.container(0, 0, [g, icon]);
+}
+
 /**
  * Éléments posés au sol et pilotés par la simulation : power-ups, globes persistants (soin / stase), auras des bonus actifs, compteur « soldats / max » au
  * centre de chaque squad. Tout est recalé chaque frame sur l'état de la simulation (snapshot en ligne) : pas d'image orpheline.
@@ -64,13 +75,7 @@ export class PickupViews {
       live.add(p.id);
       let box = this.powerups.get(p.id);
       if (!box) {
-        const info = POWERUP_INFO[p.kind];
-        const g = this.scene.add.graphics();
-        g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 22);
-        g.fillStyle(info.color, 0.3).fillCircle(0, 0, 22);
-        g.lineStyle(3, info.color, 1).strokeCircle(0, 0, 22);
-        const icon = this.scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: '26px' }).setOrigin(0.5);
-        box = this.scene.add.container(p.x, p.y, [g, icon]).setScale(0.2);
+        box = makePowerUpIcon(this.scene, p.kind).setPosition(p.x, p.y).setScale(0.2);
         this.scene.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.Out' });
         this.powerups.set(p.id, box);
       }

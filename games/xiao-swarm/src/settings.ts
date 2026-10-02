@@ -47,6 +47,16 @@ export const settings = {
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */
   debugMode: storage.get<boolean>('settings.debugMode', import.meta.env.DEV) === true,
 
+  /** Volume effectif (0 → 1) de la musique. */
+  musicGain(): number {
+    return this.musicVolume / MUSIC_STEPS;
+  },
+
+  /** Volume effectif (0 → 1) des bruitages. */
+  sfxGain(): number {
+    return this.sfxVolume / MUSIC_STEPS;
+  },
+
   setMusicVolume(steps: number): void {
     this.musicVolume = clamp(Math.round(steps), 0, MUSIC_STEPS);
     storage.set('settings.musicVolume', this.musicVolume);

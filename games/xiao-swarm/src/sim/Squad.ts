@@ -196,7 +196,7 @@ export class Squad {
       for (let i = 0; i < n; i++) {
         const a = this.sim.rng.range(0, Math.PI * 2);
         const r = this.radius * 0.5;
-        this.recruit('gunner', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r }).invulnerable = 1;
+        this.recruit('trooper', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r }).invulnerable = 1;
       }
     }
   }

@@ -151,15 +151,15 @@ function crab(ctx: CanvasRenderingContext2D): void {
 }
 
 export function makeAlienTextures(scene: Phaser.Scene): void {
-  canvasTexture(scene, 'alien_slime_basic', 48, 48, (ctx) => slime(ctx));
-  canvasTexture(scene, 'alien_slime_bombardier', 72, 72, (ctx) => {
+  canvasTexture(scene, 'alien_slime', 48, 48, (ctx) => slime(ctx));
+  canvasTexture(scene, 'alien_shoot', 72, 72, (ctx) => {
     ctx.scale(1.5, 1.5);
     slime(ctx, '#b8dcff', '#3a78d8');
   });
-  canvasTexture(scene, 'alien_slime_pink', 48, 48, (ctx) => slime(ctx, '#ffc4e0', '#e0559a'));
+  canvasTexture(scene, 'alien_gling', 48, 48, (ctx) => slime(ctx, '#ffc4e0', '#e0559a'));
   canvasTexture(scene, 'alien_charger', 66, 52, (ctx) => beast(ctx, '#e09a9a', '#a33030', '#7a2020'));
   canvasTexture(scene, 'alien_kamikaze', 48, 48, (ctx) => slime(ctx, '#ffd9a8', '#e0702a'));
-  canvasTexture(scene, 'alien_frog', 48, 48, (ctx) => slime(ctx, '#c0f5e4', '#2aa88a'));
+  canvasTexture(scene, 'alien_toad', 48, 48, (ctx) => slime(ctx, '#c0f5e4', '#2aa88a'));
   // Bulle flottante : sphère translucide à reflets (le soldat avalé se voit à travers).
   canvasTexture(scene, 'alien_bubble', 60, 60, (ctx) => {
     const g = ctx.createRadialGradient(24, 22, 4, 30, 30, 29);
@@ -185,11 +185,11 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     ctx.fill();
   });
   // Boss : le rhinocéros et le crabe agrandis (le sprite suit le rayon de l'alien).
-  canvasTexture(scene, 'alien_rhino_boss', 119, 94, (ctx) => {
+  canvasTexture(scene, 'alien_boss_rhino', 119, 94, (ctx) => {
     ctx.scale(1.8, 1.8);
     beast(ctx, '#d98a8a', '#8c1f1f', '#5a1414');
   });
-  canvasTexture(scene, 'alien_crab_king', 182, 157, (ctx) => {
+  canvasTexture(scene, 'alien_boss_scarab', 182, 157, (ctx) => {
     ctx.scale(1.4, 1.4);
     crab(ctx);
   });
@@ -216,7 +216,7 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     }
     eye(ctx, 37, 28, 6);
   });
-  canvasTexture(scene, 'alien_thrower', 48, 48, (ctx) => slime(ctx, '#d8c8b0', '#8a6a48'));
+  canvasTexture(scene, 'alien_wall', 48, 48, (ctx) => slime(ctx, '#d8c8b0', '#8a6a48'));
   canvasTexture(scene, 'alien_spitter', 48, 48, (ctx) => slime(ctx, '#e3c8ff', '#8a3fd0'));
-  canvasTexture(scene, 'alien_crab', 130, 112, crab);
+  canvasTexture(scene, 'alien_boss_crab', 130, 112, crab);
 }

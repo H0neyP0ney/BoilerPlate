@@ -100,7 +100,7 @@ try {
   // 3b) Difficulté : un boss n'apparaît qu'une fois, PV × nombre de squads vivantes.
   hs.aliens.length = 0;
   hs.waves.trigger(9, 1);
-  const bosses = hs.aliens.filter((x) => x.def.id === 'rhino_boss');
+  const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
   check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(900 * DIFFICULTY.bossHpMul * 2), 'boss unique, PV ×2 avec 2 joueurs (et × bossHpMul)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
@@ -111,7 +111,7 @@ try {
   // 3c) XP en réseau : globes visibles chez le client, choix d'upgrade envoyé à l'hôte, sans pause.
 
   check(hs.xpEnabled && client.sim.xpEnabled, 'XP active chez l\'hôte et chez le client');
-  hs.horde.spawnNear(a, 'slime_basic', 3, 100);
+  hs.horde.spawnNear(a, 'slime', 3, 100);
   for (const x of [...hs.aliens]) hs.damage(x, 9999, a.owner);
   await tick(client);
   await tick(client);
@@ -165,7 +165,7 @@ try {
 
   // 3e) Zombie, power-ups, bulles d’upgrade.
   hs.aliens.length = 0;
-  hs.horde.spawnAt('slime_basic', a.center.x + 400, a.center.y, 1, true);
+  hs.horde.spawnAt('slime', a.center.x + 400, a.center.y, 1, true);
   const zb = hs.aliens[0];
   check(zb.revived && Math.abs(zb.maxHp - 55 * 1.5 * 3) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
@@ -192,8 +192,8 @@ try {
   for (let i = 0; i < 120 && rushOk; i++) {
     host.setLocalInput(0, 0);
     hs.aliens.splice(1); // le rhino seul : on teste le format, pas la survie
-    hs.horde.spawnAt('slime_basic', rhino.x + 120, rhino.y);
-    hs.horde.spawnAt('slime_basic', rhino.x - 120, rhino.y);
+    hs.horde.spawnAt('slime', rhino.x + 120, rhino.y);
+    hs.horde.spawnAt('slime', rhino.x - 120, rhino.y);
     if (rhino.rushT > 0) sawRush = true;
     const back = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
     if (!back || back.aliens.length !== hs.aliens.length) {
@@ -222,7 +222,7 @@ try {
   check(hs.powerups.fields.length === 1 && client.sim.powerups.fields.length === 1, 'globe de stase persistant, reflété chez le client');
   check(hs.combat.projectiles.active.length >= 1 && hs.combat.projectiles.active.length < 15, 'rafale : les roquettes partent l’une après l’autre (pas d’un coup)', `${hs.combat.projectiles.active.length} en l’air`);
   hs.aliens.length = 0;
-  hs.horde.spawnAt('slime_basic', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
+  hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
   check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
   hs.aliens.length = 0;
   hs.combat.projectiles.releaseAll();
@@ -247,7 +247,7 @@ try {
   const near0 = m1.hp;
   const far0 = m2.hp;
   hs.recruits.clear(); // recrues restées au sol des tests précédents (un autre soldat les ramasserait et soignerait ses voisins)
-  hs.recruits.drop('gunner', m0.x, m0.y);
+  hs.recruits.drop('trooper', m0.x, m0.y);
   for (let i = 0; i < 3; i++) await tick(client);
   check(m0.hp === m0.maxHp, 'recrue en trop : le ramasseur est soigné à 100 %', `${m0.hp.toFixed(0)}/${m0.maxHp.toFixed(0)}`);
   check(Math.abs(m1.hp - Math.min(m1.maxHp, near0 + m1.maxHp * 0.5)) < 0.5, 'recrue en trop : un voisin proche est soigné à 50 %', `${near0.toFixed(0)} → ${m1.hp.toFixed(0)}`);
@@ -261,7 +261,7 @@ try {
   // loin des tirs de l'escouade, vers le centre de la carte (près d'un bord, ils seraient ramenés à portée)
   const hdir = a.center.x < hs.map.width / 2 ? 1 : -1;
   hs.aliens.length = 0;
-  hs.horde.spawnAt('crab', a.center.x - 300, a.center.y);
+  hs.horde.spawnAt('boss_crab', a.center.x - 300, a.center.y);
   const heavy = hs.aliens[0];
   const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
   resolveChoices(); // plus de choix en attente
@@ -280,7 +280,7 @@ try {
 
   // 3g) Saut écrasant du crabe : point d'impact visé et reflété chez le client (télégraphe), soldat écrasé tué d'un coup.
   hs.aliens.length = 0;
-  hs.horde.spawnAt('crab', a.center.x + 400, a.center.y);
+  hs.horde.spawnAt('boss_crab', a.center.x + 400, a.center.y);
   const jumper = hs.aliens[0];
   jumper.leapCd = 0;
   for (let i = 0; i < 3 && jumper.leapT <= 0; i++) await tick(client);

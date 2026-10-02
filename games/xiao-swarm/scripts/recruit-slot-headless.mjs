@@ -14,7 +14,7 @@ try {
     const sim = new Sim({ mode: { ...MODES.survival, waves: [] }, seed: 9, players: ['p'] });
     sim.arena.obstacles.length = 0;
     const sq = sim.squads[0];
-    sq.spawn(Array(size).fill('gunner'), { x: 1200, y: 900 });
+    sq.spawn(Array(size).fill('trooper'), { x: 1200, y: 900 });
     const inputs = new Map();
     inputs.set('p', moving ? { mx: 1, my: 0 } : { mx: 0, my: 0 });
     for (let i = 0; i < 90; i++) sim.step(dt, inputs);
@@ -27,7 +27,7 @@ try {
     const at = { x: edge.x + dir.x * 30, y: edge.y + dir.y * 30 };
 
     const before = new Map(sq.soldiers.map((s) => [s, { x: s.slotX, y: s.slotY }]));
-    const added = typeof sq.recruit === 'function' ? sq.recruit('gunner', at) : sq.add('gunner', at);
+    const added = typeof sq.recruit === 'function' ? sq.recruit('trooper', at) : sq.add('trooper', at);
     sim.step(dt, inputs); // déclenche la réattribution des places
 
     const relX = added.x - sq.anchor.x;

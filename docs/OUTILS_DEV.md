@@ -12,12 +12,12 @@ bouton « Copier le code » qui donne quoi y coller.
 | **Menu Réglages** | stats en direct, **Jeu** (zoom du jeu), **Visuel** (opacité des taches, échelle du sol). Touche `²` / F2 ou premier bouton du HUD (curseurs). Croix en haut à droite pour le fermer |
 | **Panneau Foule** | sliders du mouvement de foule (`CROWD`, `config.ts`) + config de travail |
 | **Panneau Triche** | tester vite une situation en jeu (hors ligne seulement) |
-| **Visionneuses** | Unités, Particules, Obstacles, Divers, Vagues, Carte — des scènes dédiées |
+| **Visionneuses** | Unités, Particules, Obstacles, Divers, Bonus, Vagues, Carte — des scènes dédiées (boutons à contour vert) |
 | **Panneau Équilibrage** | *annoncé, pas encore créé* : accueillera les réglages d'équilibrage du jeu (le « délai de soin » `CROWD.stillDelay` en a été retiré du panneau Foule pour y aller) |
 
 Les menus (Réglages, Foule, Triche) s'ouvrent toujours **à gauche**, sous les boutons du HUD, côte à côte dans l'ordre
-d'ouverture (`src/dev/dock.ts`). Boutons du HUD, de gauche à droite : Réglages · Foule · Triche · Unités · Particules ·
-Obstacles · Divers · Vagues · Carte. Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
+d'ouverture (`src/dev/dock.ts`). Boutons du HUD (**en bas à gauche**), de gauche à droite : Réglages · Foule · Triche · Unités · Particules ·
+Obstacles · Divers · Bonus · Vagues · Carte (les visionneuses ont un contour vert, `VIEW_BORDER` dans `dev/hudButtons.ts`). Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
 vues : on repasse par le jeu).
 
 ## Save / Reset (toutes les vues de dev)
@@ -40,9 +40,10 @@ raccourcis clavier (les anciens K / R / T / B ont été retirés).
 
 ## Visionneuse d'unités (`?viewer`, `src/scenes/UnitViewerScene.ts`, `src/debugSprites.ts`)
 
-- Une ou toutes les unités (soldats, aliens, recrues), liste des animations du catalogue, orientation, zoom.
+- **S'ouvre toujours sur la vue d'ensemble** (toutes les unités, à 80 %, 6 par ligne, boss sur une ligne à part, barre de défilement + molette) : pas de panneau, un clic sur une unité ouvre sa vue détaillée, la croix en haut à droite quitte vers le jeu. Chaque unité porte son nom anglais et son id ; les unités **inactives** (hors `ACTIVE_CLASSES` / `ACTIVE_ALIENS`) sont à 25 % d'opacité.
+- Vue d'une unité (panneau) : Save / Reset / Copier tout en haut, puis Zoom, Unité, Animation (seulement celles de la planche ; pas d'idle pour un alien qui a un walk), Orientation (boutons ← →). La croix du panneau ramène à la vue d'ensemble. Ombre à alpha 1.
 - Ordre du panneau : **Échelle** (réglage global du sprite), puis Ancrage (portée par défaut : « Cette séquence + direction »), Ombre, Muzzle flash.
-- **Muzzle flash** : case « Cette unité a un muzzle flash » (`muzzleFlash: true` dans le manifeste ; seul `soldier_gunner` en a un, le jeu n'affiche le flash que si la case est cochée). Cochée : point rouge (bouche du canon par frame), bouton **« Placer le canon au clic »** (le clic gauche pose le canon sur la frame affichée au lieu de déplacer le sprite), « Toutes les frames », « Effacer la frame », « Défaut unité ».
+- **Muzzle flash** : case « Cette unité a un muzzle flash » (`muzzleFlash: true` dans le manifeste ; seul `soldier_trooper` en a un, le jeu n'affiche le flash que si la case est cochée). Cochée : point rouge (bouche du canon par frame), bouton **« Placer le canon au clic »** (le clic gauche pose le canon sur la frame affichée au lieu de déplacer le sprite), « Toutes les frames », « Effacer la frame », « Défaut unité ».
 - **Ancrage** (croix jaune, glisser le sprite) : pour toute l'unité, une séquence, ou une séquence **dans une direction**
   (`anchors: { 'walk': [x, y], 'walk:left': [x, y] }`). Pour un sprite retourné, `originX/Y` se rapportent à la boîte de l'image
   en miroir : régler la direction gauche directement, ne pas la déduire de la droite.
@@ -80,6 +81,10 @@ Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE
 - **Aperçu** : les obstacles affichés sont un vrai tirage (même code que la partie) avec une seed d'aperçu ; « Nouveau tirage » la change ; case pour les hitbox. Le point de départ de la squad (centre) est marqué en bleu : ne pas y mettre de zone.
 - **Save** écrit `DEFAULT_MAP_ZONES` dans `data/mapZones.ts` ; **Reset** revient à cette sauvegarde ; le travail en cours est aussi mémorisé dans le navigateur (`xiao-debug-mapzones`).
 - Hors édition : la carte royale (`makeRoyaleMap`, 4800 px) n'utilise pas les zones.
+
+## Visionneuse bonus (`?bonus`, `src/scenes/BonusViewerScene.ts`)
+
+Consultation : une ligne de **recrues** (une par classe, inactives à 25 %) et une ligne de **power-ups** (pastille `makePowerUpIcon` de `view/PickupViews.ts`, la même qu'en jeu). Pas de réglage.
 
 ## Visionneuse divers (`?misc`, `src/scenes/MiscViewerScene.ts`)
 

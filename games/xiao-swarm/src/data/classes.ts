@@ -2,7 +2,7 @@
  * Classes de soldats (GDD §8). Valeurs de design, à équilibrer.
  * Ajouter une classe = une entrée ici + ses textures dans art/soldiers.ts.
  */
-export type SoldierClassId = 'gunner' | 'medic' | 'flammer' | 'sniper' | 'tank' | 'grenadier';
+export type SoldierClassId = 'trooper' | 'medic' | 'flammer' | 'sniper' | 'bruiser' | 'bomber';
 
 export type WeaponKind = 'bullet' | 'flame' | 'beam' | 'grenade';
 
@@ -41,8 +41,8 @@ export interface SoldierClassDef {
 }
 
 export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
-  gunner: {
-    id: 'gunner',
+  trooper: {
+    id: 'trooper',
     hp: 100,
     radius: 14,
     mass: 3,
@@ -86,8 +86,8 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     color: 0x5aa84a,
     weapon: { kind: 'beam', range: 520, cooldown: 1.3, damage: 55, texture: 'fx_beam' },
   },
-  tank: {
-    id: 'tank',
+  bruiser: {
+    id: 'bruiser',
     hp: 230,
     radius: 18,
     mass: 8,
@@ -104,8 +104,8 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
       texture: 'fx_bullet',
     },
   },
-  grenadier: {
-    id: 'grenadier',
+  bomber: {
+    id: 'bomber',
     hp: 85,
     radius: 14,
     mass: 3,
@@ -120,23 +120,23 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
  * mais ne sont ni dans les squads de départ ni recrutées. Pour en réactiver une : l'ajouter ici et
  * dans START_SQUADS.
  */
-export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner'];
+export const ACTIVE_CLASSES: SoldierClassId[] = ['trooper'];
 
 /**
  * Compositions de départ viables (GDD §7) : randomisation contrainte.
  * Pour l'instant : 4 Gunners (les autres classes sont désactivées, voir ACTIVE_CLASSES).
  */
-export const START_SQUADS: SoldierClassId[][] = [['gunner', 'gunner', 'gunner', 'gunner']];
+export const START_SQUADS: SoldierClassId[][] = [['trooper', 'trooper', 'trooper', 'trooper']];
 
 /**
  * Composition "idéale" visée par le recrutement : le type de recrue droppée
  * compense ce qui manque par rapport à ces proportions (GDD §13).
  */
 export const TARGET_MIX: Record<SoldierClassId, number> = {
-  gunner: 0.75,
+  trooper: 0.75,
   medic: 0.05,
   flammer: 0.05,
   sniper: 0.05,
-  tank: 0.05,
-  grenadier: 0.05,
+  bruiser: 0.05,
+  bomber: 0.05,
 };

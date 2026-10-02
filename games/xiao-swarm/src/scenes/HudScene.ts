@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
-import { device, theme } from '@xiao/engine';
+import { device, music, sfx, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { nextBoss } from '../data/waves';
 import { t } from '../i18n';
-import { settings } from '../settings';
+import { MUSIC_STEPS, settings, SFX } from '../settings';
 import type { SimEvent } from '../sim/types';
 import { xpBarLayout } from '../view/hudLayout';
-import { iconCheat, iconCrowd, makeSquareButton, VIEWER_BUTTONS } from '../dev/hudButtons';
+import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
 /**
@@ -17,8 +17,15 @@ import type { GameScene } from './GameScene';
 export class HudScene extends Phaser.Scene {
   private game_!: GameScene;
   private pauseBtn!: Phaser.GameObjects.Container;
-  /** Bouton Options (roue crantée, à gauche de la pause) : volume de la musique, mode debug. */
-  private optionsBtn!: Phaser.GameObjects.Container;
+  /** Haut gauche : bouton son on/off, bouton musique en dessous (ouvre la réglette de volume sur le côté). */
+  private soundBtn!: Phaser.GameObjects.Container;
+  private soundIcon!: Phaser.GameObjects.Graphics;
+  private musicIcon!: Phaser.GameObjects.Graphics;
+  /** État (son / musique non nuls) des icônes affichées : redessinées si le volume change ailleurs (menu Options). */
+  private iconState = '';
+  private musicBtn!: Phaser.GameObjects.Container;
+  private musicSlider!: Phaser.GameObjects.Container;
+  private soundSlider!: Phaser.GameObjects.Container;
   /** Boutons de dev visibles (mode debug du menu Options) ? */
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
@@ -83,7 +90,7 @@ export class HudScene extends Phaser.Scene {
         makeSquareButton(this, iconCrowd, () => this.game_.toggleCrowdPanel()),
         makeSquareButton(this, iconCheat, () => this.game_.toggleCheatPanel()),
       ];
-      this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene)));
+      this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene), VIEW_BORDER));
     }
     this.applyDebugMode();
     this.bossLabelShown = ''; // la scène est réutilisée à chaque partie : le nouveau texte est vide, il faut le remplir
@@ -118,7 +125,25 @@ export class HudScene extends Phaser.Scene {
       this.game_.events.off('netEnd', this.onNetEnd);
     });
     this.pauseBtn = this.makePauseButton().setVisible(!this.game_.session.online);
-    this.optionsBtn = this.makeOptionsButton();
+    this.soundBtn = this.makeSoundButton();
+    this.musicBtn = this.makeMusicButton();
+    this.soundSlider = this.makeVolumeSlider(
+      () => settings.sfxVolume,
+      (v) => {
+        settings.setSfxVolume(v);
+        sfx.setVolume(settings.sfxGain());
+        this.drawSpeaker();
+        sfx.play(this, SFX.blaster.key, SFX.blaster); // aperçu du volume
+      },
+    );
+    this.musicSlider = this.makeVolumeSlider(
+      () => settings.musicVolume,
+      (v) => {
+        settings.setMusicVolume(v);
+        music.setVolume(this.game, settings.musicGain());
+        this.drawNote();
+      },
+    );
     this.hint = this.makeHint();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout);
@@ -130,6 +155,10 @@ export class HudScene extends Phaser.Scene {
     if (settings.debugMode !== this.debugShown) {
       this.applyDebugMode();
       this.layout();
+    }
+    if (this.iconState !== `${settings.sfxVolume > 0}|${settings.musicVolume > 0}`) {
+      this.drawSpeaker();
+      this.drawNote();
     }
     this.fpsText.setVisible(settings.showFps);
     if (settings.showFps && time - this.fpsAt > 500) {
@@ -167,7 +196,7 @@ export class HudScene extends Phaser.Scene {
   /** Annonce d'un boss (ou de sa défaite) : gros bandeau au centre qui s'efface. */
   private readonly onBoss = (e: SimEvent): void => {
     if (e.t !== 'boss' && e.t !== 'bossDown') return;
-    const name = t(`alien_${e.alien}` as 'alien_crab');
+    const name = t(`alien_${e.alien}` as 'alien_boss_crab');
     const text = e.t === 'boss' ? `${t(e.kind === 'final' ? 'bossFinal' : 'bossMini')}\n${name}` : t('bossDown', { name });
     this.tweens.killTweensOf(this.bossBanner);
     this.bossBanner.setText(text).setColor(e.t === 'boss' ? (e.kind === 'final' ? '#ff3a3a' : '#ff9a4a') : '#8fff9a').setAlpha(1).setScale(1.3);
@@ -189,7 +218,7 @@ export class HudScene extends Phaser.Scene {
     const barY = height - 34; // haut de la barre (bas de l'écran)
     const final = boss.def.boss!.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_crab')).setPosition(width / 2, barY - 14);
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(width / 2, barY - 14);
     this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(x, barY, w, 16, 8);
     const ratio = Math.max(0, boss.hp / boss.maxHp);
     if (ratio > 0) this.bossBar.fillStyle(color, 1).fillRoundedRect(x + 2, barY + 2, Math.max(12, (w - 4) * ratio), 12, 6);
@@ -358,21 +387,101 @@ export class HudScene extends Phaser.Scene {
     for (const b of [this.debugBtn, ...this.panelBtns, ...this.viewerBtns]) b?.setVisible(show);
   }
 
-  /** Roue crantée : ouvre le menu Options. */
-  private makeOptionsButton(): Phaser.GameObjects.Container {
-    const c = this.add.container(0, 0);
+  private squareButtonBg(): Phaser.GameObjects.Graphics {
     const g = this.add.graphics();
-    g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-30, -30, 60, 60, 12);
-    g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-30, -30, 60, 60, 12);
-    g.fillStyle(0xffffff, 1);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      g.fillCircle(Math.cos(a) * 13, Math.sin(a) * 13, 4.5); // dents
+    g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-22, -22, 44, 44, 10);
+    g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-22, -22, 44, 44, 10);
+    return g;
+  }
+
+  /** Ouvre / ferme la réglette `which` (une seule à la fois). */
+  private toggleSlider(which: 'sound' | 'music'): void {
+    const target = which === 'sound' ? this.soundSlider : this.musicSlider;
+    const show = !target.visible;
+    this.soundSlider.setVisible(false);
+    this.musicSlider.setVisible(false);
+    target.setVisible(show);
+  }
+
+  /** Haut-parleur blanc : ouvre / ferme la réglette de volume des bruitages (barré à 0). */
+  private makeSoundButton(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    this.soundIcon = this.add.graphics();
+    this.drawSpeaker();
+    const hit = this.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => this.toggleSlider('sound'));
+    c.add([this.squareButtonBg(), this.soundIcon, hit]);
+    return c;
+  }
+
+  private drawSpeaker(): void {
+    const g = this.soundIcon.clear().fillStyle(0xffffff, 1).lineStyle(3, 0xffffff, 1);
+    g.fillRect(-12, -5, 7, 10).fillTriangle(-5, -5, 3, -12, 3, 12).fillTriangle(-5, 5, 3, 12, 3, -12);
+    if (settings.sfxVolume > 0) {
+      g.beginPath().arc(3, 0, 7, -0.9, 0.9).strokePath();
+      g.beginPath().arc(3, 0, 12, -0.9, 0.9).strokePath();
+    } else {
+      this.slash(g);
     }
-    g.fillCircle(0, 0, 13);
-    g.fillStyle(PALETTE.panel, 1).fillCircle(0, 0, 5.5);
-    const hit = this.add.zone(0, 0, 60, 60).setInteractive({ useHandCursor: true });
-    hit.on('pointerup', () => this.game_.openOptions());
+  }
+
+  /** Barre diagonale sur toute l'icône (volume à 0) : trait sombre puis blanc pour rester lisible sur le blanc de l'icône. */
+  private slash(g: Phaser.GameObjects.Graphics): void {
+    g.lineStyle(7, PALETTE.panel, 1).lineBetween(-15, -15, 15, 15);
+    g.lineStyle(3, 0xffffff, 1).lineBetween(-15, -15, 15, 15);
+  }
+
+  /** Note de musique blanche : ouvre / ferme la réglette de volume de la musique. */
+  private makeMusicButton(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    this.musicIcon = this.add.graphics();
+    this.drawNote();
+    const g = this.musicIcon;
+    const hit = this.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => this.toggleSlider('music'));
+    c.add([this.squareButtonBg(), g, hit]);
+    return c;
+  }
+
+  /** Note de musique, avec une croix quand la musique est au minimum. */
+  private drawNote(): void {
+    const g = this.musicIcon.clear().fillStyle(0xffffff, 1).lineStyle(3, 0xffffff, 1);
+    g.fillEllipse(-5, 9, 11, 8).fillEllipse(8, 6, 11, 8).fillRect(-1, -11, 3, 20).fillRect(12, -14, 3, 20);
+    g.fillTriangle(-1, -11, 15, -14, 15, -8).fillTriangle(-1, -11, -1, -5, 15, -8);
+    if (settings.musicVolume === 0) this.slash(g);
+    this.iconState = `${settings.sfxVolume > 0}|${settings.musicVolume > 0}`;
+  }
+
+  /** Réglette horizontale à 10 graduations (gauche = coupé, droite = plein volume), à droite de son bouton. */
+  private makeVolumeSlider(get: () => number, set: (v: number) => void): Phaser.GameObjects.Container {
+    const STEP_W = 24;
+    const trackW = MUSIC_STEPS * STEP_W;
+    const W = trackW + 44;
+    const c = this.add.container(0, 0).setVisible(false);
+    const g = this.add.graphics();
+    const draw = () => {
+      g.clear();
+      g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(0, -22, W, 44, 10);
+      g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(0, -22, W, 44, 10);
+      g.fillStyle(0xffffff, 0.35).fillRoundedRect(22, -2, trackW, 4, 2);
+      const x = 22 + (trackW * get()) / MUSIC_STEPS;
+      g.fillStyle(0xffffff, 1).fillRoundedRect(22, -2, x - 22, 4, 2);
+      for (let i = 0; i <= MUSIC_STEPS; i++) {
+        const major = i % 5 === 0;
+        g.fillStyle(0xffffff, major ? 1 : 0.6).fillRect(22 + i * STEP_W - 1, major ? -14 : -9, 2, major ? 28 : 18);
+      }
+      g.fillStyle(PALETTE.primary, 1).fillCircle(x, 0, 9).lineStyle(2, 0xffffff, 1).strokeCircle(x, 0, 9);
+    };
+    draw();
+    const apply = (p: Phaser.Input.Pointer) => {
+      const v = Math.round(Phaser.Math.Clamp((p.x - c.x - 22) / trackW, 0, 1) * MUSIC_STEPS);
+      if (v === get()) return;
+      set(v);
+      draw();
+    };
+    const hit = this.add.zone(0, -22, W, 44).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    hit.on('pointerdown', apply);
+    hit.on('pointermove', (p: Phaser.Input.Pointer) => p.isDown && apply(p));
     c.add([g, hit]);
     return c;
   }
@@ -416,15 +525,18 @@ export class HudScene extends Phaser.Scene {
     const { width, height } = this.scale;
     // Décalé sous la pill Poki sur mobile
     const top = device.isTouch ? 70 : 12;
-    // boutons alignés à gauche ; le code de salle (en ligne) se place à droite du dernier
-    this.debugBtn?.setPosition(14 + 22, top + 22);
-    const devBtns = [...this.panelBtns, ...this.viewerBtns];
-    devBtns.forEach((b, i) => b.setPosition(14 + (1 + i) * (44 + 8) + 22, top + 22));
-    const buttons = this.debugBtn && this.debugShown ? 1 + devBtns.length : 0; // menu Réglages + panneaux + visionneuses (dev, mode debug)
-    this.roomText.setPosition(buttons ? 14 + buttons * (44 + 8) + 10 : 14, buttons ? top + 10 : top);
-    this.fpsText.setPosition(14, top + (buttons ? 54 : 30)); // sous les boutons de dev / le code de salle
+    // haut gauche : son, puis musique en dessous (sa réglette s'ouvre à droite) ; le code de salle se place à droite du bouton son
+    this.soundBtn.setPosition(14 + 22, top + 22);
+    this.musicBtn.setPosition(14 + 22, top + 22 + 52);
+    this.soundSlider.setPosition(14 + 44 + 8, top + 22);
+    this.musicSlider.setPosition(14 + 44 + 8, top + 22 + 52);
+    this.roomText.setPosition(14 + 44 + 10, top + 10);
+    this.fpsText.setPosition(14, top + 44 + 8 + 44 + 8); // sous le bouton musique
+    // boutons de dev en bas à gauche, alignés sur une ligne
+    const bottomY = height - 14 - 22;
+    const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];
+    devBtns.forEach((b, i) => b.setPosition(14 + i * (44 + 8) + 22, bottomY));
     this.pauseBtn.setPosition(width - 44, top + 34);
-    this.optionsBtn.setPosition(this.pauseBtn.visible ? width - 44 - 70 : width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height * 0.22);
     this.endText.setPosition(width / 2, height * 0.4);

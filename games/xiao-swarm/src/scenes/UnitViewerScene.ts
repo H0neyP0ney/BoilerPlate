@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { getName, nameKey } from '../debugNames';
 import { clamp, sprites, theme } from '@xiao/engine';
-import { ALIENS, type AlienId } from '../data/aliens';
-import { CLASSES } from '../data/classes';
+import { ACTIVE_ALIENS, ALIENS, type AlienId } from '../data/aliens';
+import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
 import { PALETTE, SCENES } from '../config';
 import { header } from '../dev/devUi';
 import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
@@ -46,10 +46,15 @@ interface Entry {
 }
 
 const ALL = '*';
+/** Nombre maximal d'unités affichées sur une ligne (vue « toutes les unités »). */
+const MAX_PER_ROW = 6;
+/** Opacité des unités inactives (hors ACTIVE_CLASSES / ACTIVE_ALIENS). */
+const INACTIVE_ALPHA = 0.25;
+
 const GROUPS: { kind: Kind; prefix: string; ids: string[] }[] = [
   { kind: 'soldier', prefix: 'soldier_', ids: Object.keys(CLASSES) },
-  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS) },
-  { kind: 'recruit', prefix: 'recruit_', ids: Object.keys(CLASSES) },
+  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_')) },
+  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => id.startsWith('boss_')) }, // boss : ligne à part
 ];
 const ZOOMS = [0.5, 1, 1.5, 2, 3, 4];
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
@@ -60,11 +65,18 @@ export class UnitViewerScene extends Phaser.Scene {
   private animSelect!: HTMLSelectElement;
   private info!: HTMLDivElement;
   private selected = ALL;
+  private unitSelect?: HTMLSelectElement;
+  private closeBtn?: HTMLButtonElement;
+  /** Vue d'ensemble : hauteur du contenu (monde) et barre de défilement (DOM) à droite. */
+  private worldH = 0;
+  private scrollBar?: HTMLDivElement;
+  private scrollSpacer?: HTMLDivElement;
   private anim = 'idle';
   private facing = 1;
   private zoomFactor = 1;
   // Éditeur de placement (une seule unité affichée)
   private editorBox!: HTMLDivElement;
+  private actionsRow!: HTMLElement;
   private fields!: Record<'ox' | 'oy' | 'mx' | 'my', HTMLInputElement>;
   private shadowSlider!: HTMLInputElement;
   private shadowLabel!: HTMLSpanElement;
@@ -93,6 +105,7 @@ export class UnitViewerScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.selected = ALL; // la scène est réutilisée : toujours rouvrir sur la vue de toutes les unités
     this.cameras.main.setBackgroundColor(0x2b3a2e);
     this.drawGrid();
     this.buildPanel();
@@ -112,6 +125,8 @@ export class UnitViewerScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fit);
       this.panel?.remove();
+      this.closeBtn?.remove();
+      this.scrollBar?.remove();
     });
   }
 
@@ -133,15 +148,23 @@ export class UnitViewerScene extends Phaser.Scene {
     }
     this.entries = [];
 
-    const rows = GROUPS.map((g) => ({ ...g, ids: g.ids.filter((u) => this.selected === ALL || `${g.prefix}${u}` === this.selected) })).filter(
+    const groups = GROUPS.map((g) => ({ ...g, ids: g.ids.filter((u) => this.selected === ALL || `${g.prefix}${u}` === this.selected) })).filter(
       (g) => g.ids.length,
     );
+    // au plus MAX_PER_ROW unités par ligne : un groupe plus long passe à la ligne
+    const rows = groups.flatMap((g) => {
+      const lines: typeof groups = [];
+      for (let i = 0; i < g.ids.length; i += MAX_PER_ROW) lines.push({ ...g, ids: g.ids.slice(i, i + MAX_PER_ROW) });
+      return lines;
+    });
+    const totalRows = rows.length;
+    this.worldH = (totalRows - 1) * 190 + 280; // hauteur du contenu de la vue d'ensemble (marges : sprites hauts + étiquettes)
     const gap = this.selected === ALL ? 170 : 0;
     const rowGap = this.selected === ALL ? 190 : 0;
     rows.forEach((g, r) => {
       g.ids.forEach((unit, c) => {
         const x = (c - (g.ids.length - 1) / 2) * gap;
-        const y = (r - (rows.length - 1) / 2) * rowGap;
+        const y = (r - (totalRows - 1) / 2) * rowGap;
         this.entries.push(this.makeEntry(g.kind, g.prefix, unit, x, y));
       });
     });
@@ -153,9 +176,32 @@ export class UnitViewerScene extends Phaser.Scene {
 
   /** Libellé sous l'unité : son nom affiché en jeu (FR) puis son id de visuel. */
   private labelOf(kind: Kind, unit: string, id: string): string {
-    const name = getName(nameKey(kind, unit), 'fr');
-    return name ? `${name}
+    const name = getName(nameKey(kind, unit), 'en');
+    const text = name ? `${name}
 ${id}` : id;
+    return this.isInactive(kind, unit) ? `${text}
+(inactif)` : text;
+  }
+
+  /** Unité définie mais écartée du jeu (hors ACTIVE_CLASSES / ACTIVE_ALIENS ; les boss, pilotés par la timeline, comptent comme actifs). */
+  private isInactive(kind: Kind, unit: string): boolean {
+    if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ACTIVE_ALIENS.includes(unit as AlienId);
+    return !ACTIVE_CLASSES.includes(unit as SoldierClassId);
+  }
+
+  /** Texte d'une entrée de la liste « Unité » : nom anglais puis id. */
+  private optionLabel(kind: Kind, prefix: string, unit: string): string {
+    const name = getName(nameKey(kind, unit), 'en');
+    const base = name ? `${name} (${prefix}${unit})` : `${prefix}${unit}`;
+    return this.isInactive(kind, unit) ? `${base} — inactif` : base;
+  }
+
+  /** Sélectionne une unité (ou `ALL`) : met à jour la liste déroulante et reconstruit la vue. */
+  private select_(value: string): void {
+    this.selected = value;
+    this.syncChrome();
+    if (this.unitSelect) this.unitSelect.value = value;
+    this.rebuild();
   }
 
   private makeEntry(kind: Kind, prefix: string, unit: string, x: number, y: number): Entry {
@@ -164,14 +210,19 @@ ${id}` : id;
     const radius = kind === 'alien' ? ALIENS[unit as AlienId].radius : CLASSES[unit as keyof typeof CLASSES].radius;
     const shadow =
       kind === 'alien'
-        ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, 0.3)
-        : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, 0.3);
+        ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, 1)
+        : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, 1);
     const sprite = sprites.add(this, id, x, y);
+    // unités inactives : affichées à moitié transparentes
+    if (this.isInactive(kind, unit)) sprite.setAlpha(INACTIVE_ALPHA);
+    // vue d'ensemble : un clic sur une unité ouvre sa vue détaillée
+    if (this.selected === ALL) sprite.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.select_(id));
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
     const label = this.add
       .text(x, y + 26, this.labelOf(kind, unit, id), { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim, align: 'center' })
-      .setOrigin(0.5, 0);
+      .setOrigin(0.5, 0)
+      .setAlpha(this.isInactive(kind, unit) ? INACTIVE_ALPHA : 1);
     return {
       id,
       kind,
@@ -189,17 +240,24 @@ ${id}` : id;
     };
   }
 
-  /** Noms d'animations proposés : ceux des planches affichées, plus idle / walk (procéduraux à défaut). */
+  /**
+   * Noms d'animations proposés : uniquement celles qui existent dans les planches affichées. L'idle des aliens n'est pas listé quand
+   * ils ont une marche : c'est le même cycle, plus lent. `idle` seul si rien n'est animé (rendu procédural).
+   */
   private animNames(): string[] {
-    const names = new Set<string>(['idle', 'walk']);
-    for (const e of this.entries) for (const k of Object.keys(sprites.get(e.id).anims ?? {})) names.add(k);
+    const names = new Set<string>();
+    for (const e of this.entries) {
+      const anims = sprites.get(e.id).anims ?? {};
+      for (const k of Object.keys(anims)) if (!(k === 'idle' && e.kind === 'alien' && anims.walk)) names.add(k);
+    }
+    if (!names.size) names.add('idle');
     const first = ['idle', 'walk'];
     return [...names].sort((a, b) => (first.indexOf(a) + 1 || 99) - (first.indexOf(b) + 1 || 99) || a.localeCompare(b));
   }
 
   private fillAnimSelect(): void {
     const names = this.animNames();
-    if (!names.includes(this.anim)) this.anim = 'idle';
+    if (!names.includes(this.anim)) this.anim = names.includes('idle') ? 'idle' : names[0];
     this.animSelect.replaceChildren(...names.map((n) => new Option(n, n, false, n === this.anim)));
     this.playAll();
   }
@@ -216,8 +274,8 @@ ${id}` : id;
     const s = e.sprite;
     s.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
     const asked = sprites.get(e.id).anims?.[this.anim];
-    // Anim demandée, sinon idle de la planche, sinon procédural (aucune anim de planche).
-    const name = asked ? this.anim : sprites.hasAnim(e.id, 'idle') ? 'idle' : undefined;
+    // Anim demandée, sinon idle (ou marche) de la planche, sinon procédural (aucune anim de planche).
+    const name = asked ? this.anim : (['idle', 'walk'].find((n) => sprites.hasAnim(e.id, n)));
     if (name && sprites.play(s, e.id, name)) {
       e.key = sprites.get(e.id).anims![name];
       e.playing = name;
@@ -260,12 +318,12 @@ ${id}` : id;
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
     const k = sprites.get(e.id).shadow ?? 1;
-    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(e.floats ? 0.2 : 0.3);
+    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : 1);
 
     if (e.gun) {
       const aim = this.facing > 0 ? 0 : Math.PI;
       e.gun
-        .setPosition(e.x + this.facing * 4, e.y - 17 * (e.unit === 'tank' ? 1.15 : 1) + bob)
+        .setPosition(e.x + this.facing * 4, e.y - 17 * (e.unit === 'bruiser' ? 1.15 : 1) + bob)
         .setRotation(aim)
         .setFlipY(Math.cos(aim) < 0);
     }
@@ -520,8 +578,9 @@ ${id}` : id;
       note('Coche pour que cette unité tire avec un flash (seul le Trooper en a un). Décoche pour le retirer.'),
       flashRow,
       this.muzzleSection,
-      line(save, reset, copy),
     );
+    // Save / Reset / Copier : en haut du panneau, sous le titre (affichés avec l'éditeur)
+    this.actionsRow = line(save, reset, copy);
     this.editorBox = box;
     return box;
   }
@@ -571,6 +630,7 @@ ${id}` : id;
   private setupEditor(): void {
     const t = this.target;
     this.editorBox.style.display = t ? 'flex' : 'none';
+    this.actionsRow.style.display = t ? 'flex' : 'none';
     this.cross.setVisible(!!t);
     this.muzzleDot.setVisible(!!t && this.hasFlash());
     this.flash.setAlpha(0);
@@ -713,16 +773,14 @@ ${id}` : id;
     p.style.cssText =
       'position:fixed;top:8px;left:8px;z-index:99999;width:290px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
       'background:rgba(0,0,0,0.78);color:#dfe;font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:8px';
-    const title = header("Visionneuse d'unités", () => this.back());
+    const title = header("Visionneuse d'unités", () => this.select_(ALL));
 
     const units = this.select('Unité', [
       [ALL, 'Toutes les unités'],
-      ...GROUPS.flatMap((g) => g.ids.map((u) => [`${g.prefix}${u}`, `${g.prefix}${u}`] as [string, string])),
+      ...GROUPS.flatMap((g) => g.ids.map((u) => [`${g.prefix}${u}`, this.optionLabel(g.kind, g.prefix, u)] as [string, string])),
     ]);
-    units.select.addEventListener('change', () => {
-      this.selected = units.select.value;
-      this.rebuild();
-    });
+    this.unitSelect = units.select;
+    units.select.addEventListener('change', () => this.select_(units.select.value));
 
     const anims = this.select('Animation', []);
     this.animSelect = anims.select;
@@ -731,14 +789,23 @@ ${id}` : id;
       this.playAll();
     });
 
-    const side = this.select('Orientation', [
-      ['1', 'Droite'],
-      ['-1', 'Gauche'],
-    ]);
-    side.select.addEventListener('change', () => {
-      this.facing = Number(side.select.value);
-      this.playAll();
+    // orientation : deux boutons flèche (le bouton actif est surligné)
+    const sideRow = document.createElement('div');
+    sideRow.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const sideBtns = [-1, 1].map((dir) => {
+      const b = this.button(dir < 0 ? '←' : '→', () => {
+        this.facing = dir;
+        sync();
+        this.playAll();
+      });
+      b.title = dir < 0 ? 'Regarde à gauche' : 'Regarde à droite';
+      return { dir, b };
     });
+    const sync = (): void => {
+      for (const { dir, b } of sideBtns) b.style.background = dir === this.facing ? '#4a8' : '';
+    };
+    sync();
+    sideRow.append('Orientation', ...sideBtns.map((x) => x.b));
 
     const zoom = this.select(
       'Zoom',
@@ -753,9 +820,47 @@ ${id}` : id;
     this.info = document.createElement('div');
     this.info.style.cssText = 'font-size:12px;color:#9fe;min-height:2.4em;white-space:pre-wrap';
 
-    p.append(title, units.row, anims.row, side.row, zoom.row, this.buildEditorBox(), this.info);
+    const editor = this.buildEditorBox(); // crée aussi la rangée Save / Reset / Copier
+    p.append(title, this.actionsRow, zoom.row, units.row, anims.row, sideRow, editor, this.info);
     document.body.append(p);
     this.panel = p;
+
+    // vue d'ensemble : pas de panneau, seulement une croix en haut à droite pour quitter
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.title = 'Fermer et retourner au jeu';
+    close.style.cssText =
+      'position:fixed;top:8px;right:28px;z-index:99999;font:22px system-ui,sans-serif;line-height:1;cursor:pointer;padding:4px 12px;' +
+      'background:rgba(0,0,0,0.78);color:#dfe;border:1px solid #444;border-radius:6px';
+    close.addEventListener('click', () => {
+      close.blur();
+      this.back();
+    });
+    document.body.append(close);
+    this.closeBtn = close;
+
+    // barre de défilement native (vue d'ensemble) ; la molette de la souris la fait aussi défiler
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:16px;overflow-y:scroll;z-index:99998;display:none';
+    const spacer = document.createElement('div');
+    spacer.style.width = '1px';
+    bar.append(spacer);
+    bar.addEventListener('scroll', this.fit);
+    document.body.append(bar);
+    this.scrollBar = bar;
+    this.scrollSpacer = spacer;
+    this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.selected === ALL && this.scrollBar) this.scrollBar.scrollTop += dy;
+    });
+    this.syncChrome();
+  }
+
+  /** Vue d'ensemble : panneau masqué, croix de sortie affichée ; vue d'une unité : l'inverse. */
+  private syncChrome(): void {
+    const all = this.selected === ALL;
+    if (this.panel) this.panel.style.display = all ? 'none' : 'flex';
+    if (this.closeBtn) this.closeBtn.style.display = all ? 'block' : 'none';
+    if (!all && this.scrollBar) this.scrollBar.style.display = 'none';
   }
 
   /** Libellé + liste déroulante ; rend le focus au jeu après un choix (les touches restent actives). */
@@ -774,16 +879,22 @@ ${id}` : id;
   /** Zoom utilisateur, réduit si besoin pour que toutes les unités tiennent dans la fenêtre. */
   private readonly fit = (): void => {
     const cam = this.cameras.main;
-    const { width, height } = this.scale;
-    const rowsW = Math.max(...GROUPS.map((g) => g.ids.length)) * 170 + 120;
-    const fitZoom = this.selected === ALL ? Math.min(1, width / rowsW, height / (GROUPS.length * 190 + 80)) : 1;
-    cam.setZoom(fitZoom * this.zoomFactor);
+    const all = this.selected === ALL;
+    cam.setZoom(all ? 0.8 : this.zoomFactor); // vue d'ensemble : toujours à 80 %
+    // vue d'ensemble : si le contenu dépasse l'écran, la barre de défilement fait glisser la caméra
+    const contentPx = this.worldH * cam.zoom;
+    const overflow = all && contentPx > this.scale.height;
+    if (this.scrollBar && this.scrollSpacer) {
+      this.scrollBar.style.display = overflow ? 'block' : 'none';
+      this.scrollSpacer.style.height = `${contentPx}px`;
+    }
+    const scrollPx = overflow && this.scrollBar ? this.scrollBar.scrollTop : 0;
     // repères et étiquettes de taille constante à l'écran
     this.cross?.setScale(1 / cam.zoom);
     this.muzzleDot?.setScale(1 / cam.zoom);
     for (const e of this.entries) e.label.setScale(1 / cam.zoom).setY(e.y + 26 / cam.zoom);
     // décalé vers la droite pour laisser la place au panneau
-    cam.centerOn(-(300 / 2) / cam.zoom, 0);
+    cam.centerOn(all ? 0 : -(300 / 2) / cam.zoom, overflow ? (-contentPx / 2 + scrollPx + this.scale.height / 2) / cam.zoom : 0);
   };
 
   private drawGrid(): void {

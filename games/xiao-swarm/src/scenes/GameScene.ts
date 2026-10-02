@@ -10,7 +10,7 @@ import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
-import { MUSIC, MUSIC_STEPS, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
+import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
@@ -101,8 +101,8 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch(SCENES.hud);
     this.setupDebug();
-    music.play(this, MUSIC.key, MUSIC.url, settings.musicVolume / MUSIC_STEPS); // en boucle, sans relance si elle joue déjà
-    sfx.setVolume(settings.sfxVolume / MUSIC_STEPS);
+    music.play(this, MUSIC.key, MUSIC.url, settings.musicGain()); // en boucle, sans relance si elle joue déjà
+    sfx.setVolume(settings.sfxGain());
   }
 
   update(time: number, delta: number): void {

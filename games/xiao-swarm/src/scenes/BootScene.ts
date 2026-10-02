@@ -70,11 +70,12 @@ export class BootScene extends Phaser.Scene {
 
   /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
   private async launch(): Promise<void> {
-    // Dev : `?viewer` (unités), `?particles`, `?obstacles`, `?misc` ou `?waves` ouvrent directement la visionneuse correspondante.
+    // Dev : `?viewer` (unités), `?particles`, `?obstacles`, `?misc`, `?bonus` ou `?waves` ouvrent directement la visionneuse correspondante.
     if (import.meta.env.DEV && poki.getURLParam('viewer') !== undefined) return void this.scene.start(SCENES.viewer);
     if (import.meta.env.DEV && poki.getURLParam('obstacles') !== undefined) return void this.scene.start(SCENES.obstacles);
     if (import.meta.env.DEV && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
     if (import.meta.env.DEV && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
+    if (import.meta.env.DEV && poki.getURLParam('bonus') !== undefined) return void this.scene.start(SCENES.bonus);
     if (import.meta.env.DEV && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
     if (import.meta.env.DEV && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
     const req = readOnlineRequest();

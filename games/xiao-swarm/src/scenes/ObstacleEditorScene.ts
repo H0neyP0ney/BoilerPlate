@@ -54,9 +54,9 @@ export class ObstacleEditorScene extends Phaser.Scene {
     this.drawGrid();
     this.sprite = this.add.image(0, 0, OBSTACLE_IDS[0]).setDepth(1);
     this.overlay = this.add.graphics().setDepth(10);
-    if (this.textures.exists('soldier_gunner')) {
-      this.gunner = sprites.add(this, 'soldier_gunner', GUNNER_X, 0).setDepth(1);
-      sprites.play(this.gunner, 'soldier_gunner', 'idle');
+    if (this.textures.exists('soldier_trooper')) {
+      this.gunner = sprites.add(this, 'soldier_trooper', GUNNER_X, 0).setDepth(1);
+      sprites.play(this.gunner, 'soldier_trooper', 'idle');
     }
     this.buildPanel();
     this.show(this.id);

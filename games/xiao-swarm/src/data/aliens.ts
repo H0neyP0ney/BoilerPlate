@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime_basic' | 'crab' | 'slime_pink' | 'slime_bombardier' | 'kamikaze' | 'frog' | 'charger' | 'spitter' | 'shaman' | 'thrower' | 'bubble' | 'fire' | 'lurker' | 'rhino_boss' | 'crab_king';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shoot' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'fire' | 'lurker' | 'boss_rhino' | 'boss_scarab';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -88,25 +88,9 @@ export interface AlienDef {
 }
 
 export const ALIENS: Record<AlienId, AlienDef> = {
-  /** Slime de base (vert). */
-  slime_basic: {
-    id: 'slime_basic',
-    hp: 55,
-    speed: 72,
-    radius: 16,
-    mass: 1,
-    damage: 12,
-    attackCooldown: 0.8,
-    target: 'nearest',
-    revivable: true,
-    xp: 2,
-    recruitChance: 0.05,
-    color: 0x8fd14f,
-    hpBarWidth: 30,
-  },
-  /** Petit cafard (id historique `slime_pink`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
-  slime_pink: {
-    id: 'slime_pink',
+  /** Petit cafard (id historique `gling`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
+  gling: {
+    id: 'gling',
     hp: 14,
     speed: 180, // +40 %
     radius: 11,
@@ -120,9 +104,25 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xa982e8, // violet du cafard (éclaboussure à la mort)
     hpBarWidth: 22,
   },
+  /** Slime de base (vert). */
+  slime: {
+    id: 'slime',
+    hp: 55,
+    speed: 72,
+    radius: 16,
+    mass: 1,
+    damage: 12,
+    attackCooldown: 0.8,
+    target: 'nearest',
+    revivable: true,
+    xp: 2,
+    recruitChance: 0.05,
+    color: 0x8fd14f,
+    hpBarWidth: 30,
+  },
   /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
-  slime_bombardier: {
-    id: 'slime_bombardier',
+  shoot: {
+    id: 'shoot',
     hp: 90,
     speed: 55,
     radius: 24,
@@ -154,8 +154,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 28,
   },
   /** Grenouille : reste à distance, tire la langue sur un soldat et le tire vers elle. */
-  frog: {
-    id: 'frog',
+  toad: {
+    id: 'toad',
     hp: 40,
     speed: 70,
     radius: 16,
@@ -218,8 +218,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 34,
   },
   /** Bâtisseur de murs : de très loin, fait surgir (après un télégraphe jaune) des murs allongés autour de la squad pour gêner sa fuite. */
-  thrower: {
-    id: 'thrower',
+  wall: {
+    id: 'wall',
     hp: 50,
     speed: 60,
     radius: 17,
@@ -284,8 +284,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 30,
   },
   /** Mini-boss (2:00) : énorme rhinocéros, charge tous les 4,5 s dans un couloir large signalé en rouge. */
-  rhino_boss: {
-    id: 'rhino_boss',
+  boss_rhino: {
+    id: 'boss_rhino',
     hp: 900,
     speed: 71.5, // 55 + 30 %
     radius: 38,
@@ -300,9 +300,9 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xb03a3a,
     hpBarWidth: 100,
   },
-  /** Boss final (10:00) : Roi Crabe, slam de zone dévastateur. Le tuer gagne la partie. */
-  crab_king: {
-    id: 'crab_king',
+  /** Mini-boss (5:00) : Scarab, slam de zone dévastateur. */
+  boss_scarab: {
+    id: 'boss_scarab',
     hp: 3200,
     speed: 50,
     radius: 68,
@@ -311,14 +311,15 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.2,
     target: 'center',
     slam: { radius: 190, damage: 30, cooldown: 3, knockback: 650 },
-    boss: { kind: 'final' },
+    boss: { kind: 'mini' },
     xp: 220,
     recruitChance: 1,
     color: 0xc01c40,
     hpBarWidth: 140,
   },
-  crab: {
-    id: 'crab',
+  /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */
+  boss_crab: {
+    id: 'boss_crab',
     hp: 900, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
     speed: 48,
     radius: 150, // 3× plus gros (affichage et collision)
@@ -329,7 +330,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'center',
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900 },
     lob: { range: 620, cooldown: 3, flight: 1.15, damage: 22, aoe: 85, texture: 'fx_blob_green', count: 3, keepMoving: true },
-    boss: { kind: 'mini' },
+    boss: { kind: 'final' },
     xp: 60,
     recruitChance: 1,
     color: 0xd9435a,
@@ -341,4 +342,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime_basic', 'slime_pink', 'slime_bombardier', 'kamikaze', 'frog', 'charger', 'spitter', 'shaman', 'thrower', 'bubble', 'fire', 'lurker'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shoot', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'fire', 'lurker'];

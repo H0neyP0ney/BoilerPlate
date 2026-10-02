@@ -44,7 +44,7 @@ export class OptionsScene extends Phaser.Scene {
       value: settings.musicVolume,
       onChange: (v) => {
         settings.setMusicVolume(v);
-        music.setVolume(this.game, v / MUSIC_STEPS);
+        music.setVolume(this.game, settings.musicGain());
         showValue(v);
       },
     });
@@ -60,7 +60,7 @@ export class OptionsScene extends Phaser.Scene {
       value: settings.sfxVolume,
       onChange: (v) => {
         settings.setSfxVolume(v);
-        sfx.setVolume(v / MUSIC_STEPS);
+        sfx.setVolume(settings.sfxGain());
         showSfx(v);
         sfx.play(this, SFX.blaster.key, SFX.blaster); // aperçu du volume
       },

@@ -69,12 +69,13 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 
 | Id | Taille procédurale actuelle (px) | Affiché à | Remarques |
 |---|---|---|---|
-| `soldier_gunner` `soldier_medic` `soldier_flammer` `soldier_sniper` `soldier_tank` `soldier_grenadier` | 64×72 | ×0.8 | corps, face à droite |
-| `gun_gunner` … `gun_grenadier` | 64×20 | ×0.8 | arme séparée qui pivote vers la cible ; `hidden: true` si l'arme est dans la planche du soldat |
+| `soldier_trooper` `soldier_medic` `soldier_flammer` `soldier_sniper` `soldier_bruiser` `soldier_bomber` | 64×72 | ×0.8 | corps, face à droite |
+| `gun_trooper` … `gun_bomber` | 64×20 | ×0.8 | arme séparée qui pivote vers la cible ; `hidden: true` si l'arme est dans la planche du soldat |
 | `portrait_<classe>` | — | HUD | par défaut : haut du corps du soldat |
 | `recruit_<classe>` | 56×60 | ×0.75 | recrue au sol à ramasser |
 | `alien_slime` | 48×48 | ×1 | slime vert à un oeil |
-| `alien_crab` | 130×112 | ×1 | crabe géant (mini-boss) |
+| `alien_gling` `alien_shoot` `alien_kamikaze` `alien_toad` `alien_charger` `alien_spitter` `alien_shaman` `alien_wall` `alien_lurker` `alien_bubble` `alien_fire` | 48×48 → 72×72 | ×1 | aliens (ids renommés le 02/10) |
+| `alien_boss_rhino` `alien_boss_scarab` `alien_boss_crab` | 119×94 → 182×157 | ×1 | boss : rhinocéros (mini, 2:00), scarabée (mini, 5:00, réutilise la marche du crabe en attendant son dessin), crabe géant (**final**, 10:00) |
 | `palm` `bush` `bush_flowers` `log` | 160×172, 112×78, 112×78, 150×44 | ×1 | décor de bordure |
 | `obstacle_1` … `obstacle_8` | 111×107 → 260×189 (WebP) | voir `data/obstacles.ts` | obstacles volcaniques (lave, rochers, cristaux) : `public/assets/decor/`, sources `art-src/obstacle_N.png` |
 | `tache_1` … `tache_4` | 235×203 → 260×237 (WebP) | voir `data/obstacles.ts` | taches sombres sous les obstacles : chaque obstacle a son jeu de variantes (image, position, largeur, échelle Y, miroir), une tirée au hasard par obstacle posé (seed de la carte) ; `ArenaView.stain`, sources `art-src/tache_N.png` |

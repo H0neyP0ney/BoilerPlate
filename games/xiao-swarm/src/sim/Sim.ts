@@ -538,7 +538,7 @@ export class Sim {
       const target = Math.max(1, Math.min(sq.maxSize, Math.round(sq.peakSize * REVIVE_SQUAD_RATIO)));
       const base = this.rng.pick(START_SQUADS);
       const comp = base.slice(0, target);
-      while (comp.length < target) comp.push('gunner');
+      while (comp.length < target) comp.push('trooper');
       sq.spawn(comp, { x: z.x, y: z.y });
       for (const s of sq.soldiers) s.invulnerable = 2.5;
     }

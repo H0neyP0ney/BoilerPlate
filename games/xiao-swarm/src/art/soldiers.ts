@@ -23,7 +23,7 @@ interface Look {
 }
 
 const LOOKS: Record<SoldierClassId, Look> = {
-  gunner: { helmet: '#3d7fe0', helmetDark: '#2a5cb0', uniform: '#4b6fb8', uniformDark: '#33508a' },
+  trooper: { helmet: '#3d7fe0', helmetDark: '#2a5cb0', uniform: '#4b6fb8', uniformDark: '#33508a' },
   medic: {
     helmet: '#f4f4f4',
     helmetDark: '#c9ccd6',
@@ -47,8 +47,8 @@ const LOOKS: Record<SoldierClassId, Look> = {
     uniformDark: '#3f6533',
     headset: true,
   },
-  tank: { helmet: '#8a96a8', helmetDark: '#5f6a7a', uniform: '#6c7686', uniformDark: '#4a5260', visor: true },
-  grenadier: { helmet: '#9a5ad8', helmetDark: '#6f3fa8', uniform: '#7c58b4', uniformDark: '#573d86', backpack: 'grenades' },
+  bruiser: { helmet: '#8a96a8', helmetDark: '#5f6a7a', uniform: '#6c7686', uniformDark: '#4a5260', visor: true },
+  bomber: { helmet: '#9a5ad8', helmetDark: '#6f3fa8', uniform: '#7c58b4', uniformDark: '#573d86', backpack: 'grenades' },
 };
 
 function redCross(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
@@ -196,7 +196,7 @@ type GunDraw = (ctx: CanvasRenderingContext2D) => void;
 
 /** Armes dessinées pointant à droite, poignée vers x≈12. Canvas 64×20. */
 const GUNS: Record<SoldierClassId, GunDraw> = {
-  gunner: (ctx) => {
+  trooper: (ctx) => {
     ctx.beginPath();
     ctx.roundRect(6, 6, 34, 8, 2);
     outlined(ctx, '#4a4f5c', 2.5);
@@ -245,7 +245,7 @@ const GUNS: Record<SoldierClassId, GunDraw> = {
     ctx.fillStyle = '#7cf0a0';
     ctx.fillRect(31, 4, 2, 2);
   },
-  tank: (ctx) => {
+  bruiser: (ctx) => {
     ctx.beginPath();
     ctx.roundRect(6, 4, 36, 12, 3);
     outlined(ctx, '#5f6a7a', 2.5);
@@ -259,7 +259,7 @@ const GUNS: Record<SoldierClassId, GunDraw> = {
     ctx.fillRect(12, 6, 10, 3);
   },
   // Lance-grenades : gros tube + barillet, bouche évasée.
-  grenadier: (ctx) => {
+  bomber: (ctx) => {
     ctx.beginPath();
     ctx.roundRect(6, 5, 40, 10, 4);
     outlined(ctx, '#5b4a78', 2.5);
@@ -276,7 +276,7 @@ const GUNS: Record<SoldierClassId, GunDraw> = {
 
 export function makeSoldierTextures(scene: Phaser.Scene): void {
   for (const id of Object.keys(LOOKS) as SoldierClassId[]) {
-    canvasTexture(scene, `soldier_${id}`, 64, 72, (ctx) => drawBody(ctx, LOOKS[id], id === 'tank'));
+    canvasTexture(scene, `soldier_${id}`, 64, 72, (ctx) => drawBody(ctx, LOOKS[id], id === 'bruiser'));
     canvasTexture(scene, `gun_${id}`, 64, 20, GUNS[id]);
     // Recrue au sol : casque de la classe + badge "+"
     canvasTexture(scene, `recruit_${id}`, 56, 60, (ctx) => {

@@ -151,6 +151,7 @@ export const SCENES = {
   obstacles: 'Obstacles',
   particles: 'Particles',
   misc: 'Misc',
+  bonus: 'Bonus',
   waves: 'Waves',
   mapEditor: 'MapEditor',
   gameOver: 'GameOver',

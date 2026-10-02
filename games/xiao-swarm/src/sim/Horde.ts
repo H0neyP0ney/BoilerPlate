@@ -632,7 +632,7 @@ export class Horde {
       const d = Math.hypot(s.x - a.x, s.y - a.y);
       if (d > SEEK_RADIUS) continue;
       let score = d;
-      if (pref === 'specialist' && s.def.id !== 'gunner') score -= 600;
+      if (pref === 'specialist' && s.def.id !== 'trooper') score -= 600;
       if (score < bestScore) {
         bestScore = score;
         a.target = s;

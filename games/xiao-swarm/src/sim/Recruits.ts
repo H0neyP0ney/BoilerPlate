@@ -89,7 +89,7 @@ export class Recruits {
   private chooseClass(squad: Squad): SoldierClassId {
     const n = Math.max(1, squad.size);
     const ids = ACTIVE_CLASSES;
-    return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'gunner';
+    return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'trooper';
   }
 
   clear(): void {

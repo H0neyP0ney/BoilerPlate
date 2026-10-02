@@ -41,6 +41,12 @@ export const iconMisc: Icon = (g) => {
   g.fillStyle(0xffd166, 1).fillRoundedRect(2, 2, 10, 10, 2);
 };
 
+/** Bonus : une étoile dans un disque (power-up). */
+export const iconBonus: Icon = (g) => {
+  g.fillStyle(0xffd84a, 0.35).fillCircle(0, 0, 13).lineStyle(2.5, 0xffd84a, 1).strokeCircle(0, 0, 13);
+  g.fillStyle(0xffd84a, 1).fillTriangle(0, -8, -4, 3, 4, 3).fillTriangle(0, 7, -4, -2, 4, -2);
+};
+
 /** Vagues : une timeline avec des barres de hauteurs différentes. */
 export const iconWaves: Icon = (g) => {
   g.fillStyle(0x6fdc6f, 1).fillRect(-12, 4, 5, 8);
@@ -63,16 +69,25 @@ export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.particles, icon: iconParticles, label: 'Particules' },
   { scene: SCENES.obstacles, icon: iconObstacle, label: 'Obstacles' },
   { scene: SCENES.misc, icon: iconMisc, label: 'Divers' },
+  { scene: SCENES.bonus, icon: iconBonus, label: 'Bonus' },
   { scene: SCENES.waves, icon: iconWaves, label: 'Vagues' },
   { scene: SCENES.mapEditor, icon: iconMap, label: 'Carte' },
 ];
 
-/** Bouton carré de 44 px centré sur (0, 0). */
-export function makeSquareButton(scene: Phaser.Scene, icon: Icon, onClick: () => void): Phaser.GameObjects.Container {
+/** Contour vert des boutons qui ouvrent une vue plein écran (visionneuses), par opposition aux panneaux par-dessus le jeu. */
+export const VIEW_BORDER = 0x33dd55;
+
+/** Bouton carré de 44 px centré sur (0, 0) ; `borderColor` change son contour. */
+export function makeSquareButton(
+  scene: Phaser.Scene,
+  icon: Icon,
+  onClick: () => void,
+  borderColor: number = PALETTE.panelBorder,
+): Phaser.GameObjects.Container {
   const c = scene.add.container(0, 0);
   const g = scene.add.graphics();
   g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(-22, -22, 44, 44, 10);
-  g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(-22, -22, 44, 44, 10);
+  g.lineStyle(2.5, borderColor, 1).strokeRoundedRect(-22, -22, 44, 44, 10);
   icon(g);
   const hit = scene.add.zone(0, 0, 44, 44).setInteractive({ useHandCursor: true });
   hit.on('pointerup', onClick);

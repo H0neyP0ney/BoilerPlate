@@ -14,7 +14,7 @@ import { FX } from '../fxParams';
 export const RECRUIT_STAR = 'recruit_part_star';
 
 /** Classes dont la recrue a son visuel composé (tête fournie dans public/assets/recruit). */
-const HEADS: Record<string, string> = { gunner: 'recruit_part_gunner' };
+const HEADS: Record<string, string> = { trooper: 'recruit_part_gunner' };
 
 /** Taille de référence du globe (px dans la texture) ; la texture a de la marge pour grossir les pièces. */
 const GLOBE = 160;

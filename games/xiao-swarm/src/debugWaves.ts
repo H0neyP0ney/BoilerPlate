@@ -67,13 +67,27 @@ export function loadWaveOverrides(): void {
     // Migration (slimes renommés deux fois) vers 'slime_basic' (slime de base) et 'slime_bombardier' (gros qui lance de la gelée) :
     // v1 : 'slime' = base, 'slime_blue' = gros ; v2 : 'slime_blue' = base, 'slime_green' = gros.
     const version = localStorage.getItem(MIGRATION_KEY);
-    if (raw?.levels && version !== '3') {
+    if (raw?.levels && version !== '3' && version !== '4' && version !== '5') {
       const rename: Record<string, string> =
         version === '2' ? { slime_blue: 'slime_basic', slime_green: 'slime_bombardier' } : { slime: 'slime_basic', slime_blue: 'slime_bombardier' };
       for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) g.type = (rename[g.type] ?? g.type) as AlienId;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
     }
-    localStorage.setItem(MIGRATION_KEY, '3');
+    // v4 : ids renommés (slime_basic → slime, slime_pink → gling, slime_bombardier → flower)
+    if (raw?.levels && version !== '4' && version !== '5') {
+      const rename: Record<string, string> = { slime_basic: 'slime', slime_pink: 'gling', slime_bombardier: 'flower' };
+      for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) g.type = (rename[g.type] ?? g.type) as AlienId;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    }
+    // v5 : ids de boss renommés (rhino_boss → boss_rhino, crab_king → boss_slime, crab → boss_crab)
+    if (raw?.levels && version !== '5') {
+      const rename: Record<string, string> = { rhino_boss: 'boss_rhino', crab_king: 'boss_slime', crab: 'boss_crab' };
+      for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) g.type = (rename[g.type] ?? g.type) as AlienId;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+    }
+    localStorage.setItem(MIGRATION_KEY, '5');
+    // flower → shoot (idempotent)
+    if (raw?.levels) for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) { if ((g.type as string) === 'flower') g.type = 'shoot'; else if ((g.type as string) === 'frog') g.type = 'toad'; else if ((g.type as string) === 'thrower') g.type = 'wall'; else if ((g.type as string) === 'boss_slime') g.type = 'boss_scarab'; }
     const saved = sanitize(raw);
     if (saved) assign(saved);
   } catch {

@@ -20,8 +20,8 @@ répondre, commenter et documenter en français.
 - `npm run deploy` — build + upload FTP vers `REMOTE_DIR/<version>/` (identifiants dans `.env.deploy`, modèle `.env.deploy.example`) ; `-- --bump` incrémente la version, `-- --force` écrase
 - `node tools/slice-sheet.mjs games/xiao-swarm/art-src/<nom>.slice.json` — découpe une planche de sprites
 
-Menu **Options** (joueur : roue crantée en haut à droite, ou écran Pause, `scenes/OptionsScene.ts`) : volume de la musique (`settings.ts`, lecture via `music` de l'engine) et, en dev, **mode debug** qui affiche les boutons des outils de dev en haut à gauche. Les réglages (musique, bruitages, zoom, FPS, fond étoilé, debug) sont mémorisés d'une session à l'autre (`localStorage`, préfixe `xiao-swarm:` posé en tête de `settings.ts`). Par défaut : musique à 2/10 ; en dev, mode debug activé.
-Outils de dev (détail : `docs/OUTILS_DEV.md`). Visionneuses (boutons en haut à gauche du jeu en mode debug, ou `?viewer` / `?particles` / `?obstacles` / `?misc` / `?waves` / `?mapedit`) : **unités**
+**Son dans le HUD** (haut gauche, `scenes/HudScene.ts`) : bouton haut-parleur = réglette horizontale à 10 crans du volume des **bruitages**, bouton note = réglette du volume de la **musique** (icône barrée à 0). Menu **Options** (écran Pause, `scenes/OptionsScene.ts`, plus de roue crantée dans le HUD) : mêmes volumes (`settings.ts`, lecture via `music` de l'engine) et, en dev, **mode debug** qui affiche les boutons des outils de dev en haut à gauche. Les réglages (musique, bruitages, zoom, FPS, fond étoilé, debug) sont mémorisés d'une session à l'autre (`localStorage`, préfixe `xiao-swarm:` posé en tête de `settings.ts`). Par défaut : musique à 2/10 ; en dev, mode debug activé.
+Outils de dev (détail : `docs/OUTILS_DEV.md`). Visionneuses (boutons **en bas à gauche** du jeu en mode debug, contour **vert** pour ceux qui ouvrent une vue plein écran, ou `?viewer` / `?particles` / `?obstacles` / `?misc` / `?bonus` / `?waves` / `?mapedit`) : **unités**
 (animations, ancrage par séquence / direction, bouche du canon par frame), **particules** (`fxParams.ts`), **obstacles**
 (hitbox en cercles, jeu de taches, taille : `data/obstacles.ts`) **vagues** (Gestionnaire de vagues : 9 niveaux de configurations tirées au hasard + timeline : `data/waves.ts`) **divers** (projectiles, bonus, interface, terrain) et **carte** (zones d'obstacles de l'arène solo / coop : `data/mapZones.ts`, un obstacle tiré au hasard par zone à chaque partie avec la seed, donc identique chez tous les joueurs).
 Une croix en haut à droite du panneau de chaque vue ramène au jeu ; pour changer de vue, repasser par le jeu (boutons du HUD).
@@ -56,7 +56,7 @@ recrues, vagues, vitesse du jeu, invincibilité ; hors ligne seulement). `npm ru
 7. Un champ ajouté à un objet recyclé par `Pool` (ex. `Projectile`) doit être remis à zéro à la libération.
 
 ## Visuels
-Chaque visuel a un id (`soldier_gunner`, `alien_crab`…) résolu par le catalogue `sprites` : planche déclarée dans
+Chaque visuel a un id (`soldier_trooper`, `alien_boss_crab`…) résolu par le catalogue `sprites` : planche déclarée dans
 `games/xiao-swarm/src/assets/manifest.ts`, sinon dessin procédural (`src/art/`). Conventions et ids :
 `games/xiao-swarm/ASSETS.md`. Planches sources dans `art-src/` (non livrées).
 

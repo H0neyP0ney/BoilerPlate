@@ -131,15 +131,15 @@ export class WorldView {
         break;
       case 'alienDied': {
         const def = ALIENS[e.alien];
-        this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'crab' ? 40 : 10);
-        // gelée et flaques : vrais slimes seulement (`slime_pink` est désormais un petit cafard : simple éclaboussure)
-        if (e.alien === 'slime_basic' || e.alien === 'slime_bombardier') {
-          const size = e.alien === 'slime_bombardier' ? 1.6 : 1;
-          const light = e.alien === 'slime_bombardier' ? 0xcfe6ff : 0xc8ffb0;
+        this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'boss_crab' ? 40 : 10);
+        // gelée et flaques : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
+        if (e.alien === 'slime' || e.alien === 'shoot') {
+          const size = e.alien === 'shoot' ? 1.6 : 1;
+          const light = e.alien === 'shoot' ? 0xcfe6ff : 0xc8ffb0;
           this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
           if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size);
         }
-        if (e.alien === 'crab') {
+        if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
           this.fx.text(e.x, e.y - 90, 'BOSS DOWN!', '#ffe066', 34);
         }
@@ -801,7 +801,7 @@ export class WorldView {
       const s = v.state;
       if (s.hp >= s.maxHp) continue;
       const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
-      this.bar(b, v.rx, v.ry - (s.def.id === 'tank' ? 66 : 58), 30, s.hp / s.maxHp, color);
+      this.bar(b, v.rx, v.ry - (s.def.id === 'bruiser' ? 66 : 58), 30, s.hp / s.maxHp, color);
     }
     for (const v of this.aliens.values()) {
       const a = v.state;

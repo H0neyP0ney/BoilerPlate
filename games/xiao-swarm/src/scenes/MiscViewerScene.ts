@@ -252,15 +252,15 @@ const ITEMS: Item[] = [
     build(s) {
       const g = s.track(s.add.graphics().setDepth(1));
       const colors = [PALETTE.allyRing, ...RIVAL_COLORS];
-      const r = CLASSES.gunner.radius;
+      const r = CLASSES.trooper.radius;
       colors.forEach((c, i) => {
         const x = ((i % 5) - 2) * 70;
         const y = Math.floor(i / 5) * 70 - 20;
         g.fillStyle(0x2a1d2e, 0.3).fillEllipse(x, y, r * 2.2, r);
         g.lineStyle(3, c, 0.9).strokeEllipse(x, y, r * 2.6, r * 1.3);
-        if (s.textures.exists('soldier_gunner')) {
-          const u = sprites.add(s, 'soldier_gunner', x, y).setDepth(5);
-          sprites.play(u, 'soldier_gunner', 'idle');
+        if (s.textures.exists('soldier_trooper')) {
+          const u = sprites.add(s, 'soldier_trooper', x, y).setDepth(5);
+          sprites.play(u, 'soldier_trooper', 'idle');
           s.track(u);
         }
       });

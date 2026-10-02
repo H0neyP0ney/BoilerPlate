@@ -575,7 +575,7 @@ export class WaveEditorScene extends Phaser.Scene {
     const configs = this.configsOf(this.level);
     const cards = configs.map((c, i) => this.configCard(c, i, configs));
     const add = btn('+ Nouvelle configuration', () => {
-      configs.push({ name: '', groups: [{ type: 'slime_basic', count: 3 }] });
+      configs.push({ name: '', groups: [{ type: 'slime', count: 3 }] });
       this.commit();
       this.renderLevels();
       this.renderConfigs();
@@ -633,7 +633,7 @@ export class WaveEditorScene extends Phaser.Scene {
     fillGroups();
     refresh();
     const addGroup = btn('+ ennemi', () => {
-      c.groups.push({ type: 'slime_basic', count: 1 });
+      c.groups.push({ type: 'slime', count: 1 });
       fillGroups();
       refresh();
     });

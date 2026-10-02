@@ -17,7 +17,7 @@ const DICTS: Record<Lang, Record<string, string>> = { fr: fr as Record<string, s
 const DEFAULTS: Record<Lang, Record<string, string>> = { fr: { ...DICTS.fr }, en: { ...DICTS.en } };
 let edits: Names = {};
 
-/** Clé de langue du nom d'une unité de la visionneuse (`soldier_gunner` → `class_gunner`, `alien_crab` → `alien_crab`). */
+/** Clé de langue du nom d'une unité de la visionneuse (`soldier_trooper` → `class_trooper`, `alien_boss_crab` → `alien_boss_crab`). */
 export function nameKey(kind: 'soldier' | 'alien' | 'recruit', unit: string): string {
   return kind === 'alien' ? `alien_${unit}` : `class_${unit}`;
 }
@@ -57,6 +57,11 @@ export function loadNameOverrides(): void {
     edits = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Names;
   } catch {
     edits = {};
+  }
+  // clés de classes renommées (gunner → trooper, tank → bruiser)
+  for (const [from, to] of [['class_gunner', 'class_trooper'], ['class_tank', 'class_bruiser'], ['class_grenadier', 'class_bomber']]) {
+    if (edits[from]) edits[to] = edits[from];
+    delete edits[from];
   }
   for (const [key, langs] of Object.entries(edits)) {
     for (const lang of ['fr', 'en'] as Lang[]) {

@@ -48,7 +48,7 @@ export const WAVE_SCRIPT_END = 600;
 export const WAVE_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 /**
- * Script de départ : 10 minutes en DENTS DE SCIE COURTES (cycles de 75 s : ~55 s de montée, ~20 s de creux plus doux). Boss : mini-boss à 2:00 (Rhinocéros Alpha) et 5:00 (Crabe géant), boss final à 10:00 (Roi Crabe) ;
+ * Script de départ : 10 minutes en DENTS DE SCIE COURTES (cycles de 75 s : ~55 s de montée, ~20 s de creux plus doux). Boss : mini-boss à 2:00 (Alpha Rhino) et 5:00 (Scarab), boss final à 10:00 (Giant Crab) ;
  * les vagues continuent tant que le boss final n'est pas mort. Chaque niveau 1-8 introduit un nouveau type d'ennemi
  * (1 slime bleu · 2 cafard · 3 kamikaze · 4 grenouille · 5 gros slime vert · 6 cracheur, feu, chaman · 7 rhinocéros, lanceur, bulle ·
  * 8 gros mélanges). Niveau 9 = boss (configuration forcée par la timeline via `config`).
@@ -56,51 +56,51 @@ export const WAVE_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export const DEFAULT_WAVE_SCRIPT: WaveScript = {
   levels: {
     1: [
-      { name: 'Quelques slimes', groups: [{ type: 'slime_basic', count: 2 }] },
-      { name: 'Trio', groups: [{ type: 'slime_basic', count: 3 }] },
-      { name: 'Petit groupe', groups: [{ type: 'slime_basic', count: 5 }] },
+      { name: 'Quelques slimes', groups: [{ type: 'slime', count: 2 }] },
+      { name: 'Trio', groups: [{ type: 'slime', count: 3 }] },
+      { name: 'Petit groupe', groups: [{ type: 'slime', count: 5 }] },
     ],
     2: [
-      { name: 'Essaim rose', groups: [{ type: 'slime_pink', count: 5 }] },
-      { name: 'Mixte', groups: [{ type: 'slime_basic', count: 4 }, { type: 'slime_pink', count: 4 }] },
-      { name: 'Ruée rose', groups: [{ type: 'slime_pink', count: 8 }, { type: 'slime_basic', count: 1 }] },
+      { name: 'Essaim rose', groups: [{ type: 'gling', count: 5 }] },
+      { name: 'Mixte', groups: [{ type: 'slime', count: 4 }, { type: 'gling', count: 4 }] },
+      { name: 'Ruée rose', groups: [{ type: 'gling', count: 8 }, { type: 'slime', count: 1 }] },
     ],
     3: [
-      { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 3 }, { type: 'slime_basic', count: 4 }] },
-      { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 4 }, { type: 'slime_pink', count: 4 }] },
+      { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 3 }, { type: 'slime', count: 4 }] },
+      { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 4 }, { type: 'gling', count: 4 }] },
       { name: 'Deux kamikazes', groups: [{ type: 'kamikaze', count: 3 }] },
     ],
     4: [
-      { name: 'Langue', groups: [{ type: 'frog', count: 2 }, { type: 'slime_basic', count: 7 }] },
-      { name: 'Grenouilles', groups: [{ type: 'frog', count: 3 }, { type: 'kamikaze', count: 3 }] },
-      { name: 'Langue + essaim', groups: [{ type: 'frog', count: 2 }, { type: 'slime_pink', count: 8 }] },
+      { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
+      { name: 'Grenouilles', groups: [{ type: 'toad', count: 3 }, { type: 'kamikaze', count: 3 }] },
+      { name: 'Langue + essaim', groups: [{ type: 'toad', count: 2 }, { type: 'gling', count: 8 }] },
     ],
     5: [
-      { name: 'Un gros', groups: [{ type: 'slime_bombardier', count: 2 }, { type: 'slime_basic', count: 7 }] },
-      { name: 'Artillerie', groups: [{ type: 'slime_bombardier', count: 4 }, { type: 'slime_pink', count: 6 }] },
-      { name: 'Mélange', groups: [{ type: 'slime_bombardier', count: 2 }, { type: 'frog', count: 2 }, { type: 'kamikaze', count: 4 }] },
+      { name: 'Un gros', groups: [{ type: 'shoot', count: 2 }, { type: 'slime', count: 7 }] },
+      { name: 'Artillerie', groups: [{ type: 'shoot', count: 4 }, { type: 'gling', count: 6 }] },
+      { name: 'Mélange', groups: [{ type: 'shoot', count: 2 }, { type: 'toad', count: 2 }, { type: 'kamikaze', count: 4 }] },
     ],
     6: [
-      { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'fire', count: 4 }, { type: 'slime_basic', count: 6 }] },
-      { name: 'Brasier', groups: [{ type: 'fire', count: 6 }, { type: 'slime_pink', count: 10 }] },
-      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'slime_basic', count: 10 }, { type: 'slime_pink', count: 6 }] },
+      { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'fire', count: 4 }, { type: 'slime', count: 6 }] },
+      { name: 'Brasier', groups: [{ type: 'fire', count: 6 }, { type: 'gling', count: 10 }] },
+      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'slime', count: 10 }, { type: 'gling', count: 6 }] },
     ],
     7: [
-      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'thrower', count: 4 }, { type: 'slime_basic', count: 6 }] },
-      { name: 'Embuscade', groups: [{ type: 'lurker', count: 3 }, { type: 'slime_basic', count: 8 }, { type: 'slime_pink', count: 6 }] },
-      { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 4 }, { type: 'slime_pink', count: 11 }] },
-      { name: 'Barrage', groups: [{ type: 'thrower', count: 6 }, { type: 'frog', count: 4 }, { type: 'fire', count: 4 }] },
+      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'wall', count: 4 }, { type: 'slime', count: 6 }] },
+      { name: 'Embuscade', groups: [{ type: 'lurker', count: 3 }, { type: 'slime', count: 8 }, { type: 'gling', count: 6 }] },
+      { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 4 }, { type: 'gling', count: 11 }] },
+      { name: 'Barrage', groups: [{ type: 'wall', count: 6 }, { type: 'toad', count: 4 }, { type: 'fire', count: 4 }] },
     ],
     8: [
-      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'slime_basic', count: 12 }, { type: 'slime_pink', count: 9 }] },
-      { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 5 }, { type: 'frog', count: 3 }, { type: 'kamikaze', count: 4 }] },
+      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
+      { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 5 }, { type: 'toad', count: 3 }, { type: 'kamikaze', count: 4 }] },
       { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'kamikaze', count: 7 }] },
       { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'fire', count: 7 }, { type: 'bubble', count: 2 }] },
     ],
     9: [
-      { name: 'Mini-boss : Rhinocéros Alpha', groups: [{ type: 'rhino_boss', count: 1 }, { type: 'slime_basic', count: 6 }] },
-      { name: 'Mini-boss : Crabe géant', groups: [{ type: 'crab', count: 1 }, { type: 'slime_bombardier', count: 3 }, { type: 'slime_basic', count: 6 }] },
-      { name: 'BOSS FINAL : Roi Crabe', groups: [{ type: 'crab_king', count: 1 }, { type: 'shaman', count: 1 }, { type: 'bubble', count: 1 }, { type: 'charger', count: 1 }] },
+      { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 6 }] },
+      { name: 'Mini-boss : Scarab', groups: [{ type: 'boss_scarab', count: 1 }, { type: 'shoot', count: 3 }, { type: 'slime', count: 6 }] },
+      { name: 'BOSS FINAL : Giant Crab', groups: [{ type: 'boss_crab', count: 1 }, { type: 'shaman', count: 1 }, { type: 'bubble', count: 1 }, { type: 'charger', count: 1 }] },
     ],
   },
   timeline: [

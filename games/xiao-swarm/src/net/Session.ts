@@ -40,6 +40,8 @@ export interface Session {
   readonly roomCode: string | null;
   /** 'lost' : la connexion à l'hôte / à la salle est coupée. */
   readonly connection: 'connected' | 'lost';
+  /** Client en ligne : l'hôte n'envoie plus rien depuis un moment alors que la connexion tient (onglet de l'hôte en arrière-plan, gel, réseau coupé). Toujours faux ailleurs. */
+  readonly hostStalled: boolean;
   /** Libère les ressources réseau. */
   close(): void;
 }
@@ -56,6 +58,7 @@ export class LocalSession implements Session {
   readonly online = false;
   readonly roomCode = null;
   readonly connection = 'connected';
+  readonly hostStalled = false;
   private readonly loop = new FixedStep(TICK_RATE);
   private readonly inputs = new Map<PlayerId, PlayerInput>();
   private readonly local: PlayerInput = { mx: 0, my: 0 };

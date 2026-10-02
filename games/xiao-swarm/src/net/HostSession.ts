@@ -51,6 +51,7 @@ export class HostSession implements Session {
   readonly online = true;
   readonly roomCode: string;
   connection: 'connected' | 'lost' = 'connected';
+  readonly hostStalled = false;
   private readonly transport: Transport;
   private readonly loop = new FixedStep(TICK_RATE);
   private readonly inputs = new Map<PlayerId, PlayerInput>();

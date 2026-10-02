@@ -36,6 +36,7 @@
   "roomNotFound": "Room not found — solo game",
   "roomFull": "Room full — solo game",
   "connectionLost": "Connection lost",
+  "hostStalled": "The host is not responding…\nWaiting for them to come back",
   "versionMismatch": "Version mismatch — solo game",
   "respawning": "Respawning…",
   "levelUpTitle": "Level {level}!",

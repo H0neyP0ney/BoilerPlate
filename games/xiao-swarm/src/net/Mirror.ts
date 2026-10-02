@@ -3,7 +3,7 @@ import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
-import type { AlienState, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
+import type { AlienState, Projectile, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
@@ -47,6 +47,8 @@ export class Mirror {
   private readonly recruits = new Map<number, RecruitState>();
   /** Globes d'XP persistants (par id) : lissés vers leur position hôte comme les recrues, au lieu de sauter à chaque snapshot. */
   private readonly orbs = new Map<number, XpOrb>();
+  /** Projectiles persistants (par id du snapshot) : lissés comme les autres entités au lieu d'être recréés à chaque snapshot. */
+  private readonly projectiles = new Map<number, Projectile>();
   private readonly goals = new WeakMap<object, Goal>();
 
   readonly predictor = new AnchorPredictor();
@@ -136,8 +138,18 @@ export class Mirror {
     sim.arena.rocks.length = 0;
     for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
 
-    sim.combat.projectiles.releaseAll();
-    for (const p of snap.projectiles) this.addProjectile(p);
+    // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits
+    const seenProj = new Set<number>();
+    for (const p of snap.projectiles) {
+      if (seenProj.has(p.id)) continue; // collision d'id (modulo 65536) : extrêmement rare, ignorée
+      seenProj.add(p.id);
+      this.upsertProjectile(p);
+    }
+    for (const [id, p] of this.projectiles) {
+      if (seenProj.has(id)) continue;
+      this.projectiles.delete(id);
+      sim.combat.projectiles.release(p);
+    }
     for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
   }
 
@@ -192,8 +204,15 @@ export class Mirror {
     for (const p of sim.combat.projectiles.active) {
       p.px = p.x;
       p.py = p.y;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
+      const g = this.goals.get(p);
+      if (g) {
+        g.x += p.vx * dt; // le but avance à la vitesse du projectile, le projectile le rattrape (lissage)
+        g.y += p.vy * dt;
+        this.approach(p, g);
+      } else {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
       p.life = Math.max(0, p.life - (p.lob ? dt : dt / PROJECTILE_FADE)); // en cloche : vrai temps de vol (télégraphe)
     }
   }
@@ -355,10 +374,17 @@ export class Mirror {
     return s;
   }
 
-  private addProjectile(snap: ProjectileSnap): void {
-    const p = this.sim.combat.projectiles.acquire();
-    p.x = p.px = snap.x;
-    p.y = p.py = snap.y;
+  private upsertProjectile(snap: ProjectileSnap): void {
+    let p = this.projectiles.get(snap.id);
+
+    if (!p) {
+      p = this.sim.combat.projectiles.acquire();
+      this.projectiles.set(snap.id, p);
+      p.id = snap.id;
+      p.x = p.px = snap.x;
+      p.y = p.py = snap.y;
+    }
+    this.goals.set(p, { x: snap.x, y: snap.y }); // position hôte : le projectile glisse vers elle (pas de saut à chaque snapshot)
     p.vx = snap.vx;
     p.vy = snap.vy;
     p.texture = snap.texture;

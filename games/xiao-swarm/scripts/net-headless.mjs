@@ -162,6 +162,12 @@ try {
   const kx0 = a.soldiers.reduce((n, s) => n + Math.abs(s.kx) + Math.abs(s.ky), 0);
   hs.combat.spray(spitter, a.soldiers[0]);
   check(hs.combat.projectiles.active.length === 3 && hs.combat.projectiles.active.every((p) => p.lob && p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${hs.combat.projectiles.active.length}`);
+  // projectiles : identifiants stables, le client garde le MÊME objet d'un snapshot à l'autre (lissage) et le retrouve par id
+  await tick(client);
+  const projBefore = new Map(client.sim.combat.projectiles.active.map((p) => [p.id, p]));
+  await tick(client);
+  const projSame = [...client.sim.combat.projectiles.active].filter((p) => projBefore.get(p.id) === p).length;
+  check(projBefore.size === 3 && projSame >= 2, 'projectiles : mêmes objets (lissés) d’un snapshot à l’autre chez le client', `${projSame} conservés sur ${projBefore.size}`);
   hs.aliens.length = 0;
   for (let i = 0; i < 45; i++) await tick(client);
   check(hs.puddles.length === 3 && client.sim.puddles.length === 3, 'impacts : flaques ralentissantes, reflétées chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
@@ -353,6 +359,12 @@ try {
   check(clientEvents.some((e) => e.t === 'restart'), 'relance annoncée aux clients');
   check(a.alive && b.alive && hs.time < timeAtEnd, 'la partie est relancée : les deux squads de retour, horloge remise à zéro', `t=${hs.time.toFixed(1)} s`);
   check(client.sim.squadOf(client.localPlayer).alive, 'le client voit sa squad de retour');
+  // hôte muet (onglet en arrière-plan, gel) : sans snapshot depuis 1,5 s le client le sait, et il le sait de nouveau « vivant » au snapshot suivant
+  check(!client.hostStalled, 'hôte actif : pas d’alerte chez le client');
+  for (let i = 0; i < 20; i++) client.advance(100, () => {});
+  check(client.hostStalled, 'hôte muet depuis 2 s : le client est prévenu', `${client.hostStalled}`);
+  for (let i = 0; i < 3; i++) await tick(client);
+  check(!client.hostStalled, 'snapshot reçu : l’alerte disparaît');
   void deathAt;
   void base;
 

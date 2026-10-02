@@ -36,6 +36,8 @@ export class HudScene extends Phaser.Scene {
   /** Boutons des panneaux de dev (foule, triche), avant les visionneuses. */
   private panelBtns: Phaser.GameObjects.Container[] = [];
   private respawnText!: Phaser.GameObjects.Text;
+  /** En ligne : message quand l'hôte ne répond plus (onglet en arrière-plan, gel…). */
+  private hostText!: Phaser.GameObjects.Text;
   /** Compteur de FPS (haut gauche), rafraîchi deux fois par seconde. */
   private fpsText!: Phaser.GameObjects.Text;
   private fpsAt = 0;
@@ -81,6 +83,10 @@ export class HudScene extends Phaser.Scene {
     this.fpsAt = 0;
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
+      .setOrigin(0.5)
+      .setVisible(false);
+    this.hostText = this.add
+      .text(0, 0, t('hostStalled'), { fontFamily: theme.font, fontSize: '30px', fontStyle: 'bold', color: '#ffd166', stroke: '#13233a', strokeThickness: 7, align: 'center' })
       .setOrigin(0.5)
       .setVisible(false);
     // Dev uniquement : le menu Réglages, les panneaux et les visionneuses n'existent pas dans le build Poki.
@@ -170,6 +176,7 @@ export class HudScene extends Phaser.Scene {
     this.roomText.setText(
       !s.online ? '' : s.connection === 'lost' ? t('connectionLost') : t('room', { code: s.roomCode ?? '', players: g.playerCount }),
     );
+    this.hostText.setVisible(s.online && s.hostStalled);
     this.hint.setVisible(g.flow.state === 'ready');
     this.drawXp();
     this.drawBoss();
@@ -555,6 +562,7 @@ export class HudScene extends Phaser.Scene {
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height * 0.22);
+    this.hostText.setPosition(width / 2, height * 0.34);
     this.endText.setPosition(width / 2, height * 0.4);
   };
 }

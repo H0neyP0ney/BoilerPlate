@@ -8,7 +8,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -120,6 +120,8 @@ export interface RecruitSnap {
 }
 
 export interface ProjectileSnap {
+  /** Identifiant stable (modulo 65536) : le client retrouve le même projectile d'un snapshot à l'autre pour lisser son mouvement. */
+  id: number;
   x: number;
   y: number;
   vx: number;
@@ -234,6 +236,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     })),
     recruits: sim.recruits.items.map((r) => ({ id: r.id, cls: r.cls, x: r.x, y: r.y, life: r.life })),
     projectiles: sim.combat.projectiles.active.map((p) => ({
+      id: p.id & 0xffff,
       x: p.x,
       y: p.y,
       vx: p.vx,
@@ -435,6 +438,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
 
   w.u16(s.projectiles.length);
   for (const p of s.projectiles) {
+    w.u16(p.id);
     w.f32(p.x);
     w.f32(p.y);
     w.i16(p.vx);
@@ -615,6 +619,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nProj = r.u16();
     for (let i = 0; i < nProj; i++) {
+      const id = r.u16();
       const x = r.f32();
       const y = r.f32();
       const vx = r.i16();
@@ -625,7 +630,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       const aoe = lob ? r.u8() : 0;
       const flight = lob ? r.u8() / 50 : 1;
       const alien = lob ? r.u8() === 1 : false;
-      snap.projectiles.push({ x, y, vx, vy, texture, flame: !!(flags & 1), lob, age: (flags >> 3) / 31, aoe, flight, alien });
+      snap.projectiles.push({ id, x, y, vx, vy, texture, flame: !!(flags & 1), lob, age: (flags >> 3) / 31, aoe, flight, alien });
     }
 
     const nOrbs = r.u16();

@@ -100,6 +100,8 @@ export interface AlienState extends Body {
 export type Unit = SoldierState | AlienState;
 
 export interface Projectile {
+  /** Identifiant unique, attribué à chaque acquisition du pool (le client le retrouve dans le snapshot pour lisser le mouvement). */
+  id: number;
   x: number;
   y: number;
   px: number;

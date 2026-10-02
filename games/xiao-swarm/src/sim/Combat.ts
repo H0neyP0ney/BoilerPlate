@@ -23,6 +23,7 @@ export const ROCKET_TEXTURE = 'fx_rocket';
 export class Combat {
   readonly projectiles = new Pool<Projectile>(
     () => ({
+      id: 0,
       x: 0,
       y: 0,
       px: 0,
@@ -45,7 +46,9 @@ export class Combat {
       owner: '',
       hit: new Set(),
     }),
-    undefined,
+    (p) => {
+      p.id = this.sim.ids.get(); // nouvel identifiant à chaque réutilisation d'un objet du pool
+    },
     (p) => {
       // remise à zéro à la libération : un projectile recyclé ne doit garder aucun comportement du précédent
       p.hit.clear();

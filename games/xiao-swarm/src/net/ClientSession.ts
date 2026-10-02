@@ -29,6 +29,8 @@ export class ClientSession implements Session {
   readonly sim: Sim;
   readonly online = true;
   connection: 'connected' | 'lost' = 'connected';
+  /** Temps (ms) écoulé chez ce client depuis le dernier snapshot de l'hôte. */
+  private sinceSnapshot = 0;
   private readonly mirror: Mirror;
   private readonly loop = new FixedStep(TICK_RATE);
   private readonly hostId: PlayerId;
@@ -99,7 +101,13 @@ export class ClientSession implements Session {
     this.my = my;
   }
 
+  /** Aucun snapshot depuis `HOST_STALL_MS` alors que la connexion tient : l'hôte est probablement en arrière-plan ou gelé. */
+  get hostStalled(): boolean {
+    return this.connection === 'connected' && this.sinceSnapshot > HOST_STALL_MS;
+  }
+
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void {
+    this.sinceSnapshot += deltaMs;
     this.loop.advance(deltaMs, (dt) => {
       this.ticks++;
       this.mirror.step(dt, { n: this.ticks, mx: this.mx, my: this.my });
@@ -137,7 +145,10 @@ export class ClientSession implements Session {
     if (peer !== this.hostId) return;
     if (typeof data !== 'string') {
       const snap = decodeSnapshot(data);
-      if (snap) this.mirror.apply(snap);
+      if (snap) {
+        this.mirror.apply(snap);
+        this.sinceSnapshot = 0;
+      }
       return;
     }
     const msg = parseMessage<HostMessage>(data);
@@ -146,5 +157,8 @@ export class ClientSession implements Session {
     if (this.pending.length > MAX_PENDING_EVENTS) this.pending.splice(0, this.pending.length - MAX_PENDING_EVENTS);
   };
 }
+
+/** Délai (ms) sans snapshot au-delà duquel on prévient le joueur que l'hôte ne répond plus (les snapshots arrivent à 15 Hz). */
+const HOST_STALL_MS = 1500;
 
 const round = (v: number): number => Math.round(v * 100) / 100;

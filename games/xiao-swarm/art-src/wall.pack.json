@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/wall.png",
+  "scale": 0.22,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "wall_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

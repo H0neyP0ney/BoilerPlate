@@ -38,6 +38,19 @@ squad, invincibilité), aliens (faire apparaître un type × quantité, tout tue
 (vitesse du jeu 0 → 3, +30 s / +2 min de vagues). Les retraits ignorent l'invulnérabilité des recrues fraîches. Pas de
 raccourcis clavier (les anciens K / R / T / B ont été retirés).
 
+**Coéquipiers IA (coop)** : l'hôte d'une partie coop (`?net=host`) a, dans ce panneau, une section « Coéquipiers IA » (seule
+partie disponible en ligne) : ajouter un bot (niveau Standard / Expert au choix), changer le niveau de chacun, le retirer,
+« Tout en Standard / Expert ». Au lancement : `?net=host&bot=2&botlevel=expert` (dev seulement, 3 bots max ; salle publique,
+rejoignable en `?net=auto`). En mode debug, chaque bot est signalé en jeu (`dev/botOverlay.ts`) : étiquette « BOT standard / expert »,
+flèche de son déplacement, cercle vert → rouge selon la menace, cible de ramassage. Un humain qui rejoint une salle pleine
+prend la place d'un bot.
+Code : `sim/CoopBot.ts` (pur) évalue 16 directions + « rester » (danger aux instants `probes`, moins les gains : XP, recrue, power-up,
+équipier à relever, cohésion) ; réglages des deux niveaux dans `data/bots.ts` ; branché dans `net/HostSession.ts`
+(`addBot` / `removeBot`). Standard : réagit avec retard, voit court, n'esquive pas les tirs ni les attaques annoncées, upgrades au
+hasard. Expert : décide à chaque tick, voit loin, anticipe les aliens et leurs charges / sauts / grenades, ramasse les
+power-ups, se laisse soigner, prend ses upgrades par priorités. `npm run sim:bot -- 300 2 7` (secondes, bots, seed) les compare
+sans navigateur (expert doit durer plus longtemps que standard, déterminisme).
+
 ## Visionneuse d'unités (`?viewer`, `src/scenes/UnitViewerScene.ts`, `src/debugSprites.ts`)
 
 - **S'ouvre toujours sur la vue d'ensemble** (toutes les unités, à 80 %, 6 par ligne, boss sur une ligne à part, barre de défilement + molette) : pas de panneau, un clic sur une unité ouvre sa vue détaillée, la croix en haut à droite quitte vers le jeu. Chaque unité porte son nom anglais et son id ; les unités **inactives** (hors `ACTIVE_CLASSES` / `ACTIVE_ALIENS`) sont à 25 % d'opacité.

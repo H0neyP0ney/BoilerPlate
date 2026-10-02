@@ -58,7 +58,7 @@ export function loadNameOverrides(): void {
     edits = {};
   }
   // clés de classes renommées (gunner → trooper, tank → bruiser)
-  for (const [from, to] of [['class_gunner', 'class_trooper'], ['class_tank', 'class_bruiser'], ['class_grenadier', 'class_bomber']]) {
+  for (const [from, to] of [['class_gunner', 'class_trooper'], ['class_tank', 'class_bruiser'], ['class_grenadier', 'class_bomber'], ['alien_shoot', 'alien_shooter'], ['alien_fire', 'alien_burner']]) {
     if (edits[from]) edits[to] = edits[from];
     delete edits[from];
   }

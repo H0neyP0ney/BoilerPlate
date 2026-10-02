@@ -107,10 +107,10 @@ export function loadSpriteOverrides(): void {
     }
   }
   {
-    const o = overrides as Record<string, Placement | undefined>; // flower → shoot
-    if (o.alien_flower) o.alien_shoot = o.alien_flower;
+    const o = overrides as Record<string, Placement | undefined>; // flower → shooter
+    if (o.alien_flower) o.alien_shooter = o.alien_flower;
     delete o.alien_flower;
-    for (const [from, to] of [['frog', 'toad'], ['thrower', 'wall'], ['boss_slime', 'boss_scarab']]) {
+    for (const [from, to] of [['frog', 'toad'], ['thrower', 'wall'], ['boss_slime', 'boss_scarab'], ['shoot', 'shooter'], ['fire', 'burner']]) {
       if (o[`alien_${from}`]) o[`alien_${to}`] = o[`alien_${from}`];
       delete o[`alien_${from}`];
     }

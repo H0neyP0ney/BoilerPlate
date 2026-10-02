@@ -9,6 +9,7 @@ import type { Projectile } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
+import { ShockDistort } from './ShockDistort';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { ROCKET_TEXTURE } from '../sim/Combat';
@@ -26,15 +27,9 @@ const TELEGRAPH_S = 0.8;
 const MUZZLE_BLEND_PX = 40;
 /** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
 export const ORB_SCALE = 1.3;
-/**
- * Petite variation de teinte, fixe pour un globe donné (tirée de son id, pas de scintillement) : bleus un peu plus clairs ou un peu
- * plus foncés (± ~12 %), comme le léger tirage de hauteur des tirs de blaster. Mode `MULTIPLY_TWO` : 0x80 par canal = couleur d'origine.
- */
-export function orbTint(id: number): number {
-  const v = (((Math.imul(id, 2654435761) >>> 8) % 1000) / 500) - 1; // -1 … 1
-  const ch = (k: number): number => Math.max(0, Math.min(255, Math.round(128 * (1 + v * k))));
-  return (ch(0.12) << 16) | (ch(0.12) << 8) | ch(0.05);
-}
+/** Montée de niveau : nombre d'ondes de choc blanches successives et délai (ms) entre deux. */
+const LEVEL_WAVES = 5;
+const LEVEL_WAVE_GAP_MS = 170;
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
 
@@ -99,6 +94,7 @@ export class WorldView {
   ) {
     this.arena = new ArenaView(scene, sim.map);
     this.fx = new Fx(scene);
+    this.shock = new ShockDistort(scene);
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
     this.beams = scene.add.graphics().setDepth(DEPTH.fx);
@@ -144,14 +140,15 @@ export class WorldView {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'boss_crab' ? 40 : 10);
         // gelée et flaques : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
-        if (e.alien === 'slime' || e.alien === 'shoot') {
-          const size = e.alien === 'shoot' ? 1.6 : 1;
-          const light = e.alien === 'shoot' ? 0xcfe6ff : 0xc8ffb0;
+        if (e.alien === 'slime' || e.alien === 'shooter') {
+          const size = e.alien === 'shooter' ? 1.6 : 1;
+          const light = e.alien === 'shooter' ? 0xcfe6ff : 0xc8ffb0;
           this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
           if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size);
         }
         if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
+          sfx.play(this.scene, SFX.blast.key, SFX.blast);
           this.fx.text(e.x, e.y - 90, 'BOSS DOWN!', '#ffe066', 34);
         }
         break;
@@ -276,6 +273,7 @@ export class WorldView {
         }
         // pas de secousse pour les petites explosions (grenades), sinon l'écran tremble en permanence
         this.fx.explosion(e.x, e.y, e.r, e.r >= 100 && nearCam(e.x, e.y));
+        if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`
         break;
       case 'slam':
         this.fx.ring(e.x, e.y, e.r, 0xff6a6a);
@@ -338,6 +336,9 @@ export class WorldView {
 
   // ---------- Rendu ----------
 
+  /** Déformation de l'écran des ondes de montée de niveau. */
+  private readonly shock: ShockDistort;
+
   /** Ondes de montée de niveau en attente : elles partent quand la pause de choix d'upgrade est terminée (comme le repoussement). */
   private readonly pendingWaves: { x: number; y: number; level: number }[] = [];
 
@@ -348,13 +349,19 @@ export class WorldView {
     const level = this.pendingWaves[this.pendingWaves.length - 1].level;
     this.pendingWaves.length = 0;
     const ms = UPGRADE_REPEL.reach * 1000;
-    this.fx.ring(w.x, w.y, UPGRADE_REPEL.radius, 0x5aa8ff, ms); // onde de choc : les aliens sont repoussés quand le front les touche
-    this.fx.spiral(w.x, w.y, UPGRADE_REPEL.radius * 0.95, 0x3d9bff, ms * 1.5);
+    // onde de choc BLANCHE répétée LEVEL_WAVES fois (la première est celle qui repousse les aliens quand son front les touche) + déformation de l'écran
+    for (let i = 0; i < LEVEL_WAVES; i++) {
+      const draw = (): void => void this.fx.ring(w.x, w.y, UPGRADE_REPEL.radius, 0xffffff, ms);
+      if (i === 0) draw();
+      else this.scene.time.delayedCall(i * LEVEL_WAVE_GAP_MS, draw);
+    }
+    this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash);
     this.fx.text(w.x, w.y - 80, t('levelUpTitle', { level }), '#9fd3ff', 30);
   }
 
   render(alpha: number, dt: number, time: number): void {
     this.fireLevelWaves();
+    this.shock.update();
     this.syncUnits(alpha, dt, time);
     this.followFlashes();
     this.syncProjectiles(alpha);
@@ -535,7 +542,6 @@ export class WorldView {
         img.setVisible(false);
         continue;
       }
-      img.setTintMode(Phaser.TintModes.MULTIPLY_TWO).setTint(orbTint(o.id)); // ×2 : 0x808080 = couleur d'origine, au-dessus = plus clair
       const size = orbSize(o.value);
       const bob = Math.sin(time * 4 + o.id) * 2.5;
       const blink = o.life < ORB_BLINK_TIME && Math.sin(time * 18) > 0;
@@ -571,7 +577,9 @@ export class WorldView {
       const k = 1 - f.t / f.dur;
       if (Math.sin(time * (14 + 34 * k)) > 0) f.img.setTint(0xff3a2a).setTintMode(Phaser.TintModes.FILL);
       else f.img.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
-      f.img.setScale(f.base * (1 + 0.18 * k));
+      // pulsations d'échelle de plus en plus rapides et amples (étirement / écrasement en opposition de phase)
+      const pulse = Math.sin(time * (30 + 60 * k)) * (0.05 + 0.13 * k);
+      f.img.setScale(f.base * (1 + 0.12 * k + pulse), f.base * (1 + 0.12 * k - pulse * 0.8));
     }
   }
 

@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/boss_rhino.png",
+  "scale": 0.15,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "boss_rhino_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "output": "../public/assets/aliens/shaman.png",
+  "scale": 0.27,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "shaman_walk.png",
+      "cols": 3,
+      "rows": 3,
+      "flipX": true
+    }
+  ]
+}

@@ -86,8 +86,8 @@ export function loadWaveOverrides(): void {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
     }
     localStorage.setItem(MIGRATION_KEY, '5');
-    // flower → shoot (idempotent)
-    if (raw?.levels) for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) { if ((g.type as string) === 'flower') g.type = 'shoot'; else if ((g.type as string) === 'frog') g.type = 'toad'; else if ((g.type as string) === 'thrower') g.type = 'wall'; else if ((g.type as string) === 'boss_slime') g.type = 'boss_scarab'; }
+    // flower → shooter, shoot → shooter, fire → burner (idempotent)
+    if (raw?.levels) for (const configs of Object.values(raw.levels)) for (const c of configs ?? []) for (const g of c.groups ?? []) { if ((g.type as string) === 'flower' || (g.type as string) === 'shoot') g.type = 'shooter'; else if ((g.type as string) === 'fire') g.type = 'burner'; else if ((g.type as string) === 'frog') g.type = 'toad'; else if ((g.type as string) === 'thrower') g.type = 'wall'; else if ((g.type as string) === 'boss_slime') g.type = 'boss_scarab'; }
     const saved = sanitize(raw);
     if (saved) assign(saved);
   } catch {

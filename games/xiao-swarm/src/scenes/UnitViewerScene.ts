@@ -77,6 +77,8 @@ export class UnitViewerScene extends Phaser.Scene {
   private scrollSpacer?: HTMLDivElement;
   private anim = 'idle';
   private facing = 1;
+  /** Met à jour le surlignage des boutons d'orientation (défini à la création du panneau). */
+  private syncSide?: () => void;
   private zoomFactor = 1;
   // Éditeur de placement (une seule unité affichée)
   private editorBox!: HTMLDivElement;
@@ -114,6 +116,7 @@ export class UnitViewerScene extends Phaser.Scene {
   create(): void {
     this.scaleRef = new ScaleRef(this);
     this.selected = ALL; // la scène est réutilisée : toujours rouvrir sur la vue de toutes les unités
+    this.facing = 1; // et regardant à droite
     this.cameras.main.setBackgroundColor(VIEW_BG);
     this.drawGrid();
     this.buildPanel();
@@ -211,6 +214,10 @@ ${id}` : id;
   /** Sélectionne une unité (ou `ALL`) : met à jour la liste déroulante et reconstruit la vue. */
   private select_(value: string): void {
     this.selected = value;
+    if (value === ALL) {
+      this.facing = 1; // la vue de toutes les unités remet toujours l'orientation à droite
+      this.syncSide?.();
+    }
     this.syncChrome();
     if (this.unitSelect) this.unitSelect.value = value;
     this.rebuild();
@@ -231,6 +238,7 @@ ${id}` : id;
     if (this.selected === ALL) sprite.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.select_(id));
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
+    if (gun && this.isInactive(kind, unit)) gun.setAlpha(INACTIVE_ALPHA); // l'arme d'une classe inactive est transparente comme son soldat
     const label = this.add
       .text(x, y + 26, this.labelOf(kind, unit, id), { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim, align: 'center' })
       .setOrigin(0.5, 0)
@@ -672,8 +680,16 @@ ${id}` : id;
     const t = this.target;
     if (!t) return;
     const key = this.anchorKey();
-    if (key) setAnchor(t.id, key, value);
-    else setPlacement(t.id, { originX: value[0], originY: value[1] });
+    if (key) {
+      setAnchor(t.id, key, value);
+      // le décalage vertical doit être le même à gauche et à droite : le côté opposé reçoit le même Y (son X, lui, est en miroir)
+      const m = /^(.+):(left|right)$/.exec(key);
+      if (m) {
+        const other = `${m[1]}:${m[2] === 'left' ? 'right' : 'left'}`;
+        const prev = sprites.get(t.id).anchors?.[other];
+        setAnchor(t.id, other, [prev ? prev[0] : 1 - value[0], value[1]]);
+      }
+    } else setPlacement(t.id, { originX: value[0], originY: value[1] });
   }
 
   private editMuzzle(value: Point): void {
@@ -817,6 +833,7 @@ ${id}` : id;
       for (const { dir, b } of sideBtns) b.style.background = dir === this.facing ? '#4a8' : '';
     };
     sync();
+    this.syncSide = sync;
     sideRow.append('Orientation', ...sideBtns.map((x) => x.b));
 
     const zoom = this.select(

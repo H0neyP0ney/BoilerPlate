@@ -41,6 +41,8 @@ Actuel : Gunner = `idle` (16 frames) + `walk` (16) + `die` (16) → `public/asse
 Slime vert = 1 planche 4×4 de 1024 px (cycle de marche) réduite à 64 px → `public/assets/aliens/slime.png` (`art-src/slime.pack.json`) ;
 il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycle, plus lent.
 
+**Aliens (03/10)** : `slime`, `gling`, `shooter`, `toad`, `charger`, `kamikaze`, `spitter`, `wall`, `burner`, `lurker`, `bubble` ont chacun une planche 3×3 (9 frames, cycle de marche, face à gauche) dans `art-src/<nom>_walk.png`, assemblée par `node tools/pack-grids.mjs games/xiao-swarm/art-src/<nom>.pack.json` → `public/assets/aliens/<nom>.png` (option `"cleanShadow": true` : retire l'ombre brune peinte, utilisée pour `shooter`). Après une mise à jour d'une planche : relancer la commande puis vérifier la taille / l'ancrage dans la visionneuse (`?viewer`). `shaman` n'a pas encore de planche : dessin procédural (`src/art/aliens.ts`).
+
 **Ennemis actifs** : seul le slime (`ACTIVE_ALIENS` dans `data/aliens.ts`) ; les vagues des autres sont filtrées.
 **Bordure de carte** : de la lave animée (texture procédurale `lava`) avec un liseré incandescent, plus de palmiers.
 
@@ -74,7 +76,7 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 | `portrait_<classe>` | — | HUD | par défaut : haut du corps du soldat |
 | `recruit_<classe>` | 56×60 | ×0.75 | recrue au sol à ramasser |
 | `alien_slime` | 48×48 | ×1 | slime vert à un oeil |
-| `alien_gling` `alien_shoot` `alien_kamikaze` `alien_toad` `alien_charger` `alien_spitter` `alien_shaman` `alien_wall` `alien_lurker` `alien_bubble` `alien_fire` | 48×48 → 72×72 | ×1 | aliens (ids renommés le 02/10) |
+| `alien_gling` `alien_shooter` `alien_kamikaze` `alien_toad` `alien_charger` `alien_spitter` `alien_shaman` `alien_wall` `alien_lurker` `alien_bubble` `alien_burner` | 48×48 → 72×72 | ×1 | aliens (ids renommés le 02/10) |
 | `alien_boss_rhino` `alien_boss_scarab` `alien_boss_crab` | 119×94 → 182×157 | ×1 | boss : rhinocéros (mini, 2:00), scarabée (mini, 5:00, réutilise la marche du crabe en attendant son dessin), crabe géant (**final**, 10:00) |
 | `palm` `bush` `bush_flowers` `log` | 160×172, 112×78, 112×78, 150×44 | ×1 | décor de bordure |
 | `obstacle_1` … `obstacle_8` | 111×107 → 260×189 (WebP) | voir `data/obstacles.ts` | obstacles volcaniques (lave, rochers, cristaux) : `public/assets/decor/`, sources `art-src/obstacle_N.png` |

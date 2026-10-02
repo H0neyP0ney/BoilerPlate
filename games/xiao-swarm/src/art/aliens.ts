@@ -152,7 +152,7 @@ function crab(ctx: CanvasRenderingContext2D): void {
 
 export function makeAlienTextures(scene: Phaser.Scene): void {
   canvasTexture(scene, 'alien_slime', 48, 48, (ctx) => slime(ctx));
-  canvasTexture(scene, 'alien_shoot', 72, 72, (ctx) => {
+  canvasTexture(scene, 'alien_shooter', 72, 72, (ctx) => {
     ctx.scale(1.5, 1.5);
     slime(ctx, '#b8dcff', '#3a78d8');
   });
@@ -193,7 +193,7 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     ctx.scale(1.4, 1.4);
     crab(ctx);
   });
-  canvasTexture(scene, 'alien_fire', 48, 48, (ctx) => slime(ctx, '#ffd9a0', '#e04a10'));
+  canvasTexture(scene, 'alien_burner', 48, 48, (ctx) => slime(ctx, '#ffd9a0', '#e04a10'));
   canvasTexture(scene, 'alien_shaman', 48, 48, (ctx) => slime(ctx, '#fff6b0', '#d8a020'));
   // Lurker : carapace violette hérissée de pics d'os, un oeil.
   canvasTexture(scene, 'alien_lurker', 56, 48, (ctx) => {

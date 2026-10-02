@@ -1,4 +1,5 @@
 import { poki } from '@xiao/engine';
+import { BOT_LEVEL_IDS, MAX_BOTS, type BotLevel } from './data/bots';
 import { MODES, type ModeDef } from './data/modes';
 import { ClientSession } from './net/ClientSession';
 import { HostSession } from './net/HostSession';
@@ -31,6 +32,7 @@ export class OnlineError extends Error {
  *   ?net=host                 crée une salle (le code s'affiche dans le HUD)
  *   ?net=join&room=CODE       rejoint une salle (en cours de partie possible)
  *   ?net=auto                 rejoint une salle publique, sinon en crée une
+ *   ?net=host&bot=2&botlevel=expert   (dev) l'hôte démarre avec 2 coéquipiers IA, niveau standard (défaut) ou expert
  */
 export function readOnlineRequest(): OnlineRequest | null {
   const net = poki.getURLParam('net');
@@ -50,10 +52,22 @@ export async function createOnlineSession(req: OnlineRequest, mode: ModeDef = MO
   return code ? join(code).catch(() => host(mode)) : host(mode);
 }
 
+/** Coéquipiers IA demandés par l'URL (?bot=N, ?botlevel=standard|expert) : seulement en dev, absents du build Poki. */
+function readBots(): { bots: number; botLevel: BotLevel } {
+  if (!import.meta.env.DEV) return { bots: 0, botLevel: 'standard' };
+  const n = Number(poki.getURLParam('bot'));
+  const level = poki.getURLParam('botlevel');
+  return {
+    bots: Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), MAX_BOTS) : 0,
+    botLevel: BOT_LEVEL_IDS.find((l) => l === level) ?? 'standard',
+  };
+}
+
 async function host(mode: ModeDef): Promise<HostSession> {
   const transport = makeTransport();
+  const { bots, botLevel } = readBots();
   const roomCode = await withTimeout(transport.host({ public: true }), transport);
-  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode });
+  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode, bots, botLevel });
 }
 
 async function join(code: string): Promise<ClientSession> {

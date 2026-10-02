@@ -1,0 +1,14 @@
+{
+  "frameWidth": 61,
+  "frameHeight": 45,
+  "originX": 0.458,
+  "originY": 0.917,
+  "cols": 3,
+  "frames": 9,
+  "anims": {
+    "walk": {
+      "first": 0,
+      "count": 9
+    }
+  }
+}

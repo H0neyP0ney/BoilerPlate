@@ -1,0 +1,13 @@
+{
+  "output": "../public/assets/aliens/shooter.png",
+  "scale": 0.25,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "shooter_walk.png",
+      "cols": 3,
+      "rows": 3,
+      "cleanShadow": true
+    }
+  ]
+}

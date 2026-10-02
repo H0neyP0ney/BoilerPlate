@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/toad.png",
+  "scale": 0.2,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "toad_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

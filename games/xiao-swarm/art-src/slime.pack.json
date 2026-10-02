@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/slime.png",
+  "scale": 0.4,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "slime_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

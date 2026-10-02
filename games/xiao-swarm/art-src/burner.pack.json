@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/burner.png",
+  "scale": 0.22,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "burner_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/boss_scarab.png",
+  "scale": 0.19,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "boss_scarab_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

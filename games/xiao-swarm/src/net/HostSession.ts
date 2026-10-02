@@ -1,6 +1,8 @@
 import { FixedStep } from '@xiao/engine/sim';
+import { MAX_BOTS, type BotLevel } from '../data/bots';
 import { START_SQUADS } from '../data/classes';
 import type { ModeDef } from '../data/modes';
+import { CoopBot } from '../sim/CoopBot';
 import { Sim } from '../sim/Sim';
 import { NO_INPUT, type PlayerId, type PlayerInput, type SimEvent } from '../sim/types';
 import {
@@ -29,6 +31,9 @@ export interface HostSessionOptions {
   seed: number;
   transport: Transport;
   roomCode: string;
+  /** Coop : nombre de coéquipiers IA au départ (0 si absent) et leur niveau. */
+  bots?: number;
+  botLevel?: BotLevel;
 }
 
 interface RemotePlayer {
@@ -58,6 +63,9 @@ export class HostSession implements Session {
   private readonly local: PlayerInput = { mx: 0, my: 0 };
   private readonly remotes = new Map<PlayerId, RemotePlayer>();
   private readonly acks = new Map<PlayerId, number>();
+  /** Coéquipiers IA (coop) : ils jouent sur l'hôte uniquement ; les clients voient une squad comme une autre. */
+  readonly bots = new Map<PlayerId, CoopBot>();
+  private botCount = 0;
   private outbound: SimEvent[] = [];
   /** Tick d'anéantissement des squads en attente de réapparition. */
   private readonly deadSince = new Map<PlayerId, number>();
@@ -76,6 +84,28 @@ export class HostSession implements Session {
     this.transport.onMessage = this.onMessage;
     this.transport.onPeerDisconnected = this.onPeerLeft;
     this.transport.onClosed = () => (this.connection = 'lost');
+    for (let i = 0; i < Math.min(opts.bots ?? 0, MAX_BOTS); i++) this.addBot(opts.botLevel);
+  }
+
+  /** Ajoute un coéquipier IA (coop seulement, dans la limite de `MAX_BOTS` et des places libres). Renvoie son id, ou null. */
+  addBot(level: BotLevel = 'standard'): PlayerId | null {
+    if (this.sim.mode.id !== 'coop' || this.bots.size >= MAX_BOTS || this.playerCount >= MAX_PLAYERS) return null;
+    const id = `bot${++this.botCount}`;
+    this.bots.set(id, new CoopBot(id, this.sim.config.seed + 101 * this.botCount, level));
+    this.sim.spawnLate(id, this.sim.rng.pick(START_SQUADS));
+    return id;
+  }
+
+  removeBot(id: PlayerId): void {
+    if (!this.bots.delete(id)) return;
+    this.inputs.delete(id);
+    this.deadSince.delete(id);
+    this.sim.removePlayer(id);
+  }
+
+  /** Joueurs présents (hôte, clients et coéquipiers IA). */
+  get playerCount(): number {
+    return 1 + this.remotes.size + this.bots.size;
   }
 
   get alpha(): number {
@@ -94,11 +124,16 @@ export class HostSession implements Session {
         this.inputs.set(id, stale ? NO_INPUT : r.input);
       }
       this.frame++;
+      for (const [id, bot] of this.bots) this.inputs.set(id, bot.think(this.sim, dt));
       if (this.endTicks > 0) {
         // écran de fin : le monde est figé jusqu'à la relance
         if (--this.endTicks === 0) this.sim.restart();
       } else {
         this.sim.step(dt, this.inputs);
+        for (const [id, bot] of this.bots) {
+          const pick = bot.pickUpgrade(this.sim);
+          if (pick >= 0) this.sim.chooseUpgrade(id, pick);
+        }
         if (this.sim.mode.id === 'coop') this.checkCoopEnd();
         else this.respawnDead();
       }
@@ -188,7 +223,8 @@ export class HostSession implements Session {
 
   private onHello(peer: PlayerId, version: number): void {
     if (version !== PROTOCOL_VERSION) return this.send(peer, { t: 'refused', reason: 'version' });
-    if (!this.remotes.has(peer) && this.remotes.size + 1 >= MAX_PLAYERS) return this.send(peer, { t: 'refused', reason: 'full' });
+    if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS && this.bots.size > 0) this.removeBot([...this.bots.keys()][this.bots.size - 1]); // un humain prend la place d'un bot
+    if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS) return this.send(peer, { t: 'refused', reason: 'full' });
     if (!this.remotes.has(peer)) {
       this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0 });
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));

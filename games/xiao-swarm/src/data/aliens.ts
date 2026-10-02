@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shoot' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'fire' | 'lurker' | 'boss_rhino' | 'boss_scarab';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -121,8 +121,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 30,
   },
   /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
-  shoot: {
-    id: 'shoot',
+  shooter: {
+    id: 'shooter',
     hp: 90,
     speed: 55,
     radius: 24,
@@ -268,8 +268,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 46,
   },
   /** Slime de feu : laisse derrière lui une traînée de flammes qui brûle les soldats qui marchent dedans. */
-  fire: {
-    id: 'fire',
+  burner: {
+    id: 'burner',
     hp: 40,
     speed: 85,
     radius: 16,
@@ -342,4 +342,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shoot', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'fire', 'lurker'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker'];

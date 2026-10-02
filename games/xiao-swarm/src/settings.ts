@@ -24,6 +24,8 @@ export const MUSIC = { key: 'music', url: ['assets/audio/music.ogg', 'assets/aud
 export const SFX = {
   /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx` de l'engine). */
   blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.ogg', 'assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
+  /** Explosion (grenade, kamikaze, boules des aliens, onde…) : superposition max 3 voix, chaque nouvelle voix plus discrète ; hauteur variable. */
+  blast: { key: 'sfx_blast', url: ['assets/audio/blast.ogg', 'assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
 };
 
 /** Réglage booléen mémorisé ; `?clé=0` / `?clé=1` dans l'URL le force (utile sur téléphone, sans menu Réglages). */
@@ -36,6 +38,8 @@ function flag(key: string, urlParam: string, defaultOn = true): boolean {
 export const settings = {
   /** Compteur de FPS en haut à gauche (`?fps=0` pour le masquer). */
   showFps: flag('showFps', 'fps'),
+  /** Déformation de l'écran (shader) à la montée de niveau (`?shock=0` pour la couper : filtre plein écran, coûteux sur un petit GPU). */
+  shockwave: flag('shockwave', 'shock'),
   /** Fond d'espace (nébuleuses + étoiles). Désactivé par défaut (coûteux en perf) : fond noir uni ; `?space=1` ou le menu Réglages l'active. */
   starfield: flag('starfield', 'space', false),
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
@@ -76,6 +80,11 @@ export const settings = {
     // arrondi au pas pour éviter la dérive des flottants (0.7000000001)
     this.zoom = clamp(Math.round(value / ZOOM_STEP) * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
     storage.set('settings.zoom', this.zoom);
+  },
+
+  setShockwave(on: boolean): void {
+    this.shockwave = on;
+    storage.set('settings.shockwave', on);
   },
 
   setShowFps(on: boolean): void {

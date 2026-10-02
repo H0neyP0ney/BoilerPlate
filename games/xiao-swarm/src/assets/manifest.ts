@@ -37,273 +37,330 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).
   ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
-  // Slime de base (`slime`, vert) — art-src/slime_basic.png (1600 px) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_basic.pack.json.
-  // 16 cases de 82×78 (cycle de marche) ; le dessin regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  // Slime de base (`slime`, vert).
+  // art-src/slime_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json — 9 cases de 82×78, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_basic.png',
+    url: 'aliens/slime.png',
     frameWidth: 82,
     frameHeight: 78,
     sprites: {
       alien_slime: {
-        originX: 0.4807,
-        originY: 0.7891,
+        originX: 0.507,
+        originY: 0.881,
         scale: 0.73,
-        shadow: 1.1,
-        anchors: { 'walk:left': [0.4728, 0.808], 'idle:left': [0.4701, 0.7913], 'walk:right': [0.4834, 0.7996], 'idle:right': [0.484, 0.796] },
+        shadow: 1.4,
+        anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 5 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 5 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
-  // Petit cafard (id `gling`, l'ancien petit slime rose) — art-src/cafard.png réduit par
-  // node tools/pack-grids.mjs games/xiao-swarm/art-src/cafard.pack.json (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE).
-  // Même surface à l'écran que le petit slime rose (~37×28 px, plus plat que le slime) ; rayon 11 et marche rapide inchangés.
+  // Petite coccinelle violette (`gling`).
+  // art-src/gling_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/gling.pack.json — 9 cases de 64×48, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/cafard.png',
+    url: 'aliens/gling.png',
     frameWidth: 64,
-    frameHeight: 55,
+    frameHeight: 48,
     sprites: {
       alien_gling: {
-        originX: 0.4188,
-        originY: 0.7446,
+        originX: 0.531,
+        originY: 0.916,
         scale: 0.7,
         shadow: 1.45,
-        anchors: { 'walk:right': [0.4057, 0.7497], 'walk:left': [0.445, 0.7547] },
-        muzzles: {
-          idle: [null, [0.4585, 0.5726]],
-        },
+        anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 8 },
-          walk: { frames: range(0, 15), fps: 18 },
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 18 },
         },
       },
     },
   },
-  // Slime bombardier (`shoot`, gros et bleu, lance des boules de gelée) — art-src/slime_grenadier.png (4096 px) réduit par
-  // node tools/pack-grids.mjs games/xiao-swarm/art-src/slime_grenadier.pack.json (16 cases de 64×64). Plus gros (rayon 24 contre 16) et plus lent.
+  // Canon bleu (`shooter`, gros, lance des boules de gelée). Plus gros (rayon 24 contre 16) et plus lent.
+  // art-src/shooter_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/shooter.pack.json — 9 cases de 66×59, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_grenadier.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/shooter.png',
+    frameWidth: 66,
+    frameHeight: 59,
     sprites: {
-      alien_shoot: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 1.35,
+      alien_shooter: {
+        originX: 0.558,
+        originY: 0.936,
+        scale: 1.51,
         shadow: 1.35,
-        anchors: { 'idle:left': [0.4956, 0.8596], 'idle:right': [0.4865, 0.8573] },
+        anchors: { 'walk:right': [0.4379, 0.8643], 'walk:left': [0.5621, 0.8643] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 4 },
-          walk: { frames: range(0, 15), fps: 9 },
+          idle: { frames: range(0, 8), fps: 4 },
+          walk: { frames: range(0, 8), fps: 9 },
         },
       },
     },
   },
-  // Crabe géant (mini-boss de 5:00) — art-src/crab_idle.png, crab_walk.png et crab_attack.png (cases de 800×651) assemblés par
-  // node tools/pack-grids.mjs games/xiao-swarm/art-src/crab.pack.json (8 colonnes pour rester sous 2048 px), puis convertis en WebP
-  // (qualité 90). Vu de face. Taille à l'écran ≈ celle du crabe procédural (~390 px de large).
-  // Giant Crab (boss final de 10:00). L'animation « attack » a été retirée : le saut écrasant reste en marche.
+  // Giant Crab (boss final de 10:00) — art-src/boss_crab.png (grille 4×4, vu de face) réduit par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/crab.pack.json (option flipX : planche retournée en X) — 16 cases de 255×208.
+  // Cycle de marche ; idle = même cycle, plus lent (plus d'animation « attack » : le saut écrasant reste en marche).
   {
     type: 'sheet',
-    url: 'aliens/crab.webp',
+    url: 'aliens/crab.png',
     frameWidth: 255,
-    frameHeight: 197,
+    frameHeight: 208,
     sprites: {
       alien_boss_crab: {
-        originX: 0.533,
-        originY: 0.892,
-        scale: 0.82,
-        shadow: 0.4,
+        originX: 0.425,
+        originY: 0.917,
+        scale: 1.31,
+        shadow: 0.75,
+        anchors: { 'walk:right': [0.5156, 0.716], 'walk:left': [0.4903, 0.716] },
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
-          walk: { frames: range(16, 31), fps: 12 },
-        },
-      },
-      // Scarab : en attendant son propre dessin, réutilise la marche du crabe (pas d'idle ni d'attaque). Échelle à régler dans la visionneuse.
-      alien_boss_scarab: {
-        originX: 0.533,
-        originY: 0.892,
-        scale: 0.55,
-        shadow: 0.4,
-        anims: {
-          walk: { frames: range(16, 31), fps: 12 },
+          walk: { frames: range(0, 15), fps: 12 },
         },
       },
     },
   },
-  // Rhinocéros — art-src/rino.png (16 cases, cycle de marche, regarde vers la GAUCHE) réduit par
-  // node tools/pack-grids.mjs games/xiao-swarm/art-src/rino.pack.json (cases de 125×96), puis converti en WebP. Sert au mini-boss
-  // « Rhinocéros Alpha » (taille d'origine) ; la variante jaune (`rino_yellow`, node tools/hue-shift.mjs … 28 1.05) sert au Rhinocéros
-  // qui charge (`charger`, plus petit). Placement (échelle, ancrage, ombre) : visionneuse d'unités.
+  // Rhinocéros Alpha (mini-boss de 2:00).
+  // art-src/boss_rhino_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/boss_rhino.pack.json — 9 cases de 128×83, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/rino.webp',
-    frameWidth: 125,
-    frameHeight: 96,
+    url: 'aliens/boss_rhino.png',
+    frameWidth: 128,
+    frameHeight: 83,
     sprites: {
       alien_boss_rhino: {
-        originX: 0.517,
-        originY: 0.9,
-        scale: 1,
-        shadow: 1.2,
+        originX: 0.505,
+        originY: 0.962,
+        scale: 1.54,
+        shadow: 1.7,
+        anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 8 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
+  // Charognard jaune cornu (`charger`, charge télégraphiée).
+  // art-src/charger_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/charger.pack.json — 9 cases de 126×97, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/rino_yellow.webp',
-    frameWidth: 125,
-    frameHeight: 96,
+    url: 'aliens/charger.png',
+    frameWidth: 126,
+    frameHeight: 97,
     sprites: {
       alien_charger: {
-        originX: 0.517,
-        originY: 0.9,
-        scale: 0.55,
-        shadow: 1.1,
+        originX: 0.571,
+        originY: 0.957,
+        scale: 1.02,
+        shadow: 1.95,
+        anchors: { 'walk:right': [0.4946, 0.7948], 'walk:left': [0.5194, 0.7948] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 8 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
-  // Kamikaze : araignée rouge — art-src/spider_red.png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/spider_red.pack.json
-  // (16 cases de 64×55, cycle de marche ; regarde vers la GAUCHE). Même surface à l'écran que l'ancien slime kamikaze (plus plate).
+  // Kamikaze : boule orange à pattes (`kamikaze`).
+  // art-src/kamikaze_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/kamikaze.pack.json — 9 cases de 65×51, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/spider_red.png',
-    frameWidth: 64,
-    frameHeight: 55,
+    url: 'aliens/kamikaze.png',
+    frameWidth: 65,
+    frameHeight: 51,
     sprites: {
       alien_kamikaze: {
-        originX: 0.4873,
-        originY: 1.6505,
+        originX: 0.481,
+        originY: 0.914,
         scale: 1.63,
-        shadow: 1.95,
-        anchors: { 'walk:right': [0.498, 0.635], 'walk:left': [0.5015, 0.6375], 'idle:right': [0.497, 0.635], 'idle:left': [0.4966, 0.6325] },
+        shadow: 2.35,
+        anchors: { 'walk:right': [0.4906, 0.7764], 'walk:left': [0.5015, 0.7764], 'idle:right': [0.482, 0.635], 'idle:left': [0.4966, 0.6325] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 8 },
-          walk: { frames: range(0, 15), fps: 16 },
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 16 },
         },
       },
     },
   },
-  // Grenouille — planche du slime recolorée en turquoise (node tools/hue-shift.mjs … slime_teal.png 60).
+  // Canon rose (`toad`).
+  // art-src/toad_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/toad.pack.json — 9 cases de 66×49, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_teal.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/toad.png',
+    frameWidth: 66,
+    frameHeight: 49,
     sprites: {
       alien_toad: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.95,
-        shadow: 1.35,
-        anchors: { 'idle:left': [0.4902, 0.8965], 'idle:right': [0.4934, 0.8836] },
+        originX: 0.502,
+        originY: 0.931,
+        scale: 2.21,
+        shadow: 3,
+        anchors: { 'walk:right': [0.4944, 0.8187], 'walk:left': [0.498, 0.8187] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
-  // Cracheur — planche du slime recolorée en violet (node tools/hue-shift.mjs … slime_purple.png 180).
+  // Cracheur : scorpion magenta (`spitter`).
+  // art-src/spitter_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/spitter.pack.json — 9 cases de 63×54, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_purple.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/spitter.png',
+    frameWidth: 63,
+    frameHeight: 54,
     sprites: {
       alien_spitter: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.95,
-        shadow: 1.2,
-        anchors: { 'idle:left': [0.4806, 0.8965], 'idle:right': [0.4902, 0.89] },
+        originX: 0.509,
+        originY: 0.915,
+        scale: 2.24,
+        shadow: 2.7,
+        anchors: { 'walk:right': [0.4541, 0.8053], 'walk:left': [0.4988, 0.8053] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
-  // Chaman — planche du slime recolorée en jaune (node tools/hue-shift.mjs … slime_yellow.png 310).
+  // Lanceur de cailloux : golem de pierre (`wall`).
+  // art-src/wall_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/wall.pack.json — 9 cases de 61×45, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_yellow.png',
-    frameWidth: 64,
-    frameHeight: 64,
-    sprites: {
-      alien_shaman: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 1,
-        shadow: 1.25,
-        anchors: { 'idle:right': [0.4885, 0.896], 'idle:left': [0.4823, 0.8929] },
-        facesLeft: true,
-        anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
-        },
-      },
-    },
-  },
-  // Lanceur de cailloux — planche du slime recolorée en brun (node tools/hue-shift.mjs … slime_brown.png 285 0.4).
-  {
-    type: 'sheet',
-    url: 'aliens/slime_brown.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/wall.png',
+    frameWidth: 61,
+    frameHeight: 45,
     sprites: {
       alien_wall: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.95,
-        shadow: 1.3,
-        anchors: { 'idle:right': [0.4967, 0.8739], 'idle:left': [0.4967, 0.89] },
+        originX: 0.458,
+        originY: 0.917,
+        scale: 2.55,
+        shadow: 3,
+        anchors: { 'walk:right': [0.5007, 0.8013], 'walk:left': [0.5136, 0.8013] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 6 },
-          walk: { frames: range(0, 15), fps: 12 },
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
   },
-  // Slime de feu — planche du slime recolorée en rouge-orangé (node tools/hue-shift.mjs … slime_red.png 275 1.15).
+  // Araignée de lave (`burner`, laisse une traînée de feu).
+  // art-src/burner_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/burner.pack.json — 9 cases de 65×47, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',
-    url: 'aliens/slime_red.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    url: 'aliens/burner.png',
+    frameWidth: 65,
+    frameHeight: 47,
     sprites: {
-      alien_fire: {
-        originX: 0.516,
-        originY: 0.948,
-        scale: 0.9,
-        shadow: 1.3,
-        anchors: { 'idle:right': [0.4956, 0.9004], 'idle:left': [0.5058, 0.9004] },
+      alien_burner: {
+        originX: 0.616,
+        originY: 0.907,
+        scale: 1.95,
+        shadow: 2.5,
+        anchors: { 'walk:right': [0.5026, 0.6536], 'walk:left': [0.4974, 0.6536] },
         facesLeft: true,
         anims: {
-          idle: { frames: range(0, 15), fps: 7 },
-          walk: { frames: range(0, 15), fps: 14 },
+          idle: { frames: range(0, 8), fps: 7 },
+          walk: { frames: range(0, 8), fps: 14 },
+        },
+      },
+    },
+  },
+  // Lurker : crabe à pics d'os (`lurker`, s'enterre et lance des pics).
+  // art-src/lurker_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/lurker.pack.json — 9 cases de 61×43, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/lurker.png',
+    frameWidth: 61,
+    frameHeight: 43,
+    sprites: {
+      alien_lurker: {
+        originX: 0.453,
+        originY: 0.885,
+        scale: 1.92,
+        shadow: 2.15,
+        anchors: { 'walk:right': [0.497, 0.7275], 'walk:left': [0.5014, 0.7275] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 12 },
+        },
+      },
+    },
+  },
+  // Bulle : méduse flottante (`bubble`, capture un soldat) ; originY relevé : elle flotte au-dessus de son ombre.
+  // art-src/bubble_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/bubble.pack.json — 9 cases de 64×69, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/bubble.png',
+    frameWidth: 64,
+    frameHeight: 69,
+    sprites: {
+      alien_bubble: {
+        originX: 0.467,
+        originY: 1.057,
+        scale: 1.59,
+        shadow: 1.75,
+        anchors: { 'walk:right': [0.4593, 0.7642], 'walk:left': [0.533, 0.7642] },
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 10 },
+        },
+      },
+    },
+  },
+  // Scarab (mini-boss de 5:00).
+  // art-src/boss_scarab_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/boss_scarab.pack.json — 9 cases de 138×114, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/boss_scarab.png',
+    frameWidth: 138,
+    frameHeight: 114,
+    sprites: {
+      alien_boss_scarab: {
+        originX: 0.551,
+        originY: 0.933,
+        scale: 1.7,
+        shadow: 1.25,
+        anchors: { 'walk:right': [0.4897, 0.7276], 'walk:left': [0.5056, 0.7276] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 12 },
+        },
+      },
+    },
+  },
+  // Chaman : crustacé violet (`shaman`, ressuscite les slimes).
+  // art-src/shaman_walk.png (grille 3×3, option flipX : planche retournée en X) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/shaman.pack.json — 9 cases de 64×49, cycle de marche ; idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/shaman.png',
+    frameWidth: 64,
+    frameHeight: 49,
+    sprites: {
+      alien_shaman: {
+        originX: 0.525,
+        originY: 0.918,
+        scale: 1.83,
+        shadow: 2.2,
+        anchors: { 'walk:right': [0.4778, 0.7823], 'walk:left': [0.5033, 0.7823] },
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 12 },
         },
       },
     },
@@ -324,7 +381,7 @@ export const ASSETS: AssetEntry[] = [
         scale: 1.25,
         muzzleFlash: true,
         muzzle: [0.8561, 0.6376],
-        anchors: { 'idle:right': [0.3515, 0.8886], 'idle:left': [0.6463, 0.8822], 'walk:left': [0.6514, 0.9107], 'walk:right': [0.339, 0.9147] },
+        anchors: { 'idle:right': [0.3515, 0.8854], 'idle:left': [0.6463, 0.8854], 'walk:left': [0.6514, 0.9127], 'walk:right': [0.339, 0.9127] },
         muzzles: {
           idle: [[0.8968, 0.4058], [0.9055, 0.3908], [0.9026, 0.3983], [0.9055, 0.4134], [0.9143, 0.4171], [0.9143, 0.4397], [0.9202, 0.4397], [0.9289, 0.4435], [0.9231, 0.4397], [0.926, 0.4284], [0.926, 0.4134], [0.9231, 0.4021], [0.9062, 0.3983], [0.9143, 0.3908], [0.9085, 0.3832], [0.9114, 0.3908]],
           walk: [[0.9026, 0.4209], [0.9026, 0.4284], [0.9026, 0.4548], [0.9026, 0.436], [0.9026, 0.4171], [0.9114, 0.4247], [0.9085, 0.4322], [0.9114, 0.4171], [0.9055, 0.4134], [0.9026, 0.4322], [0.9055, 0.4548], [0.9114, 0.4209], [0.9085, 0.3945], [0.9114, 0.3983], [0.9085, 0.4171], [0.9143, 0.4209]],

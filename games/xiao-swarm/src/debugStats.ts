@@ -102,6 +102,11 @@ export function loadStatOverrides(): void {
   } catch {
     overrides = {};
   }
+  // ids d'aliens renommés (shoot → shooter, fire → burner) : réglages mémorisés repris sous les nouveaux ids
+  for (const [from, to] of [['alien:shoot', 'alien:shooter'], ['alien:fire', 'alien:burner']]) {
+    if (overrides[from]) overrides[to] = overrides[from];
+    delete overrides[from];
+  }
   for (const [key, values] of Object.entries(overrides)) {
     const [kind, id] = key.split(':') as [StatKind, string];
     if (!defs(kind)?.[id]) continue;

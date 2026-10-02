@@ -18,6 +18,11 @@
 // jambes) sont posés au même point dans toutes les planches. Les autres frames gardent leur position relative
 // (la marche ne « tremble » donc pas, et un personnage qui tombe reste où il tombe).
 //
+// Option par planche : "cleanShadow": true retire l'ombre portée brune/sombre peinte sous le personnage (le jeu dessine la sienne) :
+// pixels sombres et chauds (rouge > bleu) reliés au fond transparent ; le contour du personnage, lui, est froid ou coloré.
+//
+// Option par planche : "flipX": true retourne chaque frame horizontalement (planche dessinée à l'envers en X).
+//
 // Sortie : le PNG (planches empilées, `cols` colonnes) et un .json à côté (taille de case, ancrage des pieds,
 // première frame et nombre de frames de chaque animation) pour écrire l'entrée du manifeste d'assets.
 import fs from 'node:fs';
@@ -34,12 +39,50 @@ const dir = path.dirname(configPath);
 const scale = cfg.scale ?? 1;
 const ALPHA = 40;
 
+/** Retourne horizontalement chaque case de la grille (miroir dans la case, pas de la planche entière). */
+function flipCells(png, cols, rows) {
+  const cw = Math.floor(png.width / cols);
+  const ch = Math.floor(png.height / rows);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      for (let y = 0; y < ch; y++)
+        for (let x = 0; x < cw >> 1; x++) {
+          const a = ((r * ch + y) * png.width + c * cw + x) * 4;
+          const b = ((r * ch + y) * png.width + c * cw + (cw - 1 - x)) * 4;
+          for (let k = 0; k < 4; k++) [png.data[a + k], png.data[b + k]] = [png.data[b + k], png.data[a + k]];
+        }
+}
+
+/** Retire l'ombre au sol : pixels sombres à dominante chaude, reliés (4-voisins) au fond transparent. */
+function removeShadow(png) {
+  const { width: W, height: H, data: d } = png;
+  const seen = new Uint8Array(W * H);
+  const stack = [];
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] < 24) { seen[y * W + x] = 1; stack.push(x, y); }
+  const isShadow = (i) => d[i + 3] > 0 && d[i] > d[i + 2] + 3 && 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 120;
+  while (stack.length) {
+    const y = stack.pop();
+    const x = stack.pop();
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[ny * W + nx]) continue;
+      const i = (ny * W + nx) * 4;
+      if (!isShadow(i)) continue;
+      seen[ny * W + nx] = 1;
+      d[i + 3] = 0;
+      stack.push(nx, ny);
+    }
+  }
+}
+
 // ---------- 1. Lecture des planches et mesure des pieds ----------
 const sheets = cfg.sheets.map((s) => {
   const png = PNG.sync.read(fs.readFileSync(path.resolve(dir, s.input)));
   const cw = Math.floor(png.width / s.cols);
   const ch = Math.floor(png.height / s.rows);
   const ref = s.ref ?? 0;
+  if (s.cleanShadow) removeShadow(png);
+  if (s.flipX) flipCells(png, s.cols, s.rows);
   const rx = (ref % s.cols) * cw;
   const ry = Math.floor(ref / s.cols) * ch;
   let bottom = -1;

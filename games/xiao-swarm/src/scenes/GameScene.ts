@@ -5,12 +5,14 @@ import type { SoldierClassId } from '../data/classes';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
-import { CheatPanel } from '../dev/cheatPanel';
+import { BotOverlay } from '../dev/botOverlay';
+import { CheatPanel, type BotControl } from '../dev/cheatPanel';
 import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
 import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
+import { HostSession } from '../net/HostSession';
 import { LocalSession, type Session } from '../net/Session';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
@@ -34,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   private debug?: DebugOverlay;
   private crowdPanel?: CrowdPanel;
   private cheatPanel?: CheatPanel;
+  private botOverlay?: BotOverlay;
   /** Vitesse de la simulation (panneau Triche, dev) : 1 = normale, 0 = figée. */
   private timeScale = 1;
   private revived = false;
@@ -137,6 +140,7 @@ export class GameScene extends Phaser.Scene {
     this.view.render(running ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
+    this.botOverlay?.update();
     this.debug?.set('tick', sim.tick);
     this.debug?.set('squads', sim.aliveSquads.length);
     this.debug?.set('soldiers', this.localSquad.size);
@@ -377,6 +381,18 @@ export class GameScene extends Phaser.Scene {
     return !!this.debug;
   }
 
+  /** Coéquipiers IA : disponibles pour l'hôte d'une partie coop (panneau Triche, dev). */
+  private botControl(): BotControl | undefined {
+    const s = this.session;
+    if (!(s instanceof HostSession)) return undefined;
+    return {
+      list: () => [...s.bots].map(([id, b]) => ({ id, level: b.level })),
+      add: (level) => s.addBot(level) !== null,
+      remove: (id) => s.removeBot(id),
+      setLevel: (id, level) => s.bots.get(id)?.setLevel(level),
+    };
+  }
+
   private setupDebug(): void {
     if (!import.meta.env.DEV) return; // menu Réglages, panneaux Foule / Triche : dev uniquement
     this.debug = DebugOverlay.create(this, { title: 'Réglages', onMenuToggle: (open, menu) => setDocked(menu, open) });
@@ -400,6 +416,7 @@ export class GameScene extends Phaser.Scene {
     const onOff = (label: string, hint: string, get: () => boolean, set: (v: boolean) => void): void =>
       dbg.slider(label, { min: 0, max: 1, step: 1, hint, get: () => (get() ? 1 : 0), set: (v) => set(v >= 0.5) });
     onOff('Compteur FPS (0/1)', "1 = affiché en haut à gauche. Sans menu (téléphone) : ?fps=0 / ?fps=1 dans l'URL.", () => settings.showFps, (v) => settings.setShowFps(v));
+    onOff('Déformation écran (0/1)', "1 = onde de choc qui déforme l'écran à la montée de niveau (filtre plein écran). Sans menu : ?shock=0 / ?shock=1 dans l'URL.", () => settings.shockwave, (v) => settings.setShockwave(v));
     onOff('Fond étoilé (0/1)', "0 = fond noir uni, bien plus léger sur mobile. Sans menu (téléphone) : ?space=0 / ?space=1 dans l'URL.", () => settings.starfield, (v) => settings.setStarfield(v));
     addVisualMenu(this.debug);
     // Panneaux dédiés (boutons du HUD) : mouvement de foule, et triche / tests (hors ligne seulement).
@@ -411,6 +428,8 @@ export class GameScene extends Phaser.Scene {
       squad: () => this.localSquad,
       getTimeScale: () => this.timeScale,
       setTimeScale: (v) => (this.timeScale = v),
+      bots: this.botControl(),
     });
+    if (this.session instanceof HostSession) this.botOverlay = new BotOverlay(this, this.session);
   }
 }

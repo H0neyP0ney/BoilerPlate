@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
+import { BOT_LEVEL_IDS, MAX_BOTS, type BotLevel } from '../data/bots';
 import { WAVE_LEVELS } from '../data/waves';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import type { SoldierState } from '../sim/entities';
@@ -7,6 +8,14 @@ import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
 import type { PlayerId } from '../sim/types';
 import { button, checkbox, floatingPanel, heading, line, note, select, slider, type FloatingPanel } from './devUi';
+
+/** Coéquipiers IA du coop (fournis par la session hôte). */
+export interface BotControl {
+  list(): { id: PlayerId; level: BotLevel }[];
+  add(level: BotLevel): boolean;
+  remove(id: PlayerId): void;
+  setLevel(id: PlayerId, level: BotLevel): void;
+}
 
 /** Ce dont le panneau a besoin du jeu (fourni par GameScene). */
 export interface CheatHost {
@@ -17,6 +26,8 @@ export interface CheatHost {
   /** Vitesse de la simulation (1 = normale, 0 = figée). */
   getTimeScale(): number;
   setTimeScale(v: number): void;
+  /** Hôte d'une partie coop : gestion des coéquipiers IA (seule section disponible en ligne). */
+  bots?: BotControl;
 }
 
 /**
@@ -45,6 +56,11 @@ export class CheatPanel {
     this.counts.style.cssText = 'font-size:12px;color:#ffd166';
     if (host.online) {
       this.panel.body.append(note("Indisponible en ligne : la simulation appartient à l'hôte."));
+      if (host.bots) {
+        this.buildBots(host.bots);
+        const timer = scene.time.addEvent({ delay: 250, loop: true, callback: () => this.refreshBots() });
+        scene.events.once('shutdown', () => timer.remove());
+      }
     } else {
       this.build();
       // l'invincibilité remet les PV au maximum à chaque image (pas de clignotement d'invulnérabilité)
@@ -64,7 +80,48 @@ export class CheatPanel {
 
   toggle(): void {
     this.panel.toggle();
+    this.botSig = '';
+    this.refreshBots();
     this.refreshCounts();
+  }
+
+  private readonly botList = document.createElement('div');
+  private botSig = '';
+
+  /** Section « Coéquipiers IA » : ajouter / retirer un bot, régler son niveau (standard / expert). */
+  private buildBots(bots: BotControl): void {
+    const level = select('Niveau du nouveau bot', BOT_LEVEL_IDS.map((l) => [l, l === 'expert' ? 'Expert' : 'Standard'] as [string, string]));
+    this.botList.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+    this.panel.body.append(
+      heading('Coéquipiers IA (coop)'),
+      level.row,
+      line(
+        button('+ Ajouter un bot', () => this.say(bots.add(level.select.value as BotLevel) ? 'Bot ajouté' : `Impossible (max ${MAX_BOTS} bots, ou partie pleine)`)),
+        button('Tout en Standard', () => bots.list().forEach((b) => bots.setLevel(b.id, 'standard'))),
+        button('Tout en Expert', () => bots.list().forEach((b) => bots.setLevel(b.id, 'expert'))),
+      ),
+      this.botList,
+      this.status,
+    );
+    this.refreshBots();
+  }
+
+  /** Une ligne par bot (niveau + bouton retirer), reconstruite seulement quand la liste change. */
+  private refreshBots(): void {
+    const bots = this.host.bots;
+    if (!bots || !this.panel.isOpen) return;
+    const list = bots.list();
+    const sig = list.map((b) => `${b.id}:${b.level}`).join(',');
+    if (sig === this.botSig) return;
+    this.botSig = sig;
+    this.botList.replaceChildren();
+    if (list.length === 0) this.botList.append(note('Aucun bot.'));
+    for (const b of list) {
+      const lvl = select('', BOT_LEVEL_IDS.map((l) => [l, l === 'expert' ? 'Expert' : 'Standard'] as [string, string]));
+      lvl.select.value = b.level;
+      lvl.select.onchange = () => bots.setLevel(b.id, lvl.select.value as BotLevel);
+      this.botList.append(line(b.id, lvl.row, button('Retirer', () => bots.remove(b.id))));
+    }
   }
 
   private giveXp(sim: Sim, amount: number): void {

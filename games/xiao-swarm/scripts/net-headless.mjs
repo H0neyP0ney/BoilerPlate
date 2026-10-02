@@ -117,6 +117,14 @@ try {
   await tick(client);
   await tick(client);
   check(hs.xp.orbs.length > 0 && Math.abs(client.sim.xp.orbs.length - hs.xp.orbs.length) <= 1, 'globes d\'XP reflétés chez le client', `${hs.xp.orbs.length} vs ${client.sim.xp.orbs.length}`);
+  // clignotement : l'hôte marque un globe dans ses dernières secondes, le client le reçoit marqué (identifiant stable compris)
+  const orbHost = hs.xp.orbs[0];
+  const orbId = orbHost.id & 0xffff;
+  orbHost.life = 2;
+  await tick(client);
+  await tick(client);
+  const orbClient = client.sim.xp.orbs.find((o) => o.id === orbId);
+  check(!!orbClient && orbClient.life < 5, 'globe en fin de vie : le clignotement est transmis au client', orbClient ? `life ${orbClient.life}` : 'globe introuvable');
   // XP partagée (coop) : une seule barre, seuil × nombre de joueurs ; un niveau = tous les joueurs montent et choisissent
   check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 2 joueurs)', `${a.xpNeeded}`);
   const levelBefore = a.level;

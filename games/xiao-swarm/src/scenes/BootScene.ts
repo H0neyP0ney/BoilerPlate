@@ -10,6 +10,8 @@ import { loadSpriteOverrides } from '../debugSprites';
 import { loadWaveOverrides } from '../debugWaves';
 import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
+import { loadStatOverrides } from '../debugStats';
+import { loadUpgradeOverrides } from '../debugUpgrades';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
 import { makeSoldierTextures } from '../art/soldiers';
@@ -62,6 +64,8 @@ export class BootScene extends Phaser.Scene {
     makeEnvironmentTextures(this);
     makeFxTextures(this);
     registerDefaultSprites();
+    if (import.meta.env.DEV) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
+    if (import.meta.env.DEV) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités
     if (import.meta.env.DEV) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
 
     poki.gameLoadingFinished();
@@ -76,6 +80,7 @@ export class BootScene extends Phaser.Scene {
     if (import.meta.env.DEV && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
     if (import.meta.env.DEV && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
     if (import.meta.env.DEV && poki.getURLParam('bonus') !== undefined) return void this.scene.start(SCENES.bonus);
+    if (import.meta.env.DEV && poki.getURLParam('upgrades') !== undefined) return void this.scene.start(SCENES.upgrades);
     if (import.meta.env.DEV && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
     if (import.meta.env.DEV && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
     const req = readOnlineRequest();

@@ -125,6 +125,15 @@ export const DEPTH = {
   bars: 60_000,
 } as const;
 
+/** Fond (RGB 0, 125, 125) de toutes les vues de dev : visionneuses, éditeurs de vagues et de carte. */
+export const VIEW_BG = 0x007d7d;
+
+/** Un globe d'XP clignote pendant ses dernières secondes de vie (l'hôte l'indique aux clients dans le snapshot). */
+export const ORB_BLINK_TIME = 5;
+
+/** Opacité de l'ombre portée sous les soldats et les aliens (jeu et visionneuse d'unités). */
+export const SHADOW_ALPHA = 0.8;
+
 export const PALETTE = {
   bgDark: 0x1b2a1f,
   panel: 0x13233a,
@@ -152,6 +161,7 @@ export const SCENES = {
   particles: 'Particles',
   misc: 'Misc',
   bonus: 'Bonus',
+  upgrades: 'Upgrades',
   waves: 'Waves',
   mapEditor: 'MapEditor',
   gameOver: 'GameOver',

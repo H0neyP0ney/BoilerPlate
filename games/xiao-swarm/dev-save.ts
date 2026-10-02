@@ -128,7 +128,7 @@ function saveNames(data: Record<string, Record<string, string>>): Result {
     }
     writeSrc(rel, src, JSON.stringify(json, null, 2) + '\n');
   }
-  return { ok: true, message: count ? `${count} nom(s) enregistré(s) dans locales/fr.json et en.json` : 'Aucun nom modifié à enregistrer' };
+  return { ok: true, message: count ? `${count} nom(s) enregistré(s) dans locales/en.json` : 'Aucun nom modifié à enregistrer' };
 }
 
 /** Remplace le bloc `marker ... };` (toute la déclaration) par `code`. */
@@ -250,6 +250,67 @@ function saveSprite(id: string, props: SpriteProps): Result {
   return { ok: true, message: `${id} enregistré dans ${rel}` };
 }
 
+// --- statistiques des unités (data/aliens.ts, data/classes.ts)
+
+/** Remplace le nombre de `parts` (chemin pointé découpé) dans `text` ; `top` = propriété de l'unité elle-même (indentée de 4 espaces). */
+function patchPath(text: string, parts: string[], value: number, top: boolean): string | null {
+  const key = parts[0];
+  if (parts.length === 1) {
+    if (top) {
+      const re = new RegExp(String.raw`(\n[ \t]{4}${key}\s*:\s*)(-?\d+(?:\.\d+)?(?:e[-+]?\d+)?)`);
+      if (!re.test(text)) return null;
+      return text.replace(re, (_, head: string) => head + fmtNumber(value));
+    }
+    const r = patchNumbers(text, { [key]: value });
+    return r.missing.length ? null : r.text;
+  }
+  const b = blockAfter(text, new RegExp(String.raw`\b${key}\s*:\s*\{`));
+  if (!b) return null;
+  const inner = patchPath(text.slice(b[0], b[1] + 1), parts.slice(1), value, false);
+  return inner === null ? null : text.slice(0, b[0]) + inner + text.slice(b[1] + 1);
+}
+
+function saveStats(kind: string, id: string, values: Record<string, number>): Result {
+  if (!/^[a-z_]+$/.test(id)) return { ok: false, message: `Id invalide : ${id}` };
+  const rel = kind === 'alien' ? 'data/aliens.ts' : 'data/classes.ts';
+  const src = readSrc(rel);
+  const m = new RegExp(String.raw`^  ${id}: \{`, 'm').exec(src);
+  if (!m) return { ok: false, message: `${id} introuvable dans ${rel}` };
+  const open = m.index + m[0].length - 1;
+  const close = matchingBrace(src, open);
+  if (close < 0) return { ok: false, message: `${id} : accolade non fermée dans ${rel}` };
+  let block = src.slice(open, close + 1);
+  const missing: string[] = [];
+  for (const [path, v] of Object.entries(values)) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const next = patchPath(block, path.split('.'), v, true);
+    if (next === null) missing.push(path);
+    else block = next;
+  }
+  writeSrc(rel, src, src.slice(0, open) + block + src.slice(close + 1));
+  return { ok: true, message: `Stats de ${id} enregistrées dans ${rel}${missing.length ? ` (introuvables dans le code : ${missing.join(', ')})` : ''}` };
+}
+
+/** Upgrade (data/progression.ts) : ligne `id: { ..., mod: { pct }, maxStacks, value, ... }` ; seuls les nombres sont réécrits. */
+function saveUpgrade(id: string, d: { value: number; maxStacks: number; pct?: number; flat?: number }): Result {
+  if (!/^[A-Za-z]+$/.test(id)) return { ok: false, message: `Id invalide : ${id}` };
+  const rel = 'data/progression.ts';
+  const src = readSrc(rel);
+  const m = new RegExp(String.raw`^  ${id}: \{`, 'm').exec(src);
+  if (!m) return { ok: false, message: `${id} introuvable dans ${rel}` };
+  const open = m.index + m[0].length - 1;
+  const close = matchingBrace(src, open);
+  if (close < 0) return { ok: false, message: `${id} : accolade non fermée dans ${rel}` };
+  let block = src.slice(open, close + 1);
+  for (const [path, v] of [['maxStacks', d.maxStacks], ['value', d.value], ['mod.pct', d.pct], ['mod.flat', d.flat]] as [string, number | undefined][]) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const next = patchPath(block, path.split('.'), v, false);
+    if (next !== null) block = next;
+  }
+  writeSrc(rel, src, src.slice(0, open) + block + src.slice(close + 1));
+  return { ok: true, message: `Upgrade ${id} enregistrée dans ${rel}` };
+}
+
 // ---------- Routage ----------
 
 function handle(target: string, data: any): Result {
@@ -270,6 +331,10 @@ function handle(target: string, data: any): Result {
       return saveObstacle(String(data.id), String(data.code));
     case 'sprite':
       return saveSprite(String(data.id), data.props as SpriteProps);
+    case 'upgrades':
+      return saveUpgrade(String(data.id), data);
+    case 'stats':
+      return saveStats(String(data.kind), String(data.id), data.values as Record<string, number>);
     default:
       return { ok: false, message: `Cible inconnue : ${target}` };
   }

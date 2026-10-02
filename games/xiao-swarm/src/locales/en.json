@@ -1,6 +1,6 @@
 {
   "hintDrag": "Drag to move your squad",
-  "hintKeys": "Arrows / WASD to move your squad",
+  "hintKeys": "Move your squad",
   "wave": "Wave {value}",
   "kills": "{value} kills",
   "squad": "Squad {value}/{max}",
@@ -40,7 +40,7 @@
   "respawning": "Respawning…",
   "levelUpTitle": "Level {level}!",
   "chooseUpgrade": "Choose an upgrade",
-  "xpLevel": "Lv. {value}",
+  "xpLevel": "Level {value}",
   "upgradeCount": "{value}/{max}",
   "up_damage": "Heavy rounds",
   "up_damage_desc": "Damage +{value}%",

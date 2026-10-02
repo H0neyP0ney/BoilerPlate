@@ -3,7 +3,7 @@ import { clamp } from '@xiao/engine';
 import { MAP_ZONES, type ObstacleZone } from '../data/mapZones';
 import { JUNGLE_SIZE, makeJungleMap } from '../data/maps';
 import { OBSTACLES } from '../data/obstacles';
-import { SCENES, VISUAL } from '../config';
+import { SCENES, VISUAL, VIEW_BG } from '../config';
 import { button, checkbox, header, line, note, panel, title } from '../dev/devUi';
 import { mapZonesSnippet, persistMapZones, resetMapZones, saveMapZonesToCode } from '../debugMapZones';
 
@@ -47,7 +47,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   create(): void {
     const cam = this.cameras.main;
-    cam.setBackgroundColor(0x0c0a10);
+    cam.setBackgroundColor(VIEW_BG);
     this.input.mouse?.disableContextMenu();
     this.drawMap();
     this.hitG = this.add.graphics().setDepth(4000);

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { clamp, sprites } from '@xiao/engine';
 import { OBSTACLES, OBSTACLE_IDS, STAIN_IDS, type HitCircle, type ObstacleId, type StainDef, type StainId } from '../data/obstacles';
-import { SCENES, VISUAL } from '../config';
+import { SCENES, VISUAL, VIEW_BG } from '../config';
 import { header } from '../dev/devUi';
 import { obstacleSnippet, resetObstacle, saveObstacleToCode, setObstacle } from '../debugObstacles';
 
@@ -50,7 +50,7 @@ export class ObstacleEditorScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x2b3a2e);
+    this.cameras.main.setBackgroundColor(VIEW_BG);
     this.drawGrid();
     this.sprite = this.add.image(0, 0, OBSTACLE_IDS[0]).setDepth(1);
     this.overlay = this.add.graphics().setDepth(10);

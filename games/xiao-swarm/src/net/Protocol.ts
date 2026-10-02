@@ -1,4 +1,4 @@
-import { REVIVE_TIME } from '../config';
+import { ORB_BLINK_TIME, REVIVE_TIME } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { UPGRADE_IDS } from '../data/progression';
@@ -8,7 +8,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 22;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -146,7 +146,9 @@ export interface Snapshot {
   recruits: RecruitSnap[];
   projectiles: ProjectileSnap[];
   /** Globes d'XP au sol. */
-  orbs: { x: number; y: number; value: number }[];
+  /** `id` : identifiant stable (modulo 65536) du globe, pour que sa teinte ne change pas chez le client quand d'autres globes disparaissent. */
+  /** `blink` : le globe est dans ses dernières secondes de vie (il clignote ; codé dans le bit de poids fort de l'octet de valeur). */
+  orbs: { id: number; x: number; y: number; value: number; blink: boolean }[];
   /** Coop : zones de réanimation (progression 0 → 1). */
   zones: { owner: PlayerId; x: number; y: number; r: number; progress: number }[];
   /** Flaques de crachat (id, position, rayon, durée restante, facteur de vitesse) et cailloux posés (l'affichage se cale dessus). */
@@ -244,7 +246,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       flight: p.maxLife,
       alien: p.team === 'aliens',
     })),
-    orbs: sim.xp.orbs.map((o) => ({ x: o.x, y: o.y, value: o.value })),
+    orbs: sim.xp.orbs.map((o) => ({ id: o.id & 0xffff, x: o.x, y: o.y, value: o.value, blink: o.life < ORB_BLINK_TIME })),
     powerups: sim.powerups.items.map((p) => ({ id: p.id, kind: p.kind, x: p.x, y: p.y, life: p.life })),
     fields: sim.powerups.fields.map((f) => ({ id: f.id, kind: f.kind, x: f.x, y: f.y, r: f.r, ttl: f.ttl })),
     puddles: sim.puddles.map((p) => ({ id: p.id, x: p.x, y: p.y, r: p.r, ttl: p.ttl, slow: p.slow })),
@@ -448,9 +450,10 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
 
   w.u16(s.orbs.length);
   for (const o of s.orbs) {
+    w.u16(o.id);
     w.f32(o.x);
     w.f32(o.y);
-    w.u8(o.value);
+    w.u8((Math.min(127, o.value) & 0x7f) | (o.blink ? 0x80 : 0)); // valeur ≤ 127 (borné), bit 7 = clignote
   }
 
   w.u8(s.zones.length);
@@ -626,7 +629,13 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     }
 
     const nOrbs = r.u16();
-    for (let i = 0; i < nOrbs; i++) snap.orbs.push({ x: r.f32(), y: r.f32(), value: r.u8() });
+    for (let i = 0; i < nOrbs; i++) {
+      const id = r.u16();
+      const x = r.f32();
+      const y = r.f32();
+      const v = r.u8();
+      snap.orbs.push({ id, x, y, value: v & 0x7f, blink: (v & 0x80) !== 0 });
+    }
 
     const nZones = r.u8();
     for (let i = 0; i < nZones; i++) snap.zones.push({ owner: r.str(), x: r.f32(), y: r.f32(), r: r.u16(), progress: r.u8() / 255 });

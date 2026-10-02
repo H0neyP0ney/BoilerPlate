@@ -1,9 +1,9 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, REVIVE_TIME, SQUAD } from '../config';
+import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
-import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
+import type { AlienState, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
@@ -45,6 +45,8 @@ export class Mirror {
   private readonly soldiers = new Map<number, SoldierState>();
   private readonly aliens = new Map<number, AlienState>();
   private readonly recruits = new Map<number, RecruitState>();
+  /** Globes d'XP persistants (par id) : lissés vers leur position hôte comme les recrues, au lieu de sauter à chaque snapshot. */
+  private readonly orbs = new Map<number, XpOrb>();
   private readonly goals = new WeakMap<object, Goal>();
 
   readonly predictor = new AnchorPredictor();
@@ -111,8 +113,13 @@ export class Mirror {
     }
     prune(this.recruits, seenRecruits);
 
+    const seenOrbs = new Set<number>();
     sim.xp.orbs.length = 0;
-    snap.orbs.forEach((o, i) => sim.xp.orbs.push({ id: i, x: o.x, y: o.y, px: o.x, py: o.y, value: o.value, life: 10 }));
+    for (const o of snap.orbs) {
+      seenOrbs.add(o.id);
+      sim.xp.orbs.push(this.upsertOrb(o));
+    }
+    prune(this.orbs, seenOrbs);
 
     sim.reviveZones.length = 0;
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
@@ -151,13 +158,36 @@ export class Mirror {
       }
       if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
     }
-    for (const a of sim.aliens) this.follow(a, dt);
+    for (const a of sim.aliens) {
+      this.follow(a, dt);
+      // compteurs de télégraphes : la sim hôte les décompte à chaque tick, on fait pareil entre deux snapshots (sinon ils avancent par paliers de 66 ms)
+      if (a.slamWind > 0) a.slamWind = Math.max(0, a.slamWind - dt);
+      if (a.rushWind > 0) a.rushWind = Math.max(0, a.rushWind - dt); // négatif après la charge : on n'y touche pas
+      if (a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt);
+      if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
+      if (a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
+    }
+    // éléments au sol à durée décroissante (la disparition réelle vient du snapshot : on s'arrête à 0, jamais en dessous)
+    const tick = (o: { ttl: number }): void => {
+      if (o.ttl > 0) o.ttl = Math.max(0, o.ttl - dt);
+    };
+    for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // télégraphe d'un mur : `t` décompte jusqu'à l'apparition des rochers
+    for (const p of sim.puddles) tick(p);
+    for (const k of sim.arena.rocks) tick(k);
+    for (const f of sim.powerups.fields) tick(f);
+    for (const p of sim.powerups.items) if (p.life > 0) p.life = Math.max(0, p.life - dt);
     for (const r of sim.recruits.items) {
       r.px = r.x;
       r.py = r.y;
       r.life -= dt;
       const g = this.goals.get(r);
       if (g) this.approach(r, g);
+    }
+    for (const o of sim.xp.orbs) {
+      o.px = o.x;
+      o.py = o.y;
+      const g = this.goals.get(o);
+      if (g) this.approach(o, g); // un globe attiré par un soldat glisse vers sa nouvelle position au lieu de sauter à la cadence des snapshots
     }
     for (const p of sim.combat.projectiles.active) {
       p.px = p.x;
@@ -299,6 +329,18 @@ export class Mirror {
     s.lurkT = a.lurkT;
     s.spikeAng = a.spikeAng;
     this.setGoal(s, a.x, a.y);
+    return s;
+  }
+
+  private upsertOrb(o: { id: number; x: number; y: number; value: number; blink: boolean }): XpOrb {
+    let s = this.orbs.get(o.id);
+    if (!s) {
+      s = { id: o.id, x: o.x, y: o.y, px: o.x, py: o.y, value: o.value, life: 10 };
+      this.orbs.set(o.id, s);
+    }
+    s.value = o.value;
+    s.life = o.blink ? ORB_BLINK_TIME / 2 : ORB_BLINK_TIME * 2; // seul compte « sous le seuil de clignotement ou non » : l'hôte le décide
+    this.goals.set(s, { x: o.x, y: o.y });
     return s;
   }
 

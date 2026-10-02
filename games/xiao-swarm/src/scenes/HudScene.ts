@@ -103,7 +103,7 @@ export class HudScene extends Phaser.Scene {
     this.xpBar = this.add.graphics();
     this.xpLabel = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
-      .setOrigin(1, 0.5); // « Niv. X » à gauche de la jauge
+      .setOrigin(0.5, 1); // « Niv. X » centré au-dessus de la jauge
     this.bossBanner = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '44px', fontStyle: 'bold', color: '#ff6a4a', stroke: '#2a0a08', strokeThickness: 8, align: 'center' })
       .setOrigin(0.5)
@@ -360,7 +360,7 @@ export class HudScene extends Phaser.Scene {
     this.xpBar.fillStyle(0x0a1422, 0.75).fillRoundedRect(x, y - 9, w, 18, 9);
     if (ratio > 0) this.xpBar.fillStyle(0x4aa8ff, 1).fillRoundedRect(x + 2, y - 7, Math.max(14, (w - 4) * ratio), 14, 7);
     this.xpBar.lineStyle(2, 0xffffff, 0.35).strokeRoundedRect(x, y - 9, w, 18, 9);
-    this.xpLabel.setText(t('xpLevel', { value: squad.level })).setPosition(x - 8, y);
+    this.xpLabel.setText(t('xpLevel', { value: squad.level })).setPosition(x + w / 2, y - 12);
   }
 
   /** Bouton « curseurs » en haut à gauche : ouvre / ferme le menu Réglages (zoom du jeu, visuel, stats). */
@@ -452,34 +452,35 @@ export class HudScene extends Phaser.Scene {
     this.iconState = `${settings.sfxVolume > 0}|${settings.musicVolume > 0}`;
   }
 
-  /** Réglette horizontale à 10 graduations (gauche = coupé, droite = plein volume), à droite de son bouton. */
+  /** Réglette verticale à 10 graduations (haut = plein volume, bas = coupé), qui s'ouvre sous son bouton (origine = coin haut gauche). */
   private makeVolumeSlider(get: () => number, set: (v: number) => void): Phaser.GameObjects.Container {
-    const STEP_W = 24;
-    const trackW = MUSIC_STEPS * STEP_W;
-    const W = trackW + 44;
+    const STEP_H = 22;
+    const trackH = MUSIC_STEPS * STEP_H;
+    const W = 44;
+    const H = trackH + 44;
     const c = this.add.container(0, 0).setVisible(false);
     const g = this.add.graphics();
     const draw = () => {
       g.clear();
-      g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(0, -22, W, 44, 10);
-      g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(0, -22, W, 44, 10);
-      g.fillStyle(0xffffff, 0.35).fillRoundedRect(22, -2, trackW, 4, 2);
-      const x = 22 + (trackW * get()) / MUSIC_STEPS;
-      g.fillStyle(0xffffff, 1).fillRoundedRect(22, -2, x - 22, 4, 2);
+      g.fillStyle(PALETTE.panel, 0.92).fillRoundedRect(0, 0, W, H, 10);
+      g.lineStyle(2.5, PALETTE.panelBorder, 1).strokeRoundedRect(0, 0, W, H, 10);
+      g.fillStyle(0xffffff, 0.35).fillRoundedRect(W / 2 - 2, 22, 4, trackH, 2);
+      const y = 22 + (trackH * (MUSIC_STEPS - get())) / MUSIC_STEPS;
+      g.fillStyle(0xffffff, 1).fillRoundedRect(W / 2 - 2, y, 4, 22 + trackH - y, 2);
       for (let i = 0; i <= MUSIC_STEPS; i++) {
         const major = i % 5 === 0;
-        g.fillStyle(0xffffff, major ? 1 : 0.6).fillRect(22 + i * STEP_W - 1, major ? -14 : -9, 2, major ? 28 : 18);
+        g.fillStyle(0xffffff, major ? 1 : 0.6).fillRect(major ? 6 : 12, 22 + i * STEP_H - 1, major ? 32 : 20, 2);
       }
-      g.fillStyle(PALETTE.primary, 1).fillCircle(x, 0, 9).lineStyle(2, 0xffffff, 1).strokeCircle(x, 0, 9);
+      g.fillStyle(PALETTE.primary, 1).fillCircle(W / 2, y, 9).lineStyle(2, 0xffffff, 1).strokeCircle(W / 2, y, 9);
     };
     draw();
     const apply = (p: Phaser.Input.Pointer) => {
-      const v = Math.round(Phaser.Math.Clamp((p.x - c.x - 22) / trackW, 0, 1) * MUSIC_STEPS);
+      const v = MUSIC_STEPS - Math.round(Phaser.Math.Clamp((p.y - c.y - 22) / trackH, 0, 1) * MUSIC_STEPS);
       if (v === get()) return;
       set(v);
       draw();
     };
-    const hit = this.add.zone(0, -22, W, 44).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    const hit = this.add.zone(0, 0, W, H).setOrigin(0, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerdown', apply);
     hit.on('pointermove', (p: Phaser.Input.Pointer) => p.isDown && apply(p));
     c.add([g, hit]);
@@ -516,7 +517,22 @@ export class HudScene extends Phaser.Scene {
       c.add(hand);
       this.tweens.add({ targets: hand, x: 60, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     } else {
-      this.tweens.add({ targets: label, scale: 1.06, duration: 600, yoyo: true, repeat: -1 });
+      // clavier : vraies touches W / A S D dessinées (une touche s'enfonce à tour de rôle)
+      label.setY(96);
+      const caps: [string, number, number][] = [['W', 0, -26], ['A', -52, 26], ['S', 0, 26], ['D', 52, 26]];
+      caps.forEach(([letter, kx, ky], i) => {
+        const key = this.add.container(kx, ky);
+        const g = this.add.graphics();
+        g.fillStyle(0x0a1422, 0.55).fillRoundedRect(-24, -20, 48, 48, 9); // ombre
+        g.fillStyle(0x2a3a52, 1).fillRoundedRect(-24, -24, 48, 48, 9); // flanc de la touche
+        g.fillStyle(0xf2f5fa, 1).fillRoundedRect(-22, -24, 44, 42, 8); // dessus
+        g.lineStyle(2, 0x13233a, 1).strokeRoundedRect(-22, -24, 44, 42, 8);
+        const txt = this.add.text(0, -3, letter, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#13233a' }).setOrigin(0.5);
+        key.add([g, txt]);
+        c.add(key);
+        // à tour de rôle, la touche s'enfonce de quelques pixels
+        this.tweens.add({ targets: key, y: ky + 5, duration: 140, yoyo: true, delay: i * 320, hold: 80, repeatDelay: 1000 - 140 * 2 - 80 + 0, repeat: -1 });
+      });
     }
     return c;
   }
@@ -527,11 +543,11 @@ export class HudScene extends Phaser.Scene {
     const top = device.isTouch ? 70 : 12;
     // haut gauche : son, puis musique en dessous (sa réglette s'ouvre à droite) ; le code de salle se place à droite du bouton son
     this.soundBtn.setPosition(14 + 22, top + 22);
-    this.musicBtn.setPosition(14 + 22, top + 22 + 52);
-    this.soundSlider.setPosition(14 + 44 + 8, top + 22);
-    this.musicSlider.setPosition(14 + 44 + 8, top + 22 + 52);
-    this.roomText.setPosition(14 + 44 + 10, top + 10);
-    this.fpsText.setPosition(14, top + 44 + 8 + 44 + 8); // sous le bouton musique
+    this.musicBtn.setPosition(14 + 44 + 8 + 22, top + 22); // la musique juste à droite du son
+    this.soundSlider.setPosition(14, top + 52); // les réglettes s'ouvrent sous leur bouton
+    this.musicSlider.setPosition(14 + 44 + 8, top + 52);
+    this.roomText.setPosition(14 + 2 * (44 + 8) + 10, top + 10);
+    this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
     // boutons de dev en bas à gauche, alignés sur une ligne
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];

@@ -43,6 +43,26 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
   return scene.add.container(0, 0, [g, icon]);
 }
 
+/** Globe persistant au sol (soin ou stase) de rayon `r`, d'opacité `a` ; partagé avec la visionneuse de bonus. */
+export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis', x: number, y: number, r: number, a: number, time: number): void {
+  const beat = 0.5 + 0.5 * Math.sin(time * 4);
+  const col = kind === 'heal' ? 0x5dff84 : 0x6fd8ff;
+  g.fillStyle(col, (0.12 + 0.08 * beat) * a).fillEllipse(x, y, r * 2, r * 1.4);
+  g.lineStyle(3, col, (0.5 + 0.3 * beat) * a).strokeEllipse(x, y, r * 2, r * 1.4);
+  if (kind === 'stasis') g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(x, y, r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
+  else g.fillStyle(0xffffff, 0.2 * a).fillEllipse(x, y - 8 * beat, 26, 16);
+}
+
+/** Zone de réanimation (coop) de rayon `r` ; `k` = progression de la réanimation (0 → 1). */
+export function drawReviveZone(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, k: number, time: number): void {
+  const beat = 0.5 + 0.5 * Math.sin(time * 6); // pulsation 0 → 1
+  const rr = r * (1 + beat * 0.12);
+  g.fillStyle(0x3dff6a, 0.12 + 0.16 * beat + 0.12 * k).fillEllipse(x, y, rr * 2, rr * 1.4);
+  g.fillStyle(0x7dff9a, 0.2 + 0.25 * k).fillEllipse(x, y, r * 2 * k, r * 1.4 * k);
+  g.lineStyle(4, 0x8dffa8, 0.5 + 0.5 * beat).strokeEllipse(x, y, rr * 2, rr * 1.4);
+  g.lineStyle(2, 0xffffff, 0.25 + 0.3 * beat).strokeEllipse(x, y, r * 2 * 0.6, r * 1.4 * 0.6);
+}
+
 /**
  * Éléments posés au sol et pilotés par la simulation : power-ups, globes persistants (soin / stase), auras des bonus actifs, compteur « soldats / max » au
  * centre de chaque squad. Tout est recalé chaque frame sur l'état de la simulation (snapshot en ligne) : pas d'image orpheline.
@@ -173,13 +193,7 @@ export class PickupViews {
   /** Dessins au sol (globes de soin / stase, ombres et halos des bulles et power-ups, dôme de répulsion, auras). */
   drawGround(g: Phaser.GameObjects.Graphics, time: number): void {
     for (const f of this.sim.powerups.fields) {
-      const a = Math.min(1, f.ttl / 1.2);
-      const beat = 0.5 + 0.5 * Math.sin(time * 4);
-      const col = f.kind === 'heal' ? 0x5dff84 : 0x6fd8ff;
-      g.fillStyle(col, (0.12 + 0.08 * beat) * a).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
-      g.lineStyle(3, col, (0.5 + 0.3 * beat) * a).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
-      if (f.kind === 'stasis') g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(f.x, f.y, f.r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), f.r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
-      else g.fillStyle(0xffffff, 0.2 * a).fillEllipse(f.x, f.y - 8 * beat, 26, 16);
+      drawField(g, f.kind as 'heal' | 'stasis', f.x, f.y, f.r, Math.min(1, f.ttl / 1.2), time);
     }
     for (const p of this.sim.powerups.items) {
       const info = POWERUP_INFO[p.kind];

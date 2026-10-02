@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { sprites, theme } from '@xiao/engine';
 import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
-import { PALETTE, SCENES } from '../config';
+import { PALETTE, REVIVE_RADIUS, REVIVE_TIME, SCENES, VIEW_BG } from '../config';
 import { getName } from '../debugNames';
 import { header, note, panel } from '../dev/devUi';
-import { makePowerUpIcon, POWERUP_INFO } from '../view/PickupViews';
+import { ScaleRef } from '../dev/scaleRef';
+import { drawField, drawReviveZone, makePowerUpIcon, POWERUP_INFO } from '../view/PickupViews';
 import type { PowerUpKind } from '../sim/entities';
+import { ORB_SCALE, orbSize } from '../view/WorldView';
 
 /**
  * Visionneuse « bonus » (dev uniquement) : les bonus ramassés par les soldats — recrues (une par classe) et power-ups (stimpack, aimant,
@@ -21,19 +23,28 @@ interface Item {
   x: number;
   y: number;
   phase: number;
+  /** Décalage (monde) de l'étiquette sous l'élément. */
+  dy?: number;
 }
 
 export class BonusViewerScene extends Phaser.Scene {
   private panel?: HTMLDivElement;
   private items: Item[] = [];
+  /** Zones au sol (globes de soin / stase, réanimation) : redessinées à chaque frame (elles pulsent). */
+  private ground?: Phaser.GameObjects.Graphics;
+  private zones: { kind: 'heal' | 'stasis' | 'revive'; x: number; y: number }[] = [];
   private titles: { text: Phaser.GameObjects.Text; y: number }[] = [];
 
   constructor() {
     super(SCENES.bonus);
   }
 
+  /** Trooper de référence (échelle) + bouton pour le masquer. */
+  private scaleRef?: ScaleRef;
+
   create(): void {
-    this.cameras.main.setBackgroundColor(0x2b3a2e);
+    this.scaleRef = new ScaleRef(this);
+    this.cameras.main.setBackgroundColor(VIEW_BG);
     this.drawGrid();
     this.buildPanel();
     this.build();
@@ -42,14 +53,23 @@ export class BonusViewerScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fit);
       this.panel?.remove();
+      this.scaleRef?.destroy();
       this.items = [];
       this.titles = [];
     });
   }
 
   update(time: number): void {
+    this.scaleRef?.place();
     const t = time / 1000;
     for (const it of this.items) it.node.y = it.y + Math.sin(t * 3 + it.phase) * 4;
+    const g = this.ground;
+    if (!g) return;
+    g.clear();
+    for (const z of this.zones) {
+      if (z.kind === 'revive') drawReviveZone(g, z.x, z.y, REVIVE_RADIUS, (t % (REVIVE_TIME + 0.5)) / REVIVE_TIME > 1 ? 1 : (t % (REVIVE_TIME + 0.5)) / REVIVE_TIME, t);
+      else drawField(g, z.kind, z.x, z.y, 70, 1, t);
+    }
   }
 
   private label(x: number, y: number, text: string): Phaser.GameObjects.Text {
@@ -66,10 +86,14 @@ export class BonusViewerScene extends Phaser.Scene {
   private build(): void {
     const classes = Object.keys(CLASSES) as SoldierClassId[];
     const kinds = Object.keys(POWERUP_INFO) as PowerUpKind[];
-    const y0 = -ROW_GAP / 2;
-    const y1 = ROW_GAP / 2;
+    const y0 = -1.5 * ROW_GAP;
+    const y1 = -0.5 * ROW_GAP;
+    const y2 = 0.5 * ROW_GAP;
+    const y3 = 1.5 * ROW_GAP;
     this.sectionTitle(y0 - 70, 'Bonus recrue');
     this.sectionTitle(y1 - 70, 'Power-ups');
+    this.sectionTitle(y2 - 70, "Globes d'XP");
+    this.sectionTitle(y3 - 80, 'Zones au sol');
 
     classes.forEach((cls, c) => {
       const id = `recruit_${cls}`;
@@ -86,15 +110,40 @@ export class BonusViewerScene extends Phaser.Scene {
       const name = getName(`pu_${kind}`, 'en') || kind;
       this.items.push({ node: box, label: this.label(x, y1 + 40, `${name}\npu_${kind}`), x, y: y1, phase: c });
     });
+
+    // globes d'XP : trois tailles selon la valeur, comme WorldView.syncOrbs
+    const orbTex = this.textures.exists('xp_orb') ? 'xp_orb' : 'fx_xp';
+    const orbBase = orbTex === 'xp_orb' ? 32 / this.textures.get('xp_orb').getSourceImage().width : 1;
+    const orbs = [{ value: 1, name: 'Petit' }, { value: 3, name: 'Moyen' }, { value: 8, name: 'Gros' }];
+    orbs.forEach((o, c) => {
+      const x = (c - (orbs.length - 1) / 2) * COL_GAP;
+      const img = this.add.image(x, y2, orbTex).setScale(orbSize(o.value) * ORB_SCALE * orbBase);
+      this.items.push({ node: img, label: this.label(x, y2 + 40, `${o.name}
+xp_orb (valeur ${o.value})`), x, y: y2, phase: c });
+    });
+
+    // zones au sol : globes persistants (soin, stase) et zone de réanimation, dessinées comme en jeu (rayon réduit pour tenir dans la grille)
+    this.ground = this.add.graphics();
+    const zones = [
+      { kind: 'heal' as const, name: 'Healing field', id: 'field_heal' },
+      { kind: 'stasis' as const, name: 'Stasis field', id: 'field_stasis' },
+      { kind: 'revive' as const, name: 'Revive zone', id: 'revive_zone' },
+    ];
+    zones.forEach((z, c) => {
+      const x = (c - (zones.length - 1) / 2) * COL_GAP * 1.4;
+      this.zones.push({ kind: z.kind, x, y: y3 });
+      this.items.push({ node: this.add.container(x, y3), label: this.label(x, y3 + 70, `${z.name}
+${z.id}`), x, y: y3, phase: 0, dy: 70 });
+    });
   }
 
   /** Zoom adapté à la largeur de la fenêtre ; étiquettes de taille constante à l'écran. */
   private readonly fit = (): void => {
     const cam = this.cameras.main;
     const cols = Math.max(Object.keys(CLASSES).length, Object.keys(POWERUP_INFO).length);
-    const zoom = Math.min(1, (this.scale.width - 340) / (cols * COL_GAP));
+    const zoom = Math.min(1, (this.scale.width - 340) / (cols * COL_GAP), (this.scale.height - 80) / (3 * ROW_GAP + 240));
     cam.setZoom(zoom);
-    for (const it of this.items) it.label.setScale(1 / zoom).setY(it.y + 40 / zoom);
+    for (const it of this.items) it.label.setScale(1 / zoom).setY(it.y + (it.dy ?? 40) / zoom);
     for (const t of this.titles) t.text.setScale(1 / zoom);
     cam.centerOn(-(300 / 2) / zoom, 0); // décalé pour laisser la place au panneau
   };
@@ -109,7 +158,7 @@ export class BonusViewerScene extends Phaser.Scene {
     const p = panel(290);
     p.append(
       header('Visionneuse de bonus', () => this.scene.start(SCENES.game)),
-      note('Bonus ramassés par les soldats : recrues (une par classe) et power-ups. Vue d\'observation.'),
+      note("Bonus ramassés par les soldats : recrues (une par classe), power-ups et globes d'XP. Vue d'observation."),
     );
     document.body.append(p);
     this.panel = p;

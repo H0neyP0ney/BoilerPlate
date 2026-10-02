@@ -22,8 +22,8 @@ export const MUSIC_DEFAULT = 2;
 export const MUSIC = { key: 'music', url: ['assets/audio/music.ogg', 'assets/audio/music.mp3'] };
 /** Bruitages (public/assets/audio, chargés avec les visuels) : même principe OGG + MP3 de secours. */
 export const SFX = {
-  /** Tir du Gunner : volume de base, variation de hauteur (cents) et délai minimal entre deux tirs entendus (rafales d'escouade). */
-  blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.ogg', 'assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60 },
+  /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx` de l'engine). */
+  blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.ogg', 'assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
 };
 
 /** Réglage booléen mémorisé ; `?clé=0` / `?clé=1` dans l'URL le force (utile sur téléphone, sans menu Réglages). */

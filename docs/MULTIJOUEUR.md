@@ -30,7 +30,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
   tailles ±10 %) sont dérivées de la seed et de `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
-## Netcode : fonctionnement actuel (protocole v20)
+## Netcode : fonctionnement actuel (protocole v22)
 
 ### Paramètres
 | Quoi | Valeur | Où |
@@ -43,13 +43,15 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 | Joueurs max (hôte inclus) | 4 | `MAX_PLAYERS` (`HostSession.ts`) |
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 25 octets / alien, ≈ 1,8 Ko pour 57 aliens | |
-| Version du protocole | **20** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`) | |
+| Version du protocole | **22** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`) | |
 
 ### Hôte autoritaire
 L'hôte fait tourner `Sim` et applique les inputs reçus (le dernier input connu est maintenu d'un tick à l'autre). Tout ce qu'un client doit voir passe
 par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par un `SimEvent` (cosmétique : un événement perdu ne doit jamais rendre l'état faux).
 
 ### Côté client : ce qui est affiché
+- **Globes d'XP** : objets persistants côté client (retrouvés par `id` stable du snapshot, protocole v21), lissés vers leur position hôte comme les recrues. Leur **clignotement de fin de vie** est décidé par l'hôte (`ORB_BLINK_TIME` = 5 s) et transmis dans le bit 7 de l'octet de valeur (protocole v22, aucun octet de plus), donc exact même pour un joueur arrivé en cours de partie. Avant, ils étaient recréés à chaque snapshot sans lissage et sautaient à 15 Hz quand un soldat les attirait.
+- **Compteurs et télégraphes** : entre deux snapshots, `Mirror.step` décompte localement, comme la sim hôte, `slamWind` / `rushWind` / `leapT` / `castT` / `lurkT` des aliens, `t` des murs, `ttl` des flaques, cailloux et globes persistants, `life` des power-ups (arrêt à 0 ; la disparition réelle vient du snapshot). Sans cela, leurs animations avançaient par paliers de 66 ms. La progression de la zone de réanimation reste recopiée telle quelle (elle monte ou descend selon la présence d'un équipier).
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
   Pas de tampon d'interpolation : latence visuelle minimale, mais un virage brusque ou une perte de paquets se voit.
@@ -96,6 +98,10 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
 8. **L'hôte** : il garde l'avantage de latence, et s'il part la partie s'arrête (« Connexion perdue »). Migration d'hôte = lourd ; la vraie réponse est
    un **serveur Node autoritaire** (`sim/` est déjà pur : il suffit d'un `Transport` WebSocket), utile aussi au-delà de 4 joueurs.
 9. **Pause en ligne** : pas de pause (hors choix d'upgrade). Hôte en arrière-plan = partie gelée (limite des navigateurs) : détecter et prévenir les joueurs.
+
+10. **Globes d'XP : moins de données** (idée du 02/10, à mesurer avant). Aujourd'hui chaque snapshot renvoie *tous* les globes (13 octets chacun : `id`, x, y, valeur ; plafond 350, soit jusqu'à ≈ 4,5 Ko). Piste : une **photo complète** toutes les ~2 s + entre deux, seulement les globes apparus et les `id` disparus depuis la photo (cumulatif : un snapshot perdu se rattrape au suivant, un nouveau joueur reçoit la photo). Côté client, globes immobiles ; à la disparition, ils volent vers le soldat le plus proche (purement visuel) ; expiration locale à 45 s (le clignotement final est déjà transmis, voir ci-dessus). Gain probable > 90 % sur ce poste ; à décider après avoir mesuré la part des globes dans un snapshot (`sim:net`) : surtout utile au-delà de 4 joueurs.
+11. **Projectiles lissés** : ils sont recréés à chaque snapshot à la position exacte de l'hôte, sans `id` : entre deux snapshots ils avancent à leur vitesse (fluide), mais le recalage à chaque snapshot cause de petits sauts (une balle à 760 px/s × une gigue de 33 ms ≈ 25 px). Piste : `id` stable dans le snapshot (changement de protocole) puis même lissage que les globes / recrues.
+12. **Déterminisme** : la simulation est déterministe (pas fixe 30 Hz, `sim.rng` seedé, aucun `Math.random` / `Date.now` dans `sim/`, `data/`, `net/`), mais le multijoueur n'en dépend pas (hôte autoritaire + snapshots). Limites si on voulait un vrai modèle déterministe (lockstep, rejeu) : `Math.sin` / `Math.cos` peuvent différer d'un navigateur à l'autre (utiliser des tables ou des approximations maison), et les outils de dev (triche, stats éditées, vitesse du jeu) ne sont pas rejouables.
 
 ## Poki / déploiement
 - Netlib : l'id de jeu doit être un UUID ; **prévenir Poki avant la mise en ligne** (API en bêta) et autoriser leurs serveurs de signalisation / STUN / TURN dans la CSP.

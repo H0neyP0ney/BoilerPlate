@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
 import { poki } from '../poki/poki';
 
-/** Empêche flèches / espace / molette / clic droit de faire défiler la page Poki parente. */
+/** Touches qui feraient défiler la page Poki parente : flèches, espace, PageUp / PageDown, Fin / Début (codes clavier Phaser). */
+const SCROLL_KEYS = [37, 38, 39, 40, 32, 33, 34, 35, 36];
+
+/**
+ * Empêche la molette / le clic droit de faire défiler la page Poki parente. Les touches de défilement (flèches, espace…) ne sont PAS
+ * bloquées ici par un `preventDefault` sur `window` : Phaser ignore tout évènement clavier déjà « défaussé » (`defaultPrevented`), ce
+ * qui rendait les flèches mortes. C'est Phaser qui les capture (`input.keyboard.capture` ci-dessous), après les avoir traitées.
+ */
 export function preventPageScroll(): void {
-  const keys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown', 'Home', 'End']);
-  window.addEventListener('keydown', (e) => {
-    if (keys.has(e.key)) e.preventDefault();
-  });
   window.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 }
@@ -44,7 +47,7 @@ export async function bootPokiGame(opts: BootOptions): Promise<Phaser.Game> {
       width: size,
       height: size,
     },
-    input: { activePointers: 2 },
+    input: { activePointers: 2, keyboard: { capture: SCROLL_KEYS } },
     disableContextMenu: true,
     banner: false,
     scene: opts.scenes,

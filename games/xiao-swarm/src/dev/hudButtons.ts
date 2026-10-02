@@ -47,6 +47,12 @@ export const iconBonus: Icon = (g) => {
   g.fillStyle(0xffd84a, 1).fillTriangle(0, -8, -4, 3, 4, 3).fillTriangle(0, 7, -4, -2, 4, -2);
 };
 
+/** Upgrades : une carte avec une flèche vers le haut. */
+export const iconUpgrades: Icon = (g) => {
+  g.fillStyle(0xb388ff, 0.35).fillRoundedRect(-12, -14, 24, 28, 4).lineStyle(2.5, 0xb388ff, 1).strokeRoundedRect(-12, -14, 24, 28, 4);
+  g.fillStyle(0xffd166, 1).fillTriangle(0, -8, -6, 0, 6, 0).fillRect(-2.5, 0, 5, 8);
+};
+
 /** Vagues : une timeline avec des barres de hauteurs différentes. */
 export const iconWaves: Icon = (g) => {
   g.fillStyle(0x6fdc6f, 1).fillRect(-12, 4, 5, 8);
@@ -70,6 +76,7 @@ export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.obstacles, icon: iconObstacle, label: 'Obstacles' },
   { scene: SCENES.misc, icon: iconMisc, label: 'Divers' },
   { scene: SCENES.bonus, icon: iconBonus, label: 'Bonus' },
+  { scene: SCENES.upgrades, icon: iconUpgrades, label: 'Upgrades' },
   { scene: SCENES.waves, icon: iconWaves, label: 'Vagues' },
   { scene: SCENES.mapEditor, icon: iconMap, label: 'Carte' },
 ];

@@ -3,8 +3,10 @@ import { getName, nameKey } from '../debugNames';
 import { clamp, sprites, theme } from '@xiao/engine';
 import { ACTIVE_ALIENS, ALIENS, type AlienId } from '../data/aliens';
 import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
-import { PALETTE, SCENES } from '../config';
-import { header } from '../dev/devUi';
+import { PALETTE, SCENES, SHADOW_ALPHA, VIEW_BG } from '../config';
+import { button, header, line, note, slider } from '../dev/devUi';
+import { ScaleRef } from '../dev/scaleRef';
+import { getStat, listStats, resetStats, saveStatsToCode, setStat } from '../debugStats';
 import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
 
 /**
@@ -67,6 +69,8 @@ export class UnitViewerScene extends Phaser.Scene {
   private selected = ALL;
   private unitSelect?: HTMLSelectElement;
   private closeBtn?: HTMLButtonElement;
+  /** Second panneau (vue détaillée) : statistiques de l'unité pour l'équilibrage. */
+  private statsPanel?: HTMLDivElement;
   /** Vue d'ensemble : hauteur du contenu (monde) et barre de défilement (DOM) à droite. */
   private worldH = 0;
   private scrollBar?: HTMLDivElement;
@@ -104,9 +108,13 @@ export class UnitViewerScene extends Phaser.Scene {
     super(SCENES.viewer);
   }
 
+  /** Trooper de référence (échelle) + bouton pour le masquer. */
+  private scaleRef?: ScaleRef;
+
   create(): void {
+    this.scaleRef = new ScaleRef(this);
     this.selected = ALL; // la scène est réutilisée : toujours rouvrir sur la vue de toutes les unités
-    this.cameras.main.setBackgroundColor(0x2b3a2e);
+    this.cameras.main.setBackgroundColor(VIEW_BG);
     this.drawGrid();
     this.buildPanel();
     this.buildEditorMarkers();
@@ -125,12 +133,15 @@ export class UnitViewerScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fit);
       this.panel?.remove();
+      this.scaleRef?.destroy();
       this.closeBtn?.remove();
+      this.statsPanel?.remove();
       this.scrollBar?.remove();
     });
   }
 
   update(time: number): void {
+    this.scaleRef?.place();
     const t = time / 1000;
     for (const e of this.entries) this.animate(e, t);
     this.updateEditor(t);
@@ -171,6 +182,7 @@ export class UnitViewerScene extends Phaser.Scene {
 
     this.fillAnimSelect();
     this.setupEditor();
+    this.buildStats();
     this.fit();
   }
 
@@ -210,8 +222,8 @@ ${id}` : id;
     const radius = kind === 'alien' ? ALIENS[unit as AlienId].radius : CLASSES[unit as keyof typeof CLASSES].radius;
     const shadow =
       kind === 'alien'
-        ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, 1)
-        : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, 1);
+        ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, SHADOW_ALPHA)
+        : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, SHADOW_ALPHA);
     const sprite = sprites.add(this, id, x, y);
     // unités inactives : affichées à moitié transparentes
     if (this.isInactive(kind, unit)) sprite.setAlpha(INACTIVE_ALPHA);
@@ -318,7 +330,7 @@ ${id}` : id;
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
     const k = sprites.get(e.id).shadow ?? 1;
-    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : 1);
+    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : SHADOW_ALPHA);
 
     if (e.gun) {
       const aim = this.facing > 0 ? 0 : Math.PI;
@@ -855,12 +867,66 @@ ${id}` : id;
     this.syncChrome();
   }
 
+  /** Étiquette lisible d'un chemin de stat (`lob.range` → « lob · range »). */
+  private statLabel(path: string): string {
+    return path.split('.').join(' · ');
+  }
+
+  /** Second panneau : un slider par statistique de l'unité (PV, vitesse, dégâts, capacités…), appliqué en direct, avec Save / Reset. */
+  private buildStats(): void {
+    this.statsPanel?.remove();
+    this.statsPanel = undefined;
+    const t = this.target;
+    if (!t || t.kind === 'recruit') return;
+    const kind = t.kind === 'alien' ? 'alien' : 'soldier';
+    const id = t.unit;
+    const p = document.createElement('div');
+    p.style.cssText =
+      'position:fixed;top:8px;left:330px;z-index:99999;width:270px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
+      'background:rgba(0,0,0,0.78);color:#dfe;font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:8px';
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
+    const syncs: (() => void)[] = [];
+    const rows = listStats(kind, id).map((st) => {
+      const v = st.value;
+      const mag = Math.abs(v);
+      const step = mag >= 50 ? 1 : mag >= 10 ? 0.5 : mag >= 1 ? 0.05 : 0.01;
+      const c = slider(this.statLabel(st.path), {
+        min: 0,
+        max: Math.max(5, Math.ceil(mag * 3)),
+        step,
+        get: () => getStat(kind, id, st.path),
+        set: (nv) => setStat(kind, id, st.path, nv),
+      });
+      syncs.push(c.sync);
+      return c.row;
+    });
+    p.append(
+      header(`Stats — ${getName(nameKey(t.kind, t.unit), 'en') || id}`, () => this.select_(ALL)),
+      note("Équilibrage : appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs). Save écrit dans data/aliens.ts / data/classes.ts."),
+      line(
+        button('Save', () => void saveStatsToCode(kind, id).then((m) => (info.textContent = m))),
+        button('Reset', () => {
+          resetStats(kind, id);
+          for (const sy of syncs) sy();
+          info.textContent = 'Retour à la dernière sauvegarde.';
+        }),
+      ),
+      info,
+      ...rows,
+    );
+    document.body.append(p);
+    this.statsPanel = p;
+  }
+
   /** Vue d'ensemble : panneau masqué, croix de sortie affichée ; vue d'une unité : l'inverse. */
   private syncChrome(): void {
     const all = this.selected === ALL;
     if (this.panel) this.panel.style.display = all ? 'none' : 'flex';
     if (this.closeBtn) this.closeBtn.style.display = all ? 'block' : 'none';
     if (!all && this.scrollBar) this.scrollBar.style.display = 'none';
+    this.scaleRef?.setEnabled(!all); // trooper de référence : seulement dans les vues détaillées
+    if (all) this.statsPanel?.remove();
   }
 
   /** Libellé + liste déroulante ; rend le focus au jeu après un choix (les touches restent actives). */

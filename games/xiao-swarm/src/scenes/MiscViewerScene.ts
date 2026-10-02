@@ -2,8 +2,9 @@ import Phaser from 'phaser';
 import { sprites, theme } from '@xiao/engine';
 import { ALIENS } from '../data/aliens';
 import { CLASSES, type SoldierClassId } from '../data/classes';
-import { DEPTH, PALETTE, SCENES, VISUAL } from '../config';
+import { DEPTH, PALETTE, SCENES, VISUAL, VIEW_BG } from '../config';
 import { checkbox, header, line, note, panel, select, slider } from '../dev/devUi';
+import { ScaleRef } from '../dev/scaleRef';
 import { Fx } from '../view/Fx';
 import { RecruitView } from '../view/UnitViews';
 import { LOB_HEIGHT, RIVAL_COLORS } from '../view/WorldView';
@@ -389,8 +390,12 @@ export class MiscViewerScene extends Phaser.Scene {
     super(SCENES.misc);
   }
 
+  /** Trooper de référence (échelle) + bouton pour le masquer. */
+  private scaleRef?: ScaleRef;
+
   create(): void {
-    this.cameras.main.setBackgroundColor(0x2b3a2e);
+    this.scaleRef = new ScaleRef(this);
+    this.cameras.main.setBackgroundColor(VIEW_BG);
     this.drawGrid();
     this.buildPanel();
     this.open(this.item);
@@ -399,10 +404,12 @@ export class MiscViewerScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fit);
       this.live.destroy?.();
       this.panel?.remove();
+      this.scaleRef?.destroy();
     });
   }
 
   update(time: number, delta: number): void {
+    this.scaleRef?.place();
     this.live.update?.(time / 1000, delta / 1000);
   }
 
@@ -470,7 +477,7 @@ export class MiscViewerScene extends Phaser.Scene {
       zoom.row,
       slider('Vitesse de l\'aperçu', { min: 0.1, max: 1, step: 0.05, get: () => this.slow, set: (v) => (this.slow = v), hint: '1 = vitesse réelle du jeu' }).row,
       this.info,
-      line(checkbox('Fond sombre', false, (v) => this.cameras.main.setBackgroundColor(v ? 0x10161c : 0x2b3a2e))),
+      line(checkbox('Fond sombre', false, (v) => this.cameras.main.setBackgroundColor(v ? 0x10161c : VIEW_BG))),
     );
     document.body.append(p);
     this.panel = p;

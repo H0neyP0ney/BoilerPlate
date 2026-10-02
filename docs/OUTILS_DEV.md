@@ -17,7 +17,7 @@ bouton « Copier le code » qui donne quoi y coller.
 
 Les menus (Réglages, Foule, Triche) s'ouvrent toujours **à gauche**, sous les boutons du HUD, côte à côte dans l'ordre
 d'ouverture (`src/dev/dock.ts`). Boutons du HUD (**en bas à gauche**), de gauche à droite : Réglages · Foule · Triche · Unités · Particules ·
-Obstacles · Divers · Bonus · Vagues · Carte (les visionneuses ont un contour vert, `VIEW_BORDER` dans `dev/hudButtons.ts`). Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
+Obstacles · Divers · Bonus · Upgrades · Vagues · Carte (les visionneuses ont un contour vert, `VIEW_BORDER` dans `dev/hudButtons.ts`). Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
 vues : on repasse par le jeu).
 
 ## Save / Reset (toutes les vues de dev)
@@ -53,7 +53,7 @@ raccourcis clavier (les anciens K / R / T / B ont été retirés).
 
 ## Visionneuse de particules (`?particles`, `src/fxParams.ts`, `src/debugFx.ts`)
 
-Cinq effets, lus par `view/Fx.ts` : éclaboussure, explosion (flammes + onde), onde de choc, soin, texte flottant. Sliders de
+Tous les effets de `view/Fx.ts` : éclaboussure, explosion (flammes + onde), onde de choc, soin, texte flottant, impact de balle, éclatement de gelée, flaques, flash de tir, roquette + fumée, recrue (bonus +1) ; plus en lecture seule la spirale de montée de niveau, la colonne de lumière et la perte d'un soldat (paramètres fixes dans `Fx.ts`). Sliders de
 vitesse / taille / opacité / durée / quantité / couleur / secousse, aperçu en boucle ou au clic, Gunner de référence (case pour
 le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS`.
 
@@ -82,9 +82,15 @@ Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE
 - **Save** écrit `DEFAULT_MAP_ZONES` dans `data/mapZones.ts` ; **Reset** revient à cette sauvegarde ; le travail en cours est aussi mémorisé dans le navigateur (`xiao-debug-mapzones`).
 - Hors édition : la carte royale (`makeRoyaleMap`, 4800 px) n'utilise pas les zones.
 
+- **Second panneau « Stats »** (vue détaillée d'un soldat ou d'un alien, à droite du premier) : un slider par nombre de la définition (`hp`, `speed`, `damage`, `attackCooldown`… et les capacités : `lob · range`, `weapon · cooldown`…) pour l'équilibrage (`src/debugStats.ts`). Appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs), mémorisé dans le navigateur ; **Save** réécrit les nombres dans `data/aliens.ts` / `data/classes.ts` (commentaires conservés), **Reset** revient au code.
+
+## Visionneuse d'upgrades (`?upgrades`, `src/scenes/UpgradeViewerScene.ts`, `src/debugUpgrades.ts`)
+
+Toutes les cartes de choix d'upgrade d'un coup d'œil (zoom et colonnes ajustés à la fenêtre). Un clic sur une carte ouvre son panneau : **Bonus** (valeur affichée ; fixe aussi `mod.pct` = valeur / 100 ou `mod.flat`) et **Prises max** ; la carte suit en direct, Save écrit dans `data/progression.ts`, Reset revient au code.
+
 ## Visionneuse bonus (`?bonus`, `src/scenes/BonusViewerScene.ts`)
 
-Consultation : une ligne de **recrues** (une par classe, inactives à 25 %) et une ligne de **power-ups** (pastille `makePowerUpIcon` de `view/PickupViews.ts`, la même qu'en jeu). Pas de réglage.
+Consultation : **recrues** (une par classe, inactives à 25 %), **power-ups** (pastille `makePowerUpIcon` de `view/PickupViews.ts`, la même qu'en jeu), **globes d'XP** (3 tailles) et **zones au sol** (globes persistants de soin / stase et zone de réanimation, dessinés par `drawField` / `drawReviveZone`, les mêmes fonctions qu'en jeu). Pas de réglage ; l'UI (icônes d'upgrade…) n'est pas incluse.
 
 ## Visionneuse divers (`?misc`, `src/scenes/MiscViewerScene.ts`)
 

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { DEFAULT_WAVE_MODEL, generateTimeline, simulatePressure, targetAt, type TargetPoint, type WaveModel } from '../data/waveModel';
 import { entryTimes, WAVE_LEVELS, WAVE_SCRIPT, WAVE_SCRIPT_END, type TimelineEntry, type WaveConfig } from '../data/waves';
-import { SCENES } from '../config';
+import { SCENES, VIEW_BG } from '../config';
 import { resetWaves, saveWaves, saveWavesToCode, waveSnippet } from '../debugWaves';
 import { header } from '../dev/devUi';
 
@@ -65,7 +65,7 @@ export class WaveEditorScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x1d2733);
+    this.cameras.main.setBackgroundColor(VIEW_BG);
     this.buildUi();
     this.renderAll();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.root?.remove());

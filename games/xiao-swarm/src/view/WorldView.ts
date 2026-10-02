@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites } from '@xiao/engine';
-import { DEPTH, PALETTE, REVIVE_TIME, UPGRADE_REPEL } from '../config';
+import { DEPTH, ORB_BLINK_TIME, PALETTE, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL } from '../config';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
 import { t } from '../i18n';
@@ -12,7 +12,7 @@ import { ArenaView } from './ArenaView';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { ROCKET_TEXTURE } from '../sim/Combat';
-import { PickupViews, POWERUP_INFO } from './PickupViews';
+import { drawReviveZone, PickupViews, POWERUP_INFO } from './PickupViews';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
@@ -25,7 +25,18 @@ const TELEGRAPH_S = 0.8;
 /** Distance (px) de vol sur laquelle une balle rejoint sa trajectoire depuis la bouche du canon dessinée. */
 const MUZZLE_BLEND_PX = 40;
 /** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
-const ORB_SCALE = 1.3;
+export const ORB_SCALE = 1.3;
+/**
+ * Petite variation de teinte, fixe pour un globe donné (tirée de son id, pas de scintillement) : bleus un peu plus clairs ou un peu
+ * plus foncés (± ~12 %), comme le léger tirage de hauteur des tirs de blaster. Mode `MULTIPLY_TWO` : 0x80 par canal = couleur d'origine.
+ */
+export function orbTint(id: number): number {
+  const v = (((Math.imul(id, 2654435761) >>> 8) % 1000) / 500) - 1; // -1 … 1
+  const ch = (k: number): number => Math.max(0, Math.min(255, Math.round(128 * (1 + v * k))));
+  return (ch(0.12) << 16) | (ch(0.12) << 8) | ch(0.05);
+}
+/** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
+export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
 
 interface Tracer {
   x1: number;
@@ -524,9 +535,10 @@ export class WorldView {
         img.setVisible(false);
         continue;
       }
-      const size = o.value >= 8 ? 1.25 : o.value >= 3 ? 0.85 : 0.55;
+      img.setTintMode(Phaser.TintModes.MULTIPLY_TWO).setTint(orbTint(o.id)); // ×2 : 0x808080 = couleur d'origine, au-dessus = plus clair
+      const size = orbSize(o.value);
       const bob = Math.sin(time * 4 + o.id) * 2.5;
-      const blink = o.life < 5 && Math.sin(time * 18) > 0;
+      const blink = o.life < ORB_BLINK_TIME && Math.sin(time * 18) > 0;
       img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * ORB_SCALE * orbBase * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
     }
   }
@@ -647,7 +659,7 @@ export class WorldView {
     const g = this.ground;
     g.clear();
     this.pickups.drawGround(g, time);
-    g.fillStyle(0x2a1d2e, 0.28);
+    g.fillStyle(0x2a1d2e, SHADOW_ALPHA);
     for (const v of this.aliens.values()) {
       if (v.state.def.lurk && v.state.lurkPhase >= 2 && v.state.lurkPhase <= 4) continue; // enterré : pas d'ombre
       const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
@@ -667,13 +679,7 @@ export class WorldView {
     }
     // Zones de réanimation (coop) : cercle au sol qui se remplit tant qu'un équipier y reste
     for (const z of this.sim.reviveZones) {
-      const k = z.progress / REVIVE_TIME;
-      const beat = 0.5 + 0.5 * Math.sin(time * 6); // pulsation 0 → 1
-      const rr = z.r * (1 + beat * 0.12);
-      g.fillStyle(0x3dff6a, 0.12 + 0.16 * beat + 0.12 * k).fillEllipse(z.x, z.y, rr * 2, rr * 1.4);
-      g.fillStyle(0x7dff9a, 0.2 + 0.25 * k).fillEllipse(z.x, z.y, z.r * 2 * k, z.r * 1.4 * k);
-      g.lineStyle(4, 0x8dffa8, 0.5 + 0.5 * beat).strokeEllipse(z.x, z.y, rr * 2, rr * 1.4);
-      g.lineStyle(2, 0xffffff, 0.25 + 0.3 * beat).strokeEllipse(z.x, z.y, z.r * 2 * 0.6, z.r * 1.4 * 0.6);
+      drawReviveZone(g, z.x, z.y, z.r, z.progress / REVIVE_TIME, time);
     }
     // Flaques de crachat : violettes, elles ralentissent les soldats dedans ; s'effacent dans la dernière seconde
     for (const p of this.sim.puddles) {
@@ -791,7 +797,7 @@ export class WorldView {
     for (const v of this.soldiers.values()) {
       const r = v.state.radius;
       const k = sprites.get(`soldier_${v.state.def.id}`).shadow ?? 1;
-      g.fillStyle(0x2a1d2e, 0.3).fillEllipse(v.rx, v.ry, r * 2.2 * k, r * k);
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx, v.ry, r * 2.2 * k, r * k);
       g.lineStyle(3, v.ringColor, 0.9).strokeEllipse(v.rx, v.ry, r * 2.6, r * 1.3);
     }
 

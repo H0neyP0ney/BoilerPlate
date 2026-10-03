@@ -311,6 +311,18 @@ function saveUpgrade(id: string, d: { value: number; maxStacks: number; pct?: nu
   return { ok: true, message: `Upgrade ${id} enregistrée dans ${rel}` };
 }
 
+// ---------- Parties enregistrées (calibration) ----------
+
+/** Écrit une partie enregistrée (`RunRecorder`) dans `docs/bench/runs/` ; lue par `npm run sim:calibrate`. */
+function saveBenchRun(run: { mode?: string }): Result {
+  const dir = path.join(SRC, '..', '..', '..', 'docs', 'bench', 'runs');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const name = `${stamp}-${String(run.mode ?? 'run').replace(/[^a-z0-9_-]/gi, '')}.json`;
+  fs.writeFileSync(path.join(dir, name), JSON.stringify(run));
+  return { ok: true, message: `Partie enregistrée : docs/bench/runs/${name}` };
+}
+
 // ---------- Routage ----------
 
 function handle(target: string, data: any): Result {
@@ -333,6 +345,8 @@ function handle(target: string, data: any): Result {
       return saveSprite(String(data.id), data.props as SpriteProps);
     case 'upgrades':
       return saveUpgrade(String(data.id), data);
+    case 'bench-run':
+      return saveBenchRun(data as { mode?: string });
     case 'stats':
       return saveStats(String(data.kind), String(data.id), data.values as Record<string, number>);
     default:

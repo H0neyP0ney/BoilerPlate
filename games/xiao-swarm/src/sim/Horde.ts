@@ -76,6 +76,8 @@ export class Horde {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
     const maxHp = def.hp * this.sim.alienHpMul * (def.boss ? DIFFICULTY.bossHpMul : DIFFICULTY.alienHpMul) * hpMul * (revived ? ZOMBIE_MUL : 1);
+    const maxShield = def.shield ? maxHp * def.shield.pct : 0;
+    this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
     return {
       kind: 'alien',
       id: this.sim.ids.get(),
@@ -93,6 +95,9 @@ export class Horde {
       mass: def.mass,
       hp: maxHp * hpFrac,
       maxHp,
+      shield: maxShield,
+      maxShield,
+      shieldT: def.shield ? def.shield.regenDelay : 0,
       alive: true,
       target: null,
       goalX: c.x,
@@ -129,6 +134,30 @@ export class Horde {
     };
   }
 
+  /**
+   * Fait apparaître `count` aliens en cercle autour de `center`, à `radius` px (à l'écran : tutoriel). Renvoie ceux qui ont été créés.
+   * Les angles sont répartis régulièrement avec un petit aléa de la simulation ; un point occupé par le décor est décalé.
+   */
+  spawnAround(center: Point, type: AlienId, count: number, radius: number): AlienState[] {
+    const { rng, arena } = this.sim;
+    const def = ALIENS[type];
+    const out: AlienState[] = [];
+    const start = rng.range(0, Math.PI * 2);
+    for (let i = 0; i < count && this.canSpawn(type); i++) {
+      const a = start + (i / Math.max(1, count)) * Math.PI * 2 + rng.range(-0.15, 0.15);
+      let p = { x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius, radius: def.radius };
+      for (let tries = 0; tries < 8 && !arena.isFree(p, def.radius + 10); tries++) {
+        const r = radius * (1 - 0.08 * (tries + 1));
+        p = { x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r, radius: def.radius };
+      }
+      arena.constrain(p);
+      const made = this.create(def, p.x, p.y, 1, false);
+      this.sim.aliens.push(made);
+      out.push(made);
+    }
+    return out;
+  }
+
   /** Fait apparaître un alien à un endroit précis (résurrection par un chaman), si le plafond le permet. */
   spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false): void {
     if (!this.canSpawn(type)) return;
@@ -161,6 +190,12 @@ export class Horde {
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
       const def = a.def;
+
+      // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
+      if (def.shield && a.maxShield > 0) {
+        a.shieldT += dt;
+        if (a.shieldT >= def.shield.regenDelay && a.shield < a.maxShield) a.shield = Math.min(a.maxShield, a.shield + (a.maxShield / def.shield.regenTime) * dt);
+      }
 
       // Ciblage (pas à chaque tick)
       a.retarget -= dt;

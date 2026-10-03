@@ -24,12 +24,16 @@ export const UPGRADE_ICONS: Record<UpgradeId, string> = {
   range: '🎯',
 };
 
+/** Jaune de la zone qui pulse sous les recrues (les power-ups gardent la couleur de leur bonus : `POWERUP_INFO`). */
+export const RECRUIT_COLOR = 0xffe14a;
+
 export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> = {
   stim: { icon: '💉', color: 0xffd84a },
   magnet: { icon: '🧲', color: 0x4aa8ff },
   heal: { icon: '💚', color: 0x5dff84 },
   stasis: { icon: '❄️', color: 0x6fd8ff },
   rockets: { icon: '🚀', color: 0xff7a3a },
+  shield: { icon: '🛡️', color: 0x4aa8ff },
 };
 
 /** Pastille d'un power-up (disque coloré + emoji), centrée sur (0, 0) ; partagée avec la visionneuse d'unités. */
@@ -51,6 +55,16 @@ export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis
   g.lineStyle(3, col, (0.5 + 0.3 * beat) * a).strokeEllipse(x, y, r * 2, r * 1.4);
   if (kind === 'stasis') g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(x, y, r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
   else g.fillStyle(0xffffff, 0.2 * a).fillEllipse(x, y - 8 * beat, 26, 16);
+}
+
+/**
+ * Zone qui pulse posée au sol sous un objet à ramasser (power-up : sa couleur ; recrue : `RECRUIT_COLOR`) : disque translucide + anneau. `a` : opacité
+ * globale (clignote en fin de vie).
+ */
+export function drawPickupSpot(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, time: number, id: number, a = 1): void {
+  const beat = 0.5 + 0.5 * Math.sin(time * 5 + id);
+  g.fillStyle(color, (0.16 + 0.12 * beat) * a).fillEllipse(x, y, 70, 38);
+  g.lineStyle(2, color, 0.6 * a).strokeEllipse(x, y, 58 + beat * 10, 30 + beat * 6);
 }
 
 /** Zone de réanimation (coop) de rayon `r` ; `k` = progression de la réanimation (0 → 1). */
@@ -195,12 +209,7 @@ export class PickupViews {
     for (const f of this.sim.powerups.fields) {
       drawField(g, f.kind as 'heal' | 'stasis', f.x, f.y, f.r, Math.min(1, f.ttl / 1.2), time);
     }
-    for (const p of this.sim.powerups.items) {
-      const info = POWERUP_INFO[p.kind];
-      const beat = 0.5 + 0.5 * Math.sin(time * 5 + p.id);
-      g.fillStyle(info.color, 0.16 + 0.12 * beat).fillEllipse(p.x, p.y, 70, 38);
-      g.lineStyle(2, info.color, 0.6).strokeEllipse(p.x, p.y, 58 + beat * 10, 30 + beat * 6);
-    }
+    for (const p of this.sim.powerups.items) drawPickupSpot(g, p.x, p.y, POWERUP_INFO[p.kind].color, time, p.id);
     // bonus actifs
     for (const sq of this.sim.squads) {
       if (!sq.alive) continue;

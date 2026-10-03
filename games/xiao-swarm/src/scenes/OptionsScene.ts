@@ -82,13 +82,27 @@ export class OptionsScene extends Phaser.Scene {
         },
       });
     }
+    // Tutoriel au démarrage (réglage mémorisé) : activé, il se lance au début de la prochaine partie solo ; il se désactive tout seul
+    // une fois terminé (voir `settings.tutorialDone`) ; le réactiver ici permet de le rejouer.
+    const tutorialLabel = () => `${t('tutorialAtStart')} : ${settings.tutorialDone ? t('off') : t('on')}`;
+    const tutorialBtn = new Button(this, 0, 0, {
+      label: tutorialLabel(),
+      variant: 'secondary',
+      width: 340,
+      height: 56,
+      onClick: () => {
+        settings.setTutorialDone(!settings.tutorialDone);
+        tutorialBtn.destroy();
+        this.scene.restart({ resumeGame: this.resumeGame }); // relabel simple : la scène se redessine
+      },
+    });
     const close = new Button(this, 0, 0, { label: t('close'), width: 260, height: 64, onClick: () => this.close() });
     for (const key of ['ESC', 'ENTER']) this.input.keyboard!.on(`keydown-${key}`, () => this.close());
 
     const layout = () => {
       const { width: w, height: h } = this.scale;
       const pw = Math.min(520, w - 32);
-      const ph = debugBtn ? 470 : 400;
+      const ph = debugBtn ? 540 : 470;
       const cx = w / 2;
       const top = h / 2 - ph / 2;
       dim.setSize(w, h);
@@ -102,7 +116,8 @@ export class OptionsScene extends Phaser.Scene {
       sfxLabel.setPosition(cx - 170, top + 202);
       sfxValue.setPosition(cx + 170, top + 202);
       sfxSlider.setPosition(cx, top + 248).setScale(Math.min(1, (pw - 60) / 360));
-      debugBtn?.setPosition(cx, top + 330);
+      tutorialBtn.setPosition(cx, top + 330);
+      debugBtn?.setPosition(cx, top + 400);
       close.setPosition(cx, top + ph - 52);
     };
     layout();

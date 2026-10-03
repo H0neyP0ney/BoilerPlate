@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SQUAD } from '../config';
+import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SHIELD_FRACTION, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
@@ -72,6 +72,7 @@ export class Mirror {
       squad.xp = sq.xp;
       squad.offer = sq.offer.length ? sq.offer.map((i) => UPGRADE_IDS[i]) : null;
       squad.offerPrism = sq.offerPrism;
+      squad.rerolls = sq.rerolls;
       squad.buffs.stim = sq.stim;
       UPGRADE_IDS.forEach((id, i) => (squad.picked[id] = sq.picked[i]));
       squad.stats.reset();
@@ -241,6 +242,8 @@ export class Mirror {
         mass: def.mass,
         hp: u.hp,
         maxHp: u.maxHp,
+        shield: 0,
+        maxShield: 0,
         alive: true,
         slotX: 0,
         slotY: 0,
@@ -260,12 +263,13 @@ export class Mirror {
     s.vy = u.vy;
     s.hp = u.hp;
     s.maxHp = u.maxHp;
+    s.maxShield = u.shield > 0 ? u.maxHp * SHIELD_FRACTION : 0;
+    s.shield = u.shield * s.maxShield;
     s.aim = u.aim;
     s.facing = u.facing;
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
-    s.invulnerable = u.invulnerable ? 1 : 0;
-    s.capturedBy = u.capturedBy;
+    s.invulnerable = u.invulnerable ? 1 : 0;    s.capturedBy = u.capturedBy;
     this.setGoal(s, u.x, u.y);
     return s;
   }
@@ -291,6 +295,9 @@ export class Mirror {
         mass: def.mass,
         hp: a.hp,
         maxHp: a.maxHp,
+        shield: 0,
+        maxShield: 0,
+        shieldT: 0,
         alive: true,
         target: null,
         goalX: a.x,
@@ -331,6 +338,8 @@ export class Mirror {
     s.vy = a.vy;
     s.hp = a.hp;
     s.maxHp = a.maxHp;
+    s.maxShield = s.def.shield ? a.maxHp * s.def.shield.pct : 0;
+    s.shield = a.shield * s.maxShield;
     s.slamWind = a.slamWind;
     s.rushWind = a.rushWind;
     s.rushT = a.rushing ? 1 : 0;

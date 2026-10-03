@@ -30,7 +30,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
   tailles ±10 %) sont dérivées de la seed et de `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
-## Netcode : fonctionnement actuel (protocole v23)
+## Netcode : fonctionnement actuel (protocole v25)
 
 ### Paramètres
 | Quoi | Valeur | Où |
@@ -43,7 +43,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 | Joueurs max (hôte inclus) | 4 | `MAX_PLAYERS` (`HostSession.ts`) |
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 25 octets / alien, ≈ 1,8 Ko pour 57 aliens | |
-| Version du protocole | **23** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`) | |
+| Version du protocole | **25** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). v24 : relances d'upgrade (message `reroll`, octet `rerolls` par squad) ; v25 : bouclier (octet par soldat ; octet par alien **selon son type** `def.shield`, donc le décodeur teste la même chose) et textures de paliers de dégâts dans la liste des projectiles | |
 
 ### Hôte autoritaire
 L'hôte fait tourner `Sim` et applique les inputs reçus (le dernier input connu est maintenu d'un tick à l'autre). Tout ce qu'un client doit voir passe

@@ -126,6 +126,11 @@ export class ClientSession implements Session {
     this.transport.send(this.hostId, 'reliable', JSON.stringify(msg));
   }
 
+  rerollUpgrade(): void {
+    const msg: ClientMessage = { t: 'reroll' };
+    this.transport.send(this.hostId, 'reliable', JSON.stringify(msg));
+  }
+
   close(): void {
     this.transport.close();
   }

@@ -1,6 +1,7 @@
 import { ORB_BLINK_TIME, REVIVE_TIME } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES, type SoldierClassId } from '../data/classes';
+import { DAMAGE_TIERS } from '../data/damageTiers';
 import { UPGRADE_IDS } from '../data/progression';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
@@ -8,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 25;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -21,7 +22,9 @@ export type ClientMessage =
   /** `n` : numéro du tick client (prédiction) ; l'hôte renvoie le dernier reçu dans le snapshot (`ack`). */
   | { t: 'input'; mx: number; my: number; n: number }
   /** Choix d'upgrade au level up (index dans les propositions de sa squad). */
-  | { t: 'upgrade'; index: number };
+  | { t: 'upgrade'; index: number }
+  /** Relance des propositions d'upgrade. */
+  | { t: 'reroll' };
 
 /** Hôte → client. */
 export type HostMessage =
@@ -48,6 +51,8 @@ export interface SoldierSnap {
   vy: number;
   hp: number;
   maxHp: number;
+  /** Bouclier (power-up) : part restante du bouclier max (0 → 1, 0 = aucun). */
+  shield: number;
   aim: number;
   facing: number;
   target: boolean;
@@ -73,6 +78,8 @@ export interface SquadSnap {
   /** Upgrades prismatiques (mêmes indices que `offer`). */
   offerPrism: boolean[];
   picked: number[];
+  /** Relances d'upgrade restantes. */
+  rerolls: number;
   /** Power-ups actifs : secondes restantes de stimpack et d'aimant à XP. */
   stim: number;
   soldiers: SoldierSnap[];
@@ -87,6 +94,8 @@ export interface AlienSnap {
   vy: number;
   hp: number;
   maxHp: number;
+  /** Aliens à `def.shield` seulement (champ écrit selon le type) : part restante du bouclier max (0 → 1). */
+  shield: number;
   slamWind: number;
   /** Rhinocéros : préparation de la charge (s), charge en cours, direction verrouillée. */
   rushWind: number;
@@ -165,11 +174,11 @@ export interface Snapshot {
 const CLASS_IDS = Object.keys(CLASSES) as SoldierClassId[];
 const ALIEN_IDS = Object.keys(ALIENS) as AlienId[];
 const TEXTURES = [
-  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
+  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
 ];
 
 const SNAPSHOT_TAG = 0x53;
-const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
+const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'shield'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
@@ -191,6 +200,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       offer: sq.offer ? sq.offer.map((id) => UPGRADE_IDS.indexOf(id)) : [],
       offerPrism: sq.offer ? sq.offerPrism.slice() : [],
       picked: UPGRADE_IDS.map((id) => sq.picked[id] ?? 0),
+      rerolls: sq.rerolls,
       stim: Math.max(0, sq.buffs.stim),
       soldiers: sq.soldiers.map((s) => ({
         id: s.id,
@@ -201,6 +211,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
         vy: s.vy,
         hp: s.hp,
         maxHp: s.maxHp,
+        shield: s.maxShield > 0 ? s.shield / s.maxShield : 0,
         aim: s.aim,
         facing: s.facing,
         target: s.target !== null,
@@ -217,6 +228,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       vy: a.vy,
       hp: a.hp,
       maxHp: a.maxHp,
+      shield: a.maxShield > 0 ? a.shield / a.maxShield : 0,
       slamWind: a.slamWind,
       rushWind: a.rushWind,
       rushing: a.rushT > 0,
@@ -302,6 +314,10 @@ class Writer {
     this.u8(s.length);
     for (let i = 0; i < s.length; i++) this.u16(s.charCodeAt(i));
   }
+  /** Octets écrits jusqu'ici. */
+  get size(): number {
+    return this.o;
+  }
   result(): ArrayBuffer {
     return this.buf.slice(0, this.o);
   }
@@ -346,12 +362,19 @@ class Reader {
   }
 }
 
-export function encodeSnapshot(s: Snapshot): ArrayBuffer {
+/** `sizes` (mesure, dev) : reçoit les octets écrits par catégorie (en-tête, squads, aliens…), compteurs de chaque liste compris. */
+export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): ArrayBuffer {
   const w = new Writer();
+  let from = 0;
+  const mark = (name: string): void => {
+    if (sizes) sizes[name] = w.size - from;
+    from = w.size;
+  };
   w.u8(SNAPSHOT_TAG);
   w.u32(s.tick);
   w.f32(s.time);
   w.u8(Math.min(255, Math.round(s.choiceT * 40)));
+  mark('header');
 
   w.u8(s.squads.length);
   for (const sq of s.squads) {
@@ -368,6 +391,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(sq.offer.length);
     sq.offer.forEach((i, k) => w.u8(i | (sq.offerPrism[k] ? 128 : 0)));
     for (const c of sq.picked) w.u8(Math.min(255, c));
+    w.u8(Math.min(255, Math.max(0, sq.rerolls)));
     w.u8(Math.min(255, Math.round(sq.stim * 10)));
     w.u16(sq.soldiers.length);
     for (const u of sq.soldiers) {
@@ -379,12 +403,14 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
       w.i16(u.vy);
       w.u16(Math.max(0, u.hp));
       w.u16(u.maxHp);
+      w.u8(u.shield * 255); // part du bouclier max (0 → 255) ; `u8` borne et arrondit
       w.i16(u.aim * 10000);
       w.u8((u.facing > 0 ? 1 : 0) | (u.target ? 2 : 0) | (u.invulnerable ? 4 : 0) | (u.capturedBy ? 8 : 0));
       if (u.capturedBy) w.u32(u.capturedBy);
     }
   }
 
+  mark('squads');
   w.u16(s.aliens.length);
   for (const a of s.aliens) {
     w.u32(a.id);
@@ -425,8 +451,10 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
       w.u8(Math.min(255, Math.round(a.lurkT * 30)));
       w.f32(a.spikeAng);
     }
+    if (def.shield) w.u8(a.shield * 255); // champ écrit selon le TYPE (pas la valeur) : le décodeur teste la même chose
   }
 
+  mark('aliens');
   w.u16(s.recruits.length);
   for (const r of s.recruits) {
     w.u32(r.id);
@@ -436,6 +464,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(Math.min(255, Math.round(r.life * 10)));
   }
 
+  mark('recruits');
   w.u16(s.projectiles.length);
   for (const p of s.projectiles) {
     w.u16(p.id);
@@ -452,6 +481,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     }
   }
 
+  mark('projectiles');
   w.u16(s.orbs.length);
   for (const o of s.orbs) {
     w.u16(o.id);
@@ -460,6 +490,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8((Math.min(127, o.value) & 0x7f) | (o.blink ? 0x80 : 0)); // valeur ≤ 127 (borné), bit 7 = clignote
   }
 
+  mark('orbs');
   w.u8(s.zones.length);
   for (const z of s.zones) {
     w.str(z.owner);
@@ -469,6 +500,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(Math.round(Math.min(1, z.progress) * 255));
   }
 
+  mark('zones');
   w.u8(Math.min(255, s.powerups.length));
   for (const p of s.powerups.slice(0, 255)) {
     w.u32(p.id);
@@ -477,6 +509,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.f32(p.y);
     w.u8(Math.min(255, Math.round(p.life * 10)));
   }
+  mark('powerups');
   w.u8(Math.min(255, s.fields.length));
   for (const f of s.fields.slice(0, 255)) {
     w.u32(f.id);
@@ -487,6 +520,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(Math.min(255, Math.round(f.ttl * 10)));
   }
 
+  mark('fields');
   w.u8(Math.min(255, s.puddles.length));
   for (const p of s.puddles.slice(0, 255)) {
     w.u32(p.id);
@@ -496,6 +530,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(Math.min(255, Math.round(p.ttl * 10)));
     w.u8(Math.round(p.slow * 100));
   }
+  mark('puddles');
   w.u8(Math.min(255, s.rocks.length));
   for (const k of s.rocks.slice(0, 255)) {
     w.u32(k.id);
@@ -504,6 +539,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u16(Math.round(k.r));
     w.u8(Math.min(255, Math.round(k.ttl * 10)));
   }
+  mark('rocks');
   w.u8(Math.min(255, s.walls.length));
   for (const k of s.walls.slice(0, 255)) {
     w.u32(k.id);
@@ -516,6 +552,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     w.u8(Math.min(255, Math.round(k.t * 50)));
     w.u8(Math.min(255, Math.round(k.dur * 50)));
   }
+  mark('walls');
   return w.result();
 }
 
@@ -529,7 +566,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], stim: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
       sq.level = r.u8();
       sq.xp = r.u16() / 10;
       const nOffer = r.u8();
@@ -539,6 +576,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         sq.offerPrism.push((v & 128) !== 0);
       }
       for (let k = 0; k < UPGRADE_IDS.length; k++) sq.picked.push(r.u8());
+      sq.rerolls = r.u8();
       sq.stim = r.u8() / 10;
       const n = r.u16();
       for (let j = 0; j < n; j++) {
@@ -550,10 +588,11 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         const vy = r.i16();
         const hp = r.u16();
         const maxHp = r.u16();
+        const shield = r.u8() / 255;
         const aim = r.i16() / 10000;
         const flags = r.u8();
         const capturedBy = flags & 8 ? r.u32() : 0;
-        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), capturedBy });
+        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, shield, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), capturedBy });
       }
       snap.squads.push(sq);
     }
@@ -609,7 +648,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         lurkT = r.u8() / 30;
         spikeAng = r.f32();
       }
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
+      const shield = def.shield ? r.u8() / 255 : 0;
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();

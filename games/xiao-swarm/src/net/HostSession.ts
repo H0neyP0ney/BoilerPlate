@@ -153,6 +153,10 @@ export class HostSession implements Session {
     this.sim.chooseUpgrade(this.localPlayer, index);
   }
 
+  rerollUpgrade(): void {
+    this.sim.rerollUpgrade(this.localPlayer);
+  }
+
   /** Coop : fin de partie quand toutes les squads sont mortes (défaite) ou que le boss final est tombé (victoire). */
   private checkCoopEnd(): void {
     const sim = this.sim;
@@ -206,6 +210,9 @@ export class HostSession implements Session {
         return this.onHello(peer, msg.v);
       case 'upgrade':
         if (this.remotes.has(peer) && typeof msg.index === 'number') this.sim.chooseUpgrade(peer, Math.floor(msg.index));
+        return;
+      case 'reroll':
+        if (this.remotes.has(peer)) this.sim.rerollUpgrade(peer);
         return;
       case 'input': {
         const r = this.remotes.get(peer);

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Pool, theme } from '@xiao/engine';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
+import { t as tr } from '../i18n';
 
 /**
  * Effets visuels déclenchés par les événements de la simulation :
@@ -151,9 +152,10 @@ export class Fx {
     this.gloopSmall.explode(Math.max(1, Math.round(g.count * 1.5 * size)), x, y);
   }
 
-  muzzleFlash(x: number, y: number): Phaser.GameObjects.Image {
+  /** Flash de tir à la bouche du canon ; `color` : teinte (celle de FX.muzzle par défaut, celle de l'alien pour ses tirs). */
+  muzzleFlash(x: number, y: number, color: number = FX.muzzle.color): Phaser.GameObjects.Image {
     const m = FX.muzzle;
-    const img = this.scene.add.image(x, y, 'fx_glow').setBlendMode(Phaser.BlendModes.ADD).setTint(m.color).setDepth(DEPTH.fx).setScale(m.scale);
+    const img = this.scene.add.image(x, y, 'fx_glow').setBlendMode(Phaser.BlendModes.ADD).setTint(color).setDepth(DEPTH.fx).setScale(m.scale);
     this.scene.tweens.add({ targets: img, alpha: 0, scale: m.scale * 0.6, duration: m.durationMs, onComplete: () => img.destroy() });
     return img;
   }
@@ -238,6 +240,21 @@ export class Fx {
     this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: 260, onComplete: () => flash.destroy() });
     this.column(x, y, 0xff4a4a, 170, 700);
     this.text(x, y - 46, '✖', '#ff5a5a', 34);
+  }
+
+  /**
+   * « LEVEL UP! » : texte vert cerné de blanc qui jaillit de la squad (scale 0 → 1, Back.Out), monte et s'efface en alpha.
+   * Part en même temps que l'onde de choc, avant la pause qui ouvre l'écran des cartes.
+   */
+  levelUpText(x: number, y: number): void {
+    const t = this.scene.add
+      .text(x, y - 40, tr('levelUpPop'), { fontFamily: theme.font, fontSize: '46px', fontStyle: 'bold', color: '#5dff84', stroke: '#ffffff', strokeThickness: 9 })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.bars + 2)
+      .setScale(0.2);
+    this.scene.tweens.add({ targets: t, scale: 1, duration: 380, ease: 'Back.Out' });
+    this.scene.tweens.add({ targets: t, y: y - 150, duration: 1100, ease: 'Sine.Out' });
+    this.scene.tweens.add({ targets: t, alpha: 0, delay: 550, duration: 550, onComplete: () => t.destroy() });
   }
 
   text(x: number, y: number, value: string, color = '#ffffff', size = 22): void {

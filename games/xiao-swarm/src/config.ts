@@ -48,8 +48,32 @@ export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9, reach: 0.
 export const PRISM_CHANCE = 0.05;
 /** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
 export const UPGRADE_CHOICE_TIME = 5;
+/** Montée de niveau : délai (s) de jeu normal entre la montée (onde de choc, texte « LEVEL UP! ») et la pause qui ouvre l'écran des cartes. */
+export const LEVEL_UP_DELAY = 1;
+/** Renforts express : plus proposés quand la squad dépasse déjà sa taille max d'au moins ce nombre de soldats (15/12 → plus de carte). */
+export const REINFORCE_MAX_OVERCAP = 3;
+/** Relances des propositions d'upgrade par partie et par joueur (le temps du choix en ligne ne repart pas). */
+export const REROLLS_PER_RUN = 2;
+/**
+ * Recrues : durée de vie au sol (s). À l'apparition, elle fait un saut en cloche (`hopTime` s, `hopHeight` px de haut dans l'affichage)
+ * vers la squad du tueur : distance tirée dans `hopDist` (px, sans dépasser la squad), direction écartée au hasard de ± `hopSpread` rad.
+ */
+export const RECRUIT = { life: 18, hopTime: 0.55, hopDist: [110, 154] as [number, number], hopSpread: 0.5, hopHeight: 70 };
+/**
+ * Ramassage des recrues et des power-ups : rayon de ramassage (px) et vitesse max (px/s) d'un objet attiré, multipliés par la stat
+ * `magnet` de la squad (upgrade). `magnetRadius` (px) est le rayon d'attraction de base de TOUS les objets au sol, globes d'XP
+ * compris (`Xp.ts`), lui aussi multiplié par `magnet`.
+ */
+export const PICKUP = { magnetRadius: 110, pickRadius: 34, maxSpeed: 1400 };
+/** Globes d'XP : durée de vie au sol (s) ; l'affichage s'en sert pour l'animation d'apparition (scale Back.Out sur les `XP_ORB_POP` premières secondes). */
+export const XP_ORB_LIFE = 45;
+export const XP_ORB_POP = 0.3;
+/** Power-up bouclier : le bouclier de chaque soldat vaut cette part de ses PV max (consommé avant eux, dure jusqu'à sa perte). */
+export const SHIELD_FRACTION = 1 / 3;
 /** Power-ups : délai entre deux apparitions (s), durée de vie au sol (s), nombre max simultané. */
 /** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %). */
+/** Stimpack : durée (s) ; facteurs de vitesse de déplacement et de cadence ci-dessous. Aussi activé par les renforts express. */
+export const STIM_TIME = 5;
 export const STIM_SPEED = 1.25;
 export const STIM_FIRE = 1.5;
 export const POWERUPS = { every: [14, 22], life: 12, max: 3, first: 20 } as const;
@@ -143,6 +167,8 @@ export const PALETTE = {
   allyRing: 0x39c6ff,
   hpAlly: 0x5ee05e,
   hpEnemy: 0xe84a4a,
+  /** Barre de bouclier (soldats avec le power-up, Scarab) : bleue, au-dessus de la barre de PV. */
+  shield: 0x4aa8ff,
   hpBack: 0x1a1a24,
   text: '#ffffff',
   textDim: '#a9c3dd',

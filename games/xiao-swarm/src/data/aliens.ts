@@ -39,6 +39,11 @@ export interface AlienDef {
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
+  /**
+   * Bouclier : barre en plus des PV (`pct` × PV max), consommée avant eux. Régénérée en `regenTime` s une fois qu'aucun dégât n'a été
+   * reçu depuis `regenDelay` s (tout coup, même sur un bouclier vide, relance le délai).
+   */
+  shield?: { pct: number; regenDelay: number; regenTime: number };
   /** Accélération d'approche : à moins de `range` px de sa cible, sa vitesse est multipliée par `speedMul` (pour rattraper une squad qui court). */
   dash?: { range: number; speedMul: number };
   /** Bulle : au contact d'un soldat, le capture et le dévore (`dps` PV par seconde) en restant immobile ; la détruire le libère. */
@@ -311,6 +316,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.2,
     target: 'center',
     slam: { radius: 190, damage: 30, cooldown: 3, knockback: 650 },
+    shield: { pct: 0.1, regenDelay: 5, regenTime: 4 },
     boss: { kind: 'mini' },
     xp: 220,
     recruitChance: 1,

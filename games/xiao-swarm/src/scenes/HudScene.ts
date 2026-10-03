@@ -10,6 +10,9 @@ import { xpBarLayout } from '../view/hudLayout';
 import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
+/** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
+const BOSS_ARROW_COLOR = 0xff3a3a;
+
 /**
  * HUD minimal en scène parallèle (non affecté par le zoom caméra) : bouton pause,
  * consigne de contrôle avant le premier input et, en ligne uniquement, le code de la salle à partager.
@@ -56,7 +59,9 @@ export class HudScene extends Phaser.Scene {
   private bossBanner!: Phaser.GameObjects.Text;
   private bossBar!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
-  private bossArrow!: Phaser.GameObjects.Graphics;
+  private tutorialArrow!: Phaser.GameObjects.Graphics;
+  private tutorialLabel!: Phaser.GameObjects.Text;
+  private tutorialBanner!: Phaser.GameObjects.Text;  private bossArrow!: Phaser.GameObjects.Graphics;
   /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
   private reviveArrow!: Phaser.GameObjects.Graphics;
   /** Coop : écran de fin (victoire / défaite) avec compte à rebours avant la nouvelle partie. */
@@ -120,6 +125,16 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.bossArrow = this.add.graphics();
     this.reviveArrow = this.add.graphics();
+    // onboarding : flèches vers le point vert / la recrue / le power-up, bulle au-dessus de la flèche, bandeau du haut
+    this.tutorialArrow = this.add.graphics();
+    this.tutorialLabel = this.add
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6, backgroundColor: '#13233acc', padding: { x: 12, y: 6 } })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+    this.tutorialBanner = this.add
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7, align: 'center' })
+      .setOrigin(0.5, 0)
+      .setVisible(false);
     this.endText = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 9, align: 'center' })
       .setOrigin(0.5)
@@ -182,6 +197,7 @@ export class HudScene extends Phaser.Scene {
     this.drawBoss();
     this.drawBossTimer();
     this.drawReviveArrow();
+    this.drawTutorial();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
     const coop = g.mode.id === 'coop';
     this.respawnText.setVisible(dead && !this.endText.visible).setText(coop ? t('spectating') : t('respawning')).setFontSize(coop ? 24 : 34);
@@ -225,32 +241,38 @@ export class HudScene extends Phaser.Scene {
     const barY = height - 34; // haut de la barre (bas de l'écran)
     const final = boss.def.boss!.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(width / 2, barY - 14);
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(width / 2, barY - (boss.maxShield > 0 ? 22 : 14));
     this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(x, barY, w, 16, 8);
     const ratio = Math.max(0, boss.hp / boss.maxHp);
     if (ratio > 0) this.bossBar.fillStyle(color, 1).fillRoundedRect(x + 2, barY + 2, Math.max(12, (w - 4) * ratio), 12, 6);
+    if (boss.maxShield > 0) {
+      // bouclier du boss : fine barre bleue juste au-dessus de sa barre de vie
+      const shieldRatio = Math.max(0, boss.shield / boss.maxShield);
+      this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(x, barY - 9, w, 7, 3);
+      if (shieldRatio > 0) this.bossBar.fillStyle(PALETTE.shield, 1).fillRoundedRect(x + 1.5, barY - 7.5, Math.max(6, (w - 3) * shieldRatio), 4, 2);
+    }
     this.bossBar.lineStyle(2, 0xffffff, 0.4).strokeRoundedRect(x, barY, w, 16, 8);
     this.bossBanner.setPosition(width / 2, height * 0.3);
 
-    // flèche vers le boss quand il est hors de l'écran
-    const cam = g.cameras.main;
-    const wv = cam.worldView;
-    const inside = boss.x > wv.x && boss.x < wv.right && boss.y > wv.y && boss.y < wv.bottom;
-    if (inside) return;
-    const ang = Math.atan2(boss.y - (wv.y + wv.height / 2), boss.x - (wv.x + wv.width / 2));
+    // flèche rouge (même gabarit que celle de la zone de réanimation) vers le boss, seulement quand il est hors de l'écran
+    const wv = g.cameras.main.worldView;
+    const sx = ((boss.x - wv.x) / wv.width) * width;
+    const sy = ((boss.y - wv.y) / wv.height) * height;
     const m = 46;
+    if (sx > m && sx < width - m && sy > m && sy < height - m) return; // boss à l'écran : pas de flèche
+    const ang = Math.atan2(sy - height / 2, sx - width / 2);
     const c = Math.cos(ang);
     const s = Math.sin(ang);
     const k = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
     const px = width / 2 + c * k;
     const py = height / 2 + s * k;
-    const pulse = 1 + Math.sin(this.time.now / 140) * 0.12;
-    this.bossArrow.fillStyle(0x0a1422, 0.75).fillCircle(px, py, 24 * pulse);
-    this.bossArrow.lineStyle(3, color, 1).strokeCircle(px, py, 24 * pulse);
-    this.bossArrow.fillStyle(color, 1).fillTriangle(
-      px + c * 14 + c * 6, py + s * 14 + s * 6,
-      px - c * 4 - s * 10, py - s * 4 + c * 10,
-      px - c * 4 + s * 10, py - s * 4 - c * 10,
+    const pulse = 1 + (0.5 + 0.5 * Math.sin(this.time.now / 170)) * 0.14;
+    this.bossArrow.fillStyle(0x2a0a0a, 0.75).fillCircle(px, py, 25 * pulse);
+    this.bossArrow.lineStyle(3, BOSS_ARROW_COLOR, 1).strokeCircle(px, py, 25 * pulse);
+    this.bossArrow.fillStyle(BOSS_ARROW_COLOR, 1).fillTriangle(
+      px + c * 15 + c * 6, py + s * 15 + s * 6,
+      px - c * 4 - s * 11, py - s * 4 + c * 11,
+      px - c * 4 + s * 11, py - s * 4 - c * 11,
     );
   }
 
@@ -299,6 +321,72 @@ export class HudScene extends Phaser.Scene {
         px - c * 4 - s * 11, py - s * 4 + c * 11,
         px - c * 4 + s * 11, py - s * 4 - c * 11,
       );
+    }
+  }
+
+  /**
+   * Onboarding (voir `sim/Tutorial.ts`) : flèche au bord de l'écran vers chaque cible hors champ ; une recrue / un power-up à l'écran
+   * reçoit une flèche qui rebondit au-dessus de lui, avec sa bulle (« Get +1 trooper »). Le point vert à l'écran est dessiné au sol
+   * par `WorldView`. Bandeau du haut pour la consigne « ramasse tous les globes ».
+   */
+  private drawTutorial(): void {
+    const g = this.game_;
+    const a = this.tutorialArrow;
+    a.clear();
+    const tut = g.session.sim.tutorial;
+    if (!tut?.active) {
+      this.tutorialLabel.setVisible(false);
+      this.tutorialBanner.setVisible(false);
+      return;
+    }
+    const { width, height } = this.scale;
+    const banner = tut.banner;
+    this.tutorialBanner.setVisible(!!banner).setPosition(width / 2, 70);
+    if (banner) this.tutorialBanner.setText(t(banner));
+    const wv = g.cameras.main.worldView;
+    const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
+    let label: { x: number; y: number; text: string } | null = null;
+    for (const target of tut.targets()) {
+      const sx = ((target.x - wv.x) / wv.width) * width;
+      const sy = ((target.y - wv.y) / wv.height) * height;
+      const m = 46;
+      const inside = sx > m && sx < width - m && sy > m && sy < height - m;
+      if (inside && target.kind === 'marker') continue; // le point vert à l'écran est dessiné au sol
+      const color = target.kind === 'marker' ? 0x5dff84 : 0xffe14a;
+      const back = target.kind === 'marker' ? 0x0a2210 : 0x2a2208;
+      let px: number;
+      let py: number;
+      let ang: number;
+      if (inside) {
+        ang = Math.PI / 2; // pointe vers le bas, vers la cible
+        px = sx;
+        py = sy - 70 - beat * 14;
+      } else {
+        ang = Math.atan2(sy - height / 2, sx - width / 2);
+        const c0 = Math.cos(ang);
+        const s0 = Math.sin(ang);
+        const k = Math.min(c0 !== 0 ? (width / 2 - m) / Math.abs(c0) : Infinity, s0 !== 0 ? (height / 2 - m) / Math.abs(s0) : Infinity);
+        px = width / 2 + c0 * k;
+        py = height / 2 + s0 * k;
+      }
+      const c = Math.cos(ang);
+      const s = Math.sin(ang);
+      const pulse = 1 + beat * 0.14;
+      a.fillStyle(back, 0.75).fillCircle(px, py, 25 * pulse);
+      a.lineStyle(3, color, 1).strokeCircle(px, py, 25 * pulse);
+      a.fillStyle(color, 1).fillTriangle(
+        px + c * 15 + c * 6, py + s * 15 + s * 6,
+        px - c * 4 - s * 11, py - s * 4 + c * 11,
+        px - c * 4 + s * 11, py - s * 4 - c * 11,
+      );
+      if (target.label && !label) label = { x: px, y: py - 36 * pulse, text: t(target.label) };
+    }
+    // bulle de texte au-dessus de la flèche (gardée dans l'écran)
+    this.tutorialLabel.setVisible(!!label);
+    if (label) {
+      this.tutorialLabel.setText(label.text);
+      const half = this.tutorialLabel.width / 2 + 8;
+      this.tutorialLabel.setPosition(Math.max(half, Math.min(width - half, label.x)), Math.max(this.tutorialLabel.height + 8, label.y));
     }
   }
 

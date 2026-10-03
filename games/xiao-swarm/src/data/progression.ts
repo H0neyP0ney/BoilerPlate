@@ -54,11 +54,11 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   hp: { id: 'hp', stat: 'hp', mod: { pct: 0.15 }, maxStacks: 8, value: 15, color: 0x6fdc6f },
   range: { id: 'range', stat: 'range', mod: { pct: 0.05 }, maxStacks: 8, value: 5, color: 0xffa07a },
   speed: { id: 'speed', stat: 'speed', mod: { pct: 0.08 }, maxStacks: 5, value: 8, color: 0x7dd3ff },
-  maxSquad: { id: 'maxSquad', stat: 'maxSquad', mod: { flat: 2 }, maxStacks: 4, value: 2, color: 0xb388ff },
-  magnet: { id: 'magnet', stat: 'magnet', mod: { pct: 0.35 }, maxStacks: 4, value: 35, color: 0x5aa8ff },
+  maxSquad: { id: 'maxSquad', stat: 'maxSquad', mod: { flat: 2 }, maxStacks: 6, value: 2, color: 0xb388ff },
+  magnet: { id: 'magnet', stat: 'magnet', mod: { pct: 0.5 }, maxStacks: 3, value: 50, color: 0x5aa8ff },
   recruit: { id: 'recruit', stat: 'recruit', mod: { pct: 0.3 }, maxStacks: 4, value: 30, color: 0xff8fc8 },
-  xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.2 }, maxStacks: 4, value: 20, color: 0x4fe0d0 },
-  /** Effet instantané : `value` gunners rejoignent l'escouade (proposée seulement s'il reste de la place). */
+  xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0x4fe0d0 },
+  /** Effet instantané : `value` gunners rejoignent l'escouade, même au-delà de la taille max, avec un bouclier plein. Plus proposée dès que la squad dépasse déjà son max de `REINFORCE_MAX_OVERCAP` (config.ts). */
   reinforce: { id: 'reinforce', maxStacks: 99, value: 2, color: 0xffa94d },
 };
 

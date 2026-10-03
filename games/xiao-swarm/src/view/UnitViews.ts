@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
-import { DEPTH } from '../config';
+import { DEPTH, RECRUIT } from '../config';
 import { FX } from '../fxParams';
+import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { hasComposedRecruit, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
@@ -17,12 +18,32 @@ import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 /** Particules de soin sur un soldat soigné : durée (s) pendant laquelle elles le suivent, et délai entre deux « + ». */
 const HEAL_FX_TIME = 1;
 const HEAL_FX_EVERY = 0.12;
+/** Après un flash de touche, l'unité reste sans flash au moins ce temps (s, ≈ 4 images à 60 fps) : sous un tir continu elle clignote au lieu de rester blanche. */
+const FLASH_REST = 0.07;
+
+/**
+ * Point d'origine (bouche du canon, de la langue…) en monde d'un sprite de planche : le point de la frame jouée (placé dans la
+ * visionneuse d'unités, `muzzles` / `muzzle` du catalogue), retourné avec le sprite. null sans planche animée ni point défini.
+ */
+function muzzleOf(b: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, id: string, defaultAnim: string): { x: number; y: number } | null {
+  const anims = (b as Partial<Phaser.GameObjects.Sprite>).anims;
+  if (!anims) return null; // visuel statique (dessin procédural / image) : pas de point par frame
+  const key = anims.currentAnim?.key;
+  const anim = key?.startsWith(id + ':') ? key.slice(id.length + 1) : defaultAnim;
+  const frame = anims.currentFrame ? anims.currentFrame.index - 1 : 0;
+  const m = sprites.muzzleFor(id, anim, frame);
+  if (!m) return null;
+  const fx = b.flipX ? 1 - m[0] : m[0];
+  return { x: b.x + (fx - b.originX) * b.displayWidth, y: b.y + (m[1] - b.originY) * b.displayHeight };
+}
 
 export class SoldierView {
   /** Position affichée (interpolée), utilisée par l'overlay et la caméra. */
   rx = 0;
   ry = 0;
+  /** Durée restante (s) du flash de touche ; voir `hit` pour le déclencher. */
   flash = 0;
+  private rest = 0;
   seen = true;
   private walk = 0;
   /** Soin : PV vus à la frame précédente, durée restante des particules de soin (s) et cadence d'émission. */
@@ -70,6 +91,11 @@ export class SoldierView {
     return true;
   }
 
+  /** Touché : flash de `duration` s, sauf s'il est déjà en cours ou en repos (le flash n'est jamais prolongé : sous un tir continu l'unité clignote). */
+  hit(duration: number): void {
+    if (this.flash <= 0 && this.rest <= 0) this.flash = duration;
+  }
+
   sync(alpha: number, dt: number, time: number): void {
     const s = this.state;
     this.rx = lerp(s.px, s.x, alpha);
@@ -110,8 +136,10 @@ export class SoldierView {
         .setDepth(depth + 0.5);
     }
 
+    if (this.rest > 0) this.rest -= dt;
     if (this.flash > 0) {
       this.flash -= dt;
+      if (this.flash <= 0) this.rest = FLASH_REST;
       this.body.setTint(0xff6a6a).setTintMode(Phaser.TintModes.FILL);
     } else if (s.capturedBy) {
       this.body.setTint(0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion
@@ -125,16 +153,7 @@ export class SoldierView {
 
   /** Bouche du canon en monde (planche : point de la frame en cours, comme dans la visionneuse), sinon null. */
   muzzlePoint(): { x: number; y: number } | null {
-    const b = this.body;
-    const anims = (b as Partial<Phaser.GameObjects.Sprite>).anims;
-    if (!anims) return null; // visuel statique (dessin procédural / image) : pas de bouche par frame
-    const key = anims.currentAnim?.key;
-    const anim = key?.startsWith(this.bodyId + ':') ? key.slice(this.bodyId.length + 1) : 'shoot';
-    const frame = anims.currentFrame ? anims.currentFrame.index - 1 : 0;
-    const m = sprites.muzzleFor(this.bodyId, anim, frame);
-    if (!m) return null;
-    const fx = b.flipX ? 1 - m[0] : m[0];
-    return { x: b.x + (fx - b.originX) * b.displayWidth, y: b.y + (m[1] - b.originY) * b.displayHeight };
+    return muzzleOf(this.body, this.bodyId, 'shoot');
   }
 
   /** Orientation affichée (pour l'animation de mort). */
@@ -153,7 +172,9 @@ export class AlienView {
   private attackStarted = false;
   rx = 0;
   ry = 0;
+  /** Durée restante (s) du flash de touche ; voir `hit` pour le déclencher. */
   flash = 0;
+  private rest = 0;
   seen = true;
   private facing = 1;
   private spawnT = 0;
@@ -173,6 +194,16 @@ export class AlienView {
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);
+  }
+
+  /** Touché : flash de `duration` s, sauf s'il est déjà en cours ou en repos (le flash n'est jamais prolongé : sous un tir continu l'unité clignote). */
+  hit(duration: number): void {
+    if (this.flash <= 0 && this.rest <= 0) this.flash = duration;
+  }
+
+  /** Point d'origine des tirs / de la langue en monde (point de la frame jouée, placé dans la visionneuse), sinon null. */
+  muzzlePoint(): { x: number; y: number } | null {
+    return muzzleOf(this.body, this.id, 'walk');
   }
 
   sync(alpha: number, dt: number, time: number): void {
@@ -221,8 +252,10 @@ export class AlienView {
 
     if (a.revived) this.syncZombieFx();
 
+    if (this.rest > 0) this.rest -= dt;
     if (this.flash > 0) {
       this.flash -= dt;
+      if (this.flash <= 0) this.rest = FLASH_REST;
       this.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
     } else if (a.rushWind > 0) {
       this.body.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
@@ -250,22 +283,21 @@ export class AlienView {
 
 export class RecruitView {
   seen = true;
+  /** Position au sol affichée (interpolée) et clignotement de fin de vie : `WorldView` y dessine le cercle qui pulse (comme sous les power-ups). */
+  rx = 0;
+  ry = 0;
+  dim = false;
   private readonly img: Phaser.GameObjects.Sprite;
-  private readonly glow: Phaser.GameObjects.Image;
   private readonly stars?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(
     scene: Phaser.Scene,
     readonly state: RecruitState,
-    color: number,
+    /** Couleur de la classe (la zone au sol est jaune pour toutes les recrues : `RECRUIT_COLOR`). */
+    readonly color: number,
   ) {
-    this.glow = scene.add
-      .image(state.x, state.y, 'fx_glow')
-      .setTint(color)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.7)
-      .setScale(1.1, 0.6)
-      .setDepth(DEPTH.groundFx);
+    this.rx = state.x;
+    this.ry = state.y;
     const id = `recruit_${state.cls}`;
     this.img = sprites.add(scene, id, state.x, state.y);
     sprites.play(this.img, id, 'idle');
@@ -293,10 +325,19 @@ export class RecruitView {
     const r = this.state;
     const x = lerp(r.px, r.x, alpha);
     const y = lerp(r.py, r.y, alpha);
-    const bob = Math.sin(time * 5 + r.id) * 4;
+    // saut en cloche à l'apparition : l'arc se déduit de l'âge (la simulation ne décompte que `life`), le cercle au sol reste au sol
+    // l'âge est interpolé comme la position (`life` ne change qu'à chaque tick de 30 Hz : sans ça l'arc avançait par à-coups)
+    const age = RECRUIT.life - r.life - (1 - alpha) / TICK_RATE;
+    const k = age / RECRUIT.hopTime;
+    const hop = k >= 0 && k < 1 ? 4 * RECRUIT.hopHeight * k * (1 - k) : 0;
+    // après l'atterrissage, le léger balancement n'apparaît qu'en douceur (pas de saut de 4 px à la fin de l'arc)
+    const idle = Math.min(1, Math.max(0, (age - RECRUIT.hopTime) / 0.3));
+    const bob = k < 1 ? -hop : Math.sin(time * 5 + r.id) * 4 * idle;
     const blink = r.life < 4 && Math.sin(time * 20) > 0;
     this.img.setPosition(x, y + bob).setDepth(DEPTH.actors + y).setAlpha(blink ? 0.3 : 1);
-    this.glow.setPosition(x, y).setScale(1.1 + Math.sin(time * 6) * 0.1, 0.6);
+    this.rx = x;
+    this.ry = y;
+    this.dim = blink;
     // centre du globe : l'image est ancrée vers son bas (originY 0.82)
     // centre du globe : l'image est ancrée sous lui (ses pieds)
     this.stars?.setPosition(x, y + bob - this.img.displayHeight * (this.img.originY - 0.5) + FX.recruit.starY).setDepth(DEPTH.actors + y + 1);
@@ -304,7 +345,6 @@ export class RecruitView {
 
   destroy(): void {
     this.img.destroy();
-    this.glow.destroy();
     this.stars?.destroy();
   }
 }

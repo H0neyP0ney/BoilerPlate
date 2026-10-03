@@ -49,7 +49,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.507,
         originY: 0.881,
         scale: 0.73,
-        shadow: 1.4,
+        shadow: 1.25,
         anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] },
         facesLeft: true,
         anims: {
@@ -93,8 +93,13 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.558,
         originY: 0.936,
         scale: 1.51,
-        shadow: 1.35,
+        shadow: 1.25,
+        muzzleFlash: true,
+        muzzle: [0.2, 0.41],
         anchors: { 'walk:right': [0.4379, 0.8643], 'walk:left': [0.5621, 0.8643] },
+        muzzles: {
+          walk: [null, [0.2078, 0.3925], [0.2, 0.4714], [0.2, 0.4188], [0.2, 0.3574], [0.2, 0.4451], [0.2, 0.4538], [0.2, 0.3749]],
+        },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 8), fps: 4 },
@@ -202,8 +207,10 @@ export const ASSETS: AssetEntry[] = [
       alien_toad: {
         originX: 0.502,
         originY: 0.931,
-        scale: 2.21,
+        scale: 1.98,
         shadow: 3,
+        muzzleFlash: true,
+        muzzle: [0.26, 0.47],
         anchors: { 'walk:right': [0.4944, 0.8187], 'walk:left': [0.498, 0.8187] },
         facesLeft: true,
         anims: {
@@ -226,7 +233,12 @@ export const ASSETS: AssetEntry[] = [
         originY: 0.915,
         scale: 2.24,
         shadow: 2.7,
-        anchors: { 'walk:right': [0.4541, 0.8053], 'walk:left': [0.4988, 0.8053] },
+        muzzleFlash: true,
+        muzzle: [0.57, 0.27],
+        anchors: { 'walk:right': [0.4375, 0.7795], 'walk:left': [0.4988, 0.7795] },
+        muzzles: {
+          walk: [[0.404, 0.6703], [0.3985, 0.6961], [0.3985, 0.6574], [0.3929, 0.7155], [0.404, 0.6832], [0.404, 0.7025], [0.3874, 0.6832], [0.3985, 0.709], [0.3929, 0.709]],
+        },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 8), fps: 6 },
@@ -246,8 +258,8 @@ export const ASSETS: AssetEntry[] = [
       alien_wall: {
         originX: 0.458,
         originY: 0.917,
-        scale: 2.55,
-        shadow: 3,
+        scale: 2.15,
+        shadow: 2.6,
         anchors: { 'walk:right': [0.5007, 0.8013], 'walk:left': [0.5136, 0.8013] },
         facesLeft: true,
         anims: {
@@ -268,8 +280,8 @@ export const ASSETS: AssetEntry[] = [
       alien_burner: {
         originX: 0.616,
         originY: 0.907,
-        scale: 1.95,
-        shadow: 2.5,
+        scale: 1.71,
+        shadow: 2.2,
         anchors: { 'walk:right': [0.5026, 0.6536], 'walk:left': [0.4974, 0.6536] },
         facesLeft: true,
         anims: {
@@ -290,7 +302,7 @@ export const ASSETS: AssetEntry[] = [
       alien_lurker: {
         originX: 0.453,
         originY: 0.885,
-        scale: 1.92,
+        scale: 2.07,
         shadow: 2.15,
         anchors: { 'walk:right': [0.497, 0.7275], 'walk:left': [0.5014, 0.7275] },
         facesLeft: true,

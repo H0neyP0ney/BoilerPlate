@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
 import { SCENES } from '../config';
 import type { SoldierClassId } from '../data/classes';
+import { TUTORIAL } from '../data/tutorial';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
@@ -13,7 +14,10 @@ import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
 import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { HostSession } from '../net/HostSession';
+import { encodeSnapshot, SNAPSHOT_EVERY, takeSnapshot } from '../net/Protocol';
 import { LocalSession, type Session } from '../net/Session';
+import { RunRecorder } from '../sim/RunRecorder';
+import { saveToCode } from '../dev/devSave';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
 import { WorldView } from '../view/WorldView';
@@ -43,6 +47,10 @@ export class GameScene extends Phaser.Scene {
   private ended = false;
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
   private upgradeOpen = false;
+  private recorder: RunRecorder | null = null;
+  private snapMeasuredAt = -1;
+  private snapPeak = 0;
+  private snapPeakAt = 0;
   /** Proposition déjà choisie mais pas encore remplacée par l'hôte (évite de la rouvrir le temps de l'aller-retour réseau). */
   /** Proposition affichée dans la fenêtre de choix (pour la rouvrir quand elle change). */
   private shownOffer = '';
@@ -77,6 +85,7 @@ export class GameScene extends Phaser.Scene {
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
+        tutorial: mode.id === 'survival' && !settings.tutorialDone, // onboarding scripté à la première partie solo
       });
     }
     this.view = new WorldView(this, this.session.sim, this.session.localPlayer);
@@ -146,6 +155,14 @@ export class GameScene extends Phaser.Scene {
     this.debug?.set('soldiers', this.localSquad.size);
     this.debug?.set('aliens', sim.aliens.length);
     this.debug?.set('bullets', sim.combat.projectiles.active.length);
+    if (this.debug) {
+      this.measureSnapshot(secs);
+      // enregistrement de la partie (calibration du Gestionnaire de vagues et du réseau) : pas chez un client, ses compteurs sont vides
+      if (!this.ended && (!this.session.online || this.session instanceof HostSession)) {
+        this.recorder ??= new RunRecorder(sim);
+        this.recorder.update(this.session.localPlayer);
+      }
+    }
   }
 
   // ---------- Infos pour le HUD ----------
@@ -191,9 +208,15 @@ export class GameScene extends Phaser.Scene {
   private readonly onEvent = (e: SimEvent): void => {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown') this.events.emit('boss', e); // bandeau / flèche du HUD
+    if (e.t === 'boss') this.recorder?.noteBoss(e.alien, e.kind);
+    if (e.t === 'tutorial') {
+      poki.measure('onboarding', e.phase, 'complete');
+      if (e.phase === 'done') settings.setTutorialDone(true); // terminé : les parties suivantes sautent l'onboarding
+    }
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
     // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
     if (e.t === 'gameEnd') {
+      this.saveRun(e.victory);
       if (e.victory) this.flow.win();
       else this.flow.fail();
     }
@@ -224,12 +247,26 @@ export class GameScene extends Phaser.Scene {
     this.upgradeOpen = true;
     this.shownOffer = key;
     this.scene.stop(SCENES.levelUp);
-    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level });
+    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
+  }
+
+  /** Dev : encode l'état comme un snapshot réseau 2 fois par seconde (sans l'envoyer) pour afficher sa taille et le débit qu'il coûterait. */
+  private measureSnapshot(secs: number): void {
+    if (secs - this.snapMeasuredAt < 0.5) return;
+    this.snapMeasuredAt = secs;
+    const sizes: Record<string, number> = {};
+    const bytes = encodeSnapshot(takeSnapshot(this.session.sim), sizes).byteLength;
+    this.recorder?.noteSnapshot(bytes, sizes);
+    this.snapPeak = secs - this.snapPeakAt > 10 ? bytes : Math.max(this.snapPeak, bytes);
+    if (bytes >= this.snapPeak) this.snapPeakAt = secs;
+    const kbps = (b: number) => ((b * 30) / SNAPSHOT_EVERY / 1000).toFixed(0);
+    this.debug?.set('snapshot', `${bytes} o · ${kbps(bytes)} Ko/s`);
+    this.debug?.set('snapshot pic 10s', `${this.snapPeak} o · ${kbps(this.snapPeak)} Ko/s`);
   }
 
   private offerKey(squad: Squad): string {
     const picks = Object.values(squad.picked).reduce((n, v) => n + (v ?? 0), 0);
-    return `${(squad.offer ?? []).join(',')}|${picks}`;
+    return `${(squad.offer ?? []).join(',')}|${squad.offerPrism.join(',')}|${picks}|${squad.rerolls}`;
   }
 
   private closeUpgrade(): void {
@@ -243,7 +280,12 @@ export class GameScene extends Phaser.Scene {
     this.session.chooseUpgrade(index);
   }
 
-  readonly pauseGame = (): void => {
+  /** Appelé par la fenêtre de choix : relance les propositions (la fenêtre se rouvre avec le nouveau tirage). */
+  rerollUpgrade(): void {
+    this.session.rerollUpgrade();
+  }
+
+  readonly pauseGame =(): void => {
     if (this.session.online || this.upgradeOpen) return; // pause impossible : les autres joueurs continuent
     if (!this.scene.isActive() || !this.flow.interrupt()) return;
     this.scene.pause();
@@ -258,8 +300,17 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume(SCENES.hud);
   }
 
+  /** Dev : envoie la partie enregistrée au serveur de dev (`docs/bench/runs/`), si elle est assez longue pour compter. */
+  private saveRun(victory: boolean): void {
+    const rec = this.recorder;
+    this.recorder = null; // une relance coop repart sur un nouvel enregistrement
+    if (!rec || rec.samples.length < 10) return;
+    void saveToCode('bench-run', rec.finish(this.session.localPlayer, this.mode.id, victory)).then((m) => console.info(m));
+  }
+
   private endRun(victory: boolean, connectionLost = false): void {
     this.ended = true;
+    this.saveRun(victory);
     if (victory) this.flow.win();
     else this.flow.fail();
     const online = this.session.online;

@@ -30,6 +30,10 @@ export type SimEvent =
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
   | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
   | { t: 'impact'; x: number; y: number; texture: string }
+  /** Un alien lance sa volée de boules en cloche (shooter, spitter, crabe) depuis (x, y), son point d'origine simulé : l'affichage y pose un flash au canon. */
+  | { t: 'alienShot'; id: number; alien: AlienId; x: number; y: number }
+  /** Onboarding : une étape commence (`phase`, voir `sim/Tutorial.ts`) ; 'done' = fin, le gestionnaire de vagues normal prend le relai. */
+  | { t: 'tutorial'; phase: string }
   | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }
   | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
   | { t: 'tongue'; alien: number; target: number; dur: number }

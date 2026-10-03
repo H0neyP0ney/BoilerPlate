@@ -1,15 +1,15 @@
+import { PICKUP, XP_ORB_LIFE } from '../config';
 import { splitXp } from '../data/progression';
 import type { AlienState, XpOrb } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-const PICK_RADIUS = 26;
-/** Rayon d'attraction de base (px), multiplié par la stat `magnet` de la squad. */
-const MAGNET_RADIUS = 110;
+/** Rayons d'attraction et de ramassage : ceux de `PICKUP` (config.ts), communs aux globes d'XP, recrues et power-ups, multipliés par la stat `magnet` de la squad. */
+const MAGNET_RADIUS = PICKUP.magnetRadius;
 /** Power-up aimant (coup unique) : rayon (px) dans lequel tout l'XP est aspiré à son ramassage, et vitesse d'aspiration. */
 const MAGNET_BUFF_RADIUS = 1000;
 const MAGNET_BUFF_PULL = 2.5;
-const LIFETIME = 45;
+const LIFETIME = XP_ORB_LIFE;
 /** Au-delà, les plus vieux globes disparaissent (garde l'affichage et la simulation légers). */
 const MAX_ORBS = 350;
 
@@ -23,10 +23,11 @@ export class Xp {
 
   constructor(private readonly sim: Sim) {}
 
-  drop(a: AlienState): void {
-    if (a.def.xp <= 0) return;
+  /** `xp` : XP lâchée si elle diffère de celle de l'espèce (tutoriel). */
+  drop(a: AlienState, xp = a.def.xp): void {
+    if (xp <= 0) return;
     const { rng } = this.sim;
-    for (const value of splitXp(a.def.xp)) {
+    for (const value of splitXp(xp)) {
       const ang = rng.range(0, Math.PI * 2);
       const r = a.radius * rng.range(0.2, 1.1);
       const x = a.x + Math.cos(ang) * r;
@@ -51,6 +52,7 @@ export class Xp {
       let best: { x: number; y: number; owner: string } | undefined;
       let bestD = Infinity;
       let bestMag = MAGNET_RADIUS;
+      let bestStat = 1; // stat `magnet` de la squad qui attire : accélère aussi le globe
       for (const s of soldierHash.query(o.x, o.y, MAGNET_RADIUS * 2.6, this.sim.scratchSoldiers)) {
         if (!s.alive) continue;
         const sq = this.sim.squadOf(s.owner);
@@ -61,6 +63,7 @@ export class Xp {
         best = s;
         bestD = d;
         bestMag = mag;
+        bestStat = sq.stats.get('magnet');
       }
       // Globe aspiré par le power-up aimant (coup unique) : il vole vers le soldat le plus proche de sa squad jusqu'à être ramassé
       if (o.pulled) {
@@ -78,16 +81,17 @@ export class Xp {
           best = near;
           bestD = nearD;
           bestMag = MAGNET_BUFF_RADIUS;
+          bestStat = sq?.stats.get('magnet') ?? 1;
         } else o.pulled = undefined; // squad anéantie : le globe redevient un globe normal
       }
       if (!best) continue;
-      if (bestD < PICK_RADIUS) {
+      if (bestD < PICKUP.pickRadius * bestStat) {
         this.sim.squadOf(best.owner)!.gainXp(o.value);
         this.orbs.splice(i, 1);
         continue;
       }
       // plus il est proche, plus il accélère vers le soldat
-      const k = Math.min(1, dt * (bestMag >= MAGNET_BUFF_RADIUS ? MAGNET_BUFF_PULL + (1 - bestD / bestMag) * 3.5 : 5 + (1 - bestD / bestMag) * 10));
+      const k = Math.min(1, dt * bestStat * (bestMag >= MAGNET_BUFF_RADIUS ? MAGNET_BUFF_PULL + (1 - bestD / bestMag) * 3.5 : 5 + (1 - bestD / bestMag) * 10));
       o.x += (best.x - o.x) * k;
       o.y += (best.y - o.y) * k;
     }

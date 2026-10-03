@@ -12,6 +12,10 @@ export interface LevelUpData {
   /** Upgrades prismatiques (mêmes indices que `offer`) : bonus doublé. */
   prism: boolean[];
   level: number;
+  /** Relances restantes. */
+  rerolls: number;
+  /** Onboarding : upgrade recommandée, mise en avant par une flèche verte sur sa carte (le joueur choisit ce qu'il veut). */
+  suggest?: UpgradeId;
 }
 
 /**
@@ -91,6 +95,26 @@ export class LevelUpScene extends Phaser.Scene {
     });
     this.timerBar = this.add.graphics();
 
+    // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
+    const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;
+    let suggestArrow: Phaser.GameObjects.Text | null = null;
+    if (suggestIdx >= 0) {
+      suggestArrow = this.add
+        .text(0, 0, '▼', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
+        .setOrigin(0.5, 1);
+      this.tweens.add({ targets: suggestArrow, scale: { from: 1, to: 1.3 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    }
+
+    // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R)
+    let rerollBtn: Phaser.GameObjects.Text | null = null;
+    if (offer.length && data.rerolls > 0) {
+      rerollBtn = this.add
+        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#13233a', backgroundColor: '#9fd3ff', padding: { x: 14, y: 8 } })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      rerollBtn.on('pointerup', () => this.reroll());
+    }
+
     const layout = () => {
       const { width: w, height: h } = this.scale;
       dim.setSize(w, h);
@@ -102,12 +126,17 @@ export class LevelUpScene extends Phaser.Scene {
       const total = vertical ? n * ch + (n - 1) * gap : ch;
       // au centre de l'écran : titre, cartes, puis la barre de temps
       const top = h / 2 - total / 2;
-      title.setPosition(w / 2, top - 14).setFontSize(vertical ? 20 : 28);
+      title.setPosition(w / 2, top - 14 - (suggestArrow && !vertical ? 46 : 0)).setFontSize(vertical ? 20 : 28); // plus haut quand la flèche recommandée est au-dessus d'une carte
       this.cards.forEach((c, i) => {
         const x = vertical ? w / 2 : w / 2 + (i - (n - 1) / 2) * (cw + gap);
         const y = vertical ? top + ch / 2 + i * (ch + gap) : top + ch / 2;
         c.setPosition(x, y);
         this.resizeCard(c, cw, ch, vertical);
+        if (suggestArrow && i === suggestIdx) {
+          // horizontal : au-dessus de la carte, pointe vers le bas ; en colonne (mobile) : à gauche, pointe vers la droite
+          suggestArrow.setText(vertical ? '▶' : '▼').setOrigin(vertical ? 1 : 0.5, vertical ? 0.5 : 1);
+          suggestArrow.setPosition(vertical ? x - cw / 2 - 6 : x, vertical ? y : y - ch / 2 - 8);
+        }
         const fx = this.prismFx.get(i);
         if (fx) {
           fx.setPosition(x, y);
@@ -119,6 +148,7 @@ export class LevelUpScene extends Phaser.Scene {
       this.timerBox = { x: w / 2 - barW / 2, y: top + total + 22, w: barW };
       this.waitText.setPosition(w / 2, this.cards.length ? top + total + 62 : h / 2);
       if (!this.cards.length) this.timerBox.y = h / 2 + 30;
+      rerollBtn?.setPosition(w / 2, top + total + 66 + (this.game_.session.online ? 10 : -14));
     };
     layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
@@ -128,6 +158,7 @@ export class LevelUpScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code);
       if (i >= 0 && i < offer.length && !e.repeat) this.pick(i);
+      if (e.code === 'KeyR' && rerollBtn && !e.repeat) this.reroll();
     });
   }
 
@@ -196,6 +227,13 @@ export class LevelUpScene extends Phaser.Scene {
     desc.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 32 : 40)).setFontSize(vertical ? 13 : 15);
     stack.setPosition(w / 2 - 10, h / 2 - 6);
     hit.setSize(w, h);
+  }
+
+  /** La fenêtre est relancée par GameScene quand les nouvelles propositions arrivent (clé d'offre différente). */
+  private reroll(): void {
+    if (this.busy) return;
+    this.busy = true;
+    this.game_.rerollUpgrade();
   }
 
   private pick(index: number): void {

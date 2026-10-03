@@ -15,6 +15,8 @@
     "new-game": "node scripts/new-game.mjs",
     "sim:headless": "npm run sim -w @xiao/swarm-attack --",
     "sim:net": "npm run sim:net -w @xiao/swarm-attack --",
+    "sim:tutorial": "npm run sim:tutorial -w @xiao/swarm-attack --",
+    "sim:calibrate": "npm run sim:calibrate -w @xiao/swarm-attack --",
     "sim:bot": "npm run sim:bot -w @xiao/swarm-attack --",
     "sim:crowd": "npm run sim:crowd -w @xiao/swarm-attack --",
     "sim:recruit": "npm run sim:recruit -w @xiao/swarm-attack --",

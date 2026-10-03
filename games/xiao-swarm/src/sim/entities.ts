@@ -21,6 +21,9 @@ export interface Body {
   mass: number;
   hp: number;
   maxHp: number;
+  /** Bouclier : barre en plus des PV, consommée la première (power-up « shield » pour les soldats, `def.shield` pour le Scarab). 0 = aucun. */
+  shield: number;
+  maxShield: number;
   alive: boolean;
   team: Team;
 }
@@ -95,6 +98,10 @@ export interface AlienState extends Body {
   lurkPhase: number;
   lurkT: number;
   spikeAng: number;
+  /** Aliens à `def.shield` : secondes écoulées depuis les derniers dégâts reçus (le bouclier ne se régénère qu'après `regenDelay`). */
+  shieldT: number;
+  /** Tutoriel seulement : écrase ce que l'alien lâche en mourant (XP, recrue, power-up). Absent hors tutoriel. */
+  tut?: { xp: number; recruit: boolean; powerup?: PowerUpKind };
 }
 
 export type Unit = SoldierState | AlienState;
@@ -129,7 +136,7 @@ export interface Projectile {
 }
 
 /** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
-export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets';
+export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'shield';
 
 /** Power-up au sol : petit boost immédiat ramassé par une squad ; disparaît vite si personne ne le prend. */
 export interface PowerUpState {
@@ -226,6 +233,10 @@ export interface RecruitState {
   px: number;
   py: number;
   life: number;
+  /** Saut en cloche à l'apparition (simulation seulement : le client n'en a pas besoin, il déduit l'arc de `life`). */
+  hop?: { vx: number; vy: number; t: number };
+  /** Tutoriel : recrue qui ne disparaît pas tant qu'elle n'est pas ramassée. */
+  forced?: boolean;
 }
 
 export const hpRatio = (b: Body): number => b.hp / b.maxHp;

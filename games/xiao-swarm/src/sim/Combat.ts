@@ -1,6 +1,7 @@
 import { Pool } from '@xiao/engine/sim';
 import { STIM_FIRE, ZOMBIE_MUL } from '../config';
 import type { WeaponDef } from '../data/classes';
+import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -142,7 +143,7 @@ export class Combat {
       p.lob = false;
       p.aoe = 0;
       p.knock = 0;
-      p.texture = weapon.texture;
+      p.texture = projectileTexture(weapon.texture, damageMul); // blaster bleu : couleur selon le palier de dégâts
       p.team = s.team;
       p.owner = s.owner;
     }
@@ -165,6 +166,7 @@ export class Combat {
     const { rng } = this.sim;
     const n = lob.count ?? 1;
     const scatter = n > 1 ? 70 : 22; // plusieurs blobs : ils retombent éparpillés autour de la cible
+    this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
     for (let i = 0; i < n; i++) {
       const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
@@ -179,6 +181,7 @@ export class Combat {
   spray(a: AlienState, target: SoldierState): void {
     const sp = a.def.spray!;
     const { rng } = this.sim;
+    this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
     for (let i = 0; i < sp.pellets; i++) {
       const ang = rng.range(0, Math.PI * 2);
       const dist = Math.sqrt(rng.next()) * sp.scatter;

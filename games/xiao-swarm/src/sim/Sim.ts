@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { CAPTIVE_VULN, DIFFICULTY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { CAPTIVE_VULN, DIFFICULTY, LEVEL_UP_DELAY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
@@ -11,6 +11,7 @@ import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, U
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
+import { Tutorial } from './Tutorial';
 import { Xp } from './Xp';
 import { WaveRunner } from './WaveRunner';
 import { Squad } from './Squad';
@@ -33,6 +34,8 @@ export interface SimConfig {
    * autres joueurs. Faux en solo : le jeu reste en pause jusqu'au choix du joueur.
    */
   choiceTimeout?: boolean;
+  /** Onboarding scripté au début de la partie (solo seulement) : voir `sim/Tutorial.ts`. */
+  tutorial?: boolean;
 }
 
 /** Durée (s) pendant laquelle la flaque d'un slime mort peut encore être ressuscitée. */
@@ -80,7 +83,11 @@ export class Sim {
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
   readonly scratchSoldiers: SoldierState[] = [];
   readonly waves: WaveRunner;
+  /** Onboarding en cours (null hors tutoriel) : tant qu'il est actif, la timeline de vagues est suspendue. */
+  readonly tutorial: Tutorial | null;
   alienHpMul = 1;
+  /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
+  readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
   private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
@@ -96,6 +103,7 @@ export class Sim {
     this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
+    this.tutorial = config.tutorial ? new Tutorial(this) : null;
     this.waves = new WaveRunner(
       config.mode.waves,
       (type, count) => {
@@ -130,6 +138,7 @@ export class Sim {
     this.xp.clear();
     this.finalBossDead = false;
     this.choiceT = 0;
+    this.choiceDelay = 0;
     this.sharedXpPool = 0;
     this.sharedLevel = 1;
     this.waves.reset();
@@ -150,6 +159,8 @@ export class Sim {
    * en ligne) : chaque joueur choisit parmi ses 3 propositions ; à la fin du temps, choix au hasard pour ceux qui n'ont pas choisi.
    */
   choiceT = 0;
+  /** Délai (s) restant avant l'ouverture de la pause de choix après une montée de niveau (voir `beginUpgradeChoice`) ; 0 = aucun. */
+  choiceDelay = 0;
   /** Coop : une seule barre d'XP pour tous les joueurs (réserve et niveau communs). */
   private sharedXpPool = 0;
   private sharedLevel = 1;
@@ -178,7 +189,8 @@ export class Sim {
 
   /** Une squad vient d'avoir des propositions : ouvre la pause de choix si elle n'est pas déjà en cours. */
   beginUpgradeChoice(): void {
-    if (this.choiceT <= 0) this.choiceT = UPGRADE_CHOICE_TIME;
+    // pas de pause immédiate : le monde continue `LEVEL_UP_DELAY` s (l'onde de choc repousse les aliens, le texte « LEVEL UP! » monte), puis `step` ouvre la pause
+    if (this.choiceT <= 0 && this.choiceDelay <= 0) this.choiceDelay = LEVEL_UP_DELAY;
   }
 
   /** Le joueur `owner` choisit l'upgrade `index` parmi celles qui lui sont proposées. */
@@ -188,9 +200,15 @@ export class Sim {
     return ok;
   }
 
+  /** Le joueur `owner` relance ses propositions d'upgrade (nombre limité par partie). */
+  rerollUpgrade(owner: PlayerId): boolean {
+    return this.squadOf(owner)?.rerollOffer() ?? false;
+  }
+
   /** Quand plus personne n'a de choix ouvert : niveaux encore en attente → nouvelle manche de choix (temps plein), sinon reprise. */
   private afterChoice(): void {
     if (this.squads.some((sq) => sq.offer)) return;
+    this.choiceDelay = 0; // tout le monde a déjà choisi (pendant le délai, ou à la fin de la pause)
     let more = false;
     for (const sq of this.squads) if (sq.rollPending()) more = true;
     this.choiceT = more ? UPGRADE_CHOICE_TIME : 0;
@@ -315,13 +333,18 @@ export class Sim {
       a.px = a.x;
       a.py = a.y;
     }
+    // montée de niveau : après le délai, la pause s'ouvre (le monde a tourné pendant ce délai)
+    if (this.choiceDelay > 0 && (this.choiceDelay -= dt) <= 0) {
+      this.choiceDelay = 0;
+      if (this.squads.some((sq) => sq.offer)) this.choiceT = UPGRADE_CHOICE_TIME;
+    }
     // choix d'upgrade : monde en pause (ni vagues, ni déplacements, ni tirs) jusqu'à ce que tout le monde ait choisi
     if (this.choiceT > 0) {
       this.stepChoice(dt);
       return;
     }
 
-    this.waves.update(dt);
+    if (!this.tutorial?.active) this.waves.update(dt); // onboarding : la timeline normale attend la fin du tutoriel
     this.rebuildHashes();
     for (const sq of this.squads) sq.update(dt, inputs.get(sq.owner) ?? NO_INPUT);
     this.horde.update(dt);
@@ -343,6 +366,7 @@ export class Sim {
       this.fuses.splice(i, 1);
     }
     this.cleanup();
+    this.tutorial?.update();
   }
 
   private rebuildHashes(): void {
@@ -354,6 +378,14 @@ export class Sim {
 
   // ---------- Dégâts & morts ----------
 
+  /** Le bouclier absorbe en premier : renvoie la part des dégâts qui passe sur les PV. */
+  private absorb(u: Unit, amount: number): number {
+    if (u.shield <= 0) return amount;
+    const taken = Math.min(u.shield, amount);
+    u.shield -= taken;
+    return amount - taken;
+  }
+
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */
   damage(u: Unit, amount: number, attacker: PlayerId | null, dirX = 0, dirY = 0): void {
     if (u.kind === 'soldier') {
@@ -363,7 +395,9 @@ export class Sim {
     if (!u.alive) return;
     if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
     if (u.captive) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
-    u.hp -= amount;
+    this.metrics.dealt += Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
+    u.shieldT = 0; // tout coup relance le délai de régénération du bouclier
+    u.hp -= this.absorb(u, amount);
     u.kx += (dirX * 40) / u.mass;
     u.ky += (dirY * 40) / u.mass;
     this.events.push({ t: 'hit', id: u.id });
@@ -569,10 +603,13 @@ export class Sim {
   damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
     if (!s.alive) return;
     if (!force && (s.invulnerable > 0 || s.capturedBy)) return;
-    s.hp -= amount;
+    this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
+    s.hp -= this.absorb(s, amount);
+    if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
     if (!force) this.events.push({ t: 'hit', id: s.id });
     if (s.hp > 0) return;
     s.alive = false;
+    this.metrics.soldiersLost++;
     if (attacker && attacker !== s.owner) {
       const k = this.squadOf(attacker);
       if (k) k.kills++;
@@ -583,6 +620,7 @@ export class Sim {
 
   private killAlien(a: AlienState, killer: PlayerId | null): void {
     a.alive = false;
+    this.metrics.kills++;
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
@@ -609,6 +647,10 @@ export class Sim {
     if (bomb) {
       this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage, knock: bomb.knockback });
       this.events.push({ t: 'fuse', x: a.x, y: a.y, r: bomb.radius, delay: bomb.delay, alien: a.def.id });
+    }
+    if (a.tut && this.tutorial) {
+      this.tutorial.drop(a); // onboarding : XP, recrue et power-up choisis par le script
+      return;
     }
     this.recruits.maybeDrop(a, squad);
     if (this.xpEnabled) this.xp.drop(a);

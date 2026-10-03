@@ -35,7 +35,16 @@ function flag(key: string, urlParam: string, defaultOn = true): boolean {
   return storage.get<boolean>(`settings.${key}`, defaultOn) !== false;
 }
 
+/** Onboarding déjà terminé ? `?tuto=1` le rejoue (remet à faux), `?tuto=0` le saute (le marque comme terminé). */
+function tutorialDoneFlag(): boolean {
+  const q = new URLSearchParams(location.search).get('tuto');
+  if (q === '0' || q === '1') storage.set('settings.tutorialDone', q === '0');
+  return storage.get<boolean>('settings.tutorialDone', false) === true;
+}
+
 export const settings = {
+  /** L'onboarding scripté (voir `sim/Tutorial.ts`) a déjà été terminé : les parties suivantes commencent directement par les vagues normales. */
+  tutorialDone: tutorialDoneFlag(),
   /** Compteur de FPS en haut à gauche (`?fps=0` pour le masquer). */
   showFps: flag('showFps', 'fps'),
   /** Déformation de l'écran (shader) à la montée de niveau (`?shock=0` pour la couper : filtre plein écran, coûteux sur un petit GPU). */
@@ -90,6 +99,11 @@ export const settings = {
   setShowFps(on: boolean): void {
     this.showFps = on;
     storage.set('settings.showFps', on);
+  },
+
+  setTutorialDone(done: boolean): void {
+    this.tutorialDone = done;
+    storage.set('settings.tutorialDone', done);
   },
 
   setStarfield(on: boolean): void {

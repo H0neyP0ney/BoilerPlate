@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { canvasTexture } from '@xiao/engine';
+import { DAMAGE_TIERS } from '../data/damageTiers';
 
 /** Projectiles, particules et icônes d'effets. */
 export function makeFxTextures(scene: Phaser.Scene): void {
@@ -13,24 +14,29 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.ellipse(11, 5, 11, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
   });
-  // Tir de blaster bleu : traînée qui s'éclaircit vers la tête, cœur blanc. Dessiné pointant à droite (tête à droite).
-  canvasTexture(scene, 'fx_blaster_blue', 42, 16, (ctx) => {
-    const glow = ctx.createLinearGradient(0, 0, 42, 0);
-    glow.addColorStop(0, 'rgba(40,120,255,0)');
-    glow.addColorStop(0.65, 'rgba(60,150,255,0.8)');
-    glow.addColorStop(1, 'rgba(130,205,255,0.95)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.ellipse(21, 8, 21, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const core = ctx.createLinearGradient(6, 0, 40, 0);
-    core.addColorStop(0, 'rgba(180,225,255,0)');
-    core.addColorStop(1, '#ffffff');
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.ellipse(23, 8, 18, 2.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  // Tir de blaster : traînée qui s'éclaircit vers la tête, cœur blanc. Dessiné pointant à droite (tête à droite).
+  // Une texture par palier de dégâts (data/damageTiers.ts) : bleu d'origine, puis vert, orangé, violet, rouge.
+  for (const tier of DAMAGE_TIERS) {
+    const [gr, gg, gb] = tier.glow;
+    const [hr, hg, hb] = tier.head;
+    canvasTexture(scene, tier.texture, 42, 16, (ctx) => {
+      const glow = ctx.createLinearGradient(0, 0, 42, 0);
+      glow.addColorStop(0, `rgba(${gr},${gg},${gb},0)`);
+      glow.addColorStop(0.65, `rgba(${gr},${gg},${gb},0.8)`);
+      glow.addColorStop(1, `rgba(${hr},${hg},${hb},0.95)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.ellipse(21, 8, 21, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const core = ctx.createLinearGradient(6, 0, 40, 0);
+      core.addColorStop(0, `rgba(${hr},${hg},${hb},0)`);
+      core.addColorStop(1, '#ffffff');
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.ellipse(23, 8, 18, 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
   canvasTexture(scene, 'fx_bolt_green', 20, 10, (ctx) => {
     const g = ctx.createLinearGradient(0, 0, 20, 0);
     g.addColorStop(0, 'rgba(90,255,140,0)');

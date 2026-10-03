@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
-import { lerp, sfx, sprites } from '@xiao/engine';
-import { DEPTH, ORB_BLINK_TIME, PALETTE, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL } from '../config';
+import { lerp, sfx, sprites, theme } from '@xiao/engine';
+import { DEPTH, ORB_BLINK_TIME, PALETTE, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_LIFE, XP_ORB_POP } from '../config';
+import { TICK_RATE } from '../net/Session';
 import { ALIENS } from '../data/aliens';
 import { CLASSES } from '../data/classes';
+import { tierOfTexture } from '../data/damageTiers';
+import { TUTORIAL } from '../data/tutorial';
 import { t } from '../i18n';
 import { SFX } from '../settings';
 import type { Projectile } from '../sim/entities';
@@ -13,7 +16,7 @@ import { ShockDistort } from './ShockDistort';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { ROCKET_TEXTURE } from '../sim/Combat';
-import { drawReviveZone, PickupViews, POWERUP_INFO } from './PickupViews';
+import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR } from './PickupViews';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
@@ -28,7 +31,7 @@ const MUZZLE_BLEND_PX = 40;
 /** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
 export const ORB_SCALE = 1.3;
 /** Montée de niveau : nombre d'ondes de choc blanches successives et délai (ms) entre deux. */
-const LEVEL_WAVES = 5;
+const LEVEL_WAVES = 4;
 const LEVEL_WAVE_GAP_MS = 170;
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
@@ -54,10 +57,12 @@ export class WorldView {
   private readonly soldiers = new Map<number, SoldierView>();
   private readonly aliens = new Map<number, AlienView>();
   private readonly recruits = new Map<number, RecruitView>();
+  /** Le mot « BOSS » au-dessus de la barre de vie de chaque boss (par id d'alien). */
+  private readonly bossTags = new Map<number, Phaser.GameObjects.Text>();
   private readonly bullets: Phaser.GameObjects.Image[] = [];
   private readonly tracers: Tracer[] = [];
   /** Flashes de tir en cours : ils suivent la bouche du canon de leur soldat (dx, dy : repli si la planche n'en définit pas). */
-  private readonly flashes: { img: Phaser.GameObjects.Image; view: SoldierView; dx: number; dy: number }[] = [];
+  private readonly flashes: { img: Phaser.GameObjects.Image; view: SoldierView | AlienView; dx: number; dy: number }[] = [];
   /**
    * Balles fraîchement tirées : décalage (dx, dy) entre l'origine simulée (sx, sy) et la bouche du canon dessinée.
    * Affichage seulement : la balle part visuellement du flash de tir puis rejoint sa vraie trajectoire.
@@ -129,7 +134,7 @@ export class WorldView {
     switch (e.t) {
       case 'hit': {
         const v = this.soldiers.get(e.id) ?? this.aliens.get(e.id);
-        if (v) v.flash = v instanceof SoldierView ? 0.1 : 0.06;
+        v?.hit(v instanceof SoldierView ? 0.1 : 0.06);
         break;
       }
       case 'beam':
@@ -170,8 +175,22 @@ export class WorldView {
           sfx.play(this.scene, SFX.blaster.key, SFX.blaster); // cadence limitée : une escouade entière ne sature pas le son
         }
         break;
+      case 'alienShot': {
+        // shooter, spitter (et crabe) : flash teinté à la bouche du canon, les boules en cloche en partent visuellement
+        if (!sprites.get(`alien_${e.alien}`)?.muzzleFlash || !nearCam(e.x, e.y)) break;
+        const view = this.aliens.get(e.id);
+        const mp = view?.muzzlePoint();
+        const p = mp ?? e;
+        if (mp) this.shiftFreshBullets(e.x, e.y, mp.x - e.x, mp.y - e.y, true);
+        const img = this.fx.muzzleFlash(p.x, p.y, ALIENS[e.alien].color);
+        if (view) this.flashes.push({ img, view, dx: e.x - view.rx, dy: e.y - view.ry });
+        break;
+      }
       case 'impact':
-        if (e.texture === 'fx_blaster_blue' && nearCam(e.x, e.y)) this.fx.impact(e.x, e.y, 0x5ab4ff);
+      {
+        const tier = tierOfTexture(e.texture); // blaster : l'étincelle suit la couleur du palier de dégâts
+        if (tier && nearCam(e.x, e.y)) this.fx.impact(e.x, e.y, tier.impact);
+      }
         break;
       case 'restart': {
         this.quietUntil = this.scene.time.now + 1000;
@@ -247,9 +266,16 @@ export class WorldView {
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
         break;
-      case 'tongue':
+      case 'tongue': {
         this.tongues.push({ alien: e.alien, target: e.target, t: e.dur, dur: e.dur });
+        // fx (pas de flash de tir) à l'origine de la langue : petite gerbe rose à la bouche, dessinée par le point de la planche
+        const mouth = this.aliens.get(e.alien)?.muzzlePoint();
+        if (mouth && nearCam(mouth.x, mouth.y)) {
+          this.fx.burst(mouth.x, mouth.y, 0xff7fa8, 10);
+          this.fx.ring(mouth.x, mouth.y, 26, 0xff7fa8, 220);
+        }
         break;
+      }
       case 'explosion':
         if (e.style === 'spit') {
           // crachat du cracheur : éclaboussure violette (la flaque ralentissante est dessinée par drawOverlay)
@@ -314,7 +340,7 @@ export class WorldView {
         if (e.owner !== this.localPlayer) break;
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;
-        // l'onde de choc (repoussement, sim) ne démarre qu'à la fin de la pause de choix : l'effet attend donc lui aussi (voir fireLevelWaves)
+        // l'onde de choc (repoussement, sim) part tout de suite, avant la pause des cartes : l'effet aussi (voir fireLevelWaves)
         this.pendingWaves.push({ x: c.x, y: c.y, level: e.level });
         break;
       }
@@ -339,14 +365,13 @@ export class WorldView {
   /** Déformation de l'écran des ondes de montée de niveau. */
   private readonly shock: ShockDistort;
 
-  /** Ondes de montée de niveau en attente : elles partent quand la pause de choix d'upgrade est terminée (comme le repoussement). */
+  /** Montées de niveau de ce tick : l'effet part tout de suite (la pause des cartes ne s'ouvre que `LEVEL_UP_DELAY` s plus tard). */
   private readonly pendingWaves: { x: number; y: number; level: number }[] = [];
 
-  /** Lance l'effet d'onde (anneau + spirale + texte) une fois la popup d'upgrade fermée ; une seule onde même si plusieurs niveaux d'un coup. */
+  /** Lance l'effet de montée de niveau (ondes de choc + « LEVEL UP! ») ; une seule fois même si plusieurs niveaux d'un coup. */
   private fireLevelWaves(): void {
-    if (this.pendingWaves.length === 0 || this.sim.choiceT > 0) return;
+    if (this.pendingWaves.length === 0) return;
     const w = this.pendingWaves[0];
-    const level = this.pendingWaves[this.pendingWaves.length - 1].level;
     this.pendingWaves.length = 0;
     const ms = UPGRADE_REPEL.reach * 1000;
     // onde de choc BLANCHE répétée LEVEL_WAVES fois (la première est celle qui repousse les aliens quand son front les touche) + déformation de l'écran
@@ -356,7 +381,7 @@ export class WorldView {
       else this.scene.time.delayedCall(i * LEVEL_WAVE_GAP_MS, draw);
     }
     this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash);
-    this.fx.text(w.x, w.y - 80, t('levelUpTitle', { level }), '#9fd3ff', 30);
+    this.fx.levelUpText(w.x, w.y);
   }
 
   render(alpha: number, dt: number, time: number): void {
@@ -377,6 +402,8 @@ export class WorldView {
 
   destroyPickups(): void {
     this.pickups.destroy();
+    for (const tag of this.bossTags.values()) tag.destroy();
+    this.bossTags.clear();
   }
 
   /** Centre affiché (interpolé) de la squad d'un joueur, pour la caméra. */
@@ -441,6 +468,27 @@ export class WorldView {
     }
   }
 
+  /**
+   * Onboarding : le point vert à atteindre, dessiné sur le sol — disque et anneau qui pulsent, plus un curseur (chevron vers le bas)
+   * qui rebondit au-dessus. (Hors écran, le HUD dessine une flèche au bord de l'écran.)
+   */
+  private drawTutorialMarker(g: Phaser.GameObjects.Graphics, time: number): void {
+    const tut = this.sim.tutorial;
+    if (!tut?.active) return;
+    const beat = 0.5 + 0.5 * Math.sin(time * 5);
+    for (const m of tut.targets()) {
+      if (m.kind !== 'marker') continue;
+      const r = TUTORIAL.markerRadius;
+      g.fillStyle(0x5dff84, 0.1 + 0.14 * beat).fillEllipse(m.x, m.y, r * 2, r * 1.3);
+      g.lineStyle(4, 0x5dff84, 0.55 + 0.4 * beat).strokeEllipse(m.x, m.y, r * (1.7 + 0.5 * beat), r * (1.7 + 0.5 * beat) * 0.65);
+      g.lineStyle(2, 0xd9ffe3, 0.9).strokeEllipse(m.x, m.y, r * 2, r * 1.3);
+      // curseur : chevron plein pointant vers le bas, qui rebondit
+      const y = m.y - 44 - beat * 14;
+      g.fillStyle(0x5dff84, 1).fillTriangle(m.x - 15, y - 18, m.x + 15, y - 18, m.x, y + 4);
+      g.lineStyle(3, 0x0a2210, 1).strokeTriangle(m.x - 15, y - 18, m.x + 15, y - 18, m.x, y + 4);
+    }
+  }
+
   /** Les projectiles n'ont pas d'id : on réutilise un pool d'images, dans l'ordre. */
   private syncProjectiles(alpha: number): void {
     const list = this.sim.combat.projectiles.active;
@@ -464,7 +512,17 @@ export class WorldView {
         this.lobShadows.push({ x, y, h });
         // les boules ennemies passent au-dessus des acteurs (le crabe géant les cachait) ; le blob vert du crabe est plus gros
         const big = p.texture === 'fx_blob_green' ? 1.9 : 1;
-        img.setVisible(true).setPosition(x, y - h).setRotation(k * 14).setScale((1 + (h / LOB_HEIGHT) * 0.3) * big).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        let lx = x;
+        let ly = y;
+        const lsh = this.muzzleShift.get(p); // boule d'alien : elle part de la bouche du canon dessinée, puis rejoint sa trajectoire
+        if (lsh) {
+          const kk = 1 - Math.hypot(x - lsh.sx, y - lsh.sy) / MUZZLE_BLEND_PX;
+          if (kk > 0) {
+            lx += lsh.dx * kk;
+            ly += lsh.dy * kk;
+          } else this.muzzleShift.delete(p);
+        }
+        img.setVisible(true).setPosition(lx, ly - h).setRotation(k * 14).setScale((1 + (h / LOB_HEIGHT) * 0.3) * big).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
         if (p.team === 'aliens') img.setDepth(DEPTH.fx + 3);
       } else if (p.flame) {
         img.setVisible(true).setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx));
@@ -490,11 +548,14 @@ export class WorldView {
     }
   }
 
-  /** Les balles nées à (sx, sy) ce tick partent visuellement de la bouche du canon (décalage dx, dy, résorbé en vol). */
-  private shiftFreshBullets(sx: number, sy: number, dx: number, dy: number): void {
+  /**
+   * Les projectiles nés à (sx, sy) ce tick partent visuellement de la bouche du canon (décalage dx, dy, résorbé en vol) :
+   * les balles des soldats, ou (`lobs`) les boules en cloche des aliens.
+   */
+  private shiftFreshBullets(sx: number, sy: number, dx: number, dy: number, lobs = false): void {
     if (this.muzzleShift.size > 200) this.muzzleShift.clear();
     for (const p of this.sim.combat.projectiles.active) {
-      if (p.lob || p.flame || Math.abs(p.px - sx) > 0.5 || Math.abs(p.py - sy) > 0.5) continue;
+      if (p.lob !== lobs || p.flame || Math.abs(p.px - sx) > 0.5 || Math.abs(p.py - sy) > 0.5) continue;
       this.muzzleShift.set(p, { sx, sy, dx, dy });
     }
   }
@@ -545,7 +606,10 @@ export class WorldView {
       const size = orbSize(o.value);
       const bob = Math.sin(time * 4 + o.id) * 2.5;
       const blink = o.life < ORB_BLINK_TIME && Math.sin(time * 18) > 0;
-      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * ORB_SCALE * orbBase * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
+      // apparition : petite animation d'échelle Back.Out sur les premières 0,3 s de vie (âge interpolé comme la position : `life` change par ticks de 30 Hz)
+      const age = XP_ORB_LIFE - o.life - (1 - alpha) / TICK_RATE;
+      const pop = age >= XP_ORB_POP ? 1 : Phaser.Math.Easing.Back.Out(Math.max(0, age) / XP_ORB_POP);
+      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * ORB_SCALE * orbBase * pop * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
     }
   }
 
@@ -624,8 +688,9 @@ export class WorldView {
         this.tongues.splice(i, 1);
         continue;
       }
-      const sx = av.rx;
-      const sy = av.ry - av.state.radius * 0.6;
+      const mouth = av.muzzlePoint(); // la langue part de la bouche posée dans la visionneuse (repli : le milieu du corps)
+      const sx = mouth ? mouth.x : av.rx;
+      const sy = mouth ? mouth.y : av.ry - av.state.radius * 0.6;
       const ext = Math.min(1, (tg.dur - tg.t) / 0.1); // part de la longueur déjà sortie
       const ex = sx + (sv.rx - sx) * ext;
       const ey = sy + (sv.ry - 12 - sy) * ext;
@@ -667,6 +732,9 @@ export class WorldView {
     const g = this.ground;
     g.clear();
     this.pickups.drawGround(g, time);
+    // recrues : la même zone qui pulse que sous les power-ups, en jaune, posée sur la position au sol de la recrue
+    for (const r of this.recruits.values()) drawPickupSpot(g, r.rx, r.ry, RECRUIT_COLOR, time, r.state.id, r.dim ? 0.3 : 1);
+    this.drawTutorialMarker(g, time);
     g.fillStyle(0x2a1d2e, SHADOW_ALPHA);
     for (const v of this.aliens.values()) {
       if (v.state.def.lurk && v.state.lurkPhase >= 2 && v.state.lurkPhase <= 4) continue; // enterré : pas d'ombre
@@ -813,15 +881,40 @@ export class WorldView {
     b.clear();
     for (const v of this.soldiers.values()) {
       const s = v.state;
-      if (s.hp >= s.maxHp) continue;
-      const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
-      this.bar(b, v.rx, v.ry - (s.def.id === 'bruiser' ? 66 : 58), 30, s.hp / s.maxHp, color);
+      const y = v.ry - (s.def.id === 'bruiser' ? 66 : 58);
+      if (s.hp < s.maxHp) {
+        const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
+        this.bar(b, v.rx, y, 30, s.hp / s.maxHp, color);
+      }
+      if (s.shield > 0) this.bar(b, v.rx, y - 8, 30, s.shield / s.maxShield, PALETTE.shield); // bouclier : barre bleue au-dessus des PV
     }
+    const bossSeen = new Set<number>();
     for (const v of this.aliens.values()) {
       const a = v.state;
-      if (a.hp >= a.maxHp || (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4)) continue;
+      if (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4) continue;
       const top = v.body.displayHeight * v.body.originY + 8;
-      this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy);
+      const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
+      const hurt = a.hp < a.maxHp || boss;
+      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy);
+      const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
+      if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
+      if (boss) {
+        let tag = this.bossTags.get(a.id);
+        if (!tag) {
+          tag = this.scene.add
+            .text(0, 0, t('boss'), { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ff3a3a', stroke: '#2a0a08', strokeThickness: 5 })
+            .setOrigin(0.5, 1)
+            .setDepth(DEPTH.bars);
+          this.bossTags.set(a.id, tag);
+        }
+        tag.setPosition(v.rx, v.ry - top - (shielded ? 8 : 0) - 4);
+        bossSeen.add(a.id);
+      }
+    }
+    for (const [id, tag] of this.bossTags) {
+      if (bossSeen.has(id)) continue;
+      tag.destroy();
+      this.bossTags.delete(id);
     }
 
     const l = this.beams;

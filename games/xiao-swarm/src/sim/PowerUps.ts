@@ -1,12 +1,11 @@
-import { POWERUPS } from '../config';
+import { POWERUPS, STIM_TIME } from '../config';
 import type { Field, PowerUpKind, PowerUpState } from './entities';
+import { findAttractor, inPickRange, pullToward } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-const PICK_RADIUS = 34;
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'shield'];
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
-const STIM_TIME = 5; // facteurs : `STIM_SPEED` / `STIM_FIRE` (config.ts)
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel l'XP est aspirée. */
 const MAGNET_RADIUS = 1000;
 /** Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. */
@@ -27,12 +26,22 @@ export class PowerUps {
 
   constructor(private readonly sim: Sim) {}
 
+  /** Pose un power-up à un endroit précis (tutoriel : `forced` = il ne disparaît pas tant qu'il n'est pas ramassé). */
+  drop(kind: PowerUpKind, x: number, y: number, forced = false): PowerUpState {
+    const p: PowerUpState = { id: this.sim.ids.get(), kind, x, y, life: forced ? 1e6 : POWERUPS.life };
+    this.items.push(p);
+    return p;
+  }
+
   update(dt: number): void {
     const { rng } = this.sim;
-    this.timer -= dt;
-    if (this.timer <= 0) {
-      this.timer = rng.range(POWERUPS.every[0], POWERUPS.every[1]);
-      this.spawn();
+    if (!this.sim.tutorial?.active) {
+      // pendant le tutoriel, aucun power-up au hasard : seuls ceux du script apparaissent
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        this.timer = rng.range(POWERUPS.every[0], POWERUPS.every[1]);
+        this.spawn();
+      }
     }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const p = this.items[i];
@@ -41,10 +50,15 @@ export class PowerUps {
         this.items.splice(i, 1);
         continue;
       }
-      const s = this.sim.soldierHash.nearest(p.x, p.y, PICK_RADIUS, (o) => o.alive && !!this.sim.squadOf(o.owner));
-      if (!s) continue;
+      // attiré par le soldat le plus proche dont la squad a l'aimant (stat `magnet` : rayon d'attraction, de ramassage et vitesse)
+      const a = findAttractor(this.sim, p.x, p.y);
+      if (!a) continue;
+      if (!inPickRange(a)) {
+        pullToward(p, a, dt);
+        continue;
+      }
       this.items.splice(i, 1);
-      this.apply(p, this.sim.squadOf(s.owner)!);
+      this.apply(p, a.squad);
     }
     for (let i = this.fields.length - 1; i >= 0; i--) {
       const f = this.fields[i];
@@ -99,6 +113,10 @@ export class PowerUps {
         break;
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
+        break;
+      case 'shield':
+        // chaque soldat vivant reçoit un bouclier (1/3 de ses PV max) qui dure jusqu'à ce qu'il l'ait perdu ; un second power-up le remplit de nouveau
+        squad.shieldAll();
         break;
     }
   }

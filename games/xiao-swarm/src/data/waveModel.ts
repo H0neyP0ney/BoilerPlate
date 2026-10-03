@@ -40,7 +40,7 @@ export function configHp(config: WaveConfig, bossWeight = 1): number {
     if (!def || g.count <= 0) continue;
     // un boss n'apparaît qu'une fois (pas de ×alienCountMul, voir Sim.ts), les autres sont multipliés
     const count = def.boss ? g.count : Math.round(g.count * DIFFICULTY.alienCountMul);
-    total += count * def.hp * (def.boss ? DIFFICULTY.bossHpMul * bossWeight : DIFFICULTY.alienHpMul);
+    total += count * def.hp * (def.boss ? DIFFICULTY.bossHpMul * bossWeight : DIFFICULTY.alienHpMul) * (1 + (def.shield?.pct ?? 0)); // bouclier en plus des PV
   }
   return total;
 }

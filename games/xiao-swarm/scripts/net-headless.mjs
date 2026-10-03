@@ -129,7 +129,14 @@ try {
   check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 2 joueurs)', `${a.xpNeeded}`);
   const levelBefore = a.level;
   b.gainXp(b.xpNeeded - b.xp + 0.01);
+  // chronologie : l'onde de choc part tout de suite et le monde CONTINUE pendant LEVEL_UP_DELAY s ; la pause qui ouvre les cartes vient ensuite
+  const timeAtLevel = hs.time;
   for (let i = 0; i < 6; i++) await tick(client);
+  check(hs.choiceT === 0 && hs.choiceDelay > 0 && hs.time > timeAtLevel && client.sim.choiceT === 0, 'montée de niveau : le monde continue pendant le délai, la pause n’est pas immédiate', `${hs.choiceDelay.toFixed(2)} s avant la pause`);
+  let ticksToPause = 6;
+  for (let i = 0; i < 60 && hs.choiceT <= 0; i++, ticksToPause++) await tick(client);
+  for (let i = 0; i < 3; i++) await tick(client); // le snapshot de la pause arrive chez le client
+  check(hs.choiceT > 0 && Math.abs(ticksToPause / 30 - 1) < 0.3, 'la pause des cartes s’ouvre environ 1 s après la montée de niveau', `${(ticksToPause / 30).toFixed(2)} s`);
   const csq = client.sim.squadOf(client.localPlayer);
   check(a.level === levelBefore + 1 && b.level === a.level && !!a.offer && !!b.offer, 'XP partagée : l’XP de l’un fait monter tout le monde', `niv. ${a.level} / ${b.level}`);
   check(!!b.offer && !!csq.offer && csq.offer.join() === b.offer.join(), 'les propositions d\'upgrade arrivent chez le client', csq.offer?.join('/'));
@@ -141,12 +148,19 @@ try {
   check(hs.choiceT > 0 && Math.abs(hs.time - timeBefore) < 1e-6, 'le monde reste figé tant qu’un joueur n’a pas choisi');
   host.chooseUpgrade(0);
   for (let i = 0; i < 3; i++) await tick(client);
+  // XP partagée : les deux joueurs peuvent avoir plusieurs niveaux en attente, donc plusieurs manches de choix d'affilée
+  for (let round = 0; round < 10 && hs.choiceT > 0; round++) {
+    if (a.offer) host.chooseUpgrade(0);
+    if (b.offer) client.chooseUpgrade(0);
+    for (let i = 0; i < 3; i++) await tick(client);
+  }
   check(hs.choiceT === 0 && hs.time > timeBefore, 'tout le monde a choisi : la partie reprend');
   // personne ne choisit : choix au hasard à la fin du temps
   b.gainXp(b.xpNeeded - b.xp + 0.01);
   const picks = (sq) => Object.values(sq.picked).reduce((n, v) => n + (v ?? 0), 0);
   const pa = picks(a);
   const pb = picks(b);
+  for (let i = 0; i < 60 && hs.choiceT <= 0; i++) await tick(client); // délai avant la pause
   for (let i = 0; i < 30 * 6 && hs.choiceT > 0; i++) await tick(client);
   check(hs.choiceT === 0 && picks(a) === pa + 1 && picks(b) === pb + 1, 'temps écoulé : une upgrade est choisie au hasard pour chacun', `${pa}→${picks(a)} / ${pb}→${picks(b)}`);
 
@@ -161,13 +175,14 @@ try {
   for (const s of a.soldiers) s.invulnerable = 0;
   const kx0 = a.soldiers.reduce((n, s) => n + Math.abs(s.kx) + Math.abs(s.ky), 0);
   hs.combat.spray(spitter, a.soldiers[0]);
-  check(hs.combat.projectiles.active.length === 3 && hs.combat.projectiles.active.every((p) => p.lob && p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${hs.combat.projectiles.active.length}`);
+  const lobs = hs.combat.projectiles.active.filter((p) => p.lob); // les balles des soldats déjà en vol ne comptent pas
+  check(lobs.length === 3 && lobs.every((p) => p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${lobs.length}`);
   // projectiles : identifiants stables, le client garde le MÊME objet d'un snapshot à l'autre (lissage) et le retrouve par id
   await tick(client);
   const projBefore = new Map(client.sim.combat.projectiles.active.map((p) => [p.id, p]));
   await tick(client);
   const projSame = [...client.sim.combat.projectiles.active].filter((p) => projBefore.get(p.id) === p).length;
-  check(projBefore.size === 3 && projSame >= 2, 'projectiles : mêmes objets (lissés) d’un snapshot à l’autre chez le client', `${projSame} conservés sur ${projBefore.size}`);
+  check(projBefore.size >= 3 && projSame >= Math.min(2, projBefore.size), 'projectiles : mêmes objets (lissés) d’un snapshot à l’autre chez le client', `${projSame} conservés sur ${projBefore.size}`);
   hs.aliens.length = 0;
   for (let i = 0; i < 45; i++) await tick(client);
   check(hs.puddles.length === 3 && client.sim.puddles.length === 3, 'impacts : flaques ralentissantes, reflétées chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
@@ -227,9 +242,18 @@ try {
   }
   check(rushOk && sawRush, 'rhinocéros : snapshot lisible et fidèle pendant et après la charge (rushWind négatif)', rushDetail || (sawRush ? 'charge vue' : 'aucune charge'));
   hs.aliens.length = 0;
-  hs.powerups.items.push({ id: 9001, kind: 'stim', x: a.center.x, y: a.center.y, life: 5 });
-  hs.powerups.items.push({ id: 9002, kind: 'stasis', x: a.center.x + 30, y: a.center.y, life: 5 });
-  hs.powerups.items.push({ id: 9003, kind: 'rockets', x: a.center.x - 30, y: a.center.y, life: 5 });
+  // les escouades de ce test sont inactives : selon l'aléatoire de la partie, elles peuvent être anéanties avant ici (fin de partie coop) :
+  // on attend la relance automatique de l'hôte ; un choix d'upgrade en cours met aussi le monde en pause (il se termine tout seul)
+  for (let i = 0; i < 900 && (hs.aliveSquads.length === 0 || hs.choiceT > 0); i++) await tick(client);
+  await tick(client);
+  for (const sq of [a, b]) if (!sq.alive) hs.respawnSquad(sq.owner, ['trooper', 'trooper', 'trooper', 'trooper']); // une seule escouade peut être restée morte (spectateur)
+  await tick(client);
+  hs.aliens.length = 0;
+  // posés sur un soldat vivant (le centre d'une escouade qui vient de réapparaître n'est pas encore à jour)
+  const on = a.soldiers.find((s) => s.alive);
+  hs.powerups.items.push({ id: 9001, kind: 'stim', x: on.x, y: on.y, life: 5 });
+  hs.powerups.items.push({ id: 9002, kind: 'stasis', x: on.x + 30, y: on.y, life: 5 });
+  hs.powerups.items.push({ id: 9003, kind: 'rockets', x: on.x - 30, y: on.y, life: 5 });
   for (let i = 0; i < 4; i++) await tick(client);
   const stimSq = a.buffs.stim > 0 ? a : b; // la squad dont un soldat est passé dessus
   check(stimSq.buffs.stim > 0 && client.sim.squadOf(stimSq.owner).buffs.stim > 0, 'stimpack ramassé, reflété chez le client', `${stimSq.buffs.stim.toFixed(1)} s`);
@@ -239,6 +263,53 @@ try {
   hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
   check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
   hs.aliens.length = 0;
+  // power-up bouclier : chaque soldat vivant reçoit 1/3 de ses PV max, consommé avant les PV, reflété chez le client
+  const onS = a.soldiers.find((s) => s.alive);
+  hs.powerups.items.push({ id: 9004, kind: 'shield', x: onS.x, y: onS.y, life: 5 });
+  for (let i = 0; i < 4; i++) await tick(client);
+  const shielded = a.soldiers.filter((s) => s.alive);
+  check(shielded.length > 0 && shielded.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6 && s.maxShield === s.shield), 'bouclier : chaque soldat reçoit 1/3 de ses PV max', `${shielded[0]?.shield.toFixed(1)} pour ${shielded[0]?.maxHp}`);
+  const cs0 = client.sim.squadOf(a.owner).soldiers.find((s) => s.id === onS.id);
+  check(!!cs0 && cs0.shield > 0 && Math.abs(cs0.shield / cs0.maxShield - 1) < 0.01, 'bouclier : reflété chez le client (barre pleine)');
+  { onS.invulnerable = 0; const hp0 = onS.hp; const sh0 = onS.shield; hs.damageSoldier(onS, 10); check(onS.hp === hp0 && Math.abs(onS.shield - (sh0 - 10)) < 1e-6, 'bouclier : consommé avant les PV', `${onS.shield.toFixed(1)} restant`);
+    hs.damageSoldier(onS, onS.shield + 5); check(onS.shield === 0 && Math.abs(onS.hp - (hp0 - 5)) < 1e-6, 'bouclier : le surplus passe sur les PV, puis plus de bouclier', `${onS.hp.toFixed(1)} PV`); }
+  // renforts express : proposés et pris même squad pleine (dépassement du cap), et bouclier plein pour tous les soldats, renforts compris
+  { const n0 = a.soldiers.length; a.stats.add('maxSquad', { flat: n0 - a.maxSize }); // plafond = taille actuelle : squad pleine
+    a.pendingLevels = 1; a.offer = ['reinforce']; a.offerPrism = [false]; a.soldiers.forEach((s) => { s.shield = 0; });
+    const before = new Set(a.soldiers);
+    a.chooseUpgrade(0);
+    check(a.soldiers.length === n0 + 2 && a.size > a.maxSize, 'renforts express : +2 soldats même squad pleine (dépasse le cap)', `${a.size}/${a.maxSize}`);
+    const fresh = a.soldiers.filter((s) => !before.has(s));
+    check(fresh.length === 2 && fresh.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6) && [...before].every((s) => s.shield === 0), 'renforts express : bouclier plein pour les renforts seulement, pas pour le reste de la squad');
+    for (let i = 0; i < 4; i++) await tick(client);
+    const cFresh =client.sim.squadOf(a.owner).soldiers.filter((s) => fresh.some((f) => f.id === s.id));
+    check(cFresh.length === 2 && cFresh.every((s) => s.shield > 0), 'renforts express : bouclier des renforts reflété chez le client');
+    // plus proposés quand la squad dépasse déjà son max de 3 (ou plus) ; encore proposés à +2
+    const { REINFORCE_MAX_OVERCAP } = await vite.ssrLoadModule('/src/config.ts');
+    const offers = (over) => { a.stats.add('maxSquad', { flat: a.size - over - a.maxSize }); let seen = false;
+      for (let k = 0; k < 60 && !seen; k++) { a.offer = null; a.pendingLevels = 1; a.rollPending(); seen = !!a.offer?.includes('reinforce'); } a.offer = null; a.pendingLevels = 0; return seen; };
+    check(!offers(REINFORCE_MAX_OVERCAP) && !offers(REINFORCE_MAX_OVERCAP + 2) && offers(REINFORCE_MAX_OVERCAP - 1), `renforts express : plus proposés quand la squad dépasse déjà son max de ${REINFORCE_MAX_OVERCAP}`); }
+  // Scarab : bouclier = 10 % de ses PV max, régénéré vite après 5 s sans dégâts (encodage conditionnel par type : lecture fidèle chez le client)
+  hs.aliens.length = 0;
+  hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
+  const scarab = hs.aliens[0];
+  check(Math.abs(scarab.maxShield - scarab.maxHp * 0.1) < 1e-6 && scarab.shield === scarab.maxShield, 'scarab : bouclier = 10 % de ses PV max', `${Math.round(scarab.maxShield)} / ${Math.round(scarab.maxHp)}`);
+  hs.damage(scarab, 100, host.localPlayer);
+  check(scarab.hp === scarab.maxHp && Math.abs(scarab.shield - (scarab.maxShield - 100)) < 1e-6, 'scarab : le bouclier encaisse avant les PV');
+  const snapSc = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
+  const scSnap = snapSc?.aliens.find((x) => x.id === scarab.id);
+  check(!!scSnap && Math.abs(scSnap.shield - scarab.shield / scarab.maxShield) < 0.01 && snapSc.aliens.length === hs.aliens.length, 'snapshot : bouclier du scarab lu fidèlement (champ conditionnel)', `${scSnap?.shield.toFixed(3)}`);
+  const shieldBefore = scarab.shield;
+  // la horde seule (sans le combat : les soldats tireraient sur le scarab et relanceraient le délai à chaque coup)
+  for (let i = 0; i < 30 * 4; i++) hs.horde.update(1 / 30); // 4 s sans régénération (délai de 5 s)
+  check(Math.abs(scarab.shield - shieldBefore) < 1e-6, 'scarab : pas de régénération avant 5 s sans dégâts');
+  for (let i = 0; i < 30 * 6; i++) hs.horde.update(1 / 30); // 10 s au total : délai écoulé puis régénération complète (4 s)
+  check(scarab.shield === scarab.maxShield, 'scarab : bouclier régénéré après 5 s sans dégâts', `${Math.round(scarab.shield)} / ${Math.round(scarab.maxShield)}`);
+  hs.aliens.length = 0;
+  // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
+  { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
+    const names = [1, 1.3, 1.75, 2.2, 2.6].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    check(names === 'blue > green > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > orangé > violet > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);
   for (let i = 0; i < 4; i++) await tick(client);
@@ -253,6 +324,7 @@ try {
 
   // 3e bis) Recrue en trop (escouade pleine) : soin en zone — le ramasseur à 100 %, ses voisins proches à 50 %, les lointains pas du tout.
   hs.aliens.length = 0;
+  while (a.soldiers.length < 3) a.recruit('trooper', { x: a.center.x, y: a.center.y }); // le scénario a pu décimer l'escouade : il faut 3 soldats
   const [m0, m1, m2] = a.soldiers;
   const gap = a.maxSize - a.size;
   a.stats.add('maxSquad', { flat: -gap }); // escouade pleine

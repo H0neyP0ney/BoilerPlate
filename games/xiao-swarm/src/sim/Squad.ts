@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -51,6 +51,8 @@ export class Squad {
   offer: UpgradeId[] | null = null;
   /** Pour chaque upgrade proposée : prismatique (bonus doublé) ? */
   offerPrism: boolean[] = [];
+  /** Relances restantes de la partie. */
+  rerolls = REROLLS_PER_RUN;
   /** Plus grande taille atteinte par la squad depuis le début de la partie (la réanimation en rend 60 %). */
   peakSize = 0;
   /** Bonus temporaires (s restantes) des power-ups : stimpack (vitesse et cadence ×2),  */
@@ -102,6 +104,7 @@ export class Squad {
     this.level = 1;
     this.offer = null;
     this.offerPrism = [];
+    this.rerolls = REROLLS_PER_RUN;
     this.peakSize = 0;
     this.buffs.stim = 0;
     this.pendingLevels = 0;
@@ -153,16 +156,27 @@ export class Squad {
     return !!this.offer;
   }
 
-  private rollOffer(): void {
-    const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size < this.maxSize));
-    const offer = eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null;
+  /** Remplace les propositions ouvertes par un nouveau tirage (si possible sans les mêmes upgrades). Vrai si la relance a eu lieu. */
+  rerollOffer(): boolean {
+    if (!this.offer || this.rerolls <= 0 || this.sim.tutorial?.active) return false; // pas de relance pendant l'onboarding (offre imposée)
+    this.rerolls--;
+    this.rollOffer(this.offer);
+    return true;
+  }
+
+  private rollOffer(avoid: readonly UpgradeId[] = []): void {
+    let eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size - this.maxSize < REINFORCE_MAX_OVERCAP));
+    const fresh = eligible.filter((id) => !avoid.includes(id));
+    if (fresh.length >= OFFER_SIZE) eligible = fresh;
+    const forced = this.sim.tutorial?.forcedOffer() ?? null; // onboarding : offre imposée, jamais prismatique
+    const offer = forced ?? (eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null);
     this.offer = offer;
     if (!offer) {
       this.pendingLevels = 0;
       this.offerPrism = [];
         return;
     }
-    this.offerPrism = offer.map(() => this.sim.rng.chance(PRISM_CHANCE));
+    this.offerPrism = offer.map(() => (forced ? false : this.sim.rng.chance(PRISM_CHANCE)));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 
@@ -192,13 +206,26 @@ export class Squad {
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
       }
     } else if (id === 'reinforce') {
-      const n = Math.min(def.value * mult, this.maxSize - this.size); // la squad a pu se remplir entre la proposition et le choix
-      for (let i = 0; i < n; i++) {
+      // proposée même squad pleine : elle dépasse alors temporairement la taille max (14/12), seuls les ramassages sont bloqués
+      for (let i = 0; i < def.value * mult; i++) {
         const a = this.sim.rng.range(0, Math.PI * 2);
         const r = this.radius * 0.5;
-        this.recruit('trooper', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r }).invulnerable = 1;
+        const s = this.recruit('trooper', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r });
+        s.invulnerable = 1;
+        this.shield(s); // bouclier plein pour les renforts seulement, pas pour le reste de la squad
       }
     }
+  }
+
+  /** Bouclier plein pour un soldat : `SHIELD_FRACTION` de ses PV max. */
+  shield(s: SoldierState): void {
+    s.maxShield = s.maxHp * SHIELD_FRACTION;
+    s.shield = s.maxShield;
+  }
+
+  /** Bouclier plein pour tous les soldats vivants (power-up bouclier). */
+  shieldAll(): void {
+    for (const s of this.soldiers) if (s.alive) this.shield(s);
   }
 
   get isHealing(): boolean {
@@ -248,6 +275,8 @@ export class Squad {
       mass: def.mass,
       hp: maxHp,
       maxHp,
+      shield: 0,
+      maxShield: 0,
       alive: true,
       slotX: 0,
       slotY: 0,

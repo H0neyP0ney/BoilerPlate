@@ -31,6 +31,8 @@ export interface Session {
   reviveLocal(): void;
   /** La squad locale choisit l'upgrade `index` parmi ses propositions (en ligne : envoyé à l'hôte). */
   chooseUpgrade(index: number): void;
+  /** La squad locale relance ses propositions d'upgrade (en ligne : envoyé à l'hôte). */
+  rerollUpgrade(): void;
   /**
    * Partie en ligne : pas de pause (l'hôte fait tourner tout le monde), pas de revive par pub,
    * et un joueur anéanti réapparaît tout seul (l'hôte s'en charge).
@@ -50,6 +52,8 @@ export interface LocalSessionOptions {
   mode: ModeDef;
   seed: number;
   bots: number;
+  /** Onboarding scripté au début de la partie (voir `sim/Tutorial.ts`). */
+  tutorial?: boolean;
 }
 
 export class LocalSession implements Session {
@@ -67,7 +71,7 @@ export class LocalSession implements Session {
   constructor(opts: LocalSessionOptions) {
     const players: PlayerId[] = [this.localPlayer];
     for (let i = 0; i < opts.bots; i++) players.push(`bot${i + 1}`);
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true, tutorial: opts.tutorial });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
     players.slice(1).forEach((id, i) => this.bots.push(new BotBrain(id, opts.seed + 101 * (i + 1))));
@@ -97,6 +101,10 @@ export class LocalSession implements Session {
 
   chooseUpgrade(index: number): void {
     this.sim.chooseUpgrade(this.localPlayer, index);
+  }
+
+  rerollUpgrade(): void {
+    this.sim.rerollUpgrade(this.localPlayer);
   }
 
   reviveLocal(): void {

@@ -447,6 +447,19 @@ export class WorldView {
   squadFocus(owner: PlayerId): { x: number; y: number } | null {
     const sq = this.sim.squadOf(owner);
     if (!sq || !sq.alive) return null;
+    // moyenne des positions AFFICHÉES (interpolées à chaque image) des soldats : le centre de la simulation ne bouge qu'à 30 Hz, les textes et
+    // ondes qui le suivent saccaderaient
+    let x = 0;
+    let y = 0;
+    let n = 0;
+    for (const s of sq.soldiers) {
+      const v = this.soldiers.get(s.id);
+      if (!v || !s.alive) continue;
+      x += v.rx;
+      y += v.ry;
+      n++;
+    }
+    if (n > 0) return { x: x / n, y: y / n };
     const c = sq.center;
     return { x: c.x, y: c.y };
   }

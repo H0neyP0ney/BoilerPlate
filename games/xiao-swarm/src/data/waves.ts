@@ -268,6 +268,19 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
 /** Script courant : modifié par le Gestionnaire de vagues (dev), mémorisé dans le navigateur (debugWaves.ts). */
 export const WAVE_SCRIPT: WaveScript = JSON.parse(JSON.stringify(DEFAULT_WAVE_SCRIPT)) as WaveScript;
 
+/**
+ * Réglage de la pression par tranche de la timeline : le nombre d'aliens de chaque vague envoyée entre `from` et `to` (s, position dans la
+ * timeline) est multiplié par `mul` (les boss ne sont pas touchés). 120-300 s = de l'Alpha Rhino au Scarab : −20 %.
+ */
+export const WAVE_PRESSURE: { from: number; to: number; mul: number }[] = [{ from: 120, to: 300, mul: 0.8 }];
+
+/** Multiplicateur de pression à l'instant `time` de la timeline (1 si aucune tranche ne s'applique). */
+export function pressureAt(time: number): number {
+  let mul = 1;
+  for (const p of WAVE_PRESSURE) if (time >= p.from && time < p.to) mul *= p.mul;
+  return mul;
+}
+
 /** Instants (s) où une entrée de la timeline envoie son niveau. */
 export function entryTimes(e: TimelineEntry): number[] {
   const out = [e.at];

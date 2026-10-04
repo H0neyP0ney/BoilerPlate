@@ -63,6 +63,28 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
+  // Gling Mère (`boss_gling`, mini-boss à 1:00) : gros crustacé rouge à bulbes orangés. art-src/boss_mother_walk.png (grille 3×3, cases de 135×113, regarde vers la GAUCHE)
+  // assemblé par node tools/pack-grids.mjs games/xiao-swarm/art-src/boss_mother.pack.json (sans réduction) ; cycle de marche, idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/boss_mother.png',
+    frameWidth: 135,
+    frameHeight: 113,
+    sprites: {
+      alien_boss_gling: {
+        originX: 0.563,
+        originY: 0.956,
+        scale: 0.91,
+        shadow: 1.4,
+        anchors: { 'walk:right': [0.4883, 0.7115], 'walk:left': [0.5196, 0.7115] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 14 },
+        },
+      },
+    },
+  },
   // Slime de glace (`iceballer`) : cyclope-pieuvre bleu qui lance des flocons. art-src/iceballer_walk.png (grille 3×3, cases de 68×105, de face) assemblé par
   // node tools/pack-grids.mjs games/xiao-swarm/art-src/iceballer.pack.json (sans réduction) ; cycle de marche, idle = même cycle, plus lent.
   {
@@ -77,11 +99,11 @@ export const ASSETS: AssetEntry[] = [
         scale: 0.67,
         shadow: 0.95,
         muzzleFlash: true,
-        muzzle: [0.32, 0.35], // sur la pupille (flash de tir du flocon)
+        muzzle: [0.32, 0.35],
+        anchors: { 'walk:right': [0.5046, 0.8544], 'walk:left': [0.4848, 0.8544] },
         muzzles: {
-          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]], // centre de l'iris de chaque case
+          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]],
         },
-        anchors: { 'walk:right': [0.5046, 0.8877], 'walk:left': [0.382, 0.8877] },
         anims: {
           idle: { frames: range(0, 8), fps: 6 },
           walk: { frames: range(0, 8), fps: 11 },
@@ -101,19 +123,6 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.531,
         originY: 0.916,
         scale: 0.7,
-        shadow: 1.45,
-        anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
-        facesLeft: true,
-        anims: {
-          idle: { frames: range(0, 8), fps: 8 },
-          walk: { frames: range(0, 8), fps: 18 },
-        },
-      },
-      // Boss Gling : même planche, ×3,4 (teinte rose : `tint` dans data/aliens.ts).
-      alien_boss_gling: {
-        originX: 0.531,
-        originY: 0.916,
-        scale: 0.7 * 3.4,
         shadow: 1.45,
         anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
         facesLeft: true,

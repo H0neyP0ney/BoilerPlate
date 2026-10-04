@@ -281,7 +281,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const { width, height } = this.scale;
     const w = Math.min(460, width - 80);
     const x = (width - w) / 2;
-    const barY = height - 70; // haut de la barre (au-dessus de la timeline des vagues, tout en bas)
+    const barY = height - 100; // haut de la barre (au-dessus de la jauge d'XP et de son niveau, tout en bas)
     const final = boss.def.boss!.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
     this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(width / 2, barY - (boss.maxShield > 0 ? 22 : 14));

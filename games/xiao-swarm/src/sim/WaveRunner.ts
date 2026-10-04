@@ -1,6 +1,6 @@
 import type { Rng } from '@xiao/engine/sim';
 import { ALIENS, type AlienId } from '../data/aliens';
-import type { WaveConfig, WaveScript } from '../data/waves';
+import { pressureAt, type WaveConfig, type WaveScript } from '../data/waves';
 
 /**
  * Exécute un `WaveScript` : fait avancer l'horloge du run et, à chaque instant de la timeline, envoie un niveau de vague —
@@ -81,7 +81,11 @@ export class WaveRunner {
       const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
       if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
-    for (const g of groups) if (g.count > 0) this.spawn(g.type, Math.round(g.count));
+    const mul = pressureAt(this._cursor); // ex. −20 % entre le Rhinocéros et le Scarab (data/waves.ts : WAVE_PRESSURE)
+    for (const g of groups) {
+      const n = ALIENS[g.type].boss || mul === 1 ? Math.round(g.count) : Math.max(1, Math.round(g.count * mul));
+      if (g.count > 0) this.spawn(g.type, n);
+    }
     return { ...config, groups };
   }
 }

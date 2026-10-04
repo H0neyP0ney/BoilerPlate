@@ -1,6 +1,6 @@
 import { DIFFICULTY } from '../config';
 import { ALIENS } from './aliens';
-import { entryTimes, type TimelineEntry, type WaveConfig, type WaveScript } from './waves';
+import { entryTimes, pressureAt, type TimelineEntry, type WaveConfig, type WaveScript } from './waves';
 
 /**
  * Courbe de pression des vagues (Gestionnaire de vagues) : ESTIMATION des PV d'aliens vivants au fil du run, en tenant compte
@@ -33,25 +33,26 @@ export interface Pressure {
 }
 
 /** PV totaux d'une configuration, comme le jeu les fait apparaître (nombre × `alienCountMul`, PV × `alienHpMul` / `bossHpMul`). */
-export function configHp(config: WaveConfig, bossWeight = 1): number {
+export function configHp(config: WaveConfig, bossWeight = 1, mul = 1): number {
   let total = 0;
   for (const g of config.groups) {
     const def = ALIENS[g.type];
     if (!def || g.count <= 0) continue;
     // un boss n'apparaît qu'une fois (pas de ×alienCountMul, voir Sim.ts), les autres sont multipliés
-    const count = def.boss ? g.count : Math.round(g.count * DIFFICULTY.alienCountMul);
+    // `mul` : pression de la tranche de la timeline (WAVE_PRESSURE), appliquée comme le WaveRunner (avant le ×alienCountMul de Sim)
+    const count = def.boss ? g.count : Math.round((mul === 1 ? g.count : Math.max(1, Math.round(g.count * mul))) * DIFFICULTY.alienCountMul);
     total += count * def.hp * (def.boss ? DIFFICULTY.bossHpMul * bossWeight : DIFFICULTY.alienHpMul) * (1 + (def.shield?.pct ?? 0)); // bouclier en plus des PV
   }
   return total;
 }
 
 /** PV envoyés par un niveau : configuration forcée (boss) ou moyenne de ses configurations (tirage au hasard). */
-export function levelHp(script: WaveScript, level: number, config?: number, bossWeight = 1): number {
+export function levelHp(script: WaveScript, level: number, config?: number, bossWeight = 1, mul = 1): number {
   const configs = script.levels?.[level] ?? [];
   if (configs.length === 0) return 0;
   const forced = config !== undefined ? configs[config - 1] : undefined;
-  if (forced) return configHp(forced, bossWeight);
-  return configs.reduce((sum, c) => sum + configHp(c, bossWeight), 0) / configs.length;
+  if (forced) return configHp(forced, bossWeight, mul);
+  return configs.reduce((sum, c) => sum + configHp(c, bossWeight, mul), 0) / configs.length;
 }
 
 /** DPS effectif de la squad à l'instant `t` (s). */
@@ -63,10 +64,9 @@ export function simulatePressure(script: WaveScript, model: WaveModel = script.m
   const steps = Math.floor(end / dt) + 1;
   const incoming = new Float64Array(steps);
   for (const e of script.timeline) {
-    const hp = levelHp(script, e.level, e.config, model.bossWeight ?? 1);
     for (const t of entryTimes(e)) {
       const i = Math.round(t / dt);
-      if (i < steps) incoming[i] += hp;
+      if (i < steps) incoming[i] += levelHp(script, e.level, e.config, model.bossWeight ?? 1, pressureAt(t)); // pression de la tranche (−20 % avant le Scarab)
     }
   }
   const out: Pressure = { dt, hp: [], backlog: [], dps: [] };

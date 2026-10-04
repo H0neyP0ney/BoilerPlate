@@ -352,19 +352,17 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xc01c40,
     hpBarWidth: 140,
   },
-  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4,2 s pour faire apparaître 30 glings en 1,5 s. */
+  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4,2 s pour faire apparaître 30 glings en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
     hp: 500,
     speed: 85,
     radius: 38,
-    scale: 3.4,
     mass: 14,
     damage: 5,
     attackCooldown: 0.6,
     target: 'nearest',
-    swarm: { every: 4.2, duration: 1.5, count: 30, spawn: 'gling' },
-    tint: 0xff8ad0,
+    swarm: { every: 4.2, duration: 1.07, count: 30, spawn: 'gling' },
     boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1,

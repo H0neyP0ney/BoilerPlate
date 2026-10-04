@@ -1,5 +1,5 @@
 import type { Rng } from '@xiao/engine/sim';
-import type { AlienId } from '../data/aliens';
+import { ALIENS, type AlienId } from '../data/aliens';
 import type { WaveConfig, WaveScript } from '../data/waves';
 
 /**
@@ -60,9 +60,10 @@ export class WaveRunner {
 
   /** Envoie un niveau de vague maintenant (timeline, ou bouton du panneau Triche) : une configuration au hasard. */
   trigger(level: number, configIndex?: number): WaveConfig | null {
-    const configs = this.script.levels?.[level] ?? [];
-    if (configs.length === 0) return null;
-    const forced = configIndex !== undefined ? configs[configIndex - 1] : undefined;
+    const all = this.script.levels?.[level] ?? [];
+    if (all.length === 0) return null;
+    const forced = configIndex !== undefined ? all[configIndex - 1] : undefined;
+    const configs = all;
     const config = forced ?? configs[Math.floor(this.rng.next() * configs.length)];
     const groups = config.groups.map((g) => ({ ...g }));
     if (!forced && level < 9) {
@@ -75,6 +76,10 @@ export class WaveRunner {
         if (same) same.count += n;
         else groups.push({ type: guest.type, count: n });
       }
+    }
+    for (const g of groups) {
+      const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
+      if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
     for (const g of groups) if (g.count > 0) this.spawn(g.type, Math.round(g.count));
     return { ...config, groups };

@@ -35,7 +35,10 @@ export class Recruits {
   /** `toward` : la recrue saute en cloche dans sa direction (avec un peu de hasard) pour être plus facile à attraper. */
   drop(cls: SoldierClassId, x: number, y: number, toward?: Point, forced = false): RecruitState {
     const r: RecruitState = { id: this.sim.ids.get(), cls, x, y, px: x, py: y, life: forced ? 1e6 : RECRUIT.life };
-    if (forced) r.forced = true; // tutoriel : ne disparaît pas
+    if (forced) {
+      r.forced = true; // tutoriel : ne disparaît pas
+      r.age = 0;
+    }
     if (toward) {
       const d = Math.hypot(toward.x - x, toward.y - y);
       if (d > 40) {
@@ -65,6 +68,7 @@ export class Recruits {
       r.px = r.x;
       r.py = r.y;
       r.life -= dt;
+      if (r.age !== undefined) r.age += dt;
       if (r.life <= 0) {
         this.noteExpired(r);
         this.items.splice(i, 1);

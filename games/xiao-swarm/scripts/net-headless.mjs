@@ -89,6 +89,7 @@ try {
   b.anchor.y = a.center.y;
   for (const s of a.soldiers) s.invulnerable = 0;
   const hpSum = () => a.soldiers.reduce((n, x) => n + x.hp, 0) + b.soldiers.reduce((n, x) => n + x.hp, 0);
+  hs.combat.clear(); // pas de projectile d alien en vol (boule de glace, grenade…) : ils blessent légitimement
   const before = hpSum();
   for (let i = 0; i < 90; i++) {
     hs.aliens.length = 0;
@@ -308,7 +309,8 @@ try {
   hs.aliens.length = 0;
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
-    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    const { SQUAD_BASE } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
+    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m * SQUAD_BASE.damage).texture.replace('fx_blaster_', '')).join(' > ');
     check(names === 'blue > green > yellow > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);

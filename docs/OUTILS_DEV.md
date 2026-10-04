@@ -117,3 +117,7 @@ d'affichage du jeu ; curseur de ralenti.
 Le navigateur du panneau fige souvent la boucle de jeu (4–10 fps, rendu qui se bloque) : après une navigation, attendre une
 trentaine de secondes avant d'interroger la page, et ne pas conclure à un bug si un effet met longtemps à apparaître. Pour
 vérifier de la logique sans dépendre du rendu, appeler `scene.session.advance(33, () => {})` à la main.
+
+## Réglages mémorisés périmés
+
+En dev, chaque vue de réglage mémorise ses valeurs dans le navigateur (localStorage) et les réapplique par-dessus le code. Pour éviter qu'une copie ne masque en silence des valeurs du code qui ont changé (nouveau boss absent des vagues mémorisées, par exemple), chaque copie est marquée avec une **empreinte des valeurs du code** (`dev/staleOverrides.ts`, `dropStaleOverride`, appelé en tête de chaque `load…Overrides`). Au démarrage, si l'empreinte a changé, la copie est supprimée et le HUD affiche « Réglages mémorisés périmés supprimés : … » pendant quelques secondes. Première fois (aucune empreinte connue) : la copie est gardée et marquée, sauf pour les vagues. **Toute nouvelle copie mémorisée doit appeler `dropStaleOverride`.**

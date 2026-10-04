@@ -46,6 +46,8 @@ export interface SoldierState extends Body {
   invulnerable: number;
   /** Id de la bulle qui le tient captif (0 = libre) : il ne bouge ni ne tire, et seule la bulle peut le blesser. */
   capturedBy: number;
+  /** Pris dans un glaçon (et non avalé par une bulle) : reste attaquable par les aliens. Simulation hôte seulement. */
+  frozen: boolean;
   /**
    * Temps restant (s) d'un « grab » (langue) : tant qu'il est > GRAB_HOLD il est tiré hors de la formation (il ne rejoint pas son
    * slot), et jusqu'à 0 il est immunisé contre tout autre grab (langue ou bulle).
@@ -94,6 +96,14 @@ export interface AlienState extends Body {
   captive: SoldierState | null;
   /** Déjà ressuscité une fois : sa flaque ne pourra plus servir. */
   revived: boolean;
+  /** Boss Gling : compte à rebours avant l'essaim (s), temps d'essaim restant (s) et temps écoulé depuis le dernier gling apparu. */
+  swarmCd: number;
+  swarmT: number;
+  swarmAcc: number;
+  /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, 1, 2 ; voir `BOSS_ENRAGE`). */
+  enraged: number;
+  /** Temps écoulé depuis l'apparition (s), pour l'enragement des boss. */
+  age: number;
   /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */
   lurkPhase: number;
   lurkT: number;
@@ -131,6 +141,8 @@ export interface Projectile {
   puddle: number;
   puddleTtl: number;
   puddleSlow: number;
+  /** Boucle de glace : rayon (px) de la zone gelée à l'impact sur un soldat (0 = aucune). */
+  freeze: number;
   texture: string;
   team: Team;
   owner: PlayerId;
@@ -243,6 +255,8 @@ export interface RecruitState {
   hop?: { vx: number; vy: number; t: number };
   /** Tutoriel : recrue qui ne disparaît pas tant qu'elle n'est pas ramassée. */
   forced?: boolean;
+  /** Tutoriel : temps écoulé depuis son apparition (s), compté par la simulation, pour dessiner l'arc du saut sans à-coups (sa `life` est infinie). */
+  age?: number;
 }
 
 export const hpRatio = (b: Body): number => b.hp / b.maxHp;

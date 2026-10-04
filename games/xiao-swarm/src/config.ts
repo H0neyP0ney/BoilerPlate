@@ -39,11 +39,24 @@ export const REJOIN_EXTRA = 70;
 export const GRAB_SLOW = 0.55;
 export const GRAB_SLOW_TIME = 1.2;
 
-/** Zombie (alien ressuscité par un chaman) : multiplicateur de PV et de dégâts par rapport à la version de base. */
+/** Zombie (alien ressuscité par un chaman) : multiplicateur de PV par rapport à la version de base. */
 export const ZOMBIE_MUL = 3;
+/** Zombie : multiplicateur de dégâts (1 = pas de bonus : sa force vient de sa cadence d'attaque). */
+export const ZOMBIE_DMG_MUL = 1;
+/** Nombre d'exemplaires ressuscités par une incantation du chaman. */
+export const ZOMBIE_COPIES = 5;
 /** Enragé (zombie) : multiplicateurs de vitesse de déplacement et de cadence d'attaque. */
 export const ENRAGED_SPEED = 1.35;
-export const ENRAGED_ATTACK = 1.5;
+export const ENRAGED_ATTACK = 3;
+/** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
+export const ALIEN_SPAWN_HOLD = 0.7;
+/** Stats de base de toute squad (partie normale comme tutoriel) : dégâts +10 % et cadence de tir +15 % avant toute upgrade. */
+export const SQUAD_BASE = { damage: 1.1, fireRate: 1.15 } as const;
+/**
+ * Boss enragé : à chaque palier de `times` (âge du boss en s : 1:30, puis 2:30), +30 % de vitesse de déplacement et d'attaque et −30 % de
+ * cooldown des capacités spéciales (cumulés : niveau 2 = +60 % / −60 %). Les flammes d'enragé sont plus denses au niveau 2.
+ */
+export const BOSS_ENRAGE = { times: [90, 150], speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
 /**

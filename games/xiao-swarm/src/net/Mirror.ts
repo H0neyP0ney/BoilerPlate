@@ -277,6 +277,7 @@ export class Mirror {
         aim: u.aim,
         invulnerable: 0,
         capturedBy: 0,
+        frozen: false,
         grabbed: 0,
       };
       this.soldiers.set(u.id, s);
@@ -350,6 +351,11 @@ export class Mirror {
         trailCd: 0,
         captive: null,
         revived: false,
+        enraged: 0,
+        age: 0,
+        swarmCd: 0,
+        swarmT: 0,
+        swarmAcc: 0,
         lurkPhase: 0,
         lurkT: 0,
         spikeAng: 0,
@@ -375,6 +381,7 @@ export class Mirror {
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
     s.revived = a.zombie;
+    s.enraged = a.enraged;
     s.lurkPhase = a.lurkPhase;
     s.lurkT = a.lurkT;
     s.spikeAng = a.spikeAng;

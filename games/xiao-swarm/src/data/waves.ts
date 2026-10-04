@@ -1,4 +1,4 @@
-import type { AlienId } from './aliens';
+import { ALIENS, type AlienId } from './aliens';
 import type { TargetPoint, WaveModel } from './waveModel';
 
 /**
@@ -69,6 +69,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 3 }, { type: 'slime', count: 4 }] },
       { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 4 }, { type: 'gling', count: 4 }] },
       { name: 'Deux kamikazes', groups: [{ type: 'kamikaze', count: 3 }] },
+      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 2 }, { type: 'slime', count: 4 }] },
     ],
     4: [
       { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
@@ -101,6 +102,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 6 }] },
       { name: 'Mini-boss : Scarab', groups: [{ type: 'boss_scarab', count: 1 }, { type: 'shooter', count: 3 }, { type: 'slime', count: 6 }] },
       { name: 'BOSS FINAL : Giant Crab', groups: [{ type: 'boss_crab', count: 1 }, { type: 'shaman', count: 1 }, { type: 'bubble', count: 1 }, { type: 'charger', count: 1 }] },
+      { name: 'Mini-boss : Gling Mère', groups: [{ type: 'boss_gling', count: 1 }, { type: 'gling', count: 6 }] },
     ],
   },
   timeline: [
@@ -113,6 +115,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 32.5, level: 2, every: 2, until: 38.5 },
     { at: 40, level: 3 },
     { at: 42, level: 2, every: 8, until: 58 },
+    { at: 60, level: 9, config: 4 },
     { at: 64.5, level: 2 },
     { at: 71, level: 2 },
     { at: 76, level: 2 },
@@ -286,7 +289,7 @@ export function nextBoss(script: WaveScript, time: number): { at: number; type: 
   for (const e of script.timeline) {
     if (e.config === undefined || e.at <= time || (best && e.at >= best.at)) continue;
     const type = script.levels?.[e.level]?.[e.config - 1]?.groups[0]?.type;
-    if (type) best = { at: e.at, type };
+    if (type && ALIENS[type].boss) best = { at: e.at, type };
   }
   return best;
 }

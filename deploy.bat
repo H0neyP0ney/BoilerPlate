@@ -11,6 +11,6 @@ if not exist ".env.deploy" (
   pause
   exit /b 1
 )
-call npm run deploy -- %*
+call npm run deploy --bump
 echo.
 pause

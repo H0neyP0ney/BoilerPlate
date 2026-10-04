@@ -5,7 +5,7 @@ import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { soldierSpriteId } from '../art/playerVariants';
-import { hasComposedRecruit, RECRUIT_STAR } from '../art/recruits';
+import { hasComposedRecruit, recruitSpriteId, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 
 /**
@@ -43,6 +43,8 @@ function muzzleOf(b: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, id: s
 }
 
 export class SoldierView {
+  /** Retenu par un glaçon (et non par une bulle) : teinte bleue. Posé par `WorldView` à chaque image. */
+  frozen = false;
   /** Position affichée (interpolée), utilisée par l'overlay et la caméra. */
   rx = 0;
   ry = 0;
@@ -148,7 +150,7 @@ export class SoldierView {
       if (this.flash <= 0) this.rest = FLASH_REST;
       this.body.setTint(0xff6a6a).setTintMode(Phaser.TintModes.FILL);
     } else if (s.capturedBy) {
-      this.body.setTint(0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion
+      this.body.setTint(this.frozen ? 0x9fd4ff : 0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion (vert) ou gelé dans un glaçon (bleu)
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
@@ -193,6 +195,7 @@ export class AlienView {
 
   /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private flameLevel = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -265,7 +268,10 @@ export class AlienView {
         .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
         .setY(this.body.y + (1 - vis) * a.radius * 0.7);
     }
-    if (a.def.capture) {
+    if (a.def.iceBlock) {
+      // glaçon : devant le soldat gelé, qu'on voit à travers
+      this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(0.82);
+    } else if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
       if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
@@ -283,7 +289,7 @@ export class AlienView {
         .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
         .setY(this.body.y + (1 - vis) * a.radius * 0.5);
     }
-    if (a.revived) this.syncZombieFx();
+    if (a.revived || a.enraged) this.syncZombieFx();
 
     if (this.rest > 0) this.rest -= dt;
     if (this.flash > 0) {
@@ -292,8 +298,10 @@ export class AlienView {
       this.body.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
     } else if (a.rushWind > 0) {
       this.body.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
-    } else if (a.revived) {
+    } else if (a.revived || a.enraged) {
       this.body.setTint(ENRAGED_TINT).setTintMode(Phaser.TintModes.MULTIPLY); // teinte rouge de l'enragé
+    } else if (a.def.tint !== undefined) {
+      this.body.setTint(a.def.tint).setTintMode(Phaser.TintModes.MULTIPLY); // teinte propre à l'espèce (gling géant rose)
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
@@ -304,6 +312,13 @@ export class AlienView {
     const a = this.state;
     if (!this.zombieFx) {
       this.zombieFx = createEnragedFlames(this.scene, a.radius);
+    }
+    // boss enragé une 2e fois : flammes beaucoup plus denses et plus grosses
+    const level = a.enraged >= 2 ? 2 : 1;
+    if (level !== this.flameLevel) {
+      this.flameLevel = level;
+      this.zombieFx.frequency = level === 2 ? 9 : 28;
+      this.zombieFx.setScale(level === 2 ? 1.5 : 1);
     }
     this.zombieFx.setPosition(this.rx, this.ry - a.radius * 0.4);
   }
@@ -328,10 +343,12 @@ export class RecruitView {
     readonly state: RecruitState,
     /** Couleur de la classe (la zone au sol est jaune pour toutes les recrues : `RECRUIT_COLOR`). */
     readonly color: number,
+    /** Emplacement du joueur local : la tête de la recrue a la couleur de ses soldats. */
+    slot = 0,
   ) {
     this.rx = state.x;
     this.ry = state.y;
-    const id = `recruit_${state.cls}`;
+    const id = recruitSpriteId(state.cls, slot);
     this.img = sprites.add(scene, id, state.x, state.y);
     sprites.play(this.img, id, 'idle');
     // Étoiles qui scintillent autour d'une recrue composée : apparaissent, grossissent puis s'éteignent en tournant (FX.recruit).
@@ -360,7 +377,8 @@ export class RecruitView {
     const y = lerp(r.py, r.y, alpha);
     // saut en cloche à l'apparition : l'arc se déduit de l'âge (la simulation ne décompte que `life`), le cercle au sol reste au sol
     // l'âge est interpolé comme la position (`life` ne change qu'à chaque tick de 30 Hz : sans ça l'arc avançait par à-coups)
-    const age = RECRUIT.life - r.life - (1 - alpha) / TICK_RATE;
+    // recrue du tutoriel : `life` est quasi infinie (elle ne disparaît pas), l'âge est compté par la simulation (`age`) ; même lissage entre deux ticks
+    const age = (r.age ?? RECRUIT.life - r.life) - (1 - alpha) / TICK_RATE;
     const k = age / RECRUIT.hopTime;
     const hop = k >= 0 && k < 1 ? 4 * RECRUIT.hopHeight * k * (1 - k) : 0;
     // après l'atterrissage, le léger balancement n'apparaît qu'en douceur (pas de saut de 4 px à la fin de l'arc)

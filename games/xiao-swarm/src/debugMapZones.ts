@@ -1,6 +1,7 @@
 import { DEFAULT_MAP_ZONES, MAP_ZONES, type ObstacleZone } from './data/mapZones';
 import { JUNGLE_SIZE } from './data/maps';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Zones de la carte éditées dans la visionneuse « Carte » (dev uniquement) : mémorisées dans le navigateur et réappliquées au
@@ -34,6 +35,7 @@ function sanitize(raw: unknown): ObstacleZone[] | null {
 /** À appeler au démarrage, avant de créer la simulation : réapplique les zones mémorisées. */
 export function loadMapZoneOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Carte', DEFAULT_MAP_ZONES);
   try {
     const saved = sanitize(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'));
     if (saved) MAP_ZONES.obstacleZones = saved;

@@ -204,6 +204,37 @@ export function makeFxTextures(scene: Phaser.Scene): void {
   });
   // Boule de gelée bleue lancée par le gros slime : blob sombre cerclé, reflet clair.
   // Blob de gelée verte (crabe géant) : plus gros que la boule bleue, vert acide, reflet clair.
+  // Flocon du slime bleu ciel (projectile de glace) : six branches à embranchements, contour bleu sombre, cœur clair.
+  canvasTexture(scene, 'fx_ice_ball', 40, 40, (ctx) => {
+    ctx.translate(20, 20);
+    ctx.lineCap = 'round';
+    const arms = (width: number, color: string): void => {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      for (let i = 0; i < 6; i++) {
+        ctx.save();
+        ctx.rotate((i * Math.PI) / 3);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -17);
+        ctx.moveTo(0, -9);
+        ctx.lineTo(-5, -14);
+        ctx.moveTo(0, -9);
+        ctx.lineTo(5, -14);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+    arms(6, '#1c5a9a'); // contour
+    arms(3, '#e8f8ff'); // branches
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#1c5a9a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
   canvasTexture(scene, 'fx_blob_green', 34, 34, (ctx) => {
     const g = ctx.createRadialGradient(13, 12, 1, 17, 17, 16);
     g.addColorStop(0, '#f0ffd0');

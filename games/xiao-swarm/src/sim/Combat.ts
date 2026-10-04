@@ -1,5 +1,5 @@
 import { Pool } from '@xiao/engine/sim';
-import { CRIT_MAX, CRIT_MUL, STIM_FIRE, ZOMBIE_MUL } from '../config';
+import { CRIT_MAX, CRIT_MUL, STIM_FIRE, ZOMBIE_DMG_MUL } from '../config';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
@@ -43,6 +43,7 @@ export class Combat {
       puddle: 0,
       puddleTtl: 0,
       puddleSlow: 1,
+      freeze: 0,
       texture: '',
       team: 'aliens',
       owner: '',
@@ -58,6 +59,7 @@ export class Combat {
       p.aoe = 0;
       p.knock = 0;
       p.puddle = 0;
+      p.freeze = 0;
       p.flame = false;
       p.crit = false;
     },
@@ -116,8 +118,12 @@ export class Combat {
   private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1, critChance = 0): void {
     const { rng } = this.sim;
     const damage = weapon.damage * damageMul;
-    const mx = s.x + s.facing * 4 + Math.cos(s.aim) * 30;
-    const my = s.y - 17 + Math.sin(s.aim) * 30;
+    // bouche du canon à 30 px devant le soldat ; si la cible est plus près (mêlée), elle est ramenée en deçà de la cible : sinon la balle
+    // naîtrait derrière l'ennemi et le raterait
+    const reach = Math.hypot(target.x - s.x, target.y - 10 - (s.y - 17));
+    const k = Math.min(1, reach / 60);
+    const mx = s.x + s.facing * 4 * k + Math.cos(s.aim) * 30 * k;
+    const my = s.y - 17 + Math.sin(s.aim) * 30 * k;
 
     if (weapon.kind === 'beam') {
       const crit = this.rollCrit(critChance);
@@ -181,8 +187,54 @@ export class Combat {
     for (let i = 0; i < n; i++) {
       const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
-      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
+      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_DMG_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
     }
+  }
+
+  /** Slime de glace : boucle de glace en ligne droite vers la position ACTUELLE de la squad visée ; elle gèle les soldats qu'elle touche. */
+  iceShot(a: AlienState, target: SoldierState): void {
+    const ice = a.def.ice!;
+    const squad = this.sim.squadOf(target.owner);
+    const mx = a.x;
+    const my = a.y - a.radius * 0.6;
+    // vise le centre de la squad, décalé de `lead` × son déplacement pendant le trajet de la boucle (anticipation partielle)
+    let vx = 0;
+    let vy = 0;
+    if (squad) {
+      let n = 0;
+      for (const s of squad.soldiers) {
+        if (!s.alive || s.capturedBy) continue;
+        vx += s.vx;
+        vy += s.vy;
+        n++;
+      }
+      if (n > 0) {
+        vx /= n;
+        vy /= n;
+      }
+    }
+    const base = squad?.center ?? target;
+    const travel = Math.hypot(base.x - mx, base.y - my) / ice.speed;
+    const c = { x: base.x + vx * travel * ice.lead, y: base.y + vy * travel * ice.lead };
+    const d = Math.hypot(c.x - mx, c.y - my) || 1;
+    this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: mx, y: my });
+    const p = this.projectiles.acquire();
+    p.x = p.px = mx;
+    p.y = p.py = my;
+    p.vx = ((c.x - mx) / d) * ice.speed;
+    p.vy = ((c.y - my) / d) * ice.speed;
+    p.life = p.maxLife = (ice.range * 1.5) / ice.speed; // continue un peu au-delà de la cible, puis se brise
+    p.damage = ice.damage;
+    p.pierce = 0;
+    p.flame = false;
+    p.crit = false;
+    p.lob = false;
+    p.aoe = 0;
+    p.knock = 0;
+    p.freeze = ice.zone;
+    p.texture = ice.texture;
+    p.team = a.team;
+    p.owner = 'aliens';
   }
 
   /**
@@ -199,7 +251,7 @@ export class Combat {
       const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_MUL : 1), sp.aoe, sp.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_DMG_MUL : 1), sp.aoe, sp.texture, a.team, 'aliens');
       p.puddle = sp.puddle.radius;
       p.puddleTtl = sp.puddle.ttl;
       p.puddleSlow = sp.puddle.slow;
@@ -355,6 +407,11 @@ export class Combat {
       if (pvp || fromAlien) {
         for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
           if (s.team === p.team || !this.overlaps(p, s, hitR)) continue;
+          if (p.freeze > 0) {
+            if (p.damage > 0) this.sim.damage(s, p.damage, p.owner, p.vx / len, p.vy / len); // faibles dégâts
+            this.sim.freezeHit(s, p.freeze); // la boucle de glace éclate : seul le soldat touché est pris dans un glaçon
+            return true;
+          }
           this.sim.damage(s, p.damage, p.owner, p.vx / len, p.vy / len);
           if (p.knock > 0) {
             s.kx += ((p.vx / len) * p.knock) / s.mass;

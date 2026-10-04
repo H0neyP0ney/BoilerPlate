@@ -1,6 +1,7 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, GRAB_IMMUNE, ZOMBIE_MUL } from '../config';
+import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, GRAB_IMMUNE, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
+import { CLASSES } from '../data/classes';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -10,6 +11,8 @@ const CAPTURE_DRAG_DIST = 150;
 const CAPTURE_DRAG_SPEED = 0.35;
 /** Rayon dans lequel un alien cherche une cible précise (au-delà : il marche vers la squad la plus proche). */
 const SEEK_RADIUS = 700;
+/** Chaman : px de distance « gagnés » par PV de base du cadavre (un Spitter de 60 PV passe devant un slime 200 px plus près). */
+const CORPSE_SIZE_PREF = 4;
 /** Places d'aliens en plus du plafond pour les costauds (voir `Horde.canSpawn`). */
 const ELITE_RESERVE = 12;
 /** La formation ramène vite le soldat à son slot : l'impulsion de la langue est majorée pour que la traction soit visible. */
@@ -131,6 +134,11 @@ export class Horde {
       captive: null,
       trailCd: 0,
       revived,
+      enraged: 0,
+      age: 0,
+      swarmCd: def.swarm ? def.swarm.every : 0,
+      swarmT: 0,
+      swarmAcc: 0,
       lurkPhase: 0,
       lurkT: 0,
       spikeAng: 0,
@@ -141,11 +149,11 @@ export class Horde {
    * Fait apparaître `count` aliens en groupe, tous au même endroit : à `radius` px de `center`, dans une direction tirée au hasard
    * (à l'écran : tutoriel). Renvoie ceux qui ont été créés. Un point occupé par le décor est rapproché de `center`.
    */
-  spawnAround(center: Point, type: AlienId, count: number, radius: number): AlienState[] {
+  spawnAround(center: Point, type: AlienId, count: number, radius: number, angle?: number): AlienState[] {
     const { rng, arena } = this.sim;
     const def = ALIENS[type];
     const out: AlienState[] = [];
-    const a = rng.range(0, Math.PI * 2);
+    const a = angle ?? rng.range(0, Math.PI * 2); // `angle` imposé : le tutoriel annonce d'où viennent les premiers aliens
     let origin = { x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius };
     for (let tries = 0; tries < 8 && !arena.isFree(origin, def.radius + 10); tries++) {
       const r = radius * (1 - 0.08 * (tries + 1));
@@ -161,10 +169,67 @@ export class Horde {
     return out;
   }
 
+  /**
+   * Fait apparaître `count` aliens EN CERCLE autour de `center` : régulièrement répartis sur un anneau de `radius` px (départ à l'angle
+   * `start`), l'escouade se retrouve encerclée. Un point occupé par le décor est rapproché de `center`. Renvoie ceux qui ont été créés.
+   */
+  spawnRing(center: Point, type: AlienId, count: number, radius: number, start: number): AlienState[] {
+    const { rng, arena } = this.sim;
+    const def = ALIENS[type];
+    const out: AlienState[] = [];
+    for (let i = 0; i < count && this.canSpawn(type); i++) {
+      const a = start + (i / count) * Math.PI * 2;
+      let r = radius;
+      let p = { x: center.x + Math.cos(a) * r + rng.range(-12, 12), y: center.y + Math.sin(a) * r + rng.range(-12, 12), radius: def.radius };
+      for (let tries = 0; tries < 8 && !arena.isFree(p, def.radius + 10); tries++) {
+        r = radius * (1 - 0.08 * (tries + 1));
+        p = { x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r, radius: def.radius };
+      }
+      arena.constrain(p);
+      const made = this.create(def, p.x, p.y, 1, false);
+      this.sim.aliens.push(made);
+      out.push(made);
+    }
+    return out;
+  }
+
   /** Fait apparaître un alien à un endroit précis (résurrection par un chaman), si le plafond le permet. */
   spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false): void {
     if (!this.canSpawn(type)) return;
     this.sim.aliens.push(this.create(ALIENS[type], x, y, hpFrac, revived));
+  }
+
+  /**
+   * Gèle le soldat `s` : un glaçon (alien `iceblock`, PV = `blockHpMul` × un soldat de base) apparaît sur lui et le retient (`capturedBy`) :
+   * il ne bouge plus, ne tire plus, ne subit plus de dégâts et sort du contrôle de foule (comme un soldat avalé par une bulle).
+   */
+  freezeSoldier(s: SoldierState): void {
+    const def = ALIENS.iceblock;
+    const block = this.create(def, s.x, s.y, 1, false);
+    const base = CLASSES.trooper.hp * DIFFICULTY.soldierHpMul;
+    block.maxHp = block.hp = base * ALIENS.iceballer.ice!.blockHpMul; // 12 × un soldat de base (3 × +300 %)
+    block.captive = s;
+    s.capturedBy = block.id;
+    s.frozen = true; // contrairement à une bulle, les aliens peuvent frapper le soldat gelé
+    s.vx = s.vy = s.kx = s.ky = 0;
+    this.sim.aliens.push(block); // directement : le plafond d'aliens ne s'applique pas
+    this.sim.events.push({ t: 'capture', alien: block.id, soldier: s.id });
+  }
+
+  /** Glaçon : colle le soldat gelé à sa place ; ne fond jamais, se brise seulement si le soldat meurt (les aliens peuvent l'attaquer dedans). */
+  private updateIceBlock(a: AlienState): void {
+    a.px = a.x;
+    a.py = a.y;
+    a.vx = a.vy = a.kx = a.ky = 0;
+    const s = a.captive;
+    if (!s || !s.alive || s.capturedBy !== a.id) {
+      a.captive = null;
+      this.sim.damage(a, a.hp + a.shield + 1, null); // plus de prisonnier : le glaçon se brise
+      return;
+    }
+    s.x = a.x;
+    s.y = a.y;
+    s.vx = s.vy = s.kx = s.ky = 0;
   }
 
   /** Annonce l'arrivée d'un boss (bandeau + flèche dans le HUD). */
@@ -175,15 +240,22 @@ export class Horde {
   /** Flaque de slime la plus proche de `a` (libre, ou déjà choisie par `a`) dans un rayon `max`. */
   private nearestCorpse(a: AlienState, max: number): Corpse | undefined {
     let best: Corpse | undefined;
-    let bestD = max;
+    let bestD = Infinity;
     for (const c of this.sim.corpses) {
       if (c.claimed !== 0 && c.claimed !== a.id) continue;
       const d = Math.hypot(c.x - a.x, c.y - a.y);
-      if (d > bestD) continue;
+      if (d > max) continue;
+      const score = d - ALIENS[c.type].hp * CORPSE_SIZE_PREF; // les gros aliens d'abord, à distance comparable
+      if (score >= bestD) continue;
       best = c;
-      bestD = d;
+      bestD = score;
     }
     return best;
+  }
+
+  /** Vitesse d'écoulement des cooldowns spéciaux d'un boss enragé (−30 % par niveau, plancher à −90 %). */
+  private cdRate(a: AlienState): number {
+    return a.enraged ? 1 / Math.max(0.1, 1 - BOSS_ENRAGE.cooldownCut * a.enraged) : 1;
   }
 
   update(dt: number): void {
@@ -193,6 +265,10 @@ export class Horde {
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
       const def = a.def;
+      if (def.iceBlock) {
+        this.updateIceBlock(a);
+        continue;
+      }
 
       // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
       if (def.shield && a.maxShield > 0) {
@@ -221,9 +297,16 @@ export class Horde {
 
       let speed = def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y);
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
-      const power = a.revived ? ZOMBIE_MUL : 1; // zombie : dégâts ×3
+      const power = a.revived ? ZOMBIE_DMG_MUL : 1; // zombie : bonus de dégâts (config)
+      a.age += dt;
+      if (def.boss && a.enraged < BOSS_ENRAGE.times.length && a.age >= BOSS_ENRAGE.times[a.enraged]) {
+        a.enraged++; // un boss qui traîne s'enrage (puis une seconde fois)
+        this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level: a.enraged });
+      }
       if (a.revived) speed *= ENRAGED_SPEED; // enragé : plus rapide, attaque plus vite
-      const rate = a.revived ? ENRAGED_ATTACK : 1; // cadence d'attaque (cooldowns écoulés plus vite)
+      else if (a.enraged) speed *= 1 + BOSS_ENRAGE.speed * a.enraged;
+      const rate = a.revived ? ENRAGED_ATTACK : 1 + BOSS_ENRAGE.attack * a.enraged; // cadence d'attaque (cooldowns écoulés plus vite)
+      const cdRate = this.cdRate(a); // capacités spéciales (slam, saut, charge) : cooldown réduit
       let contactOverride: number | undefined;
       /** Bulle qui emporte son prisonnier à l'écart de la squad (vitesse imposée, remplace le déplacement normal). */
       let drag: { x: number; y: number } | null = null;
@@ -288,8 +371,31 @@ export class Horde {
           contactOverride = r.range * 0.6;
         }
       }
+      // Boss Gling : toutes les `every` s il s'arrête et fait apparaître ses glings en continu pendant `duration` s
+      let swarming = false;
+      if (def.swarm) {
+        const w = def.swarm;
+        if (a.swarmT > 0) {
+          swarming = true;
+          a.swarmT -= dt;
+          a.swarmAcc += dt;
+          const gap = w.duration / w.count;
+          while (a.swarmAcc >= gap) {
+            a.swarmAcc -= gap;
+            const ang = rng.range(0, Math.PI * 2);
+            const d = a.radius * rng.range(0.9, 1.3);
+            const p = { x: a.x + Math.cos(ang) * d, y: a.y + Math.sin(ang) * d * 0.7, radius: ALIENS[w.spawn].radius };
+            arena.constrain(p);
+            this.spawnAt(w.spawn, p.x, p.y);
+          }
+        } else if ((a.swarmCd -= dt) <= 0) {
+          a.swarmT = w.duration;
+          a.swarmAcc = 0;
+          a.swarmCd = w.every;
+        }
+      }
       if (def.slam) {
-        a.slamCd -= dt;
+        a.slamCd -= dt * cdRate;
         if (a.slamWind > 0) {
           a.slamWind -= dt;
           speed = 0;
@@ -317,14 +423,14 @@ export class Horde {
           a.vx = a.vy = a.kx = a.ky = 0;
           continue;
         }
-        a.leapCd -= dt;
+        a.leapCd -= dt * cdRate;
         if (a.leapCd <= 0) this.startLeap(a); // vise la squad de sa cible, sinon la plus proche (le crabe vise un centre, pas un soldat)
       }
 
       // Charge télégraphiée : s'arrête, montre la zone (rushWind), puis fonce tout droit dans la direction verrouillée
       if (def.rush) {
         const r = def.rush;
-        a.rushCd -= dt;
+        a.rushCd -= dt * cdRate;
         if (a.rushWind > 0) {
           a.rushWind -= dt;
           speed = 0;
@@ -369,6 +475,14 @@ export class Horde {
           a.lobCd = def.lob.cooldown * rng.range(0.85, 1.2);
         }
       }
+      // Slime de glace : tire sa boucle de glace dès que la cible est à portée, et se tient à distance
+      if (def.ice) {
+        a.lobCd -= dt * rate;
+        if (a.lobCd <= 0 && a.target && gd < def.ice.range) {
+          this.sim.combat.iceShot(a, a.target);
+          a.lobCd = def.ice.cooldown * rng.range(0.85, 1.2);
+        }
+      }
       // Bâtisseur : télégraphe puis fait surgir des murs en arc autour de la squad, côté opposé au lanceur
       if (def.wall) {
         a.lobCd -= dt * rate;
@@ -378,17 +492,18 @@ export class Horde {
         }
       }
       // les tireurs (cloche, langue, spray) se tiennent à distance au lieu de foncer sur leur cible
-      const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.wall?.range);
+      const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.wall?.range ?? def.ice?.range);
       const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + 4 : 0);
       const go = (gd > contact && a.rushWind <= 0) || a.rushT > 0;
-      const desiredX = drag ? drag.x : go ? gx * speed : 0;
-      const desiredY = drag ? drag.y : go ? gy * speed : 0;
+      const emerging = swarming || (!def.lurk && !a.revived && a.age < ALIEN_SPAWN_HOLD); // sort du sol : immobile le temps de l'animation d'apparition
+      const desiredX = emerging ? 0 : drag ? drag.x : go ? gx * speed : 0;
+      const desiredY = emerging ? 0 : drag ? drag.y : go ? gy * speed : 0;
 
       // Séparation entre aliens
       let sx = 0;
       let sy = 0;
       for (const o of alienHash.query(a.x, a.y, a.radius + 50, this.scratch)) {
-        if (o === a) continue;
+        if (o === a || o.def.iceBlock) continue; // les glaçons ne repoussent pas les aliens : ils peuvent frapper le soldat gelé
         const dx = a.x - o.x;
         const dy = a.y - o.y;
         const min = a.radius + o.radius;
@@ -416,7 +531,7 @@ export class Horde {
       // Collisions avec les soldats (poussée pondérée par la masse) + attaque
       a.attackCd -= dt * rate;
       for (const s of soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
-        if (!s.alive || s.capturedBy) continue;
+        if (!s.alive || (s.capturedBy && !s.frozen)) continue; // un soldat gelé reste attaquable
         const dx = s.x - a.x;
         const dy = s.y - a.y;
         const min = a.radius + s.radius;
@@ -424,7 +539,7 @@ export class Horde {
         if (d2 >= (min + 4) * (min + 4)) continue;
         if (def.capture) {
           // au contact : avale le soldat (un seul à la fois) ; sans prisonnier elle ne fait rien d'autre
-          if (!a.captive && s.invulnerable <= 0 && s.grabbed <= 0) {
+          if (!a.captive && !s.capturedBy && s.invulnerable <= 0 && s.grabbed <= 0) {
             a.captive = s;
             s.capturedBy = a.id;
             this.sim.events.push({ t: 'capture', alien: a.id, soldier: s.id });
@@ -533,7 +648,7 @@ export class Horde {
         const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
         const cos = Math.cos(a.spikeAng);
         const sin = Math.sin(a.spikeAng);
-        const power = a.revived ? ZOMBIE_MUL : 1;
+        const power = a.revived ? ZOMBIE_DMG_MUL : 1;
         for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
           if (!s.alive) continue;
           const dx = s.x - a.x;
@@ -567,7 +682,7 @@ export class Horde {
     switch (a.lurkPhase) {
       case 0: {
         a.leapT = 0;
-        a.leapCd -= dt;
+        a.leapCd -= dt * this.cdRate(a);
         const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (a.leapCd <= 0 && sq && sq.alive) {
           a.lurkPhase = 1;

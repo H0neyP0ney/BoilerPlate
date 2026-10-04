@@ -22,6 +22,8 @@ interface Pulse {
   radius: number;
   /** Aplatissement vertical (< 1 : ellipse, comme les anneaux de la vue inclinée). */
   squash: number;
+  /** Centre mobile : si fourni, l'onde est recentrée chaque image (elle suit la squad qui bouge). */
+  follow?: () => { x: number; y: number } | null;
 }
 
 /**
@@ -43,10 +45,10 @@ export class ShockDistort {
   }
 
   /** Lance `count` ondes successives (une toutes les `gapMs`) depuis un point du monde. */
-  start(x: number, y: number, radius: number, durMs: number, count: number, gapMs: number, squash = 1): void {
+  start(x: number, y: number, radius: number, durMs: number, count: number, gapMs: number, squash = 1, follow?: () => { x: number; y: number } | null): void {
     if (!this.ok || !settings.shockwave) return;
     const now = this.scene.time.now;
-    for (let i = 0; i < count; i++) this.pulses.push({ x, y, start: now + i * gapMs, dur: durMs, radius, squash });
+    for (let i = 0; i < count; i++) this.pulses.push({ x, y, start: now + i * gapMs, dur: durMs, radius, squash, follow });
   }
 
   update(): void {
@@ -79,6 +81,11 @@ export class ShockDistort {
     for (const p of this.pulses) {
       const age = now - p.start;
       if (age < 0) continue;
+      const c = p.follow?.();
+      if (c) {
+        p.x = c.x;
+        p.y = c.y;
+      }
       const k = age / p.dur;
       const sx = ((p.x - wv.x) / wv.width) * w;
       const sy = ((p.y - wv.y) / wv.height) * h;

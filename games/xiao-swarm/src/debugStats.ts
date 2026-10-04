@@ -1,6 +1,7 @@
 import { ALIENS } from './data/aliens';
 import { CLASSES } from './data/classes';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Statistiques des unités éditées dans la visionneuse d'unités (dev uniquement) pour l'équilibrage : tous les nombres de
@@ -105,6 +106,7 @@ export function resetStats(kind: StatKind, id: string): void {
 /** À appeler au démarrage (dev), avant de créer la simulation : réapplique les stats mémorisées. */
 export function loadStatOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Stats des unités', { ALIENS, CLASSES });
   try {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Overrides;
   } catch {

@@ -1,6 +1,7 @@
 import { log } from '@xiao/engine';
 import { CROWD, CROWD_DEFAULTS, type CrowdKey } from './config';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Réglages du mouvement de foule (dev uniquement) : un paramètre de `CROWD` par slider du panneau « Foule »
@@ -57,6 +58,7 @@ function apply(values: Partial<Record<CrowdKey, number>>): void {
 /** À appeler avant de créer la simulation : réapplique les réglages courants mémorisés. */
 export function loadSavedCrowd(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Foule', CROWD_DEFAULTS);
   try {
     apply(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<CrowdKey, number>>);
   } catch {

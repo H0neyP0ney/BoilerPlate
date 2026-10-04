@@ -1,5 +1,6 @@
 import { UPGRADES, type UpgradeId } from './data/progression';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Stats des upgrades éditées dans la visionneuse d'upgrades (dev uniquement) : « bonus » (valeur affichée sur la carte, qui fixe aussi
@@ -59,6 +60,7 @@ export function resetUpgrade(id: UpgradeId): void {
 /** À appeler au démarrage (dev), avant de créer la simulation. */
 export function loadUpgradeOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Upgrades', UPGRADES);
   try {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as typeof overrides;
   } catch {

@@ -1,4 +1,5 @@
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 import { FX, FX_DEFAULTS, type FxName, type FxParams } from './fxParams';
 
 /**
@@ -18,6 +19,7 @@ function persist(): void {
 /** À appeler au démarrage, avant la création des effets. */
 export function loadFxOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Particules', FX_DEFAULTS);
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<FxName, Record<string, number>>>;
     for (const name of Object.keys(FX_DEFAULTS) as FxName[]) {

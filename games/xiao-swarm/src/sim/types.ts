@@ -42,6 +42,8 @@ export type SimEvent =
   | { t: 'gameEnd'; victory: boolean; delay: number }
   | { t: 'restart' }
   | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }
+  | { t: 'freeze'; x: number; y: number; r: number }
+  | { t: 'bossEnrage'; id: number; alien: AlienId; level: number }
   | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final' }
   | { t: 'fire'; id: number; x: number; y: number; r: number; ttl: number }
   | { t: 'fireEnd'; id: number }

@@ -36,8 +36,10 @@ export const ORB_SCALE = 1.3;
 const LEVEL_WAVES = 4;
 const LEVEL_WAVE_GAP_MS = 170;
 /** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
-const BAR_GHOST_HOLD = 0.25;
-const BAR_GHOST_SPEED = 2.64; // +20 %
+const BAR_GHOST_HOLD = 0.15;
+/** Barre de vie d'un glaçon : bleue. */
+const ICE_BAR = 0x4aa8ff;
+const BAR_GHOST_SPEED = 4.5; // +70 % de plus
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
 
@@ -191,7 +193,7 @@ export class WorldView {
         const view = this.aliens.get(e.id);
         const mp = view?.muzzlePoint();
         const p = mp ?? e;
-        if (mp) this.shiftFreshBullets(e.x, e.y, mp.x - e.x, mp.y - e.y, true);
+        if (mp) this.shiftFreshBullets(e.x, e.y, mp.x - e.x, mp.y - e.y, !ALIENS[e.alien].ice); // le flocon (tir droit) part de la pupille, les boules en cloche de la bouche
         const img = this.fx.muzzleFlash(p.x, p.y, ALIENS[e.alien].color);
         if (view) this.flashes.push({ img, view, dx: e.x - view.rx, dy: e.y - view.ry });
         break;
@@ -272,6 +274,11 @@ export class WorldView {
         if (v) this.fx.ring(v.rx, v.ry, 60, 0x8fe0ff);
         break;
       }
+      case 'freeze':
+        // la boucle de glace éclate : onde et éclats bleus sur la zone gelée
+        this.fx.ring(e.x, e.y, e.r * 1.6, 0xbfeaff);
+        this.fx.burst(e.x, e.y - 14, 0x9fe0ff, 24);
+        break;
       case 'release':
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
@@ -327,7 +334,11 @@ export class WorldView {
         this.fx.column(e.x, e.y, col, 150, 700);
         // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers)
         const up = UPGRADES[e.id as UpgradeId];
-        if (up) this.fx.text(e.x, e.y - 70, `${UPGRADE_ICONS[e.id as UpgradeId]} ${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 26);
+        if (up) {
+          const tx = this.fx.text(e.x, e.y - 70, `${UPGRADE_ICONS[e.id as UpgradeId]} ${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
+          const owner = e.owner;
+          this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
+        }
         if (e.owner === this.localPlayer) this.scene.cameras.main.shake(80, 0.003);
         break;
       }
@@ -354,7 +365,7 @@ export class WorldView {
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;
         // l'onde de choc (repoussement, sim) part tout de suite, avant la pause des cartes : l'effet aussi (voir fireLevelWaves)
-        this.pendingWaves.push({ x: c.x, y: c.y, level: e.level });
+        this.pendingWaves.push({ x: c.x, y: c.y, level: e.level, owner: e.owner });
         break;
       }
       case 'repel':
@@ -382,7 +393,7 @@ export class WorldView {
   private readonly shock: ShockDistort;
 
   /** Montées de niveau de ce tick : l'effet part tout de suite (la pause des cartes ne s'ouvre que `LEVEL_UP_DELAY` s plus tard). */
-  private readonly pendingWaves: { x: number; y: number; level: number }[] = [];
+  private readonly pendingWaves: { x: number; y: number; level: number; owner?: PlayerId }[] = [];
 
   /** Lance l'effet de montée de niveau (ondes de choc + « LEVEL UP! ») ; une seule fois même si plusieurs niveaux d'un coup. */
   private fireLevelWaves(): void {
@@ -390,14 +401,23 @@ export class WorldView {
     const w = this.pendingWaves[0];
     this.pendingWaves.length = 0;
     const ms = UPGRADE_REPEL.reach * 1000;
+    const owner = w.owner;
+    const follow = owner ? () => this.squadFocus(owner) : undefined;
     // onde de choc BLANCHE répétée LEVEL_WAVES fois (la première est celle qui repousse les aliens quand son front les touche) + déformation de l'écran
     for (let i = 0; i < LEVEL_WAVES; i++) {
-      const draw = (): void => void this.fx.ring(w.x, w.y, UPGRADE_REPEL.radius, 0xffffff, ms);
+      const draw = (): void => {
+        const at = follow?.() ?? w; // l'onde part du centre ACTUEL de la squad, et le suit tant qu'elle grossit
+        const ring = this.fx.ring(at.x, at.y, UPGRADE_REPEL.radius, 0xffffff, ms);
+        if (follow) this.followers.push({ parts: [{ img: ring, dy: 0 }], pos: follow });
+      };
       if (i === 0) draw();
       else this.scene.time.delayedCall(i * LEVEL_WAVE_GAP_MS, draw);
     }
-    this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash);
-    if (w.level > 0) this.fx.levelUpText(w.x, w.y);
+    this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash, follow);
+    if (w.level > 0) {
+      const tx = this.fx.levelUpText(w.x, w.y);
+      if (follow) this.fx.follow(tx, follow, 1100); // « LEVEL UP! » suit la squad qui bouge
+    }
   }
 
   render(alpha: number, dt: number, time: number): void {
@@ -405,6 +425,7 @@ export class WorldView {
     this.shock.update();
     this.syncUnits(alpha, dt, time);
     this.followFlashes();
+    this.fx.updateFollowers();
     this.syncProjectiles(alpha);
     this.syncOrbs(alpha, time);
     this.syncRocks();
@@ -445,6 +466,7 @@ export class WorldView {
           }
         }
         v.seen = true;
+        v.frozen = s.capturedBy !== 0 && !!this.sim.aliens.find((x) => x.id === s.capturedBy)?.def.iceBlock;
         v.sync(alpha, dt, time);
         if (v.healTick(dt)) this.fx.heal(v.rx, v.ry - 30);
       }
@@ -467,7 +489,7 @@ export class WorldView {
     for (const r of this.sim.recruits.items) {
       let v = this.recruits.get(r.id);
       if (!v) {
-        v = new RecruitView(this.scene, r, CLASSES[r.cls].color);
+        v = new RecruitView(this.scene, r, CLASSES[r.cls].color, this.sim.squadOf(this.localPlayer)?.slot ?? 0);
         this.recruits.set(r.id, v);
       }
       v.seen = true;
@@ -492,7 +514,29 @@ export class WorldView {
     const tut = this.sim.tutorial;
     if (!tut?.active) return;
     const beat = 0.5 + 0.5 * Math.sin(time * 5);
+    // petite flèche verte autour de l'escouade, tournée vers le point vert à rejoindre
+    const sq = this.sim.squadOf(this.localPlayer);
+    const goal = tut.targets().find((m) => m.kind === 'marker');
+    if (sq && goal) {
+      const d = Math.hypot(goal.x - sq.center.x, goal.y - sq.center.y);
+      if (d > TUTORIAL.markerRadius + sq.radius + 30) {
+        const ang = Math.atan2(goal.y - sq.center.y, goal.x - sq.center.x);
+        const c = Math.cos(ang);
+        const s = Math.sin(ang);
+        const dist = sq.radius + 20 + beat * 5;
+        const px = sq.center.x + c * dist;
+        const py = sq.center.y + s * dist * 0.8;
+        g.fillStyle(0x5dff84, 0.95).fillTriangle(px + c * 16, py + s * 13, px - c * 8 - s * 12, py - s * 7 + c * 10, px - c * 8 + s * 12, py - s * 7 - c * 10);
+        g.lineStyle(2, 0x0a2210, 0.9).strokeTriangle(px + c * 16, py + s * 13, px - c * 8 - s * 12, py - s * 7 + c * 10, px - c * 8 + s * 12, py - s * 7 - c * 10);
+      }
+    }
     for (const m of tut.targets()) {
+      if (m.kind === 'orbs' && m.radius) {
+        // zone bleue qui englobe tous les globes d'XP restants
+        g.fillStyle(0x5ac8ff, 0.08 + 0.1 * beat).fillEllipse(m.x, m.y, m.radius * 2, m.radius * 1.3);
+        g.lineStyle(3, 0x5ac8ff, 0.5 + 0.4 * beat).strokeEllipse(m.x, m.y, m.radius * 2, m.radius * 1.3);
+        continue;
+      }
       if (m.kind !== 'marker') continue;
       const r = TUTORIAL.markerRadius;
       g.fillStyle(0x5dff84, 0.1 + 0.14 * beat).fillEllipse(m.x, m.y, r * 2, r * 1.3);
@@ -555,7 +599,8 @@ export class WorldView {
             by += sh.dy * k;
           } else this.muzzleShift.delete(p);
         }
-        const rot = Math.atan2(p.vy, p.vx);
+        const snowflake = p.texture === 'fx_ice_ball'; // le flocon de glace tourne sur lui-même au lieu de pointer dans le sens du tir
+        const rot = snowflake ? (this.scene.time.now / 1000) * 7 + p.id : Math.atan2(p.vy, p.vx);
         img.setVisible(true).setPosition(bx, by).setRotation(rot);
         const rocket = p.texture === ROCKET_TEXTURE;
         img.setScale(rocket ? FX.rocket.scale : 1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
@@ -751,11 +796,6 @@ export class WorldView {
     // recrues : la même zone qui pulse que sous les power-ups, en jaune, posée sur la position au sol de la recrue
     for (const r of this.recruits.values()) drawPickupSpot(g, r.rx, r.ry, RECRUIT_COLOR, time, r.state.id, r.dim ? 0.3 : 1);
     this.drawTutorialMarker(g, time);
-    // recrues : ombre au sol (le saut d'apparition, lui, reste en l'air)
-    for (const r of this.recruits.values()) {
-      const rad = CLASSES[r.state.cls].radius;
-      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * (r.dim ? 0.4 : 1)).fillEllipse(r.rx, r.ry, rad * 2.2, rad);
-    }
     // trous d'apparition des aliens : se creusent, l'alien en sort, puis le trou s'efface
     for (const v of this.aliens.values()) {
       const h = v.hole();
@@ -953,7 +993,7 @@ export class WorldView {
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss;
-      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
+      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, a.def.iceBlock ? ICE_BAR : PALETTE.hpEnemy, a.id, dt);
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
       if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
       if (boss) {

@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS } from '../config';
+import { CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
@@ -118,7 +118,8 @@ export class Sim {
         } else {
           // chaque joueur en plus ajoute `EXTRA_PLAYER_ALIENS` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
           const share = (1 + EXTRA_PLAYER_ALIENS * (squads.length - 1)) / squads.length;
-          for (const sq of squads) this.horde.spawnNear(sq, type, Math.round(count * DIFFICULTY.alienCountMul * share), SPAWN_DISTANCE);
+          const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
+          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * DIFFICULTY.alienCountMul * share)), SPAWN_DISTANCE);
         }
       },
       this.rng,
@@ -376,7 +377,7 @@ export class Sim {
       this.fuses.splice(i, 1);
     }
     this.cleanup();
-    this.tutorial?.update();
+    this.tutorial?.update(dt);
   }
 
   private rebuildHashes(): void {
@@ -405,7 +406,7 @@ export class Sim {
     if (!u.alive) return;
     if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
     if (u.def.burrow && u.lurkPhase >= 1 && u.lurkPhase <= 2) amount *= u.def.burrow.buriedDmg; // Scarab sous terre
-    if (u.captive) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
+    if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     const effective = Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
     this.metrics.dealt += effective;
     if (attacker) {
@@ -430,7 +431,11 @@ export class Sim {
   /** Ressuscite le slime de la flaque `c` avec `hpFrac` de ses PV (il ne pourra pas l'être une seconde fois). */
   reviveCorpse(c: Corpse, hpFrac: number): void {
     this.endCorpse(c, true);
-    this.horde.spawnAt(c.type, c.x, c.y, hpFrac, true);
+    for (let i = 0; i < ZOMBIE_COPIES; i++) {
+      const ang = this.rng.range(0, Math.PI * 2);
+      const r = i === 0 ? 0 : this.rng.range(18, 45);
+      this.horde.spawnAt(c.type, c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r, hpFrac, true);
+    }
   }
 
   /** Annonce un mur (télégraphe jaune) ; `windup` s plus tard, une ligne de rochers de rayon `rockR` surgit, pour `ttl` s. */
@@ -634,7 +639,7 @@ export class Sim {
   /** `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). */
   damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
     if (!s.alive) return;
-    if (!force && (s.invulnerable > 0 || s.capturedBy)) return;
+    if (!force && (s.invulnerable > 0 || (s.capturedBy && !s.frozen))) return; // bulle : protégé ; glaçon : attaquable
     this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
     s.hp -= this.absorb(s, amount);
     if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
@@ -652,9 +657,9 @@ export class Sim {
 
   private killAlien(a: AlienState, killer: PlayerId | null): void {
     a.alive = false;
-    this.metrics.kills++;
+    if (!a.def.iceBlock) this.metrics.kills++; // un glaçon détruit n'est pas un kill
     const squad = killer ? this.squadOf(killer) : undefined;
-    if (squad) squad.kills++;
+    if (squad && !a.def.iceBlock) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.boss) {
       this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
@@ -665,6 +670,7 @@ export class Sim {
       const s = a.captive;
       a.captive = null;
       s.capturedBy = 0;
+      s.frozen = false;
       s.invulnerable = 1.2;
       s.ky += 120;
       this.events.push({ t: 'release', soldier: s.id, x: s.x, y: s.y });
@@ -686,6 +692,13 @@ export class Sim {
     }
     this.recruits.maybeDrop(a, squad);
     if (this.xpEnabled) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // le bonus d'XP de la squad qui a tué agrandit le butin
+  }
+
+  /** Boucle de glace : gèle (glaçon) le seul soldat touché ; `ring` = rayon (px) de l'onde visuelle de l'impact. */
+  freezeHit(s: SoldierState, ring: number): void {
+    this.events.push({ t: 'freeze', x: s.x, y: s.y, r: ring });
+    if (!s.alive || s.capturedBy || s.grabbed > 0 || s.invulnerable > 0) return;
+    this.horde.freezeSoldier(s);
   }
 
   /** Retire les morts en fin de tick (jamais pendant les itérations). */

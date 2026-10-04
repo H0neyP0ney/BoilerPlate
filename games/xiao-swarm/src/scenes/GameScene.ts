@@ -216,7 +216,7 @@ export class GameScene extends Phaser.Scene {
 
   private readonly onEvent = (e: SimEvent): void => {
     this.view.handle(e);
-    if (e.t === 'boss' || e.t === 'bossDown') this.events.emit('boss', e); // bandeau / flèche du HUD
+    if (e.t === 'boss' || e.t === 'bossDown' || e.t === 'bossEnrage') this.events.emit('boss', e); // bandeau / flèche du HUD
     if (e.t === 'boss') this.recorder?.noteBoss(e.alien, e.kind);
     if (e.t === 'tutorial') {
       poki.measure('onboarding', e.phase, 'complete');

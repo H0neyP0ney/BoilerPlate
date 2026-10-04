@@ -98,7 +98,12 @@ export class LevelUpScene extends Phaser.Scene {
     // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
     const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;
     let suggestArrow: Phaser.GameObjects.Text | null = null;
+    let suggestLabel: Phaser.GameObjects.Text | null = null;
     if (suggestIdx >= 0) {
+      // texte au-dessus de la flèche : « Prends l'upgrade Dégâts »
+      suggestLabel = this.add
+        .text(0, 0, t('tutoTakeUpgrade', { name: t(`up_${data.suggest}` as 'up_damage') }), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
+        .setOrigin(0.5, 1);
       suggestArrow = this.add
         .text(0, 0, '▼', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
         .setOrigin(0.5, 1);
@@ -127,7 +132,7 @@ export class LevelUpScene extends Phaser.Scene {
       const total = vertical ? n * ch + (n - 1) * gap : ch;
       // au centre de l'écran : titre, cartes, puis la barre de temps
       const top = h / 2 - total / 2;
-      title.setPosition(w / 2, top - 14 - (suggestArrow && !vertical ? 46 : 0)).setFontSize(vertical ? 20 : 28); // plus haut quand la flèche recommandée est au-dessus d'une carte
+      title.setPosition(w / 2, top - 14 - (suggestArrow && !vertical ? 80 : 0)).setFontSize(vertical ? 20 : 28); // plus haut quand la flèche recommandée est au-dessus d'une carte
       this.cards.forEach((c, i) => {
         const x = vertical ? w / 2 : w / 2 + (i - (n - 1) / 2) * (cw + gap);
         const y = vertical ? top + ch / 2 + i * (ch + gap) : top + ch / 2;
@@ -137,6 +142,10 @@ export class LevelUpScene extends Phaser.Scene {
           // horizontal : au-dessus de la carte, pointe vers le bas ; en colonne (mobile) : à gauche, pointe vers la droite
           suggestArrow.setText(vertical ? '▶' : '▼').setOrigin(vertical ? 1 : 0.5, vertical ? 0.5 : 1);
           suggestArrow.setPosition(vertical ? x - cw / 2 - 6 : x, vertical ? y : y - ch / 2 - 8);
+          // le texte se pose au-dessus de la flèche (en colonne : au-dessus de la flèche, à gauche, sans sortir de l'écran)
+          suggestLabel?.setWordWrapWidth(Math.max(120, vertical ? x - cw / 2 - 12 : cw + 40), true);
+          suggestLabel?.setOrigin(vertical ? 1 : 0.5, vertical ? 0.5 : 1);
+          suggestLabel?.setPosition(vertical ? x - cw / 2 - 40 : x, vertical ? y : y - ch / 2 - 58);
         }
         const fx = this.prismFx.get(i);
         if (fx) {

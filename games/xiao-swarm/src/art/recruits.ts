@@ -1,6 +1,8 @@
 import type Phaser from 'phaser';
 import { canvasTexture, sprites } from '@xiao/engine';
+import { PLAYER_HUE_SHIFT } from '../config';
 import { FX } from '../fxParams';
+import { shiftBlues } from './playerVariants';
 
 /**
  * Recrue « bonus +1 » assemblée à partir de pièces fournies (art-src/bonus_recrue → public/assets/recruit, déclarées dans
@@ -24,6 +26,27 @@ const ORIGIN_Y = 0.5 + 51 / SIZE;
 
 const composed = new Set<string>();
 
+/** Id de visuel d'une recrue pour un emplacement de joueur (tête recolorée comme ses soldats ; repli : la recrue bleue d'origine). */
+export function recruitSpriteId(cls: string, slot: number): string {
+  const s = slot % PLAYER_HUE_SHIFT.length;
+  return s > 0 && sprites.has(`recruit_${cls}#s${s}`) ? `recruit_${cls}#s${s}` : `recruit_${cls}`;
+}
+
+/** Copie de l'image de la tête dont les bleus sont décalés vers la couleur de l'emplacement `slot`. */
+function recolorHead(head: HTMLImageElement, slot: number): HTMLImageElement | HTMLCanvasElement {
+  if (slot === 0) return head;
+  const canvas = document.createElement('canvas');
+  canvas.width = head.width;
+  canvas.height = head.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return head;
+  ctx.drawImage(head, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  shiftBlues(data.data, PLAYER_HUE_SHIFT[slot]);
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
 /** Vrai si la recrue de cette classe utilise le visuel composé (et donc les étoiles). */
 export function hasComposedRecruit(_scene: Phaser.Scene, cls: string): boolean {
   return composed.has(`recruit_${cls}`);
@@ -39,13 +62,15 @@ export function makeRecruitTextures(scene: Phaser.Scene): void {
   if (!globe || !ring || !plus) return;
   const r = FX.recruit;
   for (const [cls, headKey] of Object.entries(HEADS)) {
-    const head = img(headKey);
-    if (!head) continue;
-    const key = `recruit_${cls}`;
+    const head0 = img(headKey);
+    if (!head0) continue;
+    for (let slot = 0; slot < PLAYER_HUE_SHIFT.length; slot++) {
+    const head = recolorHead(head0, slot);
+    const key = slot === 0 ? `recruit_${cls}` : `recruit_${cls}#s${slot}`;
     const paint = (ctx: CanvasRenderingContext2D): void => {
       ctx.clearRect(0, 0, SIZE, SIZE);
       const c = SIZE / 2;
-      const draw = (source: HTMLImageElement, dx: number, dy: number, scale: number, alpha = 1): void => {
+      const draw = (source: HTMLImageElement | HTMLCanvasElement, dx: number, dy: number, scale: number, alpha = 1): void => {
         const w = GLOBE * scale;
         const h = (w * source.height) / source.width;
         ctx.globalAlpha = alpha;
@@ -67,5 +92,6 @@ export function makeRecruitTextures(scene: Phaser.Scene): void {
     }
     // Défini avant registerDefaultSprites : ces réglages (ancrage, échelle) sont gardés.
     sprites.define(key, { texture: key, originX: 0.5, originY: ORIGIN_Y, scale: r.displayScale * (GLOBE / 160) });
+    }
   }
 }

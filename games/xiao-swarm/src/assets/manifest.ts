@@ -63,6 +63,32 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
+  // Slime de glace (`iceballer`) : cyclope-pieuvre bleu qui lance des flocons. art-src/iceballer_walk.png (grille 3×3, cases de 68×105, de face) assemblé par
+  // node tools/pack-grids.mjs games/xiao-swarm/art-src/iceballer.pack.json (sans réduction) ; cycle de marche, idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/iceballer.png',
+    frameWidth: 68,
+    frameHeight: 105,
+    sprites: {
+      alien_iceballer: {
+        originX: 0.618,
+        originY: 0.952,
+        scale: 0.67,
+        shadow: 0.95,
+        muzzleFlash: true,
+        muzzle: [0.32, 0.35], // sur la pupille (flash de tir du flocon)
+        muzzles: {
+          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]], // centre de l'iris de chaque case
+        },
+        anchors: { 'walk:right': [0.5046, 0.8877], 'walk:left': [0.382, 0.8877] },
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 11 },
+        },
+      },
+    },
+  },
   // Petite coccinelle violette (`gling`).
   // art-src/gling_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/gling.pack.json — 9 cases de 64×48, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
@@ -75,6 +101,19 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.531,
         originY: 0.916,
         scale: 0.7,
+        shadow: 1.45,
+        anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 18 },
+        },
+      },
+      // Boss Gling : même planche, ×3,4 (teinte rose : `tint` dans data/aliens.ts).
+      alien_boss_gling: {
+        originX: 0.531,
+        originY: 0.916,
+        scale: 0.7 * 3.4,
         shadow: 1.45,
         anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
         facesLeft: true,

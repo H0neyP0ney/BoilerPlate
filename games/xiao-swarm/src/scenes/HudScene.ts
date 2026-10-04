@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
-import { device, music, sfx, theme } from '@xiao/engine';
+import { device, music, sfx, sprites, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { entryTimes, nextBoss } from '../data/waves';
 import { t } from '../i18n';
 import { MUSIC_STEPS, settings, SFX } from '../settings';
 import type { SimEvent } from '../sim/types';
-import { xpBarLayout } from '../view/hudLayout';
+import { hudTop, xpBarLayout } from '../view/hudLayout';
+import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
 import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
@@ -33,6 +34,7 @@ export class HudScene extends Phaser.Scene {
   /** Boutons de dev visibles (mode debug du menu Options) ? */
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
+  private hintLabel!: Phaser.GameObjects.Text;
   private roomText!: Phaser.GameObjects.Text;
   private debugBtn?: Phaser.GameObjects.Container;
   /** Boutons des visionneuses de dev (unités, particules, obstacles, divers), dans l'ordre d'affichage. */
@@ -56,6 +58,10 @@ export class HudScene extends Phaser.Scene {
   private bossCapsule!: Phaser.GameObjects.Graphics;
   private bossLabel!: Phaser.GameObjects.Text;
   private bossLabelShown = '';
+  /** Icône du prochain boss au centre du disque, son type (pour la recréer quand il change) et « le disque est affiché ». */
+  private bossIcon?: Phaser.GameObjects.Sprite;
+  private bossIconType: AlienId | null = null;
+  private bossTimerOn = false;
   /** Barre d'XP en bas de l'écran (hors ligne). */
   private xpBar!: Phaser.GameObjects.Graphics;
   private xpLabel!: Phaser.GameObjects.Text;
@@ -65,7 +71,7 @@ export class HudScene extends Phaser.Scene {
   private bossName!: Phaser.GameObjects.Text;
   private tutorialArrow!: Phaser.GameObjects.Graphics;
   private tutorialLabel!: Phaser.GameObjects.Text;
-  private tutorialBanner!: Phaser.GameObjects.Text;  private bossArrow!: Phaser.GameObjects.Graphics;
+  private bossArrow!: Phaser.GameObjects.Graphics;
   /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
   private reviveArrow!: Phaser.GameObjects.Graphics;
   /** « Ally down » au-dessus de chaque flèche verte (un texte par zone de réanimation, créés à la demande). */
@@ -116,8 +122,10 @@ export class HudScene extends Phaser.Scene {
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene), VIEW_BORDER));
     }
     this.applyDebugMode();
+    this.bossIcon = undefined; // détruite avec la scène précédente
+    this.bossIconType = null;
     this.bossLabelShown = ''; // la scène est réutilisée à chaque partie : le nouveau texte est vide, il faut le remplir
-    this.bossPie = this.add.graphics();
+    this.bossPie = this.add.graphics().setDepth(2); // au-dessus de la timeline, dont le bout passe sous le disque
     this.waveBar = this.add.graphics();
     this.reviveLabels = []; // la scène est réutilisée : les anciens textes ont été détruits avec elle
     this.bossCapsule = this.add.graphics();
@@ -144,10 +152,6 @@ export class HudScene extends Phaser.Scene {
     this.tutorialLabel = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6, backgroundColor: '#13233acc', padding: { x: 12, y: 6 } })
       .setOrigin(0.5, 1)
-      .setVisible(false);
-    this.tutorialBanner = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7, align: 'center' })
-      .setOrigin(0.5, 0)
       .setVisible(false);
     this.endText = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 9, align: 'center' })
@@ -180,6 +184,16 @@ export class HudScene extends Phaser.Scene {
       },
     );
     this.hint = this.makeHint();
+    // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
+    if (import.meta.env.DEV && staleDropped.length > 0) {
+      const note = this.add
+        .text(this.scale.width / 2, hudTop() + 96, `Réglages mémorisés périmés supprimés (le code a changé) :
+${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffe14a', stroke: '#13233a', strokeThickness: 5, align: 'center' })
+        .setOrigin(0.5, 0)
+        .setDepth(50);
+      this.tweens.add({ targets: note, alpha: 0, delay: 7000, duration: 800, onComplete: () => note.destroy() });
+      staleDropped.length = 0;
+    }
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.layout));
@@ -210,7 +224,9 @@ export class HudScene extends Phaser.Scene {
       !s.online ? '' : s.connection === 'lost' ? t('connectionLost') : t('room', { code: s.roomCode ?? '', players: g.playerCount }),
     );
     this.hostText.setVisible(s.online && s.hostStalled);
+    this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     this.hint.setVisible(g.flow.state === 'ready');
+    this.hintLabel.setText(s.sim.tutorial?.active ? t(device.isTouch ? 'hintTutoDrag' : 'hintTutoMove') : device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.drawXp();
     this.drawBoss();
     this.drawBossTimer();
@@ -245,11 +261,11 @@ export class HudScene extends Phaser.Scene {
 
   /** Annonce d'un boss (ou de sa défaite) : gros bandeau au centre qui s'efface. */
   private readonly onBoss = (e: SimEvent): void => {
-    if (e.t !== 'boss' && e.t !== 'bossDown') return;
+    if (e.t !== 'boss' && e.t !== 'bossDown' && e.t !== 'bossEnrage') return;
     const name = t(`alien_${e.alien}` as 'alien_boss_crab');
-    const text = e.t === 'boss' ? `${t(e.kind === 'final' ? 'bossFinal' : 'bossMini')}\n${name}` : t('bossDown', { name });
+    const text = e.t === 'boss' ? `${t(e.kind === 'final' ? 'bossFinal' : 'bossMini')}\n${name}` : e.t === 'bossEnrage' ? t(e.level > 1 ? 'bossEnraged2' : 'bossEnraged', { name }) : t('bossDown', { name });
     this.tweens.killTweensOf(this.bossBanner);
-    this.bossBanner.setText(text).setColor(e.t === 'boss' ? (e.kind === 'final' ? '#ff3a3a' : '#ff9a4a') : '#8fff9a').setAlpha(1).setScale(1.3);
+    this.bossBanner.setText(text).setColor(e.t === 'boss' ? (e.kind === 'final' ? '#ff3a3a' : '#ff9a4a') : e.t === 'bossEnrage' ? '#ff2a1a' : '#8fff9a').setAlpha(1).setScale(1.3);
     this.tweens.add({ targets: this.bossBanner, scale: 1, duration: 220, ease: 'Back.Out' });
     this.tweens.add({ targets: this.bossBanner, alpha: 0, delay: 2600, duration: 700 });
   };
@@ -379,13 +395,9 @@ export class HudScene extends Phaser.Scene {
     const tut = g.session.sim.tutorial;
     if (!tut?.active) {
       this.tutorialLabel.setVisible(false);
-      this.tutorialBanner.setVisible(false);
       return;
     }
     const { width, height } = this.scale;
-    const banner = tut.banner;
-    this.tutorialBanner.setVisible(!!banner).setPosition(width / 2, 70);
-    if (banner) this.tutorialBanner.setText(t(banner));
     const wv = g.cameras.main.worldView;
     const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
     let label: { x: number; y: number; text: string } | null = null;
@@ -394,9 +406,14 @@ export class HudScene extends Phaser.Scene {
       const sy = ((target.y - wv.y) / wv.height) * height;
       const m = 46;
       const inside = sx > m && sx < width - m && sy > m && sy < height - m;
-      if (inside && target.kind === 'marker') continue; // le point vert à l'écran est dessiné au sol
-      const color = target.kind === 'marker' ? 0x5dff84 : 0xffe14a;
-      const back = target.kind === 'marker' ? 0x0a2210 : 0x2a2208;
+      if (inside && target.kind === 'marker') {
+        // le point vert est dessiné au sol (chevron qui rebondit au-dessus, voir WorldView) : « Move here » se pose au-dessus du chevron
+        if (target.label && !label) label = { x: sx, y: sy - (44 + 14 + 18 + 12) * (width / wv.width), text: t(target.label) };
+        continue;
+      }
+      if (inside && target.kind === 'incoming') continue; // le point vert est dessiné au sol ; les ennemis déjà à l'écran n'ont plus besoin de flèche
+      const color = target.kind === 'marker' ? 0x5dff84 : target.kind === 'orbs' ? 0x5ac8ff : target.kind === 'incoming' ? 0xff4040 : 0xffe14a;
+      const back = target.kind === 'marker' ? 0x0a2210 : target.kind === 'orbs' ? 0x0a1c2a : target.kind === 'incoming' ? 0x2a0808 : 0x2a2208;
       let px: number;
       let py: number;
       let ang: number;
@@ -433,8 +450,15 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
+  /** Emplacement de la timeline des vagues : tout en haut de l'écran, 10 % plus courte qu'à l'origine. */
+  private waveTimelineRect(): { x: number; y: number; w: number; h: number } {
+    const { width } = this.scale;
+    const w = Math.min(680, width - 150) * 0.72; // 0,9 (−10 %) puis −20 % de plus
+    return { x: (width - w) / 2, y: hudTop() + 21, w, h: 18 }; // son centre est aussi celui du disque « Next boss » (rayon 30) posé à son extrémité
+  }
+
   /**
-   * Timeline des vagues tout en bas de l'écran : de l'arrivée du boss précédent (ou du début) au prochain boss, un repère à chaque vague prévue
+   * Timeline des vagues tout en haut de l'écran : de l'arrivée du boss précédent (ou du début) au prochain boss, un repère à chaque vague prévue
    * et une flèche sur la position actuelle (`sim.waves.cursor` : elle s'arrête / revient en arrière pendant un boss). Masquée à l'écran de fin.
    */
   private drawWaveTimeline(): void {
@@ -444,11 +468,7 @@ export class HudScene extends Phaser.Scene {
     const cursor = sim.waves.cursor;
     const next = nextBoss(sim.mode.waves, cursor);
     if (!next || this.endText.visible || sim.tutorial?.active) return;
-    const { width, height } = this.scale;
-    const w = Math.min(680, width - 150);
-    const h = 18;
-    const x = (width - w) / 2;
-    const y = height - 16 - h;
+    const { x, y, w, h } = this.waveTimelineRect();
     const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= cursor ? Math.max(m, e.at) : m), 0);
     const span = Math.max(1, next.at - prev);
     const p = Math.max(0, Math.min(1, (cursor - prev) / span));
@@ -463,14 +483,16 @@ export class HudScene extends Phaser.Scene {
       }
     }
     bar.lineStyle(2, 0xffffff, 0.45).strokeRoundedRect(x, y, w, h, 9);
-    // boss à l'arrivée : pastille à droite de la barre
-    bar.fillStyle(color, 1).fillCircle(x + w + 16, y + h / 2, 11);
-    bar.lineStyle(2, 0xffffff, 0.8).strokeCircle(x + w + 16, y + h / 2, 11);
-    bar.fillStyle(0xffffff, 1).fillRect(x + w + 14.5, y + h / 2 - 6, 3, 8).fillRect(x + w + 14.5, y + h / 2 + 4, 3, 3);
-    // flèche sur la position actuelle
+    // boss à l'arrivée : pastille à droite de la barre (remplacée par le compte à rebours « Next boss » quand il est affiché)
+    if (!this.bossTimerOn) {
+      bar.fillStyle(color, 1).fillCircle(x + w + 16, y + h / 2, 11);
+      bar.lineStyle(2, 0xffffff, 0.8).strokeCircle(x + w + 16, y + h / 2, 11);
+      bar.fillStyle(0xffffff, 1).fillRect(x + w + 14.5, y + h / 2 - 6, 3, 8).fillRect(x + w + 14.5, y + h / 2 + 4, 3, 3);
+    }
+    // flèche sur la position actuelle (sous la barre, pointe vers le haut)
     const ax = x + 2 + (w - 4) * p;
-    bar.fillStyle(0xffffff, 1).fillTriangle(ax - 8, y - 12, ax + 8, y - 12, ax, y - 1);
-    bar.lineStyle(2, 0x0a1422, 1).strokeTriangle(ax - 8, y - 12, ax + 8, y - 12, ax, y - 1);
+    bar.fillStyle(0xffffff, 1).fillTriangle(ax - 8, y + h + 12, ax + 8, y + h + 12, ax, y + h + 1);
+    bar.lineStyle(2, 0x0a1422, 1).strokeTriangle(ax - 8, y + h + 12, ax + 8, y + h + 12, ax, y + h + 1);
   }
 
   /** Compte à rebours avant le prochain boss annoncé par la timeline ; masqué quand il n'y en a plus ou que l'écran de fin est affiché. */
@@ -482,38 +504,41 @@ export class HudScene extends Phaser.Scene {
     const bossAlive = sim.aliens.some((a) => a.alive && a.def.boss);
     const left = next ? Math.max(0, next.at - cursor) : 0;
     // Caché pendant un combat de boss, sauf s'il reste moins d'une minute avant le suivant.
-    const show = !!next && !this.endText.visible && (!bossAlive || left < 60);
-    this.bossTimer.setVisible(show);
+    const show = !!next && !this.endText.visible && !sim.tutorial?.active && (!bossAlive || left < 60);
+    this.bossTimerOn = show;
+    this.bossTimer.setVisible(false); // le temps restant s'affiche dans la capsule sous le disque ; le disque porte l'icône du boss
     this.bossLabel.setVisible(show);
+    this.bossIcon?.setVisible(show);
     this.bossPie.clear();
     this.bossCapsule.clear();
     this.waveBar.clear();
     if (!show || !next) return;
-    const { height } = this.scale;
+    const tl = this.waveTimelineRect();
     const R = 30;
-    const cx = 14 + R + 16; // bord gauche (la capsule « Prochain boss » dépasse un peu du disque)
-    const cy = height / 3; // à un tiers de la hauteur depuis le haut
-    // part restante = temps restant / durée écoulée entre le boss précédent (ou le début) et celui-ci
+    const cx = tl.x + tl.w + R - 7; // le disque recouvre le bout de la timeline : c'est le but de la barre
+    const cy = tl.y + tl.h / 2; // l'extrémité de la timeline est centrée sur le disque
+    // part écoulée = 1 − temps restant / durée entre le boss précédent (ou le début) et celui-ci
     const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= cursor ? Math.max(m, e.at) : m), 0);
-    const frac = Math.max(0, Math.min(1, left / Math.max(1, next.at - prev)));
+    const frac = Math.max(0, Math.min(1, 1 - left / Math.max(1, next.at - prev))); // la jauge se REMPLIT jusqu'à l'arrivée du boss
     const final = ALIENS[next.type].boss?.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
     const urgent = left < 10 && Math.sin(this.time.now / 90) > 0;
     const pie = this.bossPie;
-    pie.fillStyle(0x0a1422, 0.82).fillCircle(cx, cy, R);
+    pie.fillStyle(0x0a1422, 1).fillCircle(cx, cy, R);
     if (frac > 0) {
       const start = -Math.PI / 2;
-      pie.fillStyle(urgent ? 0xffffff : color, 0.9);
+      pie.fillStyle(urgent ? 0xffffff : color, 1);
       pie.beginPath();
       pie.moveTo(cx, cy);
       pie.arc(cx, cy, R - 3, start, start + Math.PI * 2 * frac, false);
       pie.closePath();
       pie.fillPath();
     }
-    pie.fillStyle(0x0a1422, 0.78).fillCircle(cx, cy, R - 12); // centre sombre : le temps y est lisible
-    pie.lineStyle(3, 0xffffff, 0.45).strokeCircle(cx, cy, R);
+    pie.fillStyle(0x0a1422, 1).fillCircle(cx, cy, R - 10); // centre sombre : l'icône du boss y est posée
+    pie.lineStyle(3, 0x8995a8, 1).strokeCircle(cx, cy, R); // contour opaque (gris clair)
     // capsule bleu foncé sous le camembert : son bord haut recouvre un peu le bas du disque
-    const label = t('nextBoss'); // toujours « Next boss », même pour le boss final
+    const secs = Math.ceil(left);
+    const label = `${t('nextBoss')} ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`; // toujours « Next boss », même pour le boss final
     if (label !== this.bossLabelShown) {
       this.bossLabelShown = label;
       this.bossLabel.setText(label);
@@ -523,18 +548,36 @@ export class HudScene extends Phaser.Scene {
     this.bossCapsule.fillStyle(0x0b1a4d, 0.95).fillRoundedRect(cx - lw / 2, ly - 10, lw, 20, 10);
     this.bossCapsule.lineStyle(2, 0x3f6fe0, 0.9).strokeRoundedRect(cx - lw / 2, ly - 10, lw, 20, 10);
     this.bossLabel.setPosition(cx, ly);
-    const secs = Math.ceil(left);
-    this.bossTimer.setPosition(cx, cy).setText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`).setFontSize(15);
+    // icône du prochain boss au centre du disque (animée, à la teinte du boss), recréée quand le boss change
+    if (this.bossIconType !== next.type) {
+      this.bossIcon?.destroy();
+      const id = `alien_${next.type}`;
+      const icon = sprites.add(this, id, cx, cy);
+      sprites.play(icon, id, 'idle');
+      icon.setOrigin(0.5, 0.5);
+      icon.setScale(32 / Math.max(icon.width, icon.height));
+      const tint = ALIENS[next.type].tint;
+      if (tint !== undefined) icon.setTint(tint);
+      this.bossIcon = icon;
+      this.bossIconType = next.type;
+    }
+    this.bossIcon?.setPosition(cx, cy).setDepth(10).setVisible(true);
+  }
+
+  /** Onboarding : la jauge d'XP n'apparaît qu'à l'étape « ramasse les globes » (vague 2), puis disparaît jusqu'à la fin du tutoriel. */
+  private xpShownInTutorial(): boolean {
+    const tut = this.game_.session.sim.tutorial;
+    return !tut?.active || tut.phase === 'wave2';
   }
 
   /** Jauge d'XP de la squad locale : niveau à gauche, barre qui se remplit jusqu'à la prochaine upgrade. */
   private drawXp(): void {
     const squad = this.game_.localSquad;
-    const on = this.game_.session.sim.xpEnabled && !!squad;
+    const on = this.game_.session.sim.xpEnabled && !!squad && this.xpShownInTutorial(); // masquée pendant l'onboarding, sauf à l'étape de collecte des globes
     this.xpBar.setVisible(on);
     this.xpLabel.setVisible(on);
     if (!on) return;
-    const { x, y, w } = xpBarLayout(this.scale.width); // tout en haut de l'écran
+    const { x, y, w } = xpBarLayout(this.scale.width, this.scale.height); // tout en bas de l'écran
     const ratio = Math.min(1, squad.xp / squad.xpNeeded);
     this.xpBar.clear();
     this.xpBar.fillStyle(0x0a1422, 0.75).fillRoundedRect(x, y - 9, w, 18, 9);
@@ -689,8 +732,10 @@ export class HudScene extends Phaser.Scene {
         color: '#ffffff',
         stroke: '#13233a',
         strokeThickness: 6,
+        align: 'center',
       })
       .setOrigin(0.5);
+    this.hintLabel = label;
     c.add(label);
     if (device.isTouch) {
       const hand = this.add.image(-60, 0, 'hand').setScale(0.8);

@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 29;
+export const PROTOCOL_VERSION = 32;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -118,6 +118,8 @@ export interface AlienSnap {
   castCorpse: number;
   /** Zombie (ressuscité par un chaman). */
   zombie: boolean;
+  /** Niveau d'enragement d'un boss (0 à 2). */
+  enraged: number;
   /** Lurker : phase, temps restant dans la phase (s) et direction des pics. */
   lurkPhase: number;
   lurkT: number;
@@ -180,7 +182,7 @@ export interface Snapshot {
 const CLASS_IDS = Object.keys(CLASSES) as SoldierClassId[];
 const ALIEN_IDS = Object.keys(ALIENS) as AlienId[];
 const TEXTURES = [
-  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
+  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : a.ice ? [a.ice.texture] : []))]),
 ];
 
 const SNAPSHOT_TAG = 0x53;
@@ -251,6 +253,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       castT: a.castT,
       castCorpse: a.castCorpse,
       zombie: a.revived,
+      enraged: a.enraged,
       lurkPhase: a.lurkPhase,
       lurkT: a.lurkT,
       spikeAng: a.spikeAng,
@@ -434,7 +437,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.f32(a.maxHp); // les boss dépassent 65535 PV : PV max en f32, PV courants en part du max
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
     w.u8(Math.min(255, Math.round(a.slamWind * 200)));
-    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0));
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 2) << 2));
     const def = ALIENS[a.type];
     if (def.rush) {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));
@@ -661,7 +664,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         spikeAng = r.f32();
       }
       const shield = def.shield ? r.u8() / 255 : 0;
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), lurkPhase, lurkT, spikeAng });
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();

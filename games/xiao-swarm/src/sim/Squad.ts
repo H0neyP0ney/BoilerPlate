@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -45,7 +45,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: SQUAD_BASE.damage, fireRate: SQUAD_BASE.fireRate, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -190,11 +190,22 @@ export class Squad {
   chooseUpgrade(index: number): boolean {
     const id = this.offer?.[index];
     if (!id) return false;
-    this.applyUpgrade(id, this.offerPrism[index] === true);
+    const prism = this.offerPrism[index] === true;
+    this.applyUpgrade(id, prism);
+    this.sim.events.push({ t: 'upgradePicked', owner: this.owner, x: this.center.x, y: this.center.y, id, prism }); // texte flottant + onde sur la squad (view/WorldView.ts)
     this.offer = null;
     this.offerPrism = [];
     this.pendingLevels--;
     return true;
+  }
+
+  /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */
+  refreshMaxHp(): void {
+    for (const s of this.soldiers) {
+      const max = s.def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
+      s.hp += max - s.maxHp;
+      s.maxHp = max;
+    }
   }
 
   /** `prism` : upgrade prismatique, bonus habituel doublé. */
@@ -294,6 +305,7 @@ export class Squad {
       aim: 0,
       invulnerable: 0,
       capturedBy: 0,
+      frozen: false,
       grabbed: 0,
     };
     this.soldiers.push(s);
@@ -388,6 +400,7 @@ export class Squad {
       if (s.capturedBy) {
         if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
         s.capturedBy = 0;
+        s.frozen = false;
       }
       if (s.grabbed > 0) s.grabbed -= dt;
       const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;

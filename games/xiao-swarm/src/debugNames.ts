@@ -1,5 +1,6 @@
 import en from './locales/en.json';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Noms des unités édités dans la visionneuse d'unités (dev uniquement) : clés de langue `class_<classe>` (soldats) et
@@ -52,6 +53,7 @@ export function resetName(key: string): void {
 /** À appeler au démarrage (dev) : réapplique les noms mémorisés. */
 export function loadNameOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Noms', en);
   try {
     edits = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Names;
   } catch {

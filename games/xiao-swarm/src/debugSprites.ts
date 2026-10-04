@@ -1,5 +1,9 @@
 import { sprites } from '@xiao/engine';
+import { ASSETS } from './assets/manifest';
+import { ALIENS } from './data/aliens';
+import { CLASSES } from './data/classes';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Réglages de placement des sprites édités dans la visionneuse d'unités (dev uniquement) :
@@ -53,6 +57,7 @@ function apply(id: string, p: Placement): void {
 /** À appeler après l'enregistrement des sprites : réapplique les réglages mémorisés. */
 export function loadSpriteOverrides(): void {
   if (!import.meta.env.DEV) return;
+  dropStaleOverride(STORAGE_KEY, 'Sprites', { ASSETS, aliens: Object.keys(ALIENS), classes: Object.keys(CLASSES) });
   try {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Record<string, Placement>;
   } catch {

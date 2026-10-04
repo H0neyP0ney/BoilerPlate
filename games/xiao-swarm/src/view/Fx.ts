@@ -9,6 +9,11 @@ import { t as tr } from '../i18n';
  * éclaboussures, explosions, ondes de choc, textes flottants, soins.
  * Tous les réglages viennent de `fxParams.ts` (éditables dans la visionneuse de particules).
  */
+/** Taille finale de la bulle de critique (bulle + chiffres), −30 %. */
+const CRIT_SCALE = 0.7;
+/** Grossissement du texte (chiffres et « ! ») de la bulle de critique, la bulle elle-même ne change pas. */
+const CRIT_TEXT_GROW = 1.35;
+
 export class Fx {
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
   private gloopBig!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -18,6 +23,7 @@ export class Fx {
   /** Traînée des roquettes (fx_smoke, FX.rocket). */
   private smoke!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
+  private readonly followed: { obj: Phaser.GameObjects.Text; pos: () => { x: number; y: number } | null; last: { x: number; y: number } | null; until: number }[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     this.build();
@@ -246,7 +252,7 @@ export class Fx {
    * « LEVEL UP! » : texte vert cerné de blanc qui jaillit de la squad (scale 0 → 1, Back.Out), monte et s'efface en alpha.
    * Part en même temps que l'onde de choc, avant la pause qui ouvre l'écran des cartes.
    */
-  levelUpText(x: number, y: number): void {
+  levelUpText(x: number, y: number): Phaser.GameObjects.Text {
     const t = this.scene.add
       .text(x, y - 40, tr('levelUpPop'), { fontFamily: theme.font, fontSize: '46px', fontStyle: 'bold', color: '#5dff84', stroke: '#ffffff', strokeThickness: 9 })
       .setOrigin(0.5)
@@ -255,12 +261,37 @@ export class Fx {
     this.scene.tweens.add({ targets: t, scale: 1, duration: 380, ease: 'Back.Out' });
     this.scene.tweens.add({ targets: t, y: y - 150, duration: 1100, ease: 'Sine.Out' });
     this.scene.tweens.add({ targets: t, alpha: 0, delay: 550, duration: 550, onComplete: () => t.destroy() });
+    return t;
   }
 
-  text(x: number, y: number, value: string, color = '#ffffff', size = 22): void {
+  /**
+   * Fait suivre `obj` au point renvoyé par `pos` (ex. le centre de la squad) pendant `ms` ms : à chaque image, il est décalé du déplacement
+   * du point depuis l'image précédente (les tweens de montée / fondu de l'objet continuent normalement).
+   */
+  follow(obj: Phaser.GameObjects.Text, pos: () => { x: number; y: number } | null, ms: number): void {
+    this.followed.push({ obj, pos, last: pos(), until: this.scene.time.now + ms });
+  }
+
+  /** À appeler à chaque image (WorldView.render) : applique le déplacement des points suivis aux textes qui les suivent. */
+  updateFollowers(): void {
+    const now = this.scene.time.now;
+    for (let i = this.followed.length - 1; i >= 0; i--) {
+      const f = this.followed[i];
+      if (now >= f.until || !f.obj.active) {
+        this.followed.splice(i, 1);
+        continue;
+      }
+      const p = f.pos();
+      if (!p) continue;
+      if (f.last) f.obj.setPosition(f.obj.x + p.x - f.last.x, f.obj.y + p.y - f.last.y);
+      f.last = p;
+    }
+  }
+
+  text(x: number, y: number, value: string, color = '#ffffff', size = 22, stroke = '#2a1d2e'): Phaser.GameObjects.Text {
     const f = FX.text;
     const t = this.texts.acquire();
-    t.setText(value).setColor(color).setFontSize(size).setPosition(x, y).setScale(f.popFrom);
+    t.setText(value).setColor(color).setFontSize(size).setStroke(stroke, 5).setPosition(x, y).setScale(f.popFrom);
     this.scene.tweens.add({ targets: t, scale: 1, duration: f.popMs, ease: 'Back.Out' });
     this.scene.tweens.add({
       targets: t,
@@ -270,6 +301,7 @@ export class Fx {
       duration: f.fadeMs,
       onComplete: () => this.texts.release(t),
     });
+    return t;
   }
 
   /**
@@ -278,14 +310,14 @@ export class Fx {
    */
   crit(x: number, y: number, dmg: number): void {
     const txt = String(Math.round(dmg));
-    const glyphs = ['bang', ...txt.split('')].map((g) => `crit_${g}`);
-    const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3);
+    const glyphs = [...txt.split(''), 'bang'].map((g) => `crit_${g}`);
+    const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3 * CRIT_SCALE);
     if (glyphs.every((g) => this.scene.textures.exists(g)) && this.scene.textures.exists('crit_bubble')) {
       const SCALE = 0.7;
-      const gap = -1;
-      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE));
+      const gap = -7; // chiffres serrés (les glyphes ont une marge transparente)
+      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE * CRIT_TEXT_GROW));
       const total = imgs.reduce((n, im) => n + im.displayWidth + gap, -gap);
-      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total + 40) / 136), 0.7);
+      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total / CRIT_TEXT_GROW + 40) / 136), 0.7); // la bulle garde sa taille : seul le texte grossit
       let cx = -total / 2;
       for (const im of imgs) {
         im.setPosition(cx + im.displayWidth / 2, 1);
@@ -295,7 +327,7 @@ export class Fx {
     } else {
       box.add(this.scene.add.text(0, 0, `! ${txt}`, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffe14a', stroke: '#8a1a00', strokeThickness: 5 }).setOrigin(0.5));
     }
-    this.scene.tweens.add({ targets: box, scale: 1, duration: 140, ease: 'Back.Out' });
+    this.scene.tweens.add({ targets: box, scale: CRIT_SCALE, duration: 140, ease: 'Back.Out' });
     this.scene.tweens.add({ targets: box, y: box.y - 34, alpha: 0, delay: 300, duration: 420, onComplete: () => box.destroy() });
   }
 

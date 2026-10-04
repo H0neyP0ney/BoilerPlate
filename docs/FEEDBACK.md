@@ -4,7 +4,8 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 
 ## Visuel / lisibilité
 - Allié « marqué » : repérer plus facilement un allié (à préciser)
-- Couleur de chaque joueur en multi : fait côté code (soldats recolorés + anneau, barre et capsule à la couleur de l'emplacement du joueur), **à valider en jeu à plusieurs**
+- ~~Couleur de chaque joueur en multi (soldats recolorés + anneau, barre et capsule à la couleur de l'emplacement du joueur) : validé en jeu~~
+- ~~Visuel des aliens ressuscités (enragés) par le Chaman : validé en jeu~~
 - ~~Voir plus de globes d'XP avec l'upgrade XP : le bonus agrandit maintenant le butin au sol (nombre / taille des globes), plus la valeur au ramassage~~
 - ~~Boss : toute leur XP en globes, sans limite du nombre~~
 - ~~Ombre portée sous les recrues~~
@@ -44,7 +45,7 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~Charge : une unité qui charge est impoussable, mais l'onde de choc du level up l'interrompt : c'est voulu, on garde~~
 - ~~Plus d'aliens par joueur en coop : +75 % validé~~
 - Plus d'apparition d'aliens quand il y en a déjà trop : la suspension de la timeline à 150 aliens a été retirée pour l'instant (la timeline n'est jamais bloquée)
-- ~~Scarab : s'enterre, un trou se forme derrière la squad (zone rouge visible), il en ressort après ~3 s avec une onde de choc (toutes les 14 s)~~
+- ~~Scarab : s'enterre, un trou se forme derrière la squad (zone rouge visible), il en ressort après ~3 s avec une onde de choc (toutes les 14 s, puis 8 s)~~
 - ~~Mêlée du premier boss (rhino) : tue un soldat d'un coup~~
 - ~~Mêlée de tous les aliens : délai ÷2 et dégâts ÷2 (même DPS, coups plus rapides ; rhino : délai inchangé)~~
 - ~~+75 % d'aliens par joueur en plus~~
@@ -73,6 +74,20 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 ## Contrôles / outils
 - ~~Joystick virtuel (tactile et souris) : vitesse maximale dès qu'une direction est détectée (zone morte 12 %)~~
 - ~~Visionneuses : une réglette dont la valeur tombait à 0 ne pouvait plus remonter (stats d'unités et d'upgrades)~~
+
+## Session du 04/10 (nuit)
+- ~~Boss : plus d'XP ; Scarab plus nerveux (s'enterre et frappe plus souvent, placement +50 %)~~
+- ~~Chaman : 5 exemplaires, cadence ×3 sans bonus de dégâts, vise les plus gros~~
+- ~~Boss enragés après 1:30 puis 2:30 (+30 % vitesse / cadence, −30 % cooldowns, flammes, message)~~
+- ~~4e boss à 1:00 : Gling Mère~~
+- ~~Slime de glace (boucle de glace, glaçon permanent, ne gèle que le soldat touché, 2 max par vague)~~
+- ~~Soldats inefficaces au corps à corps : la balle naissait derrière l'ennemi~~
+- ~~Dégâts de base +10 %, cadence de base +15 %~~
+- ~~Texte flottant d'upgrade plus gros, qui suit la squad ; « LEVEL UP! » et pulses qui suivent la squad~~
+- ~~Critique : texte plus gros, chiffres serrés, « ! » après les chiffres~~
+- ~~HUD : timeline en haut, barre d'XP en bas, disque « Prochain boss » avec icône et jauge qui se remplit~~
+- ~~Tutoriel : flèches et textes (Move here, Enemy incoming, Get +1 trooper, Get experience, Take power-up), recrue sur place, vagues à droite puis en cercle, HUD allégé, cadeau caché~~
+- ~~Dev : réglages mémorisés périmés supprimés automatiquement~~
 
 ## Idées de gameplay
 - Zone où il faut rester dedans pour faire dropper des choses

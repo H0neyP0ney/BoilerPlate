@@ -1,0 +1,12 @@
+{
+  "output": "../public/assets/aliens/iceballer.png",
+  "scale": 1,
+  "sheets": [
+    {
+      "name": "walk",
+      "input": "iceballer_walk.png",
+      "cols": 3,
+      "rows": 3
+    }
+  ]
+}

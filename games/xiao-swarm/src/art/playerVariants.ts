@@ -19,7 +19,7 @@ export function soldierSpriteId(cls: SoldierClassId, slot: number): string {
 }
 
 /** Décale la teinte des pixels bleus (185°-250°, fondu de 15° de chaque côté) de `shift` degrés. */
-function shiftBlues(data: Uint8ClampedArray, shift: number): void {
+export function shiftBlues(data: Uint8ClampedArray, shift: number): void {
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] === 0) continue;
     const r = data[i] / 255;

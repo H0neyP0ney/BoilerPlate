@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'iceblock';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -42,6 +42,23 @@ export interface AlienDef {
    * (dégâts `damage`, recul `knockback`) au moment où il surgit.
    */
   burrow?: { every: number; dig: number; wait: number; rise: number; behind: number; radius: number; damage: number; knockback: number; buriedDmg: number };
+  /**
+   * Essaim (boss Gling) : toutes les `every` s de marche, il s'arrête `duration` s et fait apparaître `count` aliens `spawn` en continu
+   * (régulièrement répartis sur la durée), autour de lui.
+   */
+  swarm?: { every: number; duration: number; count: number; spawn: AlienId };
+  /**
+   * Slime de glace : tire en LIGNE DROITE une boucle de glace (vitesse `speed` px/s) vers la position de la squad au moment du tir, avec une anticipation partielle (`lead` × le déplacement de la squad pendant le trajet), à moins de
+   * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) : chacun est pris dans un glaçon
+   * (`iceBlock`, `blockHpMul` × les PV d'un soldat de base) qui ne fond jamais : il faut le détruire. Le soldat gelé reste attaquable par les aliens.
+   */
+  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; blockHpMul: number; texture: string };
+  /** Plafond d'aliens de cette espèce dans UNE vague (par squad), invités et mise à l'échelle comprises (slime de glace : 2). */
+  maxPerWave?: number;
+  /** Glaçon : alien immobile et inoffensif qui retient un soldat gelé (`captive`) ; le détruire le libère. Pas de kill, ni XP, ni recrue. */
+  iceBlock?: boolean;
+  /** Teinte multiplicative du visuel (ex. gling géant rose). */
+  tint?: number;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -225,7 +242,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 1.5,
     attackCooldown: 0.5,
     target: 'nearest',
-    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1 }, // le ressuscité est un ZOMBIE (×3 PV et dégâts, voir config.ZOMBIE_MUL)
+    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1 }, // le ressuscité est un ZOMBIE (5 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
     xp: 8,
     recruitChance: 0.1,
     color: 0xffd84a,
@@ -310,7 +327,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     rush: { cooldown: 3.6, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 850 },
     boss: { kind: 'mini' },
-    xp: 70,
+    xp: 150,
     recruitChance: 1,
     color: 0xb03a3a,
     hpBarWidth: 100,
@@ -326,14 +343,67 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.2,
     oneShot: true,
     target: 'center',
-    slam: { radius: 190, damage: 30, cooldown: 3, knockback: 650 },
+    slam: { radius: 190, damage: 30, cooldown: 2, knockback: 650 },
     shield: { pct: 0.05, regenDelay: 5, regenTime: 4 },
-    burrow: { every: 14, dig: 0.9, wait: 2.4, rise: 0.7, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 },
+    burrow: { every: 8, dig: 0.6, wait: 1.6, rise: 0.47, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 },
     boss: { kind: 'mini' },
-    xp: 220,
+    xp: 400,
     recruitChance: 1,
     color: 0xc01c40,
     hpBarWidth: 140,
+  },
+  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4,2 s pour faire apparaître 30 glings en 1,5 s. */
+  boss_gling: {
+    id: 'boss_gling',
+    hp: 500,
+    speed: 85,
+    radius: 38,
+    scale: 3.4,
+    mass: 14,
+    damage: 5,
+    attackCooldown: 0.6,
+    target: 'nearest',
+    swarm: { every: 4.2, duration: 1.5, count: 30, spawn: 'gling' },
+    tint: 0xff8ad0,
+    boss: { kind: 'mini' },
+    xp: 100,
+    recruitChance: 1,
+    color: 0xff5aa8,
+    hpBarWidth: 100,
+  },
+  /** Slime bleu ciel (difficulté 3/10, dès 45 s) : lance une boucle de glace qui gèle les soldats touchés dans un glaçon. */
+  iceballer: {
+    id: 'iceballer',
+    hp: 70,
+    speed: 62,
+    radius: 17,
+    mass: 1.1,
+    damage: 4,
+    attackCooldown: 0.5,
+    target: 'nearest',
+    maxPerWave: 2,
+    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, blockHpMul: 12, texture: 'fx_ice_ball' },
+    revivable: true,
+    xp: 5,
+    recruitChance: 0.07,
+    color: 0x7fd8ff,
+    hpBarWidth: 30,
+  },
+  /** Glaçon : retient un soldat gelé. PV fixés à la création (`blockHpMul` × un soldat de base, `Horde.freezeSoldier`). */
+  iceblock: {
+    id: 'iceblock',
+    hp: 1,
+    speed: 0,
+    radius: 26,
+    mass: 1000,
+    damage: 0,
+    attackCooldown: 99,
+    target: 'nearest',
+    iceBlock: true,
+    xp: 0,
+    recruitChance: 0,
+    color: 0x9fe3ff,
+    hpBarWidth: 44,
   },
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */
   boss_crab: {
@@ -350,7 +420,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900 },
     lob: { range: 620, cooldown: 3, flight: 1.15, damage: 22, aoe: 85, texture: 'fx_blob_green', count: 3, keepMoving: true },
     boss: { kind: 'final' },
-    xp: 60,
+    xp: 300,
     recruitChance: 1,
     color: 0xd9435a,
     hpBarWidth: 200,
@@ -361,4 +431,4 @@ export const ALIENS: Record<AlienId, AlienDef> = {
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer'];

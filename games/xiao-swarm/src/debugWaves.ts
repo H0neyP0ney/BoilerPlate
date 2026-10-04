@@ -2,6 +2,7 @@ import { ALIENS, type AlienId } from './data/aliens';
 import { DEFAULT_WAVE_SCRIPT, WAVE_LEVELS, WAVE_SCRIPT, type WaveConfig, type WaveScript } from './data/waves';
 import { DEFAULT_WAVE_MODEL, type TargetPoint, type WaveModel } from './data/waveModel';
 import { saveToCode } from './dev/devSave';
+import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Script de vagues édité dans le Gestionnaire de vagues (dev uniquement) : mémorisé dans le navigateur et réappliqué au
@@ -11,7 +12,6 @@ import { saveToCode } from './dev/devSave';
 const STORAGE_KEY = 'xiao-debug-waves';
 /** Version des ids d'aliens du script mémorisé (3 : slime_basic / slime_bombardier, voir loadWaveOverrides). */
 const MIGRATION_KEY = 'xiao-debug-waves-ids';
-
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 
@@ -63,6 +63,8 @@ function assign(script: WaveScript): void {
 export function loadWaveOverrides(): void {
   if (!import.meta.env.DEV) return;
   try {
+    // les vagues livrées ont changé depuis la copie mémorisée (nouveau boss, nouvelle config…) : on repart du code, sinon la copie les masque en silence
+    dropStaleOverride(STORAGE_KEY, 'Vagues', { levels: DEFAULT_WAVE_SCRIPT.levels, timeline: DEFAULT_WAVE_SCRIPT.timeline }, false);
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as WaveScript | null;
     // Migration (slimes renommés deux fois) vers 'slime_basic' (slime de base) et 'slime_bombardier' (gros qui lance de la gelée) :
     // v1 : 'slime' = base, 'slime_blue' = gros ; v2 : 'slime_blue' = base, 'slime_green' = gros.

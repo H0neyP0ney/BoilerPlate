@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Button, storage, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { t } from '../i18n';
+import { buildScoreboard, scoreboardHeight, type ScoreRow } from '../view/Scoreboard';
 import type { GameScene } from './GameScene';
 
 export interface GameOverData {
@@ -10,6 +11,8 @@ export interface GameOverData {
   kills: number;
   best: number;
   canRevive: boolean;
+  /** Scoreboard : un joueur par ligne (aliens tués, dégâts totaux). */
+  scores: ScoreRow[];
   /** Remplace le titre (ex. connexion perdue). */
   title?: string;
 }
@@ -34,12 +37,15 @@ export class GameOverScene extends Phaser.Scene {
     const cy = height / 2;
 
     this.add.rectangle(0, 0, width, height, 0x0a1422, 0.75).setOrigin(0).setInteractive();
+    // le scoreboard agrandit le panneau : le haut remonte de la moitié, le bas descend de la moitié (le tout reste centré)
+    const sbH = data.scores.length > 0 ? scoreboardHeight(data.scores.length) + 24 : 0;
+    const up = sbH / 2;
     const panel = this.add.graphics();
-    panel.fillStyle(PALETTE.panel, 0.95).fillRoundedRect(cx - 260, cy - 250, 520, 460, 20);
-    panel.lineStyle(3, PALETTE.panelBorder, 1).strokeRoundedRect(cx - 260, cy - 250, 520, 460, 20);
+    panel.fillStyle(PALETTE.panel, 0.95).fillRoundedRect(cx - 260, cy - 250 - up, 520, 460 + sbH, 20);
+    panel.lineStyle(3, PALETTE.panelBorder, 1).strokeRoundedRect(cx - 260, cy - 250 - up, 520, 460 + sbH, 20);
 
     this.add
-      .text(cx, cy - 195, data.title ?? (data.victory ? t('victory') : t('gameOver')), {
+      .text(cx, cy - 195 - up, data.title ?? (data.victory ? t('victory') : t('gameOver')), {
         fontFamily: theme.font,
         fontSize: '42px',
         color: data.victory ? '#ffe066' : '#ffffff',
@@ -49,20 +55,21 @@ export class GameOverScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(cx, cy - 130, t('survived', { time: fmt(data.time), kills: data.kills }), {
+      .text(cx, cy - 130 - up, t('survived', { time: fmt(data.time), kills: data.kills }), {
         fontFamily: theme.font,
         fontSize: '24px',
         color: PALETTE.textDim,
       })
       .setOrigin(0.5);
     this.add
-      .text(cx, cy - 96, t('best', { value: fmt(data.best) }), { fontFamily: theme.font, fontSize: '20px', color: PALETTE.textDim })
+      .text(cx, cy - 96 - up, t('best', { value: fmt(data.best) }), { fontFamily: theme.font, fontSize: '20px', color: PALETTE.textDim })
       .setOrigin(0.5);
 
-    const retry = new Button(this, cx, cy + 5, { label: t('retry'), width: 360, height: 88, onClick: () => this.retry() });
+    if (data.scores.length > 0) buildScoreboard(this, cx, cy - 70 - up, data.scores);
+    const retry = new Button(this, cx, cy + 5 + up, { label: t('retry'), width: 360, height: 88, onClick: () => this.retry() });
 
     if (data.canRevive) {
-      const revive: Button = new Button(this, cx, cy + 115, {
+      const revive: Button = new Button(this, cx, cy + 115 + up, {
         label: t('revive'),
         variant: 'rewarded',
         width: 340,

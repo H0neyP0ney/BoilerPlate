@@ -15,7 +15,7 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.fill();
   });
   // Tir de blaster : traînée qui s'éclaircit vers la tête, cœur blanc. Dessiné pointant à droite (tête à droite).
-  // Une texture par palier de dégâts (data/damageTiers.ts) : bleu d'origine, puis vert, orangé, violet, rouge.
+  // Une texture par palier de dégâts (data/damageTiers.ts) : bleu d'origine, puis vert, jaune, orangé, violet, rouge.
   for (const tier of DAMAGE_TIERS) {
     const [gr, gg, gb] = tier.glow;
     const [hr, hg, hb] = tier.head;

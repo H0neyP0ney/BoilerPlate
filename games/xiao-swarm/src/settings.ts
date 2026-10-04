@@ -1,4 +1,5 @@
 import { clamp, storage } from '@xiao/engine';
+import { i18n, LANGS, type Lang } from './i18n';
 
 /**
  * Le préfixe du stockage doit être posé AVANT la lecture des réglages ci-dessous : ce module est évalué à l'import, bien avant
@@ -45,8 +46,6 @@ function tutorialDoneFlag(): boolean {
 export const settings = {
   /** L'onboarding scripté (voir `sim/Tutorial.ts`) a déjà été terminé : les parties suivantes commencent directement par les vagues normales. */
   tutorialDone: tutorialDoneFlag(),
-  /** Compteur de FPS en haut à gauche (`?fps=0` pour le masquer). */
-  showFps: flag('showFps', 'fps'),
   /** Déformation de l'écran (shader) à la montée de niveau (`?shock=0` pour la couper : filtre plein écran, coûteux sur un petit GPU). */
   shockwave: flag('shockwave', 'shock'),
   /** Fond d'espace (nébuleuses + étoiles). Désactivé par défaut (coûteux en perf) : fond noir uni ; `?space=1` ou le menu Réglages l'active. */
@@ -59,6 +58,16 @@ export const settings = {
   sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', 6)), 0, MUSIC_STEPS),
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */
   debugMode: storage.get<boolean>('settings.debugMode', import.meta.env.DEV) === true,
+
+  /** Langue choisie dans le menu Options (null : jamais choisie, on suit le navigateur / Poki). */
+  lang: ((l) => (LANGS as readonly string[]).includes(l ?? '') ? (l as Lang) : null)(storage.get<string | null>('settings.lang', null)),
+
+  /** Change la langue du jeu (mémorisée) : les textes créés ensuite l'utilisent. */
+  setLang(lang: Lang): void {
+    this.lang = lang;
+    storage.set('settings.lang', lang);
+    i18n.setLang(lang);
+  },
 
   /** Volume effectif (0 → 1) de la musique. */
   musicGain(): number {
@@ -94,11 +103,6 @@ export const settings = {
   setShockwave(on: boolean): void {
     this.shockwave = on;
     storage.set('settings.shockwave', on);
-  },
-
-  setShowFps(on: boolean): void {
-    this.showFps = on;
-    storage.set('settings.showFps', on);
   },
 
   setTutorialDone(done: boolean): void {

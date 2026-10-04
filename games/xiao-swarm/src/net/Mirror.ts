@@ -3,11 +3,11 @@ import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SHIELD_FRACTION, SQUAD } from '../c
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
-import type { AlienState, Projectile, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
+import type { AlienState, PowerUpState, Projectile, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
-import type { AlienSnap, ProjectileSnap, RecruitSnap, Snapshot, SoldierSnap } from './Protocol';
+import { SNAPSHOT_EVERY, type AlienSnap, type ProjectileSnap, type RecruitSnap, type Snapshot, type SoldierSnap } from './Protocol';
 import { TICK_RATE } from './Session';
 
 /** Part de l'écart rattrapée à chaque tick client (0.5 = lissage rapide sans à-coups). */
@@ -20,7 +20,17 @@ const PROJECTILE_FADE = 0.5;
 interface Goal {
   x: number;
   y: number;
+  /** Dernière position reçue de l'hôte et vitesse (px/s) déduite de deux snapshots : le but avance à cette vitesse entre deux snapshots (objets au sol qui bougent). */
+  sx?: number;
+  sy?: number;
+  vx?: number;
+  vy?: number;
 }
+
+/** Durée (s) entre deux snapshots. */
+const SNAPSHOT_DT = SNAPSHOT_EVERY / TICK_RATE;
+/** Vitesse maximale (px/s) retenue pour l'extrapolation d'un objet au sol (au-delà : saut, pas un mouvement). */
+const MAX_GROUND_SPEED = 2000;
 
 /** Input du tick client courant, pour la prédiction de la squad locale. */
 export interface LocalInput {
@@ -45,6 +55,7 @@ export class Mirror {
   private readonly soldiers = new Map<number, SoldierState>();
   private readonly aliens = new Map<number, AlienState>();
   private readonly recruits = new Map<number, RecruitState>();
+  private readonly powerups = new Map<number, PowerUpState>();
   /** Globes d'XP persistants (par id) : lissés vers leur position hôte comme les recrues, au lieu de sauter à chaque snapshot. */
   private readonly orbs = new Map<number, XpOrb>();
   /** Projectiles persistants (par id du snapshot) : lissés comme les autres entités au lieu d'être recréés à chaque snapshot. */
@@ -61,13 +72,15 @@ export class Mirror {
   apply(snap: Snapshot): void {
     const { sim } = this;
     sim.tick = snap.tick;
-    sim.waves.setTime(snap.time);
+    sim.waves.setTime(snap.time, snap.cursor);
     sim.choiceT = snap.choiceT;
 
     const seenSoldiers = new Set<number>();
     for (const sq of snap.squads) {
       const squad = sim.addPlayer(sq.owner);
       squad.kills = sq.kills;
+      squad.slot = sq.slot;
+      squad.dealt = sq.dealt;
       squad.level = sq.level;
       squad.xp = sq.xp;
       squad.offer = sq.offer.length ? sq.offer.map((i) => UPGRADE_IDS[i]) : null;
@@ -128,7 +141,12 @@ export class Mirror {
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
 
     sim.powerups.items.length = 0;
-    for (const p of snap.powerups) sim.powerups.items.push({ ...p });
+    const seenPowerups = new Set<number>();
+    for (const p of snap.powerups) {
+      seenPowerups.add(p.id);
+      sim.powerups.items.push(this.upsertPowerup(p));
+    }
+    prune(this.powerups, seenPowerups);
     sim.powerups.fields.length = 0;
     for (const f of snap.fields) sim.powerups.fields.push({ ...f });
 
@@ -188,19 +206,23 @@ export class Mirror {
     for (const p of sim.puddles) tick(p);
     for (const k of sim.arena.rocks) tick(k);
     for (const f of sim.powerups.fields) tick(f);
-    for (const p of sim.powerups.items) if (p.life > 0) p.life = Math.max(0, p.life - dt);
+    for (const p of sim.powerups.items) {
+      if (p.life > 0) p.life = Math.max(0, p.life - dt);
+      const g = this.goals.get(p);
+      if (g) this.approach(p, this.advance(g, dt)); // power-up aspiré par l'aimant : glisse au lieu de sauter à chaque snapshot
+    }
     for (const r of sim.recruits.items) {
       r.px = r.x;
       r.py = r.y;
       r.life -= dt;
       const g = this.goals.get(r);
-      if (g) this.approach(r, g);
+      if (g) this.approach(r, this.advance(g, dt)); // le but avance à la vitesse déduite des snapshots (recrue aspirée, saut d'apparition)
     }
     for (const o of sim.xp.orbs) {
       o.px = o.x;
       o.py = o.y;
       const g = this.goals.get(o);
-      if (g) this.approach(o, g); // un globe attiré par un soldat glisse vers sa nouvelle position au lieu de sauter à la cadence des snapshots
+      if (g) this.approach(o, this.advance(g, dt)); // un globe attiré par un soldat glisse vers sa nouvelle position au lieu de sauter à la cadence des snapshots
     }
     for (const p of sim.combat.projectiles.active) {
       p.px = p.x;
@@ -368,7 +390,7 @@ export class Mirror {
     }
     s.value = o.value;
     s.life = o.blink ? ORB_BLINK_TIME / 2 : ORB_BLINK_TIME * 2; // seul compte « sous le seuil de clignotement ou non » : l'hôte le décide
-    this.goals.set(s, { x: o.x, y: o.y });
+    this.retarget(s, o.x, o.y);
     return s;
   }
 
@@ -379,8 +401,43 @@ export class Mirror {
       this.recruits.set(r.id, s);
     }
     s.life = r.life;
-    this.goals.set(s, { x: r.x, y: r.y });
+    this.retarget(s, r.x, r.y);
     return s;
+  }
+
+  private upsertPowerup(p: { id: number; kind: PowerUpState['kind']; x: number; y: number; life: number }): PowerUpState {
+    let s = this.powerups.get(p.id);
+    if (!s) {
+      s = { id: p.id, kind: p.kind, x: p.x, y: p.y, life: p.life };
+      this.powerups.set(p.id, s);
+    }
+    s.kind = p.kind;
+    s.life = p.life;
+    this.retarget(s, p.x, p.y);
+    return s;
+  }
+
+  /** Nouvelle position hôte d'un objet au sol : le but y saute, et sa vitesse est déduite du déplacement depuis le snapshot précédent. */
+  private retarget(u: object, x: number, y: number): void {
+    const g = this.goals.get(u);
+    if (!g || g.sx === undefined || g.sy === undefined) {
+      this.goals.set(u, { x, y, sx: x, sy: y, vx: 0, vy: 0 });
+      return;
+    }
+    let vx = (x - g.sx) / SNAPSHOT_DT;
+    let vy = (y - g.sy) / SNAPSHOT_DT;
+    if (Math.hypot(vx, vy) > MAX_GROUND_SPEED) vx = vy = 0;
+    g.x = g.sx = x;
+    g.y = g.sy = y;
+    g.vx = vx;
+    g.vy = vy;
+  }
+
+  /** Fait avancer le but d'un objet au sol à sa vitesse estimée (entre deux snapshots). */
+  private advance(g: Goal, dt: number): Goal {
+    g.x += (g.vx ?? 0) * dt;
+    g.y += (g.vy ?? 0) * dt;
+    return g;
   }
 
   private upsertProjectile(snap: ProjectileSnap): void {

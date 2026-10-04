@@ -55,7 +55,7 @@ export class LevelUpScene extends Phaser.Scene {
     const dim = this.add.rectangle(0, 0, 10, 10, 0x05101c, 0.5).setOrigin(0).setAlpha(0);
     this.tweens.add({ targets: dim, alpha: 1, duration: 160 });
     const title = this.add
-      .text(0, 0, offer.length ? `${t('levelUpTitle', { level: data.level })}  ·  ${t('chooseUpgradeShort')}` : t('levelUpTitle', { level: data.level }), {
+      .text(0, 0, t('levelUpPop'), {
         fontFamily: theme.font,
         fontSize: '28px',
         fontStyle: 'bold',
@@ -109,7 +109,8 @@ export class LevelUpScene extends Phaser.Scene {
     let rerollBtn: Phaser.GameObjects.Text | null = null;
     if (offer.length && data.rerolls > 0) {
       rerollBtn = this.add
-        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#13233a', backgroundColor: '#9fd3ff', padding: { x: 14, y: 8 } })
+        .text(0, 0, `${t('reroll', { value: data.rerolls })}
+[R]`, { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#13233a', backgroundColor: '#9fd3ff', align: 'center', padding: { x: 26, y: 10 } })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
       rerollBtn.on('pointerup', () => this.reroll());
@@ -148,7 +149,7 @@ export class LevelUpScene extends Phaser.Scene {
       this.timerBox = { x: w / 2 - barW / 2, y: top + total + 22, w: barW };
       this.waitText.setPosition(w / 2, this.cards.length ? top + total + 62 : h / 2);
       if (!this.cards.length) this.timerBox.y = h / 2 + 30;
-      rerollBtn?.setPosition(w / 2, top + total + 66 + (this.game_.session.online ? 10 : -14));
+      rerollBtn?.setPosition(w / 2, top + total + (this.game_.session.online ? 96 : 54));
     };
     layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
@@ -180,8 +181,8 @@ export class LevelUpScene extends Phaser.Scene {
     const def = UPGRADES[id];
     const c = this.add.container(0, 0);
     const bg = this.add.graphics();
-    const badge = this.add.graphics();
-    const key = this.add.text(0, 0, String(index + 1), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#13233a' }).setOrigin(0.5);
+    // raccourci clavier entre crochets, en bas au centre de la carte
+    const key = this.add.text(0, 0, `[${index + 1}]`, { fontFamily: theme.font, fontSize: '15px', fontStyle: 'bold', color: theme.textDim }).setOrigin(0.5, 1);
     const name = this.add.text(0, 0, `${UPGRADE_ICONS[id]} ${t(`up_${id}`)}`, { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff' }).setOrigin(0, 0.5);
     const desc = this.add.text(0, 0, t(`up_${id}_desc`, { value: def.value * (prism ? 2 : 1) }) + (prism ? `  (${t('prismatic')})` : ''), { fontFamily: theme.font, fontSize: '15px', color: '#dfe8ff' }).setOrigin(0, 0);
     const stack = this.add
@@ -196,8 +197,8 @@ export class LevelUpScene extends Phaser.Scene {
       if (this.pressed === index) this.pick(index);
       this.pressed = -1;
     });
-    c.add([bg, badge, key, name, desc, stack, hit]);
-    c.setData({ id, bg, badge, key, name, desc, stack, hit });
+    c.add([bg, key, name, desc, stack, hit]);
+    c.setData({ id, bg, key, name, desc, stack, hit });
     return c;
   }
 
@@ -205,7 +206,6 @@ export class LevelUpScene extends Phaser.Scene {
     const d = c.getData('id') as UpgradeId;
     const color = UPGRADES[d].color;
     const bg = c.getData('bg') as Phaser.GameObjects.Graphics;
-    const badge = c.getData('badge') as Phaser.GameObjects.Graphics;
     const key = c.getData('key') as Phaser.GameObjects.Text;
     const name = c.getData('name') as Phaser.GameObjects.Text;
     const desc = c.getData('desc') as Phaser.GameObjects.Text;
@@ -215,16 +215,11 @@ export class LevelUpScene extends Phaser.Scene {
     bg.fillStyle(PALETTE.panel, 0.82).fillRoundedRect(-w / 2, -h / 2, w, h, 12);
     bg.fillStyle(color, 0.95).fillRoundedRect(-w / 2, -h / 2, 7, h, { tl: 12, tr: 0, bl: 12, br: 0 });
     bg.lineStyle(2, color, 0.85).strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
-    const r = vertical ? 15 : 18;
-    const bx = -w / 2 + 14 + r;
-    badge.clear();
-    badge.fillStyle(color, 1).fillCircle(bx, 0, r);
-    badge.lineStyle(2, 0xffffff, 0.7).strokeCircle(bx, 0, r);
-    key.setPosition(bx, 0).setFontSize(vertical ? 18 : 22);
-    const tx = bx + r + 10;
-    const textW = w - (tx + w / 2) - 10;
-    name.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 18 : 24)).setFontSize(vertical ? 16 : 18);
-    desc.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 32 : 40)).setFontSize(vertical ? 13 : 15);
+    key.setPosition(0, h / 2 - 5).setFontSize(vertical ? 13 : 15);
+    const tx = -w / 2 + 22;
+    const textW = w - 22 - 12;
+    name.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 18 : 26)).setFontSize(vertical ? 18 : 22);
+    desc.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 34 : 46)).setFontSize(vertical ? 15 : 20);
     stack.setPosition(w / 2 - 10, h / 2 - 6);
     hit.setSize(w, h);
   }

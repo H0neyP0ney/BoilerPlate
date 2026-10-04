@@ -35,6 +35,13 @@ export interface AlienDef {
    * de `wait` s, il ressort (`rise` s) et repart.
    */
   lurk?: { lead: number; digRange: number; digTime: number; rise: number; wait: number; trigger: number; aim: number; length: number; width: number; sweep: number; damage: number; cooldown: number; buriedDmg: number };
+  /**
+   * Téléportation sous terre (Scarab) : toutes les `every` s il s'enterre (`dig` s, un trou se creuse sous lui), reste invisible et très protégé
+   * (`buriedDmg` × les dégâts), pendant que un trou se forme DERRIÈRE la squad (côté opposé au boss, à `behind` px de son centre ; la position
+   * se verrouille pour les 40 % de `wait` restants, la zone rouge se remplit), puis il en ressort (`rise` s) : onde de choc de rayon `radius`
+   * (dégâts `damage`, recul `knockback`) au moment où il surgit.
+   */
+  burrow?: { every: number; dig: number; wait: number; rise: number; behind: number; radius: number; damage: number; knockback: number; buriedDmg: number };
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -46,6 +53,8 @@ export interface AlienDef {
   shield?: { pct: number; regenDelay: number; regenTime: number };
   /** Accélération d'approche : à moins de `range` px de sa cible, sa vitesse est multipliée par `speedMul` (pour rattraper une squad qui court). */
   dash?: { range: number; speedMul: number };
+  /** Son attaque de contact tue un soldat d'un coup (les trois boss). */
+  oneShot?: boolean;
   /** Bulle : au contact d'un soldat, le capture et le dévore (`dps` PV par seconde) en restant immobile ; la détruire le libère. */
   capture?: { dps: number };
   /** Sa flaque reste au sol à sa mort (une seule fois par alien) : un chaman peut le ressusciter. */
@@ -96,12 +105,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Petit cafard (id historique `gling`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
   gling: {
     id: 'gling',
-    hp: 14,
+    hp: 12.6, // -10 %
     speed: 180, // +40 %
     radius: 11,
     mass: 0.6,
-    damage: 5,
-    attackCooldown: 0.6,
+    damage: 2.5,
+    attackCooldown: 0.3,
     target: 'nearest',
     revivable: true,
     xp: 1,
@@ -116,8 +125,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 72,
     radius: 16,
     mass: 1,
-    damage: 12,
-    attackCooldown: 0.8,
+    damage: 6,
+    attackCooldown: 0.4,
     target: 'nearest',
     revivable: true,
     xp: 2,
@@ -132,8 +141,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 55,
     radius: 24,
     mass: 3,
-    damage: 10,
-    attackCooldown: 1,
+    damage: 5,
+    attackCooldown: 0.5,
     target: 'nearest',
     lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball' }, // portée -20 %
     revivable: true,
@@ -149,8 +158,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 105,
     radius: 15,
     mass: 1,
-    damage: 4,
-    attackCooldown: 0.8,
+    damage: 2,
+    attackCooldown: 0.4,
     target: 'nearest',
     deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 560 },
     xp: 3,
@@ -165,8 +174,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 70,
     radius: 16,
     mass: 1.4,
-    damage: 6,
-    attackCooldown: 0.9,
+    damage: 3,
+    attackCooldown: 0.45,
     target: 'nearest',
     tongue: { range: 270, cooldown: 3.2, pull: 0.4, damage: 4 },
     xp: 4,
@@ -181,10 +190,10 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 40,
     radius: 24,
     mass: 5,
-    damage: 10,
-    attackCooldown: 1,
+    damage: 5,
+    attackCooldown: 0.5,
     target: 'nearest',
-    rush: { cooldown: 5, windup: 0.9, length: 320, width: 80, speed: 720, damage: 35, knockback: 700 },
+    rush: { cooldown: 5, windup: 0.675, length: 416, width: 80, speed: 720, damage: 35, knockback: 700 },
     xp: 10,
     recruitChance: 0.15,
     color: 0xb03a3a,
@@ -197,8 +206,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 62,
     radius: 17,
     mass: 1.2,
-    damage: 4,
-    attackCooldown: 0.9,
+    damage: 2,
+    attackCooldown: 0.45,
     target: 'nearest',
     spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, puddle: { radius: 46, ttl: 6, slow: 0.45 }, texture: 'fx_spit' },
     xp: 4,
@@ -213,8 +222,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 60,
     radius: 18,
     mass: 1.5,
-    damage: 3,
-    attackCooldown: 1,
+    damage: 1.5,
+    attackCooldown: 0.5,
     target: 'nearest',
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1 }, // le ressuscité est un ZOMBIE (×3 PV et dégâts, voir config.ZOMBIE_MUL)
     xp: 8,
@@ -229,10 +238,10 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 60,
     radius: 17,
     mass: 1.3,
-    damage: 4,
-    attackCooldown: 1,
+    damage: 2,
+    attackCooldown: 0.5,
     target: 'nearest',
-    wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 168, rock: { radius: 22, ttl: 8 } },
+    wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 134, rock: { radius: 22, ttl: 8 } },
     xp: 4,
     recruitChance: 0.04,
     color: 0x9a8066,
@@ -266,7 +275,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    capture: { dps: 14 },
+    capture: { dps: 17.5 },
     xp: 12,
     recruitChance: 0,
     color: 0x8fe0ff,
@@ -275,14 +284,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime de feu : laisse derrière lui une traînée de flammes qui brûle les soldats qui marchent dedans. */
   burner: {
     id: 'burner',
-    hp: 40,
+    hp: 80, // x2
     speed: 85,
     radius: 16,
     mass: 1,
-    damage: 6,
-    attackCooldown: 0.8,
+    damage: 3,
+    attackCooldown: 0.4,
     target: 'nearest',
-    trail: { every: 0.22, radius: 24, ttl: 9, dps: 24 },
+    trail: { every: 0.22, radius: 24, ttl: 11.25, dps: 31.2 },
     xp: 4,
     recruitChance: 0.03,
     color: 0xff5a1a,
@@ -295,10 +304,11 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 71.5, // 55 + 30 %
     radius: 38,
     mass: 14,
-    damage: 14,
+    damage: 7,
     attackCooldown: 1,
     target: 'nearest',
-    rush: { cooldown: 4.5, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 850 },
+    oneShot: true,
+    rush: { cooldown: 3.6, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 850 },
     boss: { kind: 'mini' },
     xp: 70,
     recruitChance: 1,
@@ -312,11 +322,13 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 50,
     radius: 68,
     mass: 50,
-    damage: 30,
+    damage: 15,
     attackCooldown: 1.2,
+    oneShot: true,
     target: 'center',
     slam: { radius: 190, damage: 30, cooldown: 3, knockback: 650 },
-    shield: { pct: 0.1, regenDelay: 5, regenTime: 4 },
+    shield: { pct: 0.05, regenDelay: 5, regenTime: 4 },
+    burrow: { every: 14, dig: 0.9, wait: 2.4, rise: 0.7, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 },
     boss: { kind: 'mini' },
     xp: 220,
     recruitChance: 1,
@@ -331,8 +343,9 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     radius: 150, // 3× plus gros (affichage et collision)
     scale: 3,
     mass: 30,
-    damage: 25,
+    damage: 12.5,
     attackCooldown: 1.2,
+    oneShot: true,
     target: 'center',
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900 },
     lob: { range: 620, cooldown: 3, flight: 1.15, damage: 22, aoe: 85, texture: 'fx_blob_green', count: 3, keepMoving: true },

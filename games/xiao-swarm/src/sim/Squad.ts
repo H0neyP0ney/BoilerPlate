@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -27,7 +27,7 @@ export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number,
   arena.constrain(anchor);
 }
 
-export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range';
+export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -43,7 +43,9 @@ export class Squad {
   private readonly slotTarget = { x: 0, y: 0, radius: 0 };
   readonly center: Point = { x: 0, y: 0 };
   /** Upgrades propres à ce joueur. */
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1 });
+  /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
+  slot = 0;
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -62,6 +64,8 @@ export class Squad {
   moving = false;
   stillTime = 0;
   kills = 0;
+  /** Dégâts totaux infligés aux aliens par cette squad (PV et boucliers réellement retirés, sans overkill). */
+  dealt = 0;
   private slots: Point[] = [];
   /** Soldats qui comptent pour le mouvement de foule (hors prisonniers d'une bulle et unités tirées par une langue). */
   private readonly crowd: SoldierState[] = [];
@@ -97,6 +101,7 @@ export class Squad {
   /** Nouvelle partie : plus de soldats, progression (XP, niveau, upgrades) et bonus remis à zéro. */
   resetRun(): void {
     this.soldiers.length = 0;
+    this.detached.clear();
     this.crowd.length = 0;
     this.newcomers.length = 0;
     this.stats.reset();
@@ -110,6 +115,7 @@ export class Squad {
     this.pendingLevels = 0;
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
     this.kills = 0;
+    this.dealt = 0;
     this.stillTime = 0;
     this.dirty = true;
   }
@@ -119,13 +125,13 @@ export class Squad {
     return xpToNext(this.level) * this.sim.xpScale;
   }
 
-  /** Ajoute de l'XP (bonus `xpGain` compris) ; chaque niveau franchi prépare un choix d'upgrade. Coop : barre commune. */
+  /** Ajoute de l'XP (le bonus `xpGain` agit à la chute des globes, voir `Xp.drop`, pas ici) ; chaque niveau franchi prépare un choix d'upgrade. Coop : barre commune. */
   gainXp(value: number): void {
     if (this.sim.sharedXp) {
       this.sim.gainSharedXp(this, value);
       return;
     }
-    this.xp += value * this.stats.get('xpGain');
+    this.xp += value;
     const before = this.level;
     while (this.xp >= this.xpNeeded) {
       this.xp -= this.xpNeeded;
@@ -319,15 +325,33 @@ export class Squad {
     return dead;
   }
 
-  /** Hors formation : avalé par une bulle, ou fraîchement tiré par une langue (il ne compte alors ni pour le centre, ni pour les slots). */
+  /** Soldats isolés de la squad (voir `DETACH_EXTRA`) : hors du mouvement de foule jusqu'à leur retour au contact. */
+  private readonly detached = new Set<SoldierState>();
+
+  /** Hors formation : avalé par une bulle, fraîchement tiré par une langue, ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots). */
   private isOut(s: SoldierState): boolean {
-    return s.capturedBy !== 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT;
+    return s.capturedBy !== 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+  }
+
+  /** Met à jour les soldats isolés : sortie au-delà de `radius + DETACH_EXTRA`, retour sous `radius + REJOIN_EXTRA` (hystérésis, d'après le centre du tick précédent). */
+  private updateDetached(): void {
+    const far = this.radius + DETACH_EXTRA;
+    const near = this.radius + REJOIN_EXTRA;
+    for (const s of this.soldiers) {
+      const d = Math.hypot(s.x - this.center.x, s.y - this.center.y);
+      if (this.detached.has(s)) {
+        if (d < near || !s.alive) this.detached.delete(s);
+      } else if (d > far && s.alive && this.soldiers.length > 1) this.detached.add(s);
+    }
+    for (const s of this.detached) if (!this.soldiers.includes(s)) this.detached.delete(s);
+    if (this.detached.size >= this.soldiers.length) this.detached.clear(); // tous isolés : la squad entière sert de repère
   }
 
   update(dt: number, input: PlayerInput): void {
     if (this.buffs.stim > 0) this.buffs.stim -= dt;
     const total = this.soldiers.length;
     if (total === 0) return;
+    this.updateDetached();
     this.crowd.length = 0;
     for (const s of this.soldiers) if (!this.isOut(s)) this.crowd.push(s);
     if (this.crowd.length === 0) this.crowd.push(...this.soldiers); // tous hors formation : on garde la squad entière comme repère

@@ -8,9 +8,12 @@ import { VirtualJoystick } from '../ui/VirtualJoystick';
 export class MoveInput {
   readonly vector = new Phaser.Math.Vector2();
   readonly joystick: VirtualJoystick;
+  /** Joystick « tout ou rien » : dès qu'une direction est détectée (au-delà de `DEADZONE` du rayon), la vitesse est maximale (longueur 1). */
+  private readonly fullSpeed: boolean;
   private readonly keys: Record<(typeof KEYS)[number], Phaser.Input.Keyboard.Key>;
 
-  constructor(scene: Phaser.Scene, opts: { joystickRadius?: number; joystickFollowMargin?: number } = {}) {
+  constructor(scene: Phaser.Scene, opts: { joystickRadius?: number; joystickFollowMargin?: number; joystickFullSpeed?: boolean } = {}) {
+    this.fullSpeed = opts.joystickFullSpeed === true;
     this.joystick = new VirtualJoystick(scene, opts.joystickRadius, opts.joystickFollowMargin);
     this.keys = scene.input.keyboard!.addKeys(KEYS.join(',')) as typeof this.keys;
   }
@@ -19,7 +22,11 @@ export class MoveInput {
   update(): Phaser.Math.Vector2 {
     const v = this.vector.reset();
     this.joystick.update();
-    if (this.joystick.active) return v.copy(this.joystick.vector);
+    if (this.joystick.active) {
+      v.copy(this.joystick.vector);
+      if (!this.fullSpeed) return v;
+      return v.length() > DEADZONE ? v.normalize() : v.reset();
+    }
     const k = this.keys;
     // pavé numérique : 8 2 4 6 = haut bas gauche droite, 7 9 1 3 = diagonales
     const left = k.LEFT.isDown || k.A.isDown || k.Q.isDown || k.NUMPAD_FOUR.isDown || k.NUMPAD_SEVEN.isDown || k.NUMPAD_ONE.isDown;
@@ -37,6 +44,9 @@ export class MoveInput {
     return this.vector.lengthSq() > 0.0001;
   }
 }
+
+/** Joystick plein régime : part du rayon sous laquelle le doigt (ou la souris) ne donne aucune direction. */
+const DEADZONE = 0.12;
 
 /** Flèches + WASD (QWERTY) + ZQSD (AZERTY) + pavé numérique. */
 const KEYS = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'W', 'A', 'S', 'D', 'Z', 'Q', 'NUMPAD_ONE', 'NUMPAD_TWO', 'NUMPAD_THREE', 'NUMPAD_FOUR', 'NUMPAD_SIX', 'NUMPAD_SEVEN', 'NUMPAD_EIGHT', 'NUMPAD_NINE'] as const;

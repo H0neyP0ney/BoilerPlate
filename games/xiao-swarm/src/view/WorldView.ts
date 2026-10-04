@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { DEPTH, ORB_BLINK_TIME, PALETTE, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_LIFE, XP_ORB_POP } from '../config';
+import { DEPTH, ORB_BLINK_TIME, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_LIFE, XP_ORB_POP } from '../config';
 import { TICK_RATE } from '../net/Session';
 import { ALIENS } from '../data/aliens';
-import { CLASSES } from '../data/classes';
+import { soldierSpriteId } from '../art/playerVariants';
+import { CLASSES, type SoldierClassId } from '../data/classes';
 import { tierOfTexture } from '../data/damageTiers';
 import { TUTORIAL } from '../data/tutorial';
 import { t } from '../i18n';
 import { SFX } from '../settings';
+import { UPGRADES, type UpgradeId } from '../data/progression';
 import type { Projectile } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
@@ -16,7 +18,7 @@ import { ShockDistort } from './ShockDistort';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { ROCKET_TEXTURE } from '../sim/Combat';
-import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR } from './PickupViews';
+import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR, UPGRADE_ICONS } from './PickupViews';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
@@ -33,6 +35,9 @@ export const ORB_SCALE = 1.3;
 /** Montée de niveau : nombre d'ondes de choc blanches successives et délai (ms) entre deux. */
 const LEVEL_WAVES = 4;
 const LEVEL_WAVE_GAP_MS = 170;
+/** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
+const BAR_GHOST_HOLD = 0.25;
+const BAR_GHOST_SPEED = 2.64; // +20 %
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
 
@@ -90,7 +95,9 @@ export class WorldView {
   private readonly pickups: PickupViews;
   /** Halos d'apparition en cours : ils suivent leur soldat / leur squad au lieu de rester à l'endroit où ils sont nés. */
   private readonly followers: { parts: { img: Phaser.GameObjects.Image; dy: number }[]; pos: () => { x: number; y: number } | null }[] = [];
-  private nextRival = 0;
+  /** Barres de vie : part blanche qui traîne derrière la part colorée (voir `bar`), par id d'unité ; `barsSeen` = ids dessinés cette frame. */
+  private readonly barGhosts = new Map<number, { last: number; ghost: number; hold: number }>();
+  private readonly barsSeen = new Set<number>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -118,7 +125,7 @@ export class WorldView {
   colorOf(owner: PlayerId): number {
     let c = this.colors.get(owner);
     if (c === undefined) {
-      c = owner === this.localPlayer ? PALETTE.allyRing : RIVAL_COLORS[this.nextRival++ % RIVAL_COLORS.length];
+      c = PLAYER_COLORS[(this.sim.squadOf(owner)?.slot ?? 0) % PLAYER_COLORS.length]; // même couleur chez tous les joueurs
       this.colors.set(owner, c);
     }
     return c;
@@ -137,6 +144,9 @@ export class WorldView {
         v?.hit(v instanceof SoldierView ? 0.1 : 0.06);
         break;
       }
+      case 'crit':
+        if (nearCam(e.x, e.y)) this.fx.crit(e.x, e.y, e.dmg);
+        break;
       case 'beam':
         this.tracers.push({ ...e, life: 0.12 });
         this.fx.burst(e.x2, e.y2, 0xb8ffb8, 6);
@@ -159,7 +169,7 @@ export class WorldView {
         break;
       }
       case 'soldierDied': {
-        this.corpse(e.id, e.cls, e.x, e.y);
+        this.corpse(e.id, e.cls, e.x, e.y, this.sim.squadOf(e.owner)?.slot ?? 0);
         this.fx.death(e.x, e.y, CLASSES[e.cls].color);
         if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(160, 0.009);
         break;
@@ -315,6 +325,9 @@ export class WorldView {
         this.fx.burst(e.x, e.y - 20, col, 30);
         this.fx.ring(e.x, e.y, 120, col);
         this.fx.column(e.x, e.y, col, 150, 700);
+        // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers)
+        const up = UPGRADES[e.id as UpgradeId];
+        if (up) this.fx.text(e.x, e.y - 70, `${UPGRADE_ICONS[e.id as UpgradeId]} ${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 26);
         if (e.owner === this.localPlayer) this.scene.cameras.main.shake(80, 0.003);
         break;
       }
@@ -344,14 +357,17 @@ export class WorldView {
         this.pendingWaves.push({ x: c.x, y: c.y, level: e.level });
         break;
       }
+      case 'repel':
+        this.pendingWaves.push({ x: e.x, y: e.y, level: 0 }); // mêmes ondes que le level up, sans texte
+        break;
       case 'squadWiped':
         break;
     }
   }
 
   /** Animation de mort (si la planche en a une) : le corps reste un instant puis s'efface. */
-  private corpse(soldierId: number, cls: string, x: number, y: number): void {
-    const id = `soldier_${cls}`;
+  private corpse(soldierId: number, cls: SoldierClassId, x: number, y: number, slot: number): void {
+    const id = soldierSpriteId(cls, slot); // à la couleur du joueur
     if (!sprites.hasAnim(id, 'die')) return;
     const c = sprites.add(this.scene, id, x, y).setDepth(DEPTH.actors + y - 1);
     c.setFlipX(this.soldiers.get(soldierId)?.flipX ?? false);
@@ -381,7 +397,7 @@ export class WorldView {
       else this.scene.time.delayedCall(i * LEVEL_WAVE_GAP_MS, draw);
     }
     this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash);
-    this.fx.levelUpText(w.x, w.y);
+    if (w.level > 0) this.fx.levelUpText(w.x, w.y);
   }
 
   render(alpha: number, dt: number, time: number): void {
@@ -420,7 +436,7 @@ export class WorldView {
       for (const s of sq.soldiers) {
         let v = this.soldiers.get(s.id);
         if (!v) {
-          v = new SoldierView(this.scene, s, this.colorOf(s.owner));
+          v = new SoldierView(this.scene, s, this.colorOf(s.owner), sq.slot);
           this.soldiers.set(s.id, v);
           if (this.scene.time.now > this.quietUntil) {
             // nouvelle unité dans une squad : la colonne bleue suit le soldat
@@ -439,7 +455,7 @@ export class WorldView {
     for (const a of this.sim.aliens) {
       let v = this.aliens.get(a.id);
       if (!v) {
-        v = new AlienView(this.scene, a);
+        v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil); // départ de partie / arrivée d'un client : pas de trou
         this.aliens.set(a.id, v);
       }
       v.seen = true;
@@ -642,7 +658,7 @@ export class WorldView {
       if (Math.sin(time * (14 + 34 * k)) > 0) f.img.setTint(0xff3a2a).setTintMode(Phaser.TintModes.FILL);
       else f.img.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
       // pulsations d'échelle de plus en plus rapides et amples (étirement / écrasement en opposition de phase)
-      const pulse = Math.sin(time * (30 + 60 * k)) * (0.05 + 0.13 * k);
+      const pulse = Math.sin(time * (30 + 60 * k)) * (0.05 + 0.13 * k) * 1.15; // variations d'échelle +15 %
       f.img.setScale(f.base * (1 + 0.12 * k + pulse), f.base * (1 + 0.12 * k - pulse * 0.8));
     }
   }
@@ -735,9 +751,24 @@ export class WorldView {
     // recrues : la même zone qui pulse que sous les power-ups, en jaune, posée sur la position au sol de la recrue
     for (const r of this.recruits.values()) drawPickupSpot(g, r.rx, r.ry, RECRUIT_COLOR, time, r.state.id, r.dim ? 0.3 : 1);
     this.drawTutorialMarker(g, time);
+    // recrues : ombre au sol (le saut d'apparition, lui, reste en l'air)
+    for (const r of this.recruits.values()) {
+      const rad = CLASSES[r.state.cls].radius;
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * (r.dim ? 0.4 : 1)).fillEllipse(r.rx, r.ry, rad * 2.2, rad);
+    }
+    // trous d'apparition des aliens : se creusent, l'alien en sort, puis le trou s'efface
+    for (const v of this.aliens.values()) {
+      const h = v.hole();
+      if (!h) continue;
+      const r = h.radius * h.open;
+      g.fillStyle(0x6a4a30, 0.9 * h.alpha).fillEllipse(h.x, h.y + 4, r * 2.3, r * 1.25);
+      g.fillStyle(0x1a0f0a, 0.95 * h.alpha).fillEllipse(h.x, h.y + 5, r * 1.8, r * 0.95);
+      g.fillStyle(0x000000, 0.7 * h.alpha).fillEllipse(h.x, h.y + 7, r * 1.1, r * 0.55);
+    }
     g.fillStyle(0x2a1d2e, SHADOW_ALPHA);
     for (const v of this.aliens.values()) {
       if (v.state.def.lurk && v.state.lurkPhase >= 2 && v.state.lurkPhase <= 4) continue; // enterré : pas d'ombre
+      if (v.state.def.burrow && v.state.lurkPhase === 2) continue; // Scarab sous terre
       const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
       const r = v.state.radius * (v.state.def.floats ? 0.7 : 1) * k;
       g.fillEllipse(v.rx, v.ry, r * 2.1, r * 0.9);
@@ -785,6 +816,31 @@ export class WorldView {
         g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(quad(L.length * k, hw * k), true);
         g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
       }
+    }
+    // Scarab : trou sous lui qui se creuse puis se rebouche, et trou d'arrivée DERRIÈRE la squad qui se forme (zone rouge qui se remplit) avant sa sortie
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const B = a.def.burrow;
+      if (!B || a.lurkPhase === 0) continue;
+      const hole = (x: number, y: number, r: number, alpha: number): void => {
+        g.fillStyle(0x6a4a30, 0.9 * alpha).fillEllipse(x, y + 4, r * 2.3, r * 1.25); // rebord de terre
+        g.fillStyle(0x1a0f0a, 0.95 * alpha).fillEllipse(x, y + 5, r * 1.8, r * 0.95); // trou
+        g.fillStyle(0x000000, 0.7 * alpha).fillEllipse(x, y + 7, r * 1.1, r * 0.55);
+      };
+      const R = a.radius * 1.1;
+      if (a.lurkPhase === 1) hole(a.x, a.y, R * (1 - a.lurkT / B.dig), 1);
+      if (a.lurkPhase === 2) {
+        const el = B.wait - a.lurkT; // temps écoulé sous terre
+        hole(a.x, a.y, R, Math.max(0, 1 - el / 0.6)); // le trou de départ se rebouche
+        const k = Math.min(1, el / (B.wait * 0.8));
+        hole(a.leapX, a.leapY, R * k, 1); // le trou d'arrivée se forme
+        const f = Math.min(1, el / B.wait);
+        const pulse = a.lurkT < 0.6 && Math.sin(this.scene.time.now / 45) > 0 ? 0.15 : 0;
+        g.fillStyle(0xff2a2a, 0.1 + 0.2 * f + pulse).fillEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
+        g.fillStyle(0xff2a2a, 0.15 + 0.25 * f).fillEllipse(a.leapX, a.leapY, B.radius * 2 * f, B.radius * 1.4 * f);
+        g.lineStyle(4, 0xff4a3a, 0.6 + 0.4 * f).strokeEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
+      }
+      if (a.lurkPhase === 3) hole(a.x, a.y, R, a.lurkT / B.rise); // le boss ressort : le trou s'efface
     }
     // Murs du bâtisseur : télégraphe jaune (rectangle allongé qui se remplit) avant que les rochers ne surgissent
     for (const w of this.sim.walls) {
@@ -879,12 +935,13 @@ export class WorldView {
 
     const b = this.bars;
     b.clear();
+    this.barsSeen.clear();
     for (const v of this.soldiers.values()) {
       const s = v.state;
       const y = v.ry - (s.def.id === 'bruiser' ? 66 : 58);
       if (s.hp < s.maxHp) {
         const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
-        this.bar(b, v.rx, y, 30, s.hp / s.maxHp, color);
+        this.bar(b, v.rx, y, 30, s.hp / s.maxHp, color, s.id, dt);
       }
       if (s.shield > 0) this.bar(b, v.rx, y - 8, 30, s.shield / s.maxShield, PALETTE.shield); // bouclier : barre bleue au-dessus des PV
     }
@@ -892,10 +949,11 @@ export class WorldView {
     for (const v of this.aliens.values()) {
       const a = v.state;
       if (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4) continue;
+      if (a.def.burrow && a.lurkPhase === 2) continue; // Scarab sous terre : pas de barre de vie
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss;
-      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy);
+      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
       if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
       if (boss) {
@@ -916,6 +974,7 @@ export class WorldView {
       tag.destroy();
       this.bossTags.delete(id);
     }
+    for (const id of this.barGhosts.keys()) if (!this.barsSeen.has(id)) this.barGhosts.delete(id); // barre plus affichée : le traînard est oublié
 
     const l = this.beams;
     l.clear();
@@ -962,9 +1021,27 @@ export class WorldView {
     }
   }
 
-  private bar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, ratio: number, color: number): void {
+  /**
+   * Barre de vie « jeu de combat » : la barre colorée descend tout de suite du montant des dégâts, une barre blanche dessous reste sur la
+   * vie d'avant le coup (`BAR_GHOST_HOLD` s) puis rejoint vite la barre colorée. Sans `id` (bouclier), barre simple.
+   */
+  private bar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, ratio: number, color: number, id?: number, dt = 0): void {
     const h = 5;
+    const r = Math.max(0, Math.min(1, ratio));
+    let ghost = r;
+    if (id !== undefined) {
+      this.barsSeen.add(id);
+      const st = this.barGhosts.get(id) ?? { last: r, ghost: r, hold: 0 };
+      if (r < st.last - 1e-4) st.hold = BAR_GHOST_HOLD; // nouveau coup : la barre blanche attend un instant sur l'ancienne vie
+      if (r >= st.ghost) st.ghost = r; // soin : pas de traînard
+      else if (st.hold > 0) st.hold -= dt;
+      else st.ghost = Math.max(r, st.ghost - BAR_GHOST_SPEED * dt);
+      st.last = r;
+      this.barGhosts.set(id, st);
+      ghost = st.ghost;
+    }
     g.fillStyle(PALETTE.hpBack, 0.85).fillRoundedRect(x - w / 2 - 1.5, y - 1.5, w + 3, h + 3, 3);
-    g.fillStyle(color, 1).fillRect(x - w / 2, y, Math.max(0, w * Math.max(0, ratio)), h);
+    if (ghost > r) g.fillStyle(0xffffff, 0.95).fillRect(x - w / 2, y, w * ghost, h);
+    g.fillStyle(color, 1).fillRect(x - w / 2, y, w * r, h);
   }
 }

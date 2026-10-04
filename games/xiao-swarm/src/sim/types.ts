@@ -26,6 +26,8 @@ export const NO_INPUT: Readonly<PlayerInput> = { mx: 0, my: 0 };
 export type SimEvent =
   | { t: 'beam'; x1: number; y1: number; x2: number; y2: number }
   | { t: 'hit'; id: number }
+  /** Coup critique d'un soldat allié en (x, y) (impact du tir), `dmg` = dégâts infligés : l'affichage montre un « ! » rouge et ce nombre. */
+  | { t: 'crit'; x: number; y: number; dmg: number }
   | { t: 'alienDied'; id: number; x: number; y: number; alien: AlienId; killer: PlayerId | null }
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
   | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
@@ -55,5 +57,7 @@ export type SimEvent =
   | { t: 'powerup'; owner: PlayerId; kind: string; x: number; y: number }
   | { t: 'heal'; x: number; y: number }
   | { t: 'levelUp'; owner: PlayerId; level: number }
+  /** Onde de choc qui repousse les aliens sans montée de niveau (relance de la squad en solo) : l'affichage joue les ondes, sans le texte « LEVEL UP! ». */
+  | { t: 'repel'; x: number; y: number }
   | { t: 'squadWiped'; owner: PlayerId }
   | { t: 'squadSpawned'; owner: PlayerId; x: number; y: number };

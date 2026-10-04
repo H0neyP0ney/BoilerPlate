@@ -47,8 +47,8 @@ export interface MapDef {
   seed: number;
 }
 
-/** Côté (px) de l'arène solo / coop : 2400 d'origine, +20 %. */
-export const JUNGLE_SIZE = 2880;
+/** Côté (px) de l'arène solo / coop : 2400 d'origine, +20 % (2880), puis encore +20 % (3456). Les zones de `data/mapZones.ts` sont à la même échelle. */
+export const JUNGLE_SIZE = 3456;
 
 /**
  * Arène solo : une île carrée flottant dans l'espace (GDD §3). Seuls des obstacles volcaniques (data/obstacles.ts) font obstacle

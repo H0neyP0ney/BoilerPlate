@@ -5,6 +5,9 @@ import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
+/** Bulle qui a capturé un soldat : elle l'éloigne de la squad jusqu'à `CAPTURE_DRAG_DIST` px au-delà de son rayon, à cette part de sa vitesse. */
+const CAPTURE_DRAG_DIST = 150;
+const CAPTURE_DRAG_SPEED = 0.35;
 /** Rayon dans lequel un alien cherche une cible précise (au-delà : il marche vers la squad la plus proche). */
 const SEEK_RADIUS = 700;
 /** Places d'aliens en plus du plafond pour les costauds (voir `Horde.canSpawn`). */
@@ -116,7 +119,7 @@ export class Horde {
       rushDy: 0,
       rushX: x,
       rushY: y,
-      leapCd: def.leap ? def.leap.every / 2 : 0,
+      leapCd: def.leap ? def.leap.every / 2 : def.burrow ? def.burrow.every * 0.6 : 0, // le même compteur sert à l'enfouissement du Scarab
       leapT: 0,
       leapFromX: x,
       leapFromY: y,
@@ -135,21 +138,21 @@ export class Horde {
   }
 
   /**
-   * Fait apparaître `count` aliens en cercle autour de `center`, à `radius` px (à l'écran : tutoriel). Renvoie ceux qui ont été créés.
-   * Les angles sont répartis régulièrement avec un petit aléa de la simulation ; un point occupé par le décor est décalé.
+   * Fait apparaître `count` aliens en groupe, tous au même endroit : à `radius` px de `center`, dans une direction tirée au hasard
+   * (à l'écran : tutoriel). Renvoie ceux qui ont été créés. Un point occupé par le décor est rapproché de `center`.
    */
   spawnAround(center: Point, type: AlienId, count: number, radius: number): AlienState[] {
     const { rng, arena } = this.sim;
     const def = ALIENS[type];
     const out: AlienState[] = [];
-    const start = rng.range(0, Math.PI * 2);
+    const a = rng.range(0, Math.PI * 2);
+    let origin = { x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius };
+    for (let tries = 0; tries < 8 && !arena.isFree(origin, def.radius + 10); tries++) {
+      const r = radius * (1 - 0.08 * (tries + 1));
+      origin = { x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r };
+    }
     for (let i = 0; i < count && this.canSpawn(type); i++) {
-      const a = start + (i / Math.max(1, count)) * Math.PI * 2 + rng.range(-0.15, 0.15);
-      let p = { x: center.x + Math.cos(a) * radius, y: center.y + Math.sin(a) * radius, radius: def.radius };
-      for (let tries = 0; tries < 8 && !arena.isFree(p, def.radius + 10); tries++) {
-        const r = radius * (1 - 0.08 * (tries + 1));
-        p = { x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r, radius: def.radius };
-      }
+      const p = { x: origin.x + rng.range(-40, 40), y: origin.y + rng.range(-40, 40), radius: def.radius };
       arena.constrain(p);
       const made = this.create(def, p.x, p.y, 1, false);
       this.sim.aliens.push(made);
@@ -207,6 +210,7 @@ export class Horde {
         this.updateLurker(a, dt);
         continue;
       }
+      if (def.burrow && this.updateBurrow(a, dt)) continue; // enterré / en train de ressortir : rien d'autre
       const goalX = a.target ? a.target.x : a.goalX;
       const goalY = a.target ? a.target.y : a.goalY;
       let gx = goalX - a.x;
@@ -221,6 +225,8 @@ export class Horde {
       if (a.revived) speed *= ENRAGED_SPEED; // enragé : plus rapide, attaque plus vite
       const rate = a.revived ? ENRAGED_ATTACK : 1; // cadence d'attaque (cooldowns écoulés plus vite)
       let contactOverride: number | undefined;
+      /** Bulle qui emporte son prisonnier à l'écart de la squad (vitesse imposée, remplace le déplacement normal). */
+      let drag: { x: number; y: number } | null = null;
       // Slime de feu : sème des flammes derrière lui tant qu'il avance
       if (def.trail) {
         a.trailCd -= dt;
@@ -239,6 +245,14 @@ export class Horde {
           s.y = a.y;
           s.vx = s.vy = s.kx = s.ky = 0;
           this.sim.damageSoldier(s, def.capture.dps * dt, null, true);
+          // elle tire sa proie à l'écart de la squad (pour la dévorer tranquille), puis s'immobilise
+          const sq = this.sim.squadOf(s.owner);
+          if (sq) {
+            const ax = a.x - sq.center.x;
+            const ay = a.y - sq.center.y;
+            const ad = Math.hypot(ax, ay) || 1;
+            if (ad < sq.radius + CAPTURE_DRAG_DIST) drag = { x: (ax / ad) * def.speed * CAPTURE_DRAG_SPEED, y: (ay / ad) * def.speed * CAPTURE_DRAG_SPEED };
+          }
         }
       }
       // Chaman : incante sur la flaque d'un slime mort, marche vers la flaque la plus proche, sinon reste en retrait
@@ -367,8 +381,8 @@ export class Horde {
       const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.wall?.range);
       const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + 4 : 0);
       const go = (gd > contact && a.rushWind <= 0) || a.rushT > 0;
-      const desiredX = go ? gx * speed : 0;
-      const desiredY = go ? gy * speed : 0;
+      const desiredX = drag ? drag.x : go ? gx * speed : 0;
+      const desiredY = drag ? drag.y : go ? gy * speed : 0;
 
       // Séparation entre aliens
       let sx = 0;
@@ -427,7 +441,7 @@ export class Horde {
           s.y += dy * overlap * (a.mass / total);
         }
         if (a.attackCd <= 0) {
-          this.sim.damageSoldier(s, def.damage * power);
+          this.sim.damageSoldier(s, def.oneShot ? s.hp + s.shield + 1 : def.damage * power); // le boss rhinocéros tue un soldat d'un coup
           a.attackCd = def.attackCooldown;
         }
       }
@@ -543,6 +557,97 @@ export class Horde {
     arena.constrain(a);
   }
 
+  /**
+   * Scarab : téléportation sous terre derrière la squad. Phases (`lurkPhase`) : 0 normal (compte à rebours `leapCd`), 1 s'enterre (`dig`), 2 sous terre
+   * (`wait`, le trou se forme derrière la squad : position dans `leapX/leapY`, `leapT` = temps restant pour le réseau), 3 ressort (`rise`, onde de choc
+   * à l'arrivée). Renvoie vrai quand le boss est occupé (aucune autre action).
+   */
+  private updateBurrow(a: AlienState, dt: number): boolean {
+    const B = a.def.burrow!;
+    switch (a.lurkPhase) {
+      case 0: {
+        a.leapT = 0;
+        a.leapCd -= dt;
+        const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (a.leapCd <= 0 && sq && sq.alive) {
+          a.lurkPhase = 1;
+          a.lurkT = B.dig;
+          a.vx = a.vy = a.kx = a.ky = 0;
+        }
+        return false;
+      }
+      case 1:
+        a.vx = a.vy = a.kx = a.ky = 0;
+        if ((a.lurkT -= dt) <= 0) {
+          a.lurkPhase = 2;
+          a.lurkT = B.wait;
+          this.aimBurrow(a);
+        }
+        a.leapT = Math.max(0.05, a.lurkT + B.wait);
+        return true;
+      case 2: {
+        a.vx = a.vy = a.kx = a.ky = 0;
+        a.lurkT -= dt;
+        if (a.lurkT > B.wait * 0.4) this.aimBurrow(a); // le trou suit la squad, puis se verrouille : le joueur peut s'écarter
+        if (a.lurkT <= 0) {
+          a.x = a.leapX;
+          a.y = a.leapY;
+          a.px = a.x;
+          a.py = a.y;
+          a.lurkPhase = 3;
+          a.lurkT = B.rise;
+          this.burrowImpact(a);
+        }
+        a.leapT = Math.max(0.05, a.lurkT);
+        return true;
+      }
+      default: // 3 : ressort
+        a.vx = a.vy = 0;
+        if ((a.lurkT -= dt) <= 0) {
+          a.lurkPhase = 0;
+          a.leapT = 0;
+          a.leapCd = B.every;
+        } else a.leapT = Math.max(0.05, a.lurkT);
+        return true;
+    }
+  }
+
+  /** Point de sortie : derrière la squad (côté opposé au boss), ramené sur un endroit libre de la carte. */
+  private aimBurrow(a: AlienState): void {
+    const B = a.def.burrow!;
+    const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    if (!sq) return;
+    const c = sq.center;
+    const base = Math.atan2(c.y - a.y, c.x - a.x); // direction du boss vers la squad : la sortie est au-delà
+    for (const k of [0, 0.5, -0.5, 1, -1, 1.6, -1.6]) {
+      const p = { x: c.x + Math.cos(base + k) * B.behind, y: c.y + Math.sin(base + k) * B.behind, radius: a.radius * 0.6 };
+      if (this.sim.arena.isFree(p, a.radius * 0.6)) {
+        a.leapX = p.x;
+        a.leapY = p.y;
+        return;
+      }
+    }
+    const p = { x: c.x + Math.cos(base) * B.behind, y: c.y + Math.sin(base) * B.behind, radius: a.radius };
+    this.sim.arena.constrain(p);
+    a.leapX = p.x;
+    a.leapY = p.y;
+  }
+
+  /** Surgissement : onde de choc autour du trou (recul + dégâts aux soldats dans le rayon). */
+  private burrowImpact(a: AlienState): void {
+    const B = a.def.burrow!;
+    this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: B.radius });
+    for (const s of this.sim.soldierHash.query(a.x, a.y, B.radius + 30, this.scratchS)) {
+      const dx = s.x - a.x;
+      const dy = s.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (!s.alive || d > B.radius + s.radius) continue;
+      s.kx += (dx / d) * B.knockback;
+      s.ky += (dy / d) * B.knockback;
+      this.sim.damageSoldier(s, B.damage);
+    }
+  }
+
   /** Murs autour de la squad visée : `count` murs tangents à un arc de rayon `ring`, devant elle (sa direction de fuite : celle où elle court, sinon à l'opposé du lanceur). */
   private castWalls(a: AlienState, target: SoldierState): void {
     const w = a.def.wall!;
@@ -553,9 +658,14 @@ export class Horde {
     const away = moving ? Math.atan2(target.vy, target.vx) : Math.atan2(cy - a.y, cx - a.x);
     for (let i = 0; i < w.count; i++) {
       const ang = away + (i - (w.count - 1) / 2) * w.spread + rng.range(-0.12, 0.12);
-      const px = cx + Math.cos(ang) * w.ring;
-      const py = cy + Math.sin(ang) * w.ring;
-      this.sim.addWall(px, py, ang + Math.PI / 2, w.length, w.windup, w.rock.radius, w.rock.ttl);
+      // hors carte ou sur un obstacle : on le rapproche de la squad, et à défaut on ne le pose pas
+      for (const k of [1, 0.8, 0.6]) {
+        const px = cx + Math.cos(ang) * w.ring * k;
+        const py = cy + Math.sin(ang) * w.ring * k;
+        if (!this.sim.wallFits(px, py, ang + Math.PI / 2, w.length, w.rock.radius)) continue;
+        this.sim.addWall(px, py, ang + Math.PI / 2, w.length, w.windup, w.rock.radius, w.rock.ttl);
+        break;
+      }
     }
   }
 
@@ -662,12 +772,16 @@ export class Horde {
     a.target = null;
     if (pref === 'center') return;
     let bestScore = Infinity;
+    // bulles : jamais un soldat déjà avalé, et chacune préfère un soldat que les autres bulles ne visent pas
+    const claimed = a.def.capture ? this.sim.aliens.filter((o) => o !== a && o.alive && o.def.capture && o.target).map((o) => o.target!) : [];
     for (const s of this.sim.soldierHash.query(a.x, a.y, SEEK_RADIUS, this.scratchS)) {
       if (!s.alive || (nearestSquad && s.owner !== nearestSquad.owner)) continue;
+      if (a.def.capture && s.capturedBy) continue;
       const d = Math.hypot(s.x - a.x, s.y - a.y);
       if (d > SEEK_RADIUS) continue;
       let score = d;
       if (pref === 'specialist' && s.def.id !== 'trooper') score -= 600;
+      if (claimed.includes(s)) score += 900; // déjà visé par une autre bulle : seulement s'il n'y a personne d'autre
       if (score < bestScore) {
         bestScore = score;
         a.target = s;

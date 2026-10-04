@@ -112,10 +112,10 @@ try {
   const p = client.mirror.predictor;
   check(Math.hypot(p.anchor.x - hostSquad.anchor.x, p.anchor.y - hostSquad.anchor.y) < 1, 'téléportation chez l\'hôte : la prédiction se recale', `${Math.hypot(p.anchor.x - hostSquad.anchor.x, p.anchor.y - hostSquad.anchor.y).toFixed(2)} px`);
 
-  // 6) Pause de choix d'upgrade : le monde est figé chez l'hôte, la prédiction ne doit pas faire avancer le joueur.
+  // 6) Pause de choix d'upgrade (ouverte `LEVEL_UP_DELAY` s après la montée de niveau) : le monde est figé chez l'hôte, la prédiction ne doit pas faire avancer le joueur.
   const sq = hs.squadOf(me);
   sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
-  for (let i = 0; i < 20; i++) await tick(client);
+  for (let i = 0; i < 30; i++) await tick(client);
   check(hs.choiceT > 0 && client.sim.choiceT > 0, 'choix d\'upgrade ouvert (monde en pause)');
   const ax = p.anchor.x;
   client.setLocalInput(dir, 0);

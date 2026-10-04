@@ -4,6 +4,7 @@ import { PALETTE, SCENES } from '../config';
 import { ASSETS } from '../assets/manifest';
 import { makeAlienTextures } from '../art/aliens';
 import { registerDefaultSprites } from '../art/catalog';
+import { makePlayerVariants } from '../art/playerVariants';
 import { loadFxOverrides } from '../debugFx';
 import { loadObstacleOverrides } from '../debugObstacles';
 import { loadSpriteOverrides } from '../debugSprites';
@@ -67,6 +68,7 @@ export class BootScene extends Phaser.Scene {
     if (import.meta.env.DEV) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
     if (import.meta.env.DEV) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités
     if (import.meta.env.DEV) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
+    makePlayerVariants(this); // soldats recolorés (un par emplacement de joueur), après les placements : ils en sont une copie
 
     poki.gameLoadingFinished();
     void this.launch();

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Button, music, sfx, StepSlider, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
-import { t } from '../i18n';
+import { i18n, LANGS, LANG_NAMES, t, type Lang } from '../i18n';
 import { MUSIC_STEPS, settings, SFX } from '../settings';
 import type { GameScene } from './GameScene';
 
@@ -96,13 +96,25 @@ export class OptionsScene extends Phaser.Scene {
         this.scene.restart({ resumeGame: this.resumeGame }); // relabel simple : la scène se redessine
       },
     });
+    // Langue : bascule anglais / français (mémorisée) ; la scène se redessine dans la nouvelle langue
+    const langBtn: Button = new Button(this, 0, 0, {
+      label: `${t('language')} : ${LANG_NAMES[(i18n.lang as Lang) in LANG_NAMES ? (i18n.lang as Lang) : 'en']}`,
+      variant: 'secondary',
+      width: 340,
+      height: 56,
+      onClick: () => {
+        const cur = LANGS.indexOf(i18n.lang as Lang);
+        settings.setLang(LANGS[(cur + 1) % LANGS.length]);
+        this.scene.restart({ resumeGame: this.resumeGame });
+      },
+    });
     const close = new Button(this, 0, 0, { label: t('close'), width: 260, height: 64, onClick: () => this.close() });
     for (const key of ['ESC', 'ENTER']) this.input.keyboard!.on(`keydown-${key}`, () => this.close());
 
     const layout = () => {
       const { width: w, height: h } = this.scale;
       const pw = Math.min(520, w - 32);
-      const ph = debugBtn ? 540 : 470;
+      const ph = debugBtn ? 610 : 540;
       const cx = w / 2;
       const top = h / 2 - ph / 2;
       dim.setSize(w, h);
@@ -117,7 +129,8 @@ export class OptionsScene extends Phaser.Scene {
       sfxValue.setPosition(cx + 170, top + 202);
       sfxSlider.setPosition(cx, top + 248).setScale(Math.min(1, (pw - 60) / 360));
       tutorialBtn.setPosition(cx, top + 330);
-      debugBtn?.setPosition(cx, top + 400);
+      langBtn.setPosition(cx, top + 400);
+      debugBtn?.setPosition(cx, top + 470);
       close.setPosition(cx, top + ph - 52);
     };
     layout();

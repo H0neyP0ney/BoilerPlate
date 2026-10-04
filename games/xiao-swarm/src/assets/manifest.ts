@@ -31,6 +31,10 @@ export const ASSETS: AssetEntry[] = [
   // Taches sombres posées sous les obstacles pour les fondre dans le sol — art-src/tache_N.png réduits de moitié (WebP).
   ...[1, 2, 3, 4].map((n): AssetEntry => ({ type: 'image', id: `tache_${n}`, url: `decor/tache_${n}.webp` })),
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n): AssetEntry => ({ type: 'image', id: `obstacle_${n}`, url: `decor/obstacle_${n}.webp` })),
+  // Critique — bulle (art-src/critic_bubble.png) et glyphes « ! » + chiffres (art-src/critic_font.png découpé par python tools/crit-font.py). Affichés par Fx.crit.
+  { type: 'image', id: 'crit_bubble', url: 'fx/crit/bubble.png' },
+  { type: 'image', id: 'crit_bang', url: 'fx/crit/bang.png' },
+  ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n): AssetEntry => ({ type: 'image', id: `crit_${n}`, url: `fx/crit/${n}.png` })),
   // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.

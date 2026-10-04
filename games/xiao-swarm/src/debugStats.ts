@@ -63,6 +63,14 @@ export function getStat(kind: StatKind, id: string, path: string): number {
   return typeof v === 'number' ? v : 0;
 }
 
+/** Valeur du code (dernière sauvegarde) d'une stat : sert de repère à l'échelle des réglettes (une réglette ne doit pas se réduire quand la valeur courante tombe à 0). */
+export function getDefaultStat(kind: StatKind, id: string, path: string): number {
+  const def = DEFAULTS[keyOf(kind, id)];
+  const r = def ? resolve(def, path) : null;
+  const v = r?.obj[r.key];
+  return typeof v === 'number' ? v : 0;
+}
+
 function persist(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { theme } from '@xiao/engine';
 import { PALETTE, SCENES, VIEW_BG } from '../config';
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
-import { getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
+import { getDefaultUpgradeStats, getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
 import { button, header, line, note, panel, slider } from '../dev/devUi';
 import { t } from '../i18n';
 import { UPGRADE_ICONS } from '../view/PickupViews';
@@ -98,11 +98,12 @@ export class UpgradeViewerScene extends Phaser.Scene {
     info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
     const syncs: (() => void)[] = [];
     const u = UPGRADES[id];
+    const ref = Math.max(u.value, getDefaultUpgradeStats(id).value); // échelle d'après la valeur du code : à 0, on peut remonter
     const unit = u.mod?.flat !== undefined ? '' : ' %';
     const v = slider(`Bonus${unit}`, {
       min: 0,
-      max: Math.max(10, Math.ceil(u.value * 3)),
-      step: u.value >= 10 ? 1 : 0.5,
+      max: Math.max(10, Math.ceil(ref * 3)),
+      step: ref >= 10 ? 1 : 0.5,
       get: () => getUpgradeStats(id).value,
       set: (nv) => {
         setUpgradeStat(id, 'value', nv);

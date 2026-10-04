@@ -272,6 +272,33 @@ export class Fx {
     });
   }
 
+  /**
+   * Coup critique : bulle d'explosion jaune avec « ! » et les dégâts infligés en chiffres dorés (glyphes `crit_*` du manifeste) ;
+   * l'ensemble pop (Back.Out), monte et s'efface. Sans ces images, repli sur du texte.
+   */
+  crit(x: number, y: number, dmg: number): void {
+    const txt = String(Math.round(dmg));
+    const glyphs = ['bang', ...txt.split('')].map((g) => `crit_${g}`);
+    const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3);
+    if (glyphs.every((g) => this.scene.textures.exists(g)) && this.scene.textures.exists('crit_bubble')) {
+      const SCALE = 0.7;
+      const gap = -1;
+      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE));
+      const total = imgs.reduce((n, im) => n + im.displayWidth + gap, -gap);
+      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total + 40) / 136), 0.7);
+      let cx = -total / 2;
+      for (const im of imgs) {
+        im.setPosition(cx + im.displayWidth / 2, 1);
+        cx += im.displayWidth + gap;
+      }
+      box.add([bubble, ...imgs]);
+    } else {
+      box.add(this.scene.add.text(0, 0, `! ${txt}`, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffe14a', stroke: '#8a1a00', strokeThickness: 5 }).setOrigin(0.5));
+    }
+    this.scene.tweens.add({ targets: box, scale: 1, duration: 140, ease: 'Back.Out' });
+    this.scene.tweens.add({ targets: box, y: box.y - 34, alpha: 0, delay: 300, duration: 420, onComplete: () => box.destroy() });
+  }
+
   heal(x: number, y: number): void {
     const h = FX.heal;
     const img = this.scene.add.image(x + Phaser.Math.Between(-h.jitter, h.jitter), y, 'fx_plus').setDepth(DEPTH.fx);

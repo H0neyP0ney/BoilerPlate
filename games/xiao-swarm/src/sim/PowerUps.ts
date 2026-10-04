@@ -1,6 +1,6 @@
 import { POWERUPS, STIM_TIME } from '../config';
 import type { Field, PowerUpKind, PowerUpState } from './entities';
-import { findAttractor, inPickRange, pullToward } from './Pickup';
+import { findAttractor, inPickRange, pulledAttractor, pullStrongly, pullToward } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
@@ -9,7 +9,7 @@ const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'sh
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel l'XP est aspirée. */
 const MAGNET_RADIUS = 1000;
 /** Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. */
-const HEAL_FIELD = { r: 127, ttl: 10, perSec: 0.12 };
+const HEAL_FIELD = { r: 152, ttl: 10, perSec: 0.24 };
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
 const STASIS_FIELD = { r: 450, ttl: 8, slow: 0.2 };
 const ROCKETS = 30;
@@ -51,10 +51,13 @@ export class PowerUps {
         continue;
       }
       // attiré par le soldat le plus proche dont la squad a l'aimant (stat `magnet` : rayon d'attraction, de ramassage et vitesse)
-      const a = findAttractor(this.sim, p.x, p.y);
+      const pulled = p.pulled ? pulledAttractor(this.sim, p.x, p.y, p.pulled) : undefined; // aspiré par le power-up aimant : vole vers la squad
+      if (p.pulled && !pulled) p.pulled = undefined;
+      const a = pulled ?? findAttractor(this.sim, p.x, p.y);
       if (!a) continue;
       if (!inPickRange(a)) {
-        pullToward(p, a, dt);
+        if (pulled) pullStrongly(p, a, dt);
+        else pullToward(p, a, dt);
         continue;
       }
       this.items.splice(i, 1);
@@ -103,7 +106,9 @@ export class PowerUps {
         squad.buffs.stim = STIM_TIME;
         break;
       case 'magnet':
-        this.sim.xp.magnetize(squad, MAGNET_RADIUS); // coup unique : aspire tout l'XP alentour, ne reste pas actif
+        this.sim.xp.magnetize(squad, MAGNET_RADIUS); // coup unique : aspire tout l'XP, les recrues et les autres power-ups alentour, ne reste pas actif
+        this.sim.recruits.magnetize(squad, MAGNET_RADIUS);
+        this.magnetize(squad, MAGNET_RADIUS);
         break;
       case 'heal':
         this.fields.push({ id: this.sim.ids.get(), kind: 'heal', x: p.x, y: p.y, r: HEAL_FIELD.r, ttl: HEAL_FIELD.ttl });
@@ -118,6 +123,15 @@ export class PowerUps {
         // chaque soldat vivant reçoit un bouclier (1/3 de ses PV max) qui dure jusqu'à ce qu'il l'ait perdu ; un second power-up le remplit de nouveau
         squad.shieldAll();
         break;
+    }
+  }
+
+  /** Aimant : les power-ups à moins de `radius` px de la squad sont aspirés vers elle (le power-up aimant lui-même vient d'être ramassé). */
+  private magnetize(squad: Squad, radius: number): void {
+    for (const p of this.items) {
+      if (Math.hypot(squad.center.x - p.x, squad.center.y - p.y) > radius) continue;
+      p.pulled = squad.owner;
+      p.life = Math.max(p.life, 10); // il ne disparaît pas en route
     }
   }
 

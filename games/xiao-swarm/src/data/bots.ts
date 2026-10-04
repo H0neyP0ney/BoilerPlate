@@ -93,6 +93,7 @@ export const BOT_UPGRADE_PRIORITY: Record<UpgradeId, number> = {
   xpGain: 5,
   speed: 5,
   range: 4,
+  crit: 6,
   magnet: 4,
   recruit: 3,
 };

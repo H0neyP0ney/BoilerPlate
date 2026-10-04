@@ -120,6 +120,8 @@ export interface Projectile {
   damage: number;
   pierce: number;
   flame: boolean;
+  /** Tir critique (dégâts déjà multipliés) : l'impact émet un événement `crit` pour l'affichage. */
+  crit: boolean;
   /** Grenade en cloche : pas de collision en vol, explose à la fin de sa course (rayon `aoe`). */
   lob: boolean;
   aoe: number;
@@ -145,6 +147,8 @@ export interface PowerUpState {
   x: number;
   y: number;
   life: number;
+  /** Aimant (power-up) : joueur vers qui le power-up est aspiré (simulation seulement). */
+  pulled?: string;
 }
 
 /** Zone persistante laissée par un power-up : globe de soin (soigne les soldats dedans) ou de stase (ralentit énormément les aliens). */
@@ -233,6 +237,8 @@ export interface RecruitState {
   px: number;
   py: number;
   life: number;
+  /** Aimant (power-up) : joueur vers qui la recrue est aspirée (simulation seulement). */
+  pulled?: string;
   /** Saut en cloche à l'apparition (simulation seulement : le client n'en a pas besoin, il déduit l'arc de `life`). */
   hop?: { vx: number; vy: number; t: number };
   /** Tutoriel : recrue qui ne disparaît pas tant qu'elle n'est pas ramassée. */

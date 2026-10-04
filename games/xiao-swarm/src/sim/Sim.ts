@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { CAPTIVE_VULN, DIFFICULTY, LEVEL_UP_DELAY, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
@@ -103,18 +103,23 @@ export class Sim {
     this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
+    this.squads.forEach((sq, i) => (sq.slot = i));
     this.tutorial = config.tutorial ? new Tutorial(this) : null;
     this.waves = new WaveRunner(
       config.mode.waves,
       (type, count) => {
-        // Difficulté dynamique : chaque squad vivante reçoit sa vague (2 joueurs = 2× plus d'ennemis, 1 seul vivant = retour à ×1).
+        // Difficulté dynamique : chaque joueur vivant en plus ajoute 75 % d'ennemis (2 joueurs = ×1,75, 1 seul vivant = retour à ×1).
         // Un boss, lui, n'apparaît qu'une fois, avec des PV × le nombre de squads vivantes.
         // Le plafond d'aliens est appliqué par type dans Horde.spawnNear (les costauds gardent une réserve de places).
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
         if (ALIENS[type].boss) {
           this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, squads.length);
-        } else for (const sq of squads) this.horde.spawnNear(sq, type, Math.round(count * DIFFICULTY.alienCountMul), SPAWN_DISTANCE);
+        } else {
+          // chaque joueur en plus ajoute `EXTRA_PLAYER_ALIENS` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
+          const share = (1 + EXTRA_PLAYER_ALIENS * (squads.length - 1)) / squads.length;
+          for (const sq of squads) this.horde.spawnNear(sq, type, Math.round(count * DIFFICULTY.alienCountMul * share), SPAWN_DISTANCE);
+        }
       },
       this.rng,
     );
@@ -175,9 +180,9 @@ export class Sim {
     return this.sharedXp ? Math.max(1, this.squads.length) : 1;
   }
 
-  /** XP gagnée par `from` (bonus `xpGain` de ce joueur compris) versée dans la barre commune ; un niveau franchi = tous montent. */
-  gainSharedXp(from: Squad, value: number): void {
-    this.sharedXpPool += value * from.stats.get('xpGain');
+  /** XP gagnée par `from` versée dans la barre commune ; un niveau franchi = tous montent. */
+  gainSharedXp(_from: Squad, value: number): void {
+    this.sharedXpPool += value;
     let levels = 0;
     while (this.sharedXpPool >= xpToNext(this.sharedLevel) * this.xpScale) {
       this.sharedXpPool -= xpToNext(this.sharedLevel) * this.xpScale;
@@ -202,7 +207,9 @@ export class Sim {
 
   /** Le joueur `owner` relance ses propositions d'upgrade (nombre limité par partie). */
   rerollUpgrade(owner: PlayerId): boolean {
-    return this.squadOf(owner)?.rerollOffer() ?? false;
+    const ok = this.squadOf(owner)?.rerollOffer() ?? false;
+    if (ok && this.choiceT > 0) this.choiceT = UPGRADE_CHOICE_TIME; // la jauge d'attente repart à zéro (choix en ligne)
+    return ok;
   }
 
   /** Quand plus personne n'a de choix ouvert : niveaux encore en attente → nouvelle manche de choix (temps plein), sinon reprise. */
@@ -270,6 +277,9 @@ export class Sim {
     let sq = this.squadOf(owner);
     if (!sq) {
       sq = new Squad(this, owner);
+      let slot = 0;
+      while (this.squads.some((o) => o.slot === slot)) slot++; // le plus petit emplacement libre
+      sq.slot = slot;
       this.squads.push(sq);
       if (this.sharedXp) sq.syncSharedXp(this.sharedXpPool, this.sharedLevel, 0); // arrive au niveau commun
     }
@@ -290,7 +300,7 @@ export class Sim {
    * (Re)place la squad d'un joueur à un endroit aléatoire de la carte, à distance des
    * autres squads vivantes (arrivée en cours de partie, ou réapparition après une mort).
    */
-  spawnLate(owner: PlayerId, composition: SoldierClassId[], invulnerable = 2.5): void {
+  spawnLate(owner: PlayerId, composition: SoldierClassId[], invulnerable = REVIVE_INVULN): void {
     const sq = this.addPlayer(owner);
     if (sq.alive) return;
     // coop : on arrive à côté de ses équipiers ; sinon (PvP) à l'écart des autres squads
@@ -394,8 +404,14 @@ export class Sim {
     }
     if (!u.alive) return;
     if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
+    if (u.def.burrow && u.lurkPhase >= 1 && u.lurkPhase <= 2) amount *= u.def.burrow.buriedDmg; // Scarab sous terre
     if (u.captive) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
-    this.metrics.dealt += Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
+    const effective = Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
+    this.metrics.dealt += effective;
+    if (attacker) {
+      const sq = this.squadOf(attacker);
+      if (sq) sq.dealt += effective;
+    }
     u.shieldT = 0; // tout coup relance le délai de régénération du bouclier
     u.hp -= this.absorb(u, amount);
     u.kx += (dirX * 40) / u.mass;
@@ -428,15 +444,31 @@ export class Sim {
       const w = this.walls[i];
       if ((w.t -= dt) > 0) continue;
       this.walls.splice(i, 1);
-      // rochers qui se chevauchent à moitié : un mur continu, pas une rangée de cailloux
-      const n = Math.max(2, Math.round(w.length / (w.rockR * 1.4)) + 1);
-      const cos = Math.cos(w.angle);
-      const sin = Math.sin(w.angle);
-      for (let k = 0; k < n; k++) {
-        const o = (k / (n - 1) - 0.5) * w.length;
-        this.addRock(w.x + cos * o, w.y + sin * o, w.rockR, w.ttl);
-      }
+      // un rocher qui tomberait hors de la carte ou sur un obstacle n'apparaît pas (vérifié avant d'en poser un seul : les rochers d'un même mur se chevauchent)
+      const spots = this.wallSpots(w.x, w.y, w.angle, w.length, w.rockR);
+      const free = spots.map((p) => this.arena.isFree(p, w.rockR));
+      spots.forEach((p, k) => {
+        if (free[k]) this.addRock(p.x, p.y, w.rockR, w.ttl);
+      });
     }
+  }
+
+  /** Positions des rochers d'un mur : qui se chevauchent à moitié, pour un mur continu et non une rangée de cailloux. */
+  private wallSpots(x: number, y: number, angle: number, length: number, rockR: number): Point[] {
+    const n = Math.max(2, Math.round(length / (rockR * 1.4)) + 1);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const out: Point[] = [];
+    for (let k = 0; k < n; k++) {
+      const o = (k / (n - 1) - 0.5) * length;
+      out.push({ x: x + cos * o, y: y + sin * o });
+    }
+    return out;
+  }
+
+  /** Tous les rochers du mur tiennent dans la carte et hors des obstacles ? (le bâtisseur ne pose que des murs entiers) */
+  wallFits(x: number, y: number, angle: number, length: number, rockR: number): boolean {
+    return this.wallSpots(x, y, angle, length, rockR).every((p) => this.arena.isFree(p, rockR));
   }
 
   /** Rocher au sol (élément d'un mur) : obstacle pendant `ttl` secondes. */
@@ -574,7 +606,7 @@ export class Sim {
       const comp = base.slice(0, target);
       while (comp.length < target) comp.push('trooper');
       sq.spawn(comp, { x: z.x, y: z.y });
-      for (const s of sq.soldiers) s.invulnerable = 2.5;
+      for (const s of sq.soldiers) s.invulnerable = REVIVE_INVULN;
     }
   }
 
@@ -653,7 +685,7 @@ export class Sim {
       return;
     }
     this.recruits.maybeDrop(a, squad);
-    if (this.xpEnabled) this.xp.drop(a);
+    if (this.xpEnabled) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 
   /** Retire les morts en fin de tick (jamais pendant les itérations). */
@@ -703,14 +735,14 @@ export class Sim {
 
   // ---------- Revive ----------
 
-  /** Relance une squad anéantie (pub récompensée en solo) en dégageant les aliens proches. */
-  respawnSquad(owner: PlayerId, composition: SoldierClassId[], invulnerable = 2.5): void {
+  /** Relance une squad anéantie (pub récompensée en solo) : les aliens ne disparaissent pas, une onde de choc les repousse comme à une montée de niveau. */
+  respawnSquad(owner: PlayerId, composition: SoldierClassId[], invulnerable = REVIVE_INVULN): void {
     const sq = this.squadOf(owner);
     if (!sq) return;
     const at = { x: sq.anchor.x, y: sq.anchor.y };
-    for (const a of this.aliens) if (Math.hypot(a.x - at.x, a.y - at.y) < 420) a.alive = false;
-    this.aliens.splice(0, this.aliens.length, ...this.aliens.filter((a) => a.alive));
     sq.spawn(composition, at);
     for (const s of sq.soldiers) s.invulnerable = invulnerable;
+    this.shockwave(at.x, at.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration, UPGRADE_REPEL.reach);
+    this.events.push({ t: 'repel', x: at.x, y: at.y });
   }
 }

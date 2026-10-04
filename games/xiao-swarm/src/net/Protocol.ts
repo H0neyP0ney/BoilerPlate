@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 25;
+export const PROTOCOL_VERSION = 29;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -69,6 +69,10 @@ export interface SquadSnap {
   speed: number;
   ack: number;
   kills: number;
+  /** Emplacement du joueur (couleur). */
+  slot: number;
+  /** Dégâts totaux infligés aux aliens (sans overkill) : scoreboard de fin de partie. */
+  dealt: number;
   maxSize: number;
   healing: boolean;
   /** Progression (XP) : niveau, XP dans le niveau, propositions d'upgrade (index dans UPGRADE_IDS) et nombre de prises de chacune. */
@@ -150,6 +154,8 @@ export interface ProjectileSnap {
 export interface Snapshot {
   tick: number;
   time: number;
+  /** Position dans la timeline des vagues (s) : peut différer de `time` (suspendue, boucle de boss). */
+  cursor: number;
   /** Choix d'upgrade en cours (s restantes, 0 = aucun) : le jeu est en pause chez tout le monde. */
   choiceT: number;
   squads: SquadSnap[];
@@ -185,6 +191,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
   return {
     tick: sim.tick,
     time: sim.time,
+    cursor: sim.waves.cursor,
     choiceT: sim.choiceT,
     squads: sim.squads.map((sq) => ({
       owner: sq.owner,
@@ -193,6 +200,8 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       speed: sq.moveSpeed,
       ack: acks?.get(sq.owner) ?? 0,
       kills: sq.kills,
+      slot: sq.slot,
+      dealt: sq.dealt,
       maxSize: sq.maxSize,
       healing: sq.isHealing,
       level: sq.level,
@@ -373,6 +382,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   w.u8(SNAPSHOT_TAG);
   w.u32(s.tick);
   w.f32(s.time);
+  w.f32(s.cursor);
   w.u8(Math.min(255, Math.round(s.choiceT * 40)));
   mark('header');
 
@@ -384,6 +394,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u16(Math.min(65535, Math.round(sq.speed)));
     w.u32(sq.ack);
     w.u16(sq.kills);
+    w.u8(sq.slot);
+    w.u32(Math.round(sq.dealt));
     w.u8(sq.maxSize);
     w.u8(sq.healing ? 1 : 0);
     w.u8(Math.min(255, sq.level));
@@ -433,7 +445,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
         w.f32(a.rushY);
       }
     }
-    if (def.leap) {
+    if (def.leap || def.burrow) {
       const leapByte = Math.max(0, Math.min(255, Math.round(a.leapT * 50)));
       w.u8(leapByte);
       if (leapByte > 0) { // même test que le décodeur (octet arrondi, pas la valeur brute)
@@ -446,7 +458,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
       w.u8(castByte);
       if (castByte > 0) w.u32(a.castCorpse);
     }
-    if (def.lurk) {
+    if (def.lurk || def.burrow) {
       w.u8(a.lurkPhase);
       w.u8(Math.min(255, Math.round(a.lurkT * 30)));
       w.f32(a.spikeAng);
@@ -561,12 +573,12 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
   try {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
-    const snap: Snapshot = { tick: r.u32(), time: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [] };
+    const snap: Snapshot = { tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
       sq.level = r.u8();
       sq.xp = r.u16() / 10;
       const nOffer = r.u8();
@@ -629,7 +641,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
           rushY = r.f32();
         }
       }
-      if (def.leap) {
+      if (def.leap || def.burrow) {
         leapT = r.u8() / 50;
         if (leapT > 0) {
           leapX = r.f32();
@@ -643,7 +655,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       let lurkPhase = 0;
       let lurkT = 0;
       let spikeAng = 0;
-      if (def.lurk) {
+      if (def.lurk || def.burrow) {
         lurkPhase = r.u8();
         lurkT = r.u8() / 30;
         spikeAng = r.f32();

@@ -2,7 +2,7 @@ import { clamp, Rng, type Point } from '@xiao/engine/sim';
 import { RECRUIT } from '../config';
 import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState } from './entities';
-import { findAttractor, inPickRange, pullToward } from './Pickup';
+import { findAttractor, inPickRange, pulledAttractor, pullStrongly, pullToward } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
@@ -81,7 +81,10 @@ export class Recruits {
       }
       // aimant vers le soldat le plus proche (toutes squads confondues) qui peut en profiter : place libre, ou blessé (escouade pleine)
       // rayon d'attraction, de ramassage et vitesse max : stat `magnet` de la squad (upgrade)
-      const a = findAttractor(this.sim, r.x, r.y, (o, sq) => sq.size < sq.maxSize || o.hp < o.maxHp);
+      const accept = (o: SoldierState, sq: Squad): boolean => sq.size < sq.maxSize || o.hp < o.maxHp;
+      const pulled = r.pulled ? pulledAttractor(this.sim, r.x, r.y, r.pulled, accept) : undefined; // aspirée par le power-up aimant : vole vers la squad
+      if (r.pulled && !pulled) r.pulled = undefined; // plus personne à qui elle sert : recrue normale
+      const a = pulled ?? findAttractor(this.sim, r.x, r.y, accept);
       if (!a) continue;
       const s = a.soldier;
       if (inPickRange(a)) {
@@ -98,7 +101,8 @@ export class Recruits {
         this.items.splice(i, 1);
         continue;
       }
-      pullToward(r, a, dt); // comme les globes d'XP : plus elle est proche, plus elle accélère vers le soldat
+      if (pulled) pullStrongly(r, a, dt);
+      else pullToward(r, a, dt); // comme les globes d'XP : plus elle est proche, plus elle accélère vers le soldat
     }
   }
 
@@ -117,6 +121,15 @@ export class Recruits {
     const n = Math.max(1, squad.size);
     const ids = ACTIVE_CLASSES;
     return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'trooper';
+  }
+
+  /** Aimant (power-up, coup unique) : toute recrue à moins de `radius` px de la squad est aspirée vers elle (si elle peut en profiter). */
+  magnetize(squad: Squad, radius: number): void {
+    for (const r of this.items) {
+      if (Math.hypot(squad.center.x - r.x, squad.center.y - r.y) > radius) continue;
+      r.pulled = squad.owner;
+      r.life = Math.max(r.life, 10); // elle ne disparaît pas en route
+    }
   }
 
   clear(): void {

@@ -9,6 +9,8 @@ import { createEnragedFlames } from './EnragedFx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
 const CAPSULE_LIFT = 52;
+/** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
+const CAPSULE_SCALE = 0.9;
 
 /** Icône (emoji) de chaque upgrade, affichée dans son bouton de choix. */
 export const UPGRADE_ICONS: Record<UpgradeId, string> = {
@@ -22,6 +24,7 @@ export const UPGRADE_ICONS: Record<UpgradeId, string> = {
   xpGain: '⭐',
   reinforce: '➕',
   range: '🎯',
+  crit: '✨',
 };
 
 /** Jaune de la zone qui pulse sous les recrues (les power-ups gardent la couleur de leur bonus : `POWERUP_INFO`). */
@@ -193,7 +196,7 @@ export class PickupViews {
         cap.g.fillStyle(0x0b1a4d, 0.92).fillRoundedRect(-w / 2, -13, w, 26, 13);
         cap.g.lineStyle(2, 0x3f6fe0, 0.9).strokeRoundedRect(-w / 2, -13, w, 26, 13);
       }
-      cap.box.setPosition(cap.x, cap.y - CAPSULE_LIFT);
+      cap.box.setPosition(cap.x, cap.y - CAPSULE_LIFT).setScale(CAPSULE_SCALE);
     }
     for (const [owner, cap] of this.counts) {
       if (seen.has(owner)) continue;

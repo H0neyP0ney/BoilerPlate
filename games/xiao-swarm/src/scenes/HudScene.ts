@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { device, music, sfx, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
-import { nextBoss } from '../data/waves';
+import { entryTimes, nextBoss } from '../data/waves';
 import { t } from '../i18n';
 import { MUSIC_STEPS, settings, SFX } from '../settings';
 import type { SimEvent } from '../sim/types';
 import { xpBarLayout } from '../view/hudLayout';
+import { buildScoreboard, scoreRows } from '../view/Scoreboard';
 import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
@@ -44,6 +45,9 @@ export class HudScene extends Phaser.Scene {
   /** Compteur de FPS (haut gauche), rafraîchi deux fois par seconde. */
   private fpsText!: Phaser.GameObjects.Text;
   private fpsAt = 0;
+  /** Nombre d'aliens en jeu, en bas à droite (au-dessus du compteur de FPS). */
+  private alienText!: Phaser.GameObjects.Text;
+  private alienShown = -1;
   /** Haut centre : compte à rebours avant le prochain boss (mini ou final), dès le début de la partie. */
   private bossTimer!: Phaser.GameObjects.Text;
   /** Camembert du compte à rebours : secteur orange (rouge pour le boss final) qui se vide dans le sens inverse des aiguilles. */
@@ -64,6 +68,12 @@ export class HudScene extends Phaser.Scene {
   private tutorialBanner!: Phaser.GameObjects.Text;  private bossArrow!: Phaser.GameObjects.Graphics;
   /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
   private reviveArrow!: Phaser.GameObjects.Graphics;
+  /** « Ally down » au-dessus de chaque flèche verte (un texte par zone de réanimation, créés à la demande). */
+  private reviveLabels: Phaser.GameObjects.Text[] = [];
+  /** Timeline des vagues : grande barre tout en bas de l'écran, avec une flèche sur la position actuelle. */
+  private waveBar!: Phaser.GameObjects.Graphics;
+  /** Coop : scoreboard de l'écran de fin. */
+  private endScores?: Phaser.GameObjects.Container;
   /** Coop : écran de fin (victoire / défaite) avec compte à rebours avant la nouvelle partie. */
   private endText!: Phaser.GameObjects.Text;
   private endVictory = false;
@@ -86,6 +96,8 @@ export class HudScene extends Phaser.Scene {
     // Compteur de FPS, toujours affiché pour l'instant
     this.fpsText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
     this.fpsAt = 0;
+    this.alienText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
+    this.alienShown = -1; // la scène est réutilisée : le texte est à refaire
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
@@ -106,6 +118,8 @@ export class HudScene extends Phaser.Scene {
     this.applyDebugMode();
     this.bossLabelShown = ''; // la scène est réutilisée à chaque partie : le nouveau texte est vide, il faut le remplir
     this.bossPie = this.add.graphics();
+    this.waveBar = this.add.graphics();
+    this.reviveLabels = []; // la scène est réutilisée : les anciens textes ont été détruits avec elle
     this.bossCapsule = this.add.graphics();
     this.bossLabel = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '12px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
     this.bossTimer = this.add
@@ -181,8 +195,12 @@ export class HudScene extends Phaser.Scene {
       this.drawSpeaker();
       this.drawNote();
     }
-    this.fpsText.setVisible(settings.showFps);
-    if (settings.showFps && time - this.fpsAt > 500) {
+    const aliens = this.game_.session.sim.aliens.length;
+    if (aliens !== this.alienShown) {
+      this.alienShown = aliens;
+      this.alienText.setText(t('aliensCount', { value: aliens }));
+    }
+    if (time - this.fpsAt > 500) { // le compteur de FPS est toujours affiché
       this.fpsAt = time;
       this.fpsText.setText(`${Math.round(this.game.loop.actualFps)} FPS`);
     }
@@ -196,6 +214,7 @@ export class HudScene extends Phaser.Scene {
     this.drawXp();
     this.drawBoss();
     this.drawBossTimer();
+    this.drawWaveTimeline();
     this.drawReviveArrow();
     this.drawTutorial();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
@@ -213,7 +232,15 @@ export class HudScene extends Phaser.Scene {
       this.endVictory = e.victory;
       this.endAt = this.time.now + e.delay * 1000;
       this.endText.setColor(e.victory ? '#8fff9a' : '#ff6a6a').setVisible(true);
-    } else if (e.t === 'restart') this.endText.setVisible(false);
+      // scoreboard sous le texte de fin : aliens tués et dégâts totaux de chaque joueur
+      this.endScores?.destroy();
+      const g = this.game_;
+      this.endScores = buildScoreboard(this, this.scale.width / 2, this.scale.height * 0.4 + 70, scoreRows(g.session.sim.squads, g.session.localPlayer));
+    } else if (e.t === 'restart') {
+      this.endText.setVisible(false);
+      this.endScores?.destroy();
+      this.endScores = undefined;
+    }
   };
 
   /** Annonce d'un boss (ou de sa défaite) : gros bandeau au centre qui s'efface. */
@@ -238,7 +265,7 @@ export class HudScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const w = Math.min(460, width - 80);
     const x = (width - w) / 2;
-    const barY = height - 34; // haut de la barre (bas de l'écran)
+    const barY = height - 70; // haut de la barre (au-dessus de la timeline des vagues, tout en bas)
     const final = boss.def.boss!.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
     this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(width / 2, barY - (boss.maxShield > 0 ? 22 : 14));
@@ -285,7 +312,21 @@ export class HudScene extends Phaser.Scene {
     const a = this.reviveArrow;
     a.clear();
     const me = g.localSquad;
-    if (!me?.alive) return;
+    let shown = 0;
+    const label = (px: number, py: number): void => {
+      let txt = this.reviveLabels[shown];
+      if (!txt) {
+        txt = this.add
+          .text(0, 0, t('allyDown'), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 5 })
+          .setOrigin(0.5, 1);
+        this.reviveLabels[shown] = txt;
+      }
+      const half = txt.width / 2 + 6;
+      txt.setVisible(true).setPosition(Math.max(half, Math.min(this.scale.width - half, px)), Math.max(txt.height + 4, py));
+      shown++;
+    };
+    const hideRest = (): void => this.reviveLabels.slice(shown).forEach((x) => x.setVisible(false));
+    if (!me?.alive) return hideRest();
     const { width, height } = this.scale;
     const cam = g.cameras.main;
     const wv = cam.worldView;
@@ -314,6 +355,7 @@ export class HudScene extends Phaser.Scene {
       const c = Math.cos(ang);
       const s = Math.sin(ang);
       const pulse = 1 + beat * 0.14;
+      label(px, py - 30 * pulse);
       a.fillStyle(0x0a2210, 0.75).fillCircle(px, py, 25 * pulse);
       a.lineStyle(3, 0x5dff84, 1).strokeCircle(px, py, 25 * pulse);
       a.fillStyle(0x5dff84, 1).fillTriangle(
@@ -322,6 +364,7 @@ export class HudScene extends Phaser.Scene {
         px - c * 4 + s * 11, py - s * 4 - c * 11,
       );
     }
+    hideRest();
   }
 
   /**
@@ -390,26 +433,68 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Timeline des vagues tout en bas de l'écran : de l'arrivée du boss précédent (ou du début) au prochain boss, un repère à chaque vague prévue
+   * et une flèche sur la position actuelle (`sim.waves.cursor` : elle s'arrête / revient en arrière pendant un boss). Masquée à l'écran de fin.
+   */
+  private drawWaveTimeline(): void {
+    const sim = this.game_.session.sim;
+    const bar = this.waveBar;
+    bar.clear();
+    const cursor = sim.waves.cursor;
+    const next = nextBoss(sim.mode.waves, cursor);
+    if (!next || this.endText.visible || sim.tutorial?.active) return;
+    const { width, height } = this.scale;
+    const w = Math.min(680, width - 150);
+    const h = 18;
+    const x = (width - w) / 2;
+    const y = height - 16 - h;
+    const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= cursor ? Math.max(m, e.at) : m), 0);
+    const span = Math.max(1, next.at - prev);
+    const p = Math.max(0, Math.min(1, (cursor - prev) / span));
+    const color = ALIENS[next.type].boss?.kind === 'final' ? 0xff3a3a : 0xff9a4a;
+    bar.fillStyle(0x0a1422, 0.85).fillRoundedRect(x, y, w, h, 9);
+    if (p > 0) bar.fillStyle(color, 0.95).fillRoundedRect(x + 2, y + 2, Math.max(14, (w - 4) * p), h - 4, 7);
+    for (const e of sim.mode.waves.timeline) {
+      if (e.config !== undefined) continue;
+      for (const at of entryTimes(e)) {
+        if (at <= prev || at >= next.at) continue;
+        bar.fillStyle(0xffffff, at <= cursor ? 0.7 : 0.4).fillRect(x + w * ((at - prev) / span) - 0.5, y + 4, 1.5, h - 8);
+      }
+    }
+    bar.lineStyle(2, 0xffffff, 0.45).strokeRoundedRect(x, y, w, h, 9);
+    // boss à l'arrivée : pastille à droite de la barre
+    bar.fillStyle(color, 1).fillCircle(x + w + 16, y + h / 2, 11);
+    bar.lineStyle(2, 0xffffff, 0.8).strokeCircle(x + w + 16, y + h / 2, 11);
+    bar.fillStyle(0xffffff, 1).fillRect(x + w + 14.5, y + h / 2 - 6, 3, 8).fillRect(x + w + 14.5, y + h / 2 + 4, 3, 3);
+    // flèche sur la position actuelle
+    const ax = x + 2 + (w - 4) * p;
+    bar.fillStyle(0xffffff, 1).fillTriangle(ax - 8, y - 12, ax + 8, y - 12, ax, y - 1);
+    bar.lineStyle(2, 0x0a1422, 1).strokeTriangle(ax - 8, y - 12, ax + 8, y - 12, ax, y - 1);
+  }
+
   /** Compte à rebours avant le prochain boss annoncé par la timeline ; masqué quand il n'y en a plus ou que l'écran de fin est affiché. */
   private drawBossTimer(): void {
     const g = this.game_;
     const sim = g.session.sim;
-    const next = nextBoss(sim.mode.waves, g.runTime);
+    const cursor = sim.waves.cursor; // position dans la timeline des vagues (suspendue / rejouée pendant un boss) : c'est elle qui mène au prochain boss
+    const next = nextBoss(sim.mode.waves, cursor);
     const bossAlive = sim.aliens.some((a) => a.alive && a.def.boss);
-    const left = next ? Math.max(0, next.at - g.runTime) : 0;
+    const left = next ? Math.max(0, next.at - cursor) : 0;
     // Caché pendant un combat de boss, sauf s'il reste moins d'une minute avant le suivant.
     const show = !!next && !this.endText.visible && (!bossAlive || left < 60);
     this.bossTimer.setVisible(show);
     this.bossLabel.setVisible(show);
     this.bossPie.clear();
     this.bossCapsule.clear();
+    this.waveBar.clear();
     if (!show || !next) return;
     const { height } = this.scale;
     const R = 30;
     const cx = 14 + R + 16; // bord gauche (la capsule « Prochain boss » dépasse un peu du disque)
     const cy = height / 3; // à un tiers de la hauteur depuis le haut
     // part restante = temps restant / durée écoulée entre le boss précédent (ou le début) et celui-ci
-    const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= g.runTime ? Math.max(m, e.at) : m), 0);
+    const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= cursor ? Math.max(m, e.at) : m), 0);
     const frac = Math.max(0, Math.min(1, left / Math.max(1, next.at - prev)));
     const final = ALIENS[next.type].boss?.kind === 'final';
     const color = final ? 0xff3a3a : 0xff9a4a;
@@ -643,6 +728,7 @@ export class HudScene extends Phaser.Scene {
     this.musicSlider.setPosition(14 + 44 + 8, top + 52);
     this.roomText.setPosition(14 + 2 * (44 + 8) + 10, top + 10);
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
+    this.alienText.setOrigin(1, 1).setPosition(width - 14, height - 34); // nombre d'aliens juste au-dessus
     // boutons de dev en bas à gauche, alignés sur une ligne
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];

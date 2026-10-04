@@ -26,7 +26,15 @@ export const REVIVE_RADIUS = 80;
 export const REVIVE_TIME = 2;
 /** Taille de l'escouade d'un joueur réanimé, en part de celle de l'équipier qui l'a ramené. */
 export const REVIVE_SQUAD_RATIO = 0.6;
+/** Invincibilité (s, les soldats clignotent) d'un joueur qui vient d'être réanimé par un équipier. */
+export const REVIVE_INVULN = 3;
 export const GRAB_IMMUNE = 2;
+/**
+ * Soldat isolé (tiré par une langue, emmené par une bulle, repoussé…) : au-delà de `radius + DETACH_EXTRA` px de la squad il sort du mouvement
+ * de foule (ni centre, ni slots, ni laisse : il ne tire plus la squad vers lui), et n'y revient qu'en dessous de `radius + REJOIN_EXTRA` px.
+ */
+export const DETACH_EXTRA = 200;
+export const REJOIN_EXTRA = 70;
 /** Ralentissement de l'unité qui vient d'être grabée : facteur de vitesse et durée (s) depuis le grab. */
 export const GRAB_SLOW = 0.55;
 export const GRAB_SLOW_TIME = 1.2;
@@ -49,7 +57,7 @@ export const PRISM_CHANCE = 0.05;
 /** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
 export const UPGRADE_CHOICE_TIME = 5;
 /** Montée de niveau : délai (s) de jeu normal entre la montée (onde de choc, texte « LEVEL UP! ») et la pause qui ouvre l'écran des cartes. */
-export const LEVEL_UP_DELAY = 1;
+export const LEVEL_UP_DELAY = 0.75;
 /** Renforts express : plus proposés quand la squad dépasse déjà sa taille max d'au moins ce nombre de soldats (15/12 → plus de carte). */
 export const REINFORCE_MAX_OVERCAP = 3;
 /** Relances des propositions d'upgrade par partie et par joueur (le temps du choix en ligne ne repart pas). */
@@ -70,13 +78,22 @@ export const XP_ORB_LIFE = 45;
 export const XP_ORB_POP = 0.3;
 /** Power-up bouclier : le bouclier de chaque soldat vaut cette part de ses PV max (consommé avant eux, dure jusqu'à sa perte). */
 export const SHIELD_FRACTION = 1 / 3;
+
+/** Multiplicateur de dégâts d'un coup critique (la chance de critique vient de la stat `crit` de la squad, en %, 0 de base). */
+export const CRIT_MUL = 2;
+
+/** Chance de critique maximale (%) : plafond appliqué même avec les upgrades prismatiques (double bonus). */
+export const CRIT_MAX = 30;
 /** Power-ups : délai entre deux apparitions (s), durée de vie au sol (s), nombre max simultané. */
 /** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %). */
 /** Stimpack : durée (s) ; facteurs de vitesse de déplacement et de cadence ci-dessous. Aussi activé par les renforts express. */
-export const STIM_TIME = 5;
+export const STIM_TIME = 6.5;
 export const STIM_SPEED = 1.25;
 export const STIM_FIRE = 1.5;
-export const POWERUPS = { every: [14, 22], life: 12, max: 3, first: 20 } as const;
+export const POWERUPS = { every: [11.7, 18.3], life: 12, max: 3, first: 20 } as const;
+
+/** Coop : chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague (0,75 = +75 %). */
+export const EXTRA_PLAYER_ALIENS = 0.75;
 
 export const DIFFICULTY = {
   soldierHpMul: 0.7,
@@ -174,6 +191,13 @@ export const PALETTE = {
   textDim: '#a9c3dd',
   outline: '#2a1d2e',
 } as const;
+
+/**
+ * Couleur des joueurs (multi) : un emplacement (`Squad.slot`, attribué par l'hôte et le même chez tous) = une couleur d'anneau, de barre de
+ * vie et de capsule, et un décalage de teinte (degrés) des bleus du soldat (`art/playerVariants.ts`). L'emplacement 0 est le bleu d'origine.
+ */
+export const PLAYER_COLORS = [0x39c6ff, 0xff5a5a, 0xffb938, 0x7dff9a, 0xc77dff, 0xff7ad9, 0x3de0c0, 0xff8a3a, 0x9aa0ff] as const;
+export const PLAYER_HUE_SHIFT = [0, 150, 195, -70, 75, 115, -37, 180, 30] as const;
 
 export const SCENES = {
   boot: 'Boot',

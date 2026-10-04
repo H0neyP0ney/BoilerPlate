@@ -1,5 +1,5 @@
 import { Pool } from '@xiao/engine/sim';
-import { STIM_FIRE, ZOMBIE_MUL } from '../config';
+import { CRIT_MAX, CRIT_MUL, STIM_FIRE, ZOMBIE_MUL } from '../config';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
@@ -36,6 +36,7 @@ export class Combat {
       damage: 0,
       pierce: 0,
       flame: false,
+      crit: false,
       lob: false,
       aoe: 0,
       knock: 0,
@@ -58,6 +59,7 @@ export class Combat {
       p.knock = 0;
       p.puddle = 0;
       p.flame = false;
+      p.crit = false;
     },
   );
   /** Rafales en cours (power-up roquettes) : roquettes restantes et délai avant la prochaine. */
@@ -96,7 +98,7 @@ export class Combat {
         s.aim = Math.atan2(t.y - 10 - (s.y - 17), t.x - s.x);
         s.facing = Math.cos(s.aim) >= 0 ? 1 : -1;
         if (s.cooldown <= 0) {
-          this.fire(s, t, weapon, squad.stats.get('damage'), rangeMul);
+          this.fire(s, t, weapon, squad.stats.get('damage'), rangeMul, Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
           s.cooldown += weapon.cooldown;
           if (s.cooldown < 0) s.cooldown = 0;
         }
@@ -106,20 +108,28 @@ export class Combat {
     this.updateProjectiles(dt);
   }
 
-  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1): void {
+  /** Tirage de critique (stat `crit` de la squad) : aucun tirage de `rng` tant que la chance est nulle. */
+  private rollCrit(chance: number): boolean {
+    return chance > 0 && this.sim.rng.chance(Math.min(1, chance));
+  }
+
+  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1, critChance = 0): void {
     const { rng } = this.sim;
     const damage = weapon.damage * damageMul;
     const mx = s.x + s.facing * 4 + Math.cos(s.aim) * 30;
     const my = s.y - 17 + Math.sin(s.aim) * 30;
 
     if (weapon.kind === 'beam') {
+      const crit = this.rollCrit(critChance);
       this.sim.events.push({ t: 'beam', x1: mx, y1: my, x2: target.x, y2: target.y - 10 });
-      this.sim.damage(target, damage, s.owner, Math.cos(s.aim), Math.sin(s.aim));
+      if (crit) this.sim.events.push({ t: 'crit', x: target.x, y: target.y - 10, dmg: damage * CRIT_MUL });
+      this.sim.damage(target, crit ? damage * CRIT_MUL : damage, s.owner, Math.cos(s.aim), Math.sin(s.aim));
       return;
     }
 
     if (weapon.kind === 'grenade') {
-      this.lob(s, target, weapon, damage, mx, my);
+      const crit = this.rollCrit(critChance);
+      this.lob(s, target, weapon, crit ? damage * CRIT_MUL : damage, mx, my, crit);
       return;
     }
 
@@ -137,7 +147,8 @@ export class Combat {
       p.vx = Math.cos(a) * speed * k;
       p.vy = Math.sin(a) * speed * k;
       p.life = p.maxLife = life;
-      p.damage = damage;
+      p.crit = this.rollCrit(critChance);
+      p.damage = p.crit ? damage * CRIT_MUL : damage;
       p.pierce = weapon.pierce ?? 0;
       p.flame = weapon.kind === 'flame';
       p.lob = false;
@@ -150,14 +161,14 @@ export class Combat {
   }
 
   /** Grenade : trajectoire droite au sol (l'arc n'est qu'un effet d'affichage), explosion à l'arrivée sur la cible anticipée. */
-  private lob(s: SoldierState, target: Unit, weapon: WeaponDef, damage: number, mx: number, my: number): void {
+  private lob(s: SoldierState, target: Unit, weapon: WeaponDef, damage: number, mx: number, my: number, crit = false): void {
     const { rng } = this.sim;
     const speed = weapon.projectileSpeed ?? 300;
     const flight = Math.min(1.4, Math.max(0.45, Math.hypot(target.x - mx, target.y - my) / speed));
     // vise où sera la cible à l'atterrissage, avec un léger écart
     const lx = target.x + target.vx * flight + rng.range(-14, 14);
     const ly = target.y + target.vy * flight + rng.range(-14, 14);
-    this.launchLob(mx, my, lx, ly, flight, damage, weapon.aoe ?? 60, weapon.texture, s.team, s.owner);
+    this.launchLob(mx, my, lx, ly, flight, damage, weapon.aoe ?? 60, weapon.texture, s.team, s.owner).crit = crit;
   }
 
   /** Alien à tir en cloche (slime bleu) : boule visant la position anticipée d'un soldat, explosion au sol qui blesse les soldats. */
@@ -310,6 +321,7 @@ export class Combat {
           p.y += p.vy * (dt + p.life);
           // crachat : pas de recul (la flaque ralentit à la place) ; les autres boules repoussent comme avant
           this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, p.puddle > 0 ? 0 : 300, p.puddle > 0 ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
+          if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
         }
         return true;
@@ -336,6 +348,7 @@ export class Combat {
             return true;
           }
           this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
+          if (p.crit && !p.flame) this.sim.events.push({ t: 'crit', x: a.x, y: a.y - 10, dmg: p.damage }); // flammes : pas d'effet (un par tick de brûlure)
           if (p.pierce-- <= 0) return true;
         }
       }

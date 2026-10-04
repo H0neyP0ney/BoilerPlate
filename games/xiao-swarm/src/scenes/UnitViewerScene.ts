@@ -6,7 +6,7 @@ import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
 import { PALETTE, SCENES, SHADOW_ALPHA, VIEW_BG } from '../config';
 import { button, header, line, note, slider } from '../dev/devUi';
 import { ScaleRef } from '../dev/scaleRef';
-import { getStat, listStats, resetStats, saveStatsToCode, setStat } from '../debugStats';
+import { getDefaultStat, getStat, listStats, resetStats, saveStatsToCode, setStat } from '../debugStats';
 import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
 
 /**
@@ -905,8 +905,8 @@ ${id}` : id;
     info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
     const syncs: (() => void)[] = [];
     const rows = listStats(kind, id).map((st) => {
-      const v = st.value;
-      const mag = Math.abs(v);
+      // échelle d'après la plus grande des valeurs courante et du code : à 0, la réglette garde sa course (on peut remonter à la valeur d'origine)
+      const mag = Math.max(Math.abs(st.value), Math.abs(getDefaultStat(kind, id, st.path)));
       const step = mag >= 50 ? 1 : mag >= 10 ? 0.5 : mag >= 1 ? 0.05 : 0.01;
       const c = slider(this.statLabel(st.path), {
         min: 0,

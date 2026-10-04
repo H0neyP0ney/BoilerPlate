@@ -20,6 +20,7 @@ import { RunRecorder } from '../sim/RunRecorder';
 import { saveToCode } from '../dev/devSave';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
+import { scoreRows } from '../view/Scoreboard';
 import { WorldView } from '../view/WorldView';
 import type { GameOverData } from './GameOverScene';
 
@@ -99,12 +100,19 @@ export class GameScene extends Phaser.Scene {
     cam.startFollow(this.camTarget, false, 0.12, 0.12);
     cam.centerOn(c.x, c.y);
 
-    this.move = new MoveInput(this);
+    this.move = new MoveInput(this, { joystickFullSpeed: true });
+    this.watching = '';
+    // à terre : un clic (hors boutons du HUD) regarde l'équipier suivant
+    const onClick = (_p: Phaser.Input.Pointer, over: unknown[]): void => {
+      if (over.length === 0) this.cycleSpectated();
+    };
+    this.input.on('pointerdown', onClick);
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', this.pauseGame);
     kb.on('keydown-P', this.pauseGame);
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseGame);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', onClick);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseGame);
       this.session.close();
       this.view.arena.destroy();
@@ -146,7 +154,8 @@ export class GameScene extends Phaser.Scene {
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.checkEnd();
     }
-    this.view.render(running ? this.session.alpha : 1, dt, secs);
+    // choix d'upgrade : le monde est figé ; on dessine l'état à son dernier pas (alpha 1), sinon l'interpolation fait trembler les projectiles
+    this.view.render(running && sim.choiceT <= 0 ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
     this.botOverlay?.update();
@@ -314,6 +323,7 @@ export class GameScene extends Phaser.Scene {
     if (victory) this.flow.win();
     else this.flow.fail();
     const online = this.session.online;
+    const sim = this.session.sim;
     const time = Math.floor(this.runTime);
     const best = online ? time : Math.max(time, storage.get('bestTime', 0));
     if (!online) storage.set('bestTime', best);
@@ -328,6 +338,7 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       best,
       canRevive: !online && !victory && !this.revived,
+      scores: scoreRows(sim.squads, this.session.localPlayer),
       title: connectionLost ? t('connectionLost') : undefined,
     };
     this.scene.launch(SCENES.gameOver, data);
@@ -363,7 +374,20 @@ export class GameScene extends Phaser.Scene {
   get spectated(): string {
     const me = this.session.localPlayer;
     if (this.localSquad?.alive) return me;
-    return this.session.sim.aliveSquads[0]?.owner ?? me;
+    const alive = this.session.sim.aliveSquads;
+    return (alive.find((s) => s.owner === this.watching) ?? alive[0])?.owner ?? me;
+  }
+
+  /** Équipier regardé quand on est à terre (un clic passe au suivant) ; vide : le premier vivant. */
+  private watching = '';
+
+  /** À terre : passe à l'équipier vivant suivant (cycle). */
+  private cycleSpectated(): void {
+    if (this.localSquad?.alive) return;
+    const alive = this.session.sim.aliveSquads;
+    if (alive.length < 2) return;
+    const i = alive.findIndex((s) => s.owner === this.spectated);
+    this.watching = alive[(i + 1) % alive.length].owner;
   }
 
   private updateCamera(dt: number): void {
@@ -466,7 +490,6 @@ export class GameScene extends Phaser.Scene {
     const dbg = this.debug;
     const onOff = (label: string, hint: string, get: () => boolean, set: (v: boolean) => void): void =>
       dbg.slider(label, { min: 0, max: 1, step: 1, hint, get: () => (get() ? 1 : 0), set: (v) => set(v >= 0.5) });
-    onOff('Compteur FPS (0/1)', "1 = affiché en haut à gauche. Sans menu (téléphone) : ?fps=0 / ?fps=1 dans l'URL.", () => settings.showFps, (v) => settings.setShowFps(v));
     onOff('Déformation écran (0/1)', "1 = onde de choc qui déforme l'écran à la montée de niveau (filtre plein écran). Sans menu : ?shock=0 / ?shock=1 dans l'URL.", () => settings.shockwave, (v) => settings.setShockwave(v));
     onOff('Fond étoilé (0/1)', "0 = fond noir uni, bien plus léger sur mobile. Sans menu (téléphone) : ?space=0 / ?space=1 dans l'URL.", () => settings.starfield, (v) => settings.setStarfield(v));
     addVisualMenu(this.debug);

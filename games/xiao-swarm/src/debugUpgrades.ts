@@ -18,6 +18,9 @@ const DEFAULTS = new Map<UpgradeId, UpgradeStats>();
 for (const [id, u] of Object.entries(UPGRADES)) DEFAULTS.set(id as UpgradeId, { value: u.value, maxStacks: u.maxStacks });
 let overrides: Partial<Record<UpgradeId, UpgradeStats>> = {};
 
+/** Valeurs du code (dernière sauvegarde) : repère de l'échelle des réglettes, qui ne doit pas se réduire quand la valeur courante tombe à 0. */
+export const getDefaultUpgradeStats = (id: UpgradeId): UpgradeStats => ({ ...(DEFAULTS.get(id) ?? getUpgradeStats(id)) });
+
 export const getUpgradeStats = (id: UpgradeId): UpgradeStats => ({ value: UPGRADES[id].value, maxStacks: UPGRADES[id].maxStacks });
 
 /** Applique le bonus à la définition : valeur affichée + modificateur (pourcentage ou valeur fixe selon l'upgrade). */

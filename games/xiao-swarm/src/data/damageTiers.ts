@@ -18,13 +18,17 @@ export interface DamageTier {
 /** Texture de base de l'arme concernée (`weapon.texture` du Gunner) : seule elle change de couleur. */
 export const TIERED_TEXTURE = 'fx_blaster_blue';
 
-/** bleu > vert > jaune/orangé > violet > rouge */
+/**
+ * bleu > vert > jaune > orangé > violet > rouge : un palier toutes les 2 prises de l'upgrade de dégâts (+15 % chacune, 10 prises max → ×2,5 :
+ * 1, 1,3, 1,6, 1,9, 2,2, 2,5). Seuils légèrement sous la valeur exacte : le cumul de flottants (0,15 × 4…) ne doit pas faire rater un palier.
+ */
 export const DAMAGE_TIERS: DamageTier[] = [
   { min: 1, texture: 'fx_blaster_blue', glow: [60, 150, 255], head: [130, 205, 255], impact: 0x5ab4ff },
-  { min: 1.3, texture: 'fx_blaster_green', glow: [60, 220, 110], head: [170, 255, 190], impact: 0x5aff8a },
-  { min: 1.75, texture: 'fx_blaster_orange', glow: [255, 170, 40], head: [255, 225, 130], impact: 0xffb43a },
-  { min: 2.2, texture: 'fx_blaster_purple', glow: [170, 90, 255], head: [215, 170, 255], impact: 0xb06aff },
-  { min: 2.6, texture: 'fx_blaster_red', glow: [255, 60, 60], head: [255, 160, 150], impact: 0xff4a4a },
+  { min: 1.29, texture: 'fx_blaster_green', glow: [60, 220, 110], head: [170, 255, 190], impact: 0x5aff8a },
+  { min: 1.59, texture: 'fx_blaster_yellow', glow: [255, 235, 60], head: [255, 250, 170], impact: 0xffec3a },
+  { min: 1.89, texture: 'fx_blaster_orange', glow: [255, 150, 40], head: [255, 210, 130], impact: 0xff9a3a },
+  { min: 2.19, texture: 'fx_blaster_purple', glow: [170, 90, 255], head: [215, 170, 255], impact: 0xb06aff },
+  { min: 2.49, texture: 'fx_blaster_red', glow: [255, 60, 60], head: [255, 160, 150], impact: 0xff4a4a },
 ];
 
 /** Palier atteint pour ce multiplicateur de dégâts. */

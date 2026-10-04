@@ -23,11 +23,19 @@ export class Xp {
 
   constructor(private readonly sim: Sim) {}
 
-  /** `xp` : XP lâchée si elle diffère de celle de l'espèce (tutoriel). */
-  drop(a: AlienState, xp = a.def.xp): void {
+  /**
+   * `xp` : XP lâchée si elle diffère de celle de l'espèce (tutoriel). `squad` : celle qui a tué l'alien ; sa stat `xpGain` (upgrade « XP »)
+   * multiplie l'XP du butin, donc le nombre et la taille des globes (1, 3 ou 8 XP) : chaque globe vaut toujours la même chose au ramassage.
+   * La part décimale est tirée au sort (2 XP × 1,25 = 2,5 : 2 ou 3), pour que le bonus compte aussi sur les petits aliens.
+   */
+  drop(a: AlienState, xp = a.def.xp, squad?: Squad): void {
     if (xp <= 0) return;
     const { rng } = this.sim;
-    for (const value of splitXp(xp)) {
+    if (squad) {
+      const scaled = xp * squad.stats.get('xpGain');
+      xp = Math.floor(scaled) + (rng.chance(scaled - Math.floor(scaled)) ? 1 : 0);
+    }
+    for (const value of splitXp(xp, a.def.boss ? Infinity : undefined)) { // un boss laisse toute son XP, en autant de globes qu'il faut
       const ang = rng.range(0, Math.PI * 2);
       const r = a.radius * rng.range(0.2, 1.1);
       const x = a.x + Math.cos(ang) * r;

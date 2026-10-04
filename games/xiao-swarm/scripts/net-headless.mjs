@@ -178,7 +178,7 @@ try {
   const lobs = hs.combat.projectiles.active.filter((p) => p.lob); // les balles des soldats déjà en vol ne comptent pas
   check(lobs.length === 3 && lobs.every((p) => p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${lobs.length}`);
   // projectiles : identifiants stables, le client garde le MÊME objet d'un snapshot à l'autre (lissage) et le retrouve par id
-  await tick(client);
+  for (let i = 0; i < 6 && client.sim.combat.projectiles.active.length < 3; i++) await tick(client); // le snapshot n'arrive pas à chaque tick
   const projBefore = new Map(client.sim.combat.projectiles.active.map((p) => [p.id, p]));
   await tick(client);
   const projSame = [...client.sim.combat.projectiles.active].filter((p) => projBefore.get(p.id) === p).length;
@@ -278,12 +278,12 @@ try {
     a.pendingLevels = 1; a.offer = ['reinforce']; a.offerPrism = [false]; a.soldiers.forEach((s) => { s.shield = 0; });
     const before = new Set(a.soldiers);
     a.chooseUpgrade(0);
-    check(a.soldiers.length === n0 + 2 && a.size > a.maxSize, 'renforts express : +2 soldats même squad pleine (dépasse le cap)', `${a.size}/${a.maxSize}`);
+    check(a.soldiers.length === n0 + 3 && a.size > a.maxSize, 'renforts express : +3 soldats même squad pleine (dépasse le cap)', `${a.size}/${a.maxSize}`);
     const fresh = a.soldiers.filter((s) => !before.has(s));
-    check(fresh.length === 2 && fresh.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6) && [...before].every((s) => s.shield === 0), 'renforts express : bouclier plein pour les renforts seulement, pas pour le reste de la squad');
+    check(fresh.length === 3 && fresh.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6) && [...before].every((s) => s.shield === 0), 'renforts express : bouclier plein pour les renforts seulement, pas pour le reste de la squad');
     for (let i = 0; i < 4; i++) await tick(client);
     const cFresh =client.sim.squadOf(a.owner).soldiers.filter((s) => fresh.some((f) => f.id === s.id));
-    check(cFresh.length === 2 && cFresh.every((s) => s.shield > 0), 'renforts express : bouclier des renforts reflété chez le client');
+    check(cFresh.length === 3 && cFresh.every((s) => s.shield > 0), 'renforts express : bouclier des renforts reflété chez le client');
     // plus proposés quand la squad dépasse déjà son max de 3 (ou plus) ; encore proposés à +2
     const { REINFORCE_MAX_OVERCAP } = await vite.ssrLoadModule('/src/config.ts');
     const offers = (over) => { a.stats.add('maxSquad', { flat: a.size - over - a.maxSize }); let seen = false;
@@ -293,7 +293,7 @@ try {
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
   const scarab = hs.aliens[0];
-  check(Math.abs(scarab.maxShield - scarab.maxHp * 0.1) < 1e-6 && scarab.shield === scarab.maxShield, 'scarab : bouclier = 10 % de ses PV max', `${Math.round(scarab.maxShield)} / ${Math.round(scarab.maxHp)}`);
+  check(Math.abs(scarab.maxShield - scarab.maxHp * 0.05) < 1e-6 && scarab.shield === scarab.maxShield, 'scarab : bouclier = 5 % de ses PV max', `${Math.round(scarab.maxShield)} / ${Math.round(scarab.maxHp)}`);
   hs.damage(scarab, 100, host.localPlayer);
   check(scarab.hp === scarab.maxHp && Math.abs(scarab.shield - (scarab.maxShield - 100)) < 1e-6, 'scarab : le bouclier encaisse avant les PV');
   const snapSc = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
@@ -308,8 +308,8 @@ try {
   hs.aliens.length = 0;
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
-    const names = [1, 1.3, 1.75, 2.2, 2.6].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
-    check(names === 'blue > green > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > orangé > violet > rouge', names); }
+    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    check(names === 'blue > green > yellow > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);
   for (let i = 0; i < 4; i++) await tick(client);
@@ -332,6 +332,8 @@ try {
   for (const [sold, dx] of [[m0, 0], [m1, 30], [m2, 400]]) { sold.hp = sold.maxHp * 0.2; sold.x = m0.x + dx * towardCenter; sold.y = m0.y; }
   const near0 = m1.hp;
   const far0 = m2.hp;
+  const parked = hs.squads.filter((o) => o !== a).flatMap((o) => o.soldiers).map((s) => [s, s.x]); // l'autre squad (pas pleine) ramasserait la recrue : on l'éloigne le temps du test
+  for (const [s] of parked) s.x = m0.x + towardCenter * 1200;
   hs.recruits.clear(); // recrues restées au sol des tests précédents (un autre soldat les ramasserait et soignerait ses voisins)
   hs.recruits.drop('trooper', m0.x, m0.y);
   for (let i = 0; i < 3; i++) await tick(client);
@@ -339,6 +341,7 @@ try {
   check(Math.abs(m1.hp - Math.min(m1.maxHp, near0 + m1.maxHp * 0.5)) < 0.5, 'recrue en trop : un voisin proche est soigné à 50 %', `${near0.toFixed(0)} → ${m1.hp.toFixed(0)}`);
   check(m2.hp <= far0, 'recrue en trop : un soldat hors zone n’est pas soigné');
   a.stats.add('maxSquad', { flat: gap });
+  for (const [s, x] of parked) s.x = x;
 
   // 3f) Onde de choc : repousse même un alien lourd, à chaque montée de niveau.
   hs.aliens.length = 0;
@@ -357,7 +360,7 @@ try {
     a.gainXp(a.xpNeeded - a.xp + 0.01);
     resolveChoices(); // l'onde de choc se déroule une fois la pause de choix terminée
     const dBefore = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
-    for (let i = 0; i < 40; i++) { heavy.attackCd = 5; await tick(client); }
+    for (let i = 0; i < 40; i++) { heavy.attackCd = 5; hs.aliens.splice(0, hs.aliens.length, heavy); await tick(client); } // le boss vivant fait rejouer les vagues : on retire les autres aliens (ils gêneraient la mesure)
     const dAfter = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
     check(dAfter > dBefore + 80, `onde de choc n°${round + 1} : repousse un alien lourd`, `${dBefore.toFixed(0)} → ${dAfter.toFixed(0)} px`);
   }

@@ -4,6 +4,7 @@ import { DEPTH, RECRUIT } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
+import { soldierSpriteId } from '../art/playerVariants';
 import { hasComposedRecruit, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 
@@ -20,6 +21,10 @@ const HEAL_FX_TIME = 1;
 const HEAL_FX_EVERY = 0.12;
 /** Après un flash de touche, l'unité reste sans flash au moins ce temps (s, ≈ 4 images à 60 fps) : sous un tir continu elle clignote au lieu de rester blanche. */
 const FLASH_REST = 0.07;
+/** Apparition d'un alien (les aliens sont enterrés dans la carte) : durée (s) où le trou se creuse, où l'alien en sort, puis où le trou s'efface. */
+const EMERGE_OPEN = 0.4;
+const EMERGE_POP = 0.3;
+const EMERGE_FADE = 0.4;
 
 /**
  * Point d'origine (bouche du canon, de la langue…) en monde d'un sprite de planche : le point de la frame jouée (placé dans la
@@ -63,10 +68,11 @@ export class SoldierView {
     scene: Phaser.Scene,
     readonly state: SoldierState,
     readonly ringColor: number,
+    slot = 0,
   ) {
     this.lastHp = state.hp;
     this.lastMaxHp = state.maxHp;
-    this.bodyId = `soldier_${state.def.id}`;
+    this.bodyId = soldierSpriteId(state.def.id, slot); // soldat à la couleur du joueur
     this.gunId = `gun_${state.def.id}`;
     this.body = sprites.add(scene, this.bodyId, state.x, state.y);
     this.gun = sprites.add(scene, this.gunId, state.x, state.y);
@@ -178,6 +184,8 @@ export class AlienView {
   seen = true;
   private facing = 1;
   private spawnT = 0;
+  /** Temps écoulé depuis l'apparition (s) ; au-delà de la durée totale, plus de trou (0 pour les aliens présents d'emblée : ils n'en ont pas). */
+  private emergeT: number;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly id: string;
   private readonly animated: boolean;
@@ -189,7 +197,10 @@ export class AlienView {
   constructor(
     private readonly scene: Phaser.Scene,
     readonly state: AlienState,
+    emerge = false,
   ) {
+    // lurker (il creuse son propre trou) et ressuscité (il sort de sa flaque) n'ont pas de trou d'apparition
+    this.emergeT = emerge && !state.def.lurk && !state.revived ? 0 : EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
     this.id = `alien_${state.def.id}`;
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
@@ -206,10 +217,20 @@ export class AlienView {
     return muzzleOf(this.body, this.id, 'walk');
   }
 
+  /** Trou d'apparition sous l'alien (null : aucun) : `open` 0 → 1 pendant qu'il se creuse, `alpha` qui tombe à 0 quand l'alien en est sorti. */
+  hole(): { x: number; y: number; radius: number; open: number; alpha: number } | null {
+    const total = EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
+    if (this.emergeT >= total) return null;
+    const alpha = this.emergeT < EMERGE_OPEN + EMERGE_POP ? 1 : 1 - (this.emergeT - EMERGE_OPEN - EMERGE_POP) / EMERGE_FADE;
+    return { x: this.rx, y: this.ry, radius: this.state.radius * 1.3, open: Math.min(1, this.emergeT / EMERGE_OPEN), alpha };
+  }
+
   sync(alpha: number, dt: number, time: number): void {
     const a = this.state;
     this.rx = lerp(a.px, a.x, alpha);
     this.ry = lerp(a.py, a.y, alpha);
+    const hidden = this.emergeT < EMERGE_OPEN; // le trou se creuse : l'alien n'est pas encore sorti
+    this.emergeT += dt;
     if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
 
     // Squash / lévitation procéduraux seulement sans planche animée.
@@ -224,7 +245,7 @@ export class AlienView {
       else if (!this.attackStarted) this.attackStarted = sprites.play(this.body, this.id, 'attack');
       if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, 'walk') || sprites.play(this.body, this.id, 'idle'); // pas d'idle dédié : toujours la marche (l'idle n'est qu'un repli)
     }
-    this.spawnT = Math.min(1, this.spawnT + dt * 4);
+    if (!hidden) this.spawnT = Math.min(1, this.spawnT + dt * 4);
     const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
     this.body.setScale(pop * (1 + squash + wind * 0.12), pop * (1 - squash - wind * 0.1));
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
@@ -250,6 +271,18 @@ export class AlienView {
       if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
     }
 
+    if (hidden) this.body.setVisible(false);
+    else if (!a.def.lurk) this.body.setVisible(true); // le lurker gère lui-même sa visibilité (enterré)
+    if (a.def.burrow) {
+      // Scarab : s'enfonce dans son trou (phase 1), invisible sous terre (2), ressort du trou d'arrivée (3)
+      const B = a.def.burrow;
+      const vis = a.lurkPhase === 1 ? a.lurkT / B.dig : a.lurkPhase === 2 ? 0 : a.lurkPhase === 3 ? 1 - a.lurkT / B.rise : 1;
+      this.body
+        .setVisible(vis > 0.03)
+        .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
+        .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
+        .setY(this.body.y + (1 - vis) * a.radius * 0.5);
+    }
     if (a.revived) this.syncZombieFx();
 
     if (this.rest > 0) this.rest -= dt;

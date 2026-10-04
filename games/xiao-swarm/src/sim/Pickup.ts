@@ -1,4 +1,5 @@
 import { PICKUP } from '../config';
+
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -28,6 +29,34 @@ export function findAttractor(sim: Sim, x: number, y: number, accept?: (s: Soldi
     best = { soldier: s, squad, dist, radius, stat };
   }
   return best;
+}
+
+/** Rayon (px) autour de la squad dans lequel le power-up aimant aspire les objets au sol, et force de l'aspiration (comme pour les globes d'XP). */
+export const MAGNET_BUFF_RADIUS = 1000;
+const MAGNET_BUFF_PULL = 2.5;
+
+/**
+ * Objet aspiré par le power-up aimant : le soldat vivant de la squad `owner` le plus proche (sans limite de distance), ou undefined si la
+ * squad n'a plus personne ou si `accept` refuse tous ses soldats (ex. recrue sans place libre ni blessé).
+ */
+export function pulledAttractor(sim: Sim, x: number, y: number, owner: string, accept?: (s: SoldierState, sq: Squad) => boolean): Attractor | undefined {
+  const squad = sim.squadOf(owner);
+  if (!squad) return undefined;
+  let best: Attractor | undefined;
+  for (const s of squad.soldiers) {
+    if (!s.alive || (accept && !accept(s, squad))) continue;
+    const dist = Math.hypot(s.x - x, s.y - y);
+    if (!best || dist < best.dist) best = { soldier: s, squad, dist, radius: MAGNET_BUFF_RADIUS, stat: squad.stats.get('magnet') };
+  }
+  return best;
+}
+
+/** Aspiration du power-up aimant : plus l'objet est proche, plus il accélère (même courbe que les globes d'XP). */
+export function pullStrongly(item: { x: number; y: number }, a: Attractor, dt: number): void {
+  if (a.dist < 1e-6) return;
+  const k = Math.min(1, dt * a.stat * (MAGNET_BUFF_PULL + (1 - Math.min(1, a.dist / a.radius)) * 3.5));
+  item.x += ((a.soldier.x - item.x) / a.dist) * a.dist * k;
+  item.y += ((a.soldier.y - item.y) / a.dist) * a.dist * k;
 }
 
 /** Le soldat est assez près pour ramasser l'objet (rayon de ramassage × stat `magnet`). */

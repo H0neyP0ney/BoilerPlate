@@ -1,6 +1,7 @@
 import { bootPokiGame, poki, setTheme, storage } from '@xiao/engine';
 import { PALETTE, SAFE_SIZE } from './config';
 import { i18n } from './i18n';
+import { settings } from './settings';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { GameOverScene } from './scenes/GameOverScene';
@@ -23,7 +24,7 @@ void bootPokiGame({
   scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(import.meta.env.DEV ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
-    i18n.init(poki.getURLParam('lang'));
+    i18n.init(settings.lang ?? poki.getURLParam('lang'));
     setTheme({
       font: '"Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       panel: PALETTE.panel,

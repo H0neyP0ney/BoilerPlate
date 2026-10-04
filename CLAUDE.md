@@ -14,6 +14,7 @@ répondre, commenter et documenter en français.
 - `npm run sim:headless -- royale 9 300` — simulation dans Node (sans navigateur)
 - `npm run sim:net` — test réseau hôte + client sans navigateur. En ligne : `?net=host`, `?net=join&room=CODE`, `?net=auto` (voir `docs/MULTIJOUEUR.md`)
 - `npm run sim:bot -- 300 2 7` — coéquipiers IA du coop (`sim/CoopBot.ts`, niveaux standard / expert dans `data/bots.ts`) joués sans navigateur et comparés. En jeu (dev) : `?net=host&bot=2&botlevel=expert` ou section « Coéquipiers IA » du panneau Triche.
+- `npm run sim:waves` (dans `games/xiao-swarm`) — horloge de la timeline des vagues (`sim/WaveRunner.ts`) : aucune suspension pour l'instant (ni boss vivant, ni nombre d'aliens)
 - `npm run sim:tutorial` — joue l'onboarding scripté (`sim/Tutorial.ts`, données `data/tutorial.ts`, doc `docs/TUTORIEL.md`) avec un joueur automatique. `?tuto=1` rejoue le tutoriel, `?tuto=0` le saute.
 - `npm run sim:calibrate` — lit tes parties enregistrées en dev (`docs/bench/runs/*.json`, `sim/RunRecorder.ts`) : DPS réel, `model` proposé pour `data/waves.ts`, pression subie, débit réseau (voir `docs/OUTILS_DEV.md`).
 - `npm run sim:predict -- 4` — prédiction de la squad locale d'un client avec latence simulée (4 ticks par sens).

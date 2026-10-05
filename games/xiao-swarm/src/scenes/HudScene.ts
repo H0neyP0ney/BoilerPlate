@@ -8,7 +8,7 @@ import type { SimEvent } from '../sim/types';
 import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
 import { BAR_GHOST_HOLD, BAR_GHOST_SPEED } from '../view/WorldView';
 import { HUD_ART, makeHudButton } from '../view/HudButtons';
-import { TimelineHud, timelineBottom } from '../view/TimelineHud';
+import { TimelineHud } from '../view/TimelineHud';
 import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
 import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
@@ -216,7 +216,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.hintLabel.setText(s.sim.tutorial?.active ? t(device.isTouch ? 'hintTutoDrag' : 'hintTutoMove') : device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.drawXp();
     this.drawBoss();
-    this.timeline.update(this.game_.session.sim, this.endText.visible || !!this.game_.session.sim.tutorial?.active);
+    // pendant un combat de boss, sa barre de vie (drawBoss) prend la place de la timeline
+    this.timeline.update(this.game_.session.sim, this.endText.visible || !!this.game_.session.sim.tutorial?.active || this.game_.session.sim.aliens.some((a) => a.alive && !!a.def.boss));
     this.drawReviveArrow();
     this.drawTutorial();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
@@ -268,10 +269,10 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.bossFill.setVisible(!!boss);
     if (!boss) return;
     const { width, height } = this.scale;
-    const w = Math.min(360, width - 80); // 360 px (420 avant : -15 %)
+    const w = Math.min(364, width - 60); // grosse barre (520 × 0,7), à la place de la timeline (en haut, centrée)
     const k = w / BOSS_ART.W;
     const cx = width / 2;
-    const top = timelineBottom(width) + 34; // haut du cadre : sous la timeline, descendu de 30 px
+    const top = hudTop() + 2;
     this.bossFrame.setPosition(cx, top + (BOSS_ART.H / 2) * k).setScale(k);
     this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, top + 9 * k); // dans le creux au-dessus de l'ornement central
     // jauges 3-slice dans la zone sombre : la part blanche reste sur la vie d'avant le coup (BAR_GHOST_HOLD s) puis rejoint la rouge, comme sur les barres de vie des aliens

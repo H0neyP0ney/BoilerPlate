@@ -135,6 +135,7 @@ export class Horde {
       trailCd: 0,
       revived,
       enraged: 0,
+      noXp: this.sim.waves.replaying, // rejeu de vague pendant un combat de boss : pas de globe d'XP
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
       swarmT: 0,
@@ -193,10 +194,12 @@ export class Horde {
     return out;
   }
 
-  /** Fait apparaître un alien à un endroit précis (résurrection par un chaman), si le plafond le permet. */
+  /** Fait apparaître un alien à un endroit précis (invocation ou résurrection par un chaman), si le plafond le permet ; il ne donne jamais d'XP. */
   spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false): void {
     if (!this.canSpawn(type)) return;
-    this.sim.aliens.push(this.create(ALIENS[type], x, y, hpFrac, revived));
+    const made = this.create(ALIENS[type], x, y, hpFrac, revived);
+    made.noXp = true; // invoqué (essaim de la Gling Mère) ou ressuscité (chaman) : ne laisse jamais de globe d'XP
+    this.sim.aliens.push(made);
   }
 
   /**
@@ -299,10 +302,12 @@ export class Horde {
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
       const power = a.revived ? ZOMBIE_DMG_MUL : 1; // zombie : bonus de dégâts (config)
       a.age += dt;
-      const enrageTimes = def.boss?.enrageTimes ?? BOSS_ENRAGE.times;
-      if (def.boss && a.enraged < enrageTimes.length && a.age >= enrageTimes[a.enraged]) {
-        a.enraged++; // un boss qui traîne s'enrage (puis une seconde fois)
-        this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level: a.enraged });
+      if (def.boss) {
+        const level = Math.floor(a.age / BOSS_ENRAGE.every); // un boss qui traîne s'enrage toutes les `every` s, sans fin
+        if (level > a.enraged) {
+          a.enraged = level;
+          this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level });
+        }
       }
       if (a.revived) speed *= ENRAGED_SPEED; // enragé : plus rapide, attaque plus vite
       else if (a.enraged) speed *= 1 + BOSS_ENRAGE.speed * a.enraged;

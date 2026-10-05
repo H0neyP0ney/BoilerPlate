@@ -8,6 +8,19 @@ import { i18n, LANGS, type Lang } from './i18n';
  */
 storage.setNamespace('xiao-swarm');
 
+/**
+ * Version de la sauvegarde : l'incrémenter REMET À ZÉRO, chez tous les joueurs au prochain lancement, la progression (tutoriel à rejouer,
+ * compteur de parties pour les interstitielles, record) ; les réglages (volumes, mutes, langue, zoom…) sont conservés. À faire quand une
+ * version change assez le jeu pour que tout le monde doive refaire l'onboarding.
+ */
+export const SAVE_VERSION = 2;
+if (storage.get<number>('saveVersion', 0) < SAVE_VERSION) {
+  storage.set('settings.tutorialDone', false);
+  storage.set('gamesPlayed', 0);
+  storage.set('bestTime', 0);
+  storage.set('saveVersion', SAVE_VERSION);
+}
+
 /** Réglages joueur (menu « Réglages »), mémorisés dans le navigateur. */
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 1.5;
@@ -15,7 +28,9 @@ export const ZOOM_STEP = 0.1;
 /** Graduations de la réglette de volume de la musique (0 = coupée, 10 = plein volume). */
 export const MUSIC_STEPS = 10;
 /** Cran de volume de la musique à la première partie. */
-export const MUSIC_DEFAULT = 6;
+export const MUSIC_DEFAULT = 5;
+/** Cran de volume des bruitages à la première partie (5/10 = 50 %). */
+export const SFX_DEFAULT = 5;
 /** Gain réel de la musique au cran maximal (la réglette 0-10 est mise à l'échelle : plein volume = 1/6 du volume du fichier). */
 export const MUSIC_MAX_GAIN = 1 / 6;
 /**
@@ -54,10 +69,10 @@ export const settings = {
   starfield: flag('starfield', 'space', false),
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
   zoom: clamp(storage.get('settings.zoom', 1), ZOOM_MIN, ZOOM_MAX),
-  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 6. */
+  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 5 (50 %). */
   musicVolume: clamp(Math.round(storage.get('settings.musicVolume', MUSIC_DEFAULT)), 0, MUSIC_STEPS),
   /** Volume des bruitages (tirs…), en crans de 0 à `MUSIC_STEPS` (menu Options). */
-  sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', 6)), 0, MUSIC_STEPS),
+  sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', SFX_DEFAULT)), 0, MUSIC_STEPS),
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */
   debugMode: storage.get<boolean>('settings.debugMode', import.meta.env.DEV) === true,
 
@@ -90,7 +105,7 @@ export const settings = {
   },
   toggleSfx(): void {
     if (this.sfxOn()) return this.setSfxMuted(true);
-    if (this.sfxVolume === 0) this.setSfxVolume(6);
+    if (this.sfxVolume === 0) this.setSfxVolume(SFX_DEFAULT);
     this.setSfxMuted(false);
   },
 

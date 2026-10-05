@@ -53,10 +53,11 @@ export const ALIEN_SPAWN_HOLD = 0.7;
 /** Stats de base de toute squad (partie normale comme tutoriel) avant toute upgrade : dégâts +20 %, cadence +15 %, PV +30 %, vitesse +8 %, recrues +30 %. */
 export const SQUAD_BASE = { damage: 1.2, fireRate: 1.15, hp: 1.3, speed: 1.08, recruit: 1.3 } as const;
 /**
- * Boss enragé : à chaque palier de `times` (âge du boss en s : 1:00, puis 1:45), +30 % de vitesse de déplacement et d'attaque et −30 % de
- * cooldown des capacités spéciales (cumulés : niveau 2 = +60 % / −60 %). Les flammes d'enragé sont plus denses au niveau 2.
+ * Boss enragé : un niveau d'enragement toutes les `every` s après son apparition, SANS FIN (30 s, 1:00, 1:30, 2:00…) ; chaque niveau ajoute
+ * +30 % de vitesse de déplacement et d'attaque et −30 % de cooldown des capacités spéciales (cumulés ; le gain de cooldown plafonne à ×10).
+ * Les flammes d'enragé sont plus denses à partir du niveau 2.
  */
-export const BOSS_ENRAGE = { times: [60, 105], speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
+export const BOSS_ENRAGE = { every: 30, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
 /**
@@ -77,6 +78,8 @@ export const REINFORCE_MAX_OVERCAP = 3;
 export const REROLLS_PER_RUN = 2;
 /** Les `FREE_GAMES` premières parties jouées sont sans pub interstitielle : elle précède chaque partie à partir de la suivante (la 4e). Compteur des parties lancées, mémorisé d'une session à l'autre (`gamesPlayed`). */
 export const FREE_GAMES = 3;
+/** Interrupteur des interstitielles entre deux parties : FAUX pour le moment (seule la pub récompensée du revive est active). Remettre à `true` pour appliquer la règle `FREE_GAMES`. */
+export const INTERSTITIALS_ENABLED = false;
 /**
  * Recrues : durée de vie au sol (s). À l'apparition, elle fait un saut en cloche (`hopTime` s, `hopHeight` px de haut dans l'affichage)
  * vers la squad du tueur : distance tirée dans `hopDist` (px, sans dépasser la squad), direction écartée au hasard de ± `hopSpread` rad.

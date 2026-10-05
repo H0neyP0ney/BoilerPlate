@@ -60,7 +60,7 @@ export interface AlienDef {
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
   tint?: number;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
-  boss?: { kind: 'mini' | 'final'; /** Âges (s) des enragements de ce boss, à la place de `BOSS_ENRAGE.times`. */ enrageTimes?: readonly number[] };
+  boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
   /**
@@ -364,7 +364,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     target: 'nearest',
     swarm: { every: 3, duration: 1.07, count: 30, spawn: 'gling' },
-    boss: { kind: 'mini', enrageTimes: [30, 60, 90] }, // s'enrage 3 fois (30 s, 1:00, 1:30 après son apparition)
+    boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1,
     color: 0xff5aa8,

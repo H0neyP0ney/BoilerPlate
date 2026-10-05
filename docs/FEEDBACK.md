@@ -92,7 +92,10 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 ## Session du 05/10
 - ~~Revive spécial de la partie du tutoriel : un seul bouton « Free Revive », onde de choc qui détruit~~
 - ~~Stats de base : vitesse ×1,08, recrues ×1,3, dégâts ×1,2, PV ×1,3~~
-- ~~Gling Mère : one-shot, essaim toutes les 3 s, 3 enragements (30 s, 1:00, 1:30) ; autres boss 1:00 / 1:45~~
+- ~~Gling Mère : one-shot, essaim toutes les 3 s~~
+- ~~Boss : enragement sans fin, un niveau toutes les 30 s après l'apparition~~
+- ~~Unités invoquées ou ressuscitées : jamais de globe d'XP~~
+- ~~Grosse barre de vie du boss −30 % (364 px)~~
 - ~~Carte +10 % (3802 px)~~
 - ~~Habillage : timeline, barre d'XP, barre de vie du boss, boutons pause / son / musique, icône rewarded, cartes d'upgrade (+ prismatique holographique, icônes, slots, titre, Reroll)~~
 - ~~Mute au clic sur les boutons son / musique ; volume max de la musique ÷6 ; anglais par défaut ; musique au premier input~~
@@ -100,6 +103,7 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~Textes flottants de la squad : animation commune, suivi sans décrochage~~
 - ~~Glaçon repoussé par l'onde de choc avec le soldat gelé~~
 - ~~Pubs : rewarded revive + interstitielle entre parties à partir de la 4e~~
+- ~~Combat de boss : barre de vie à la place de la timeline ; vagues figées + rejeu des 5 dernières sans XP ; pause du gestionnaire au-delà de 150 aliens (reprise à 100)~~
 - À valider en jeu : rendu mobile des nouvelles cartes / barres, texte français de la capsule « PROCHAIN BOSS : », fluidité des textes flottants, pubs avec le vrai SDK Poki.
 
 ## Idées de gameplay

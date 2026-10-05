@@ -107,10 +107,10 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
   },
   timeline: [
     { at: 0, level: 1 },
-    { at: 5, level: 1, every: 3, until: 11 },
-    { at: 12, level: 2 },
-    { at: 16, level: 2, every: 2.5, until: 21 },
-    { at: 23, level: 2, every: 2, until: 29 },
+    { at: 3, level: 1, every: 2, until: 7 },
+    { at: 8, level: 2 },
+    { at: 11, level: 2, every: 2, until: 15 },
+    { at: 17, level: 2, every: 1.75, until: 22 },
     { at: 30, level: 3 },
     { at: 32.5, level: 2, every: 2, until: 38.5 },
     { at: 40, level: 3 },
@@ -280,6 +280,18 @@ export function pressureAt(time: number): number {
   for (const p of WAVE_PRESSURE) if (time >= p.from && time < p.to) mul *= p.mul;
   return mul;
 }
+
+/**
+ * Plafond d'aliens : au-dessus de `pauseAbove` aliens vivants, le gestionnaire de vagues se met en pause (plus aucun envoi, timeline figée)
+ * jusqu'à ce qu'il en reste `resumeAt` ou moins.
+ */
+export const WAVE_CAP = { pauseAbove: 150, resumeAt: 100 };
+
+/**
+ * Combat de boss : la timeline est suspendue tant qu'un boss est vivant ; on renvoie à la place, en boucle, les `count` derniers envois qui ont
+ * précédé son apparition (écarts plafonnés à `maxGap` s, `wrapGap` s de repos entre deux tours). Ces aliens ne laissent aucun globe d'XP.
+ */
+export const BOSS_REPLAY = { count: 5, maxGap: 4, wrapGap: 3 };
 
 /** Instants (s) où une entrée de la timeline envoie son niveau. */
 export function entryTimes(e: TimelineEntry): number[] {

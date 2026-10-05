@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
-import { FREE_GAMES, SCENES } from '../config';
+import { FREE_GAMES, INTERSTITIALS_ENABLED, SCENES } from '../config';
 import type { SoldierClassId } from '../data/classes';
 import { TUTORIAL } from '../data/tutorial';
 import { MODES, type ModeDef } from '../data/modes';
@@ -180,7 +180,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Pub interstitielle avant la prochaine partie ? Pas avant les `FREE_GAMES` premières parties jouées (compteur mémorisé d'une session à l'autre). */
   private adBeforeNextGame(): boolean {
-    return storage.get('gamesPlayed', 0) >= FREE_GAMES;
+    return INTERSTITIALS_ENABLED && storage.get('gamesPlayed', 0) >= FREE_GAMES;
   }
 
   /** Premier input du joueur : le gameplay démarre (Poki) et la musique se lance (en boucle, sans relance si elle joue déjà). */

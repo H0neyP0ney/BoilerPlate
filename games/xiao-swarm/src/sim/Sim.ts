@@ -123,6 +123,14 @@ export class Sim {
         }
       },
       this.rng,
+      {
+        bossAlive: () => this.aliens.some((a) => a.alive && !!a.def.boss),
+        aliveCount: () => {
+          let n = 0;
+          for (const a of this.aliens) if (a.alive) n++;
+          return n;
+        },
+      },
     );
   }
 
@@ -696,7 +704,7 @@ export class Sim {
       return;
     }
     this.recruits.maybeDrop(a, squad);
-    if (this.xpEnabled) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // le bonus d'XP de la squad qui a tué agrandit le butin
+    if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 
   /** Boucle de glace : gèle (glaçon) le seul soldat touché ; `ring` = rayon (px) de l'onde visuelle de l'impact. */

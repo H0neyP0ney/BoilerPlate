@@ -1,14 +1,16 @@
 // Déploiement en un clic : build web du jeu puis upload FTP de dist/ dans <REMOTE_DIR>/<version>/.
 // Chaque version reste sur le serveur (historique). Identifiants dans .env.deploy (voir .env.deploy.example).
 //
-//   npm run deploy                 build + upload de la version de games/xiao-swarm/package.json
+//   npm run deploy                 demande quoi faire (terminal interactif) : [N] telle quelle, [B] bump, [F] force ; sinon build + upload de la version actuelle
 //   npm run deploy -- --bump       incrémente d'abord la version patch (0.1.0 → 0.1.1)
 //   npm run deploy -- --force      écrase la version si elle existe déjà sur le serveur
 //   npm run deploy -- --skip-build envoie le dist/ existant sans rebuild
+//   npm run deploy -- --no-prompt  ne pose pas la question (utile en script)
 //   npm run deploy -- --game=_starter   autre jeu du monorepo
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 import { Client } from 'basic-ftp';
 
 const args = process.argv.slice(2);
@@ -43,7 +45,24 @@ const run = (cmd) => {
   if (r.status !== 0) fail(`Échec de : ${cmd}`);
 };
 
-if (flag('bump')) run(`npm version patch --no-git-tag-version -w ${JSON.parse(readFileSync(join(gameDir, 'package.json'), 'utf8')).name}`);
+// Choix de la version : sans --bump ni --force, on demande (terminal interactif seulement ; --no-prompt pour l'éviter)
+let bump = flag('bump');
+let force = flag('force');
+if (!bump && !force && !flag('no-prompt') && process.stdin.isTTY) {
+  const current = JSON.parse(readFileSync(join(gameDir, 'package.json'), 'utf8')).version;
+  console.log(`\nVersion actuelle : ${current}`);
+  console.log('  [N] déployer la version actuelle telle quelle (échoue si elle existe déjà sur le serveur)');
+  console.log('  [B] bump : passer à la version suivante (patch) puis déployer');
+  console.log('  [F] force : écraser la version actuelle sur le serveur');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = (await rl.question('Choix [N/B/F] (N par défaut) : ')).trim().toLowerCase();
+  rl.close();
+  if (answer === 'b') bump = true;
+  else if (answer === 'f') force = true;
+  else if (answer !== '' && answer !== 'n') fail(`Choix inconnu : "${answer}" (attendu N, B ou F).`);
+}
+
+if (bump) run(`npm version patch --no-git-tag-version -w ${JSON.parse(readFileSync(join(gameDir, 'package.json'), 'utf8')).name}`);
 const { name, version } = JSON.parse(readFileSync(join(gameDir, 'package.json'), 'utf8'));
 if (!/^[\w.-]+$/.test(version)) fail(`Version invalide : ${version}`);
 
@@ -66,7 +85,7 @@ try {
 
   await client.ensureDir(env.REMOTE_DIR);
   const existing = (await client.list()).some((f) => f.name === version);
-  if (existing && !flag('force')) {
+  if (existing && !force) {
     fail(`La version ${version} existe déjà sur le serveur. Utilise --bump (nouvelle version) ou --force (écraser).`);
   }
 

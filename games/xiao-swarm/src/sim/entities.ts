@@ -100,10 +100,12 @@ export interface AlienState extends Body {
   swarmCd: number;
   swarmT: number;
   swarmAcc: number;
-  /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, 1, 2 ; voir `BOSS_ENRAGE`). */
+  /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, +1 toutes les `BOSS_ENRAGE.every` s sans fin ; voir `BOSS_ENRAGE`). */
   enraged: number;
   /** Temps écoulé depuis l'apparition (s), pour l'enragement des boss. */
   age: number;
+  /** Ne laisse aucun globe d'XP : envoyé par un rejeu de vague pendant un combat de boss (pas de farm en laissant le boss en vie), invoqué ou ressuscité. */
+  noXp: boolean;
   /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */
   lurkPhase: number;
   lurkT: number;

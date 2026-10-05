@@ -352,6 +352,7 @@ export class Mirror {
         captive: null,
         revived: false,
         enraged: 0,
+        noXp: false,
         age: 0,
         swarmCd: 0,
         swarmT: 0,

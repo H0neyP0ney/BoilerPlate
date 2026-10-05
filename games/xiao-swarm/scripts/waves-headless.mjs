@@ -1,4 +1,5 @@
-// Teste l'horloge de la timeline des vagues (`WaveRunner`) sans navigateur : la timeline avance sans pause (boss vivant ou non).
+// Teste l'horloge de la timeline des vagues (`WaveRunner`) sans navigateur : timeline normale, suspension pendant un boss (rejeu des
+// 5 dernières vagues, sans XP) et pause quand il y a trop d'aliens.
 // Usage : node scripts/waves-headless.mjs
 import { createServer } from 'vite';
 
@@ -11,31 +12,90 @@ const check = (ok, label, detail = '') => {
 
 try {
   const { WaveRunner } = await vite.ssrLoadModule('/src/sim/WaveRunner.ts');
-  const { DEFAULT_WAVE_SCRIPT } = await vite.ssrLoadModule('/src/data/waves.ts');
+  const { DEFAULT_WAVE_SCRIPT, WAVE_CAP, BOSS_REPLAY } = await vite.ssrLoadModule('/src/data/waves.ts');
+  const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { Rng } = await vite.ssrLoadModule('@xiao/engine/sim');
   const DT = 1 / 30;
+  /** Un runner dont l'état (boss vivant, nombre d'aliens) est piloté par le test. */
   const make = () => {
+    const state = { boss: false, aliens: 0 };
     const log = [];
-    const runner = new WaveRunner(DEFAULT_WAVE_SCRIPT, (type, count) => log.push({ type, count, at: runner.cursor }), new Rng(7));
-    return { runner, log };
+    const runner = new WaveRunner(
+      DEFAULT_WAVE_SCRIPT,
+      (type, count) => log.push({ type, count, at: runner.cursor, time: runner.time, replaying: runner.replaying, boss: !!ALIENS[type].boss }),
+      new Rng(7),
+      { bossAlive: () => state.boss, aliveCount: () => state.aliens },
+    );
+    return { runner, log, state };
   };
-  const run = (runner, secs, ctx) => {
-    for (let i = 0; i < secs / DT; i++) runner.update(DT, typeof ctx === 'function' ? ctx() : ctx);
+  const run = (runner, secs) => {
+    for (let i = 0; i < secs / DT; i++) runner.update(DT);
+  };
+  /** Avance jusqu'à ce que le boss soit apparu (le test déclare ensuite le boss vivant). */
+  const runUntilBoss = (runner, log) => {
+    for (let i = 0; i < 100 / DT && !log.some((e) => e.boss); i++) runner.update(DT);
   };
 
-  // 1) sans boss ni suspension : les deux horloges avancent ensemble
+  // 1) sans boss ni plafond : les deux horloges avancent ensemble
   {
     const { runner } = make();
-    run(runner, 60);
-    check(Math.abs(runner.cursor - runner.time) < 1e-6 && runner.time > 59.9, 'sans cas particulier : curseur = durée de la partie', `${runner.cursor.toFixed(2)} / ${runner.time.toFixed(2)}`);
+    run(runner, 55);
+    check(Math.abs(runner.cursor - runner.time) < 1e-6 && runner.time > 54.9, 'sans cas particulier : curseur = durée de la partie', `${runner.cursor.toFixed(2)} / ${runner.time.toFixed(2)}`);
   }
 
-  // 2) un boss vivant ne ralentit pas la timeline : les vagues suivantes arrivent à l'heure
+  // 2) combat de boss : la timeline est figée, les derniers envois d'avant le boss sont rejoués en boucle (marqués « sans XP »)
   {
-    const { runner, log } = make();
-    run(runner, 130);
-    check(log.some((e) => e.type === 'boss_rhino') && Math.abs(runner.cursor - runner.time) < 1e-6, 'boss : la timeline continue sans pause (curseur = durée de la partie)', `${runner.cursor.toFixed(1)} s`);
+    const { runner, log, state } = make();
+    runUntilBoss(runner, log);
+    const bossEntry = log.find((e) => e.boss);
+    state.boss = true;
+    const cursorAtBoss = runner.cursor;
+    const before = log.length;
+    run(runner, 40);
+    const replayed = log.slice(before);
+    check(!!bossEntry && Math.abs(runner.cursor - cursorAtBoss) < DT * 2, 'boss vivant : la timeline est figée (curseur à l\'arrivée du boss)', `${runner.cursor.toFixed(1)} s`);
+    check(runner.time > cursorAtBoss + 39, 'boss vivant : la durée de la partie continue', `${runner.time.toFixed(1)} s`);
+    check(replayed.length > 0 && replayed.every((e) => e.replaying && !e.boss), 'boss vivant : des vagues sont renvoyées en continu, marquées « rejeu » (sans XP), jamais un boss', `${replayed.length} envois en 40 s`);
+    // la boucle compte BOSS_REPLAY.count envois différents (un par entrée), répétée
+    const levels = [...new Set(replayed.map((e) => e.at))];
+    check(levels.length === 1, 'le rejeu ne fait pas avancer le curseur', `${levels.length} valeur(s)`);
+    state.boss = false;
+    const cursorBefore = runner.cursor;
+    run(runner, 5);
+    check(runner.cursor > cursorBefore + 4.5 && !runner.replaying, 'boss tué : la timeline reprend', `${cursorBefore.toFixed(1)} → ${runner.cursor.toFixed(1)} s`);
   }
+
+  // 3) trop d'aliens : plus aucun envoi, curseur figé, reprise sous le seuil bas (hystérésis)
+  {
+    const { runner, log, state } = make();
+    run(runner, 20);
+    state.aliens = WAVE_CAP.pauseAbove + 10;
+    run(runner, 0.1);
+    const cursorPaused = runner.cursor;
+    const sent = log.length;
+    run(runner, 15);
+    check(runner.suspended && Math.abs(runner.cursor - cursorPaused) < 1e-6 && log.length === sent, `plus de ${WAVE_CAP.pauseAbove} aliens : le gestionnaire est en pause (aucun envoi, curseur figé)`, `${log.length - sent} envois`);
+    state.aliens = WAVE_CAP.resumeAt + 20; // redescendu, mais pas encore sous le seuil bas
+    run(runner, 3);
+    check(runner.suspended && Math.abs(runner.cursor - cursorPaused) < 1e-6, `entre ${WAVE_CAP.resumeAt} et ${WAVE_CAP.pauseAbove} aliens : toujours en pause (hystérésis)`);
+    state.aliens = WAVE_CAP.resumeAt;
+    run(runner, 3);
+    check(!runner.suspended && runner.cursor > cursorPaused + 2.5, `retombé à ${WAVE_CAP.resumeAt} aliens : la timeline reprend`, `${cursorPaused.toFixed(1)} → ${runner.cursor.toFixed(1)} s`);
+  }
+
+  // 4) combat de boss avec trop d'aliens : le rejeu aussi est en pause
+  {
+    const { runner, log, state } = make();
+    runUntilBoss(runner, log);
+    state.boss = true;
+    run(runner, 1);
+    state.aliens = WAVE_CAP.pauseAbove + 1;
+    const sent = log.length;
+    run(runner, 20);
+    check(log.length === sent, 'boss vivant et trop d\'aliens : le rejeu s\'arrête aussi', `${log.length - sent} envois`);
+  }
+
+  check(BOSS_REPLAY.count === 5, 'le rejeu porte sur les 5 dernières vagues avant le boss');
 } finally {
   await vite.close();
 }

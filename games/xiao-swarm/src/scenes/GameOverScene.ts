@@ -11,6 +11,8 @@ export interface GameOverData {
   kills: number;
   best: number;
   canRevive: boolean;
+  /** Partie qui suit le tutoriel : seul bouton « Free Revive » (revive offert, onde de choc létale). */
+  freeRevive?: boolean;
   /** Scoreboard : un joueur par ligne (aliens tués, dégâts totaux). */
   scores: ScoreRow[];
   /** Remplace le titre (ex. connexion perdue). */
@@ -66,6 +68,13 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     if (data.scores.length > 0) buildScoreboard(this, cx, cy - 70 - up, data.scores);
+    if (data.freeRevive) {
+      // partie qui suit le tutoriel : un seul bouton, le revive offert
+      const free: Button = new Button(this, cx, cy + 5 + up, { label: t('freeRevive'), width: 360, height: 88, onClick: () => this.revive(free, true) });
+      this.input.keyboard!.on('keydown-ENTER', () => free.trigger());
+      this.input.keyboard!.on('keydown-SPACE', () => free.trigger());
+      return;
+    }
     const retry = new Button(this, cx, cy + 5 + up, { label: t('retry'), width: 360, height: 88, onClick: () => this.retry() });
 
     if (data.canRevive) {
@@ -99,10 +108,10 @@ export class GameOverScene extends Phaser.Scene {
     await this.gameScene.retry();
   }
 
-  private async revive(button: Button): Promise<void> {
+  private async revive(button: Button, free = false): Promise<void> {
     if (this.busy) return;
     this.busy = true;
-    if (await this.gameScene.revive()) {
+    if (await this.gameScene.revive(free)) {
       this.scene.stop();
       return;
     }

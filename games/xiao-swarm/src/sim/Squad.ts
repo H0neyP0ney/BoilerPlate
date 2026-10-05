@@ -45,7 +45,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: SQUAD_BASE.damage, fireRate: SQUAD_BASE.fireRate, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: SQUAD_BASE.damage, fireRate: SQUAD_BASE.fireRate, hp: SQUAD_BASE.hp, speed: SQUAD_BASE.speed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: SQUAD_BASE.recruit, xpGain: 1, range: 1, crit: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;

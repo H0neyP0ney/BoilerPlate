@@ -79,13 +79,23 @@ export class RunFlow {
     return true;
   }
 
+  /** Revive offert (sans pub : aide à la première partie). Reprend le jeu comme `revive`. */
+  reviveFree(): boolean {
+    if (this._state !== 'dead') return false;
+    this._state = 'playing';
+    poki.gameplayStart();
+    poki.measure('reward', 'free_revive', 'complete');
+    return true;
+  }
+
   /**
    * Avant de relancer une partie (retry / rejouer, relance coop). Depuis n'importe quel état : le gameplay est arrêté d'abord
    * (jamais deux `gameplayStop` de suite : `poki` les filtre), l'état repasse tout de suite à `ready`, la pub passe ensuite.
+   * `ad: false` : pas de pub interstitielle (le jeu en décide, ex. pas pour les premières parties).
    */
-  async restart(): Promise<void> {
+  async restart({ ad = true }: { ad?: boolean } = {}): Promise<void> {
     this._state = 'ready';
     poki.gameplayStop();
-    await poki.commercialBreak();
+    if (ad) await poki.commercialBreak();
   }
 }

@@ -5,7 +5,7 @@ import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
 import { getDefaultUpgradeStats, getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
 import { button, header, line, note, panel, slider } from '../dev/devUi';
 import { t } from '../i18n';
-import { UPGRADE_ICONS } from '../view/PickupViews';
+import { upgradeIconKey } from '../view/upgradeIcons';
 
 /**
  * Visionneuse d'upgrades (dev uniquement) : toutes les cartes de choix d'upgrade affichées d'un coup, comme dans la fenêtre de montée de
@@ -55,7 +55,8 @@ export class UpgradeViewerScene extends Phaser.Scene {
     const badge = this.add.graphics();
     const color = UPGRADES[id].color;
     badge.fillStyle(color, 1).fillCircle(-CARD_W / 2 + 14 + 18, 0, 18).lineStyle(2, 0xffffff, 0.7).strokeCircle(-CARD_W / 2 + 14 + 18, 0, 18);
-    const icon = this.add.text(-CARD_W / 2 + 32, 0, UPGRADE_ICONS[id], { fontFamily: theme.font, fontSize: '20px' }).setOrigin(0.5);
+    const icon = this.add.image(-CARD_W / 2 + 32, 0, upgradeIconKey(id));
+    icon.setScale(28 / Math.max(icon.width, icon.height));
     const tx = -CARD_W / 2 + 14 + 36 + 10;
     const name = this.add.text(tx, -CARD_H / 2 + 24, t(`up_${id}`), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0, 0.5);
     const desc = this.add.text(tx, -CARD_H / 2 + 40, '', { fontFamily: theme.font, fontSize: '15px', color: '#dfe8ff', wordWrap: { width: CARD_W - (tx + CARD_W / 2) - 10 } });
@@ -123,7 +124,7 @@ export class UpgradeViewerScene extends Phaser.Scene {
     });
     syncs.push(v.sync, m.sync);
     p.append(
-      header(`${UPGRADE_ICONS[id]} ${t(`up_${id}`)}`, () => {
+      header(t(`up_${id}`), () => {
         this.statsPanel?.remove();
         this.statsPanel = undefined;
         this.selected = null;

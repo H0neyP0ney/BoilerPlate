@@ -1,10 +1,18 @@
 import Phaser from 'phaser';
 import { theme } from '@xiao/engine';
-import { PALETTE, SCENES, UPGRADE_CHOICE_TIME } from '../config';
+import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import { UPGRADES, type UpgradeId } from '../data/progression';
-import { UPGRADE_ICONS } from '../view/PickupViews';
+import { upgradeIconKey } from '../view/upgradeIcons';
+import { CARD, cardTexture } from '../view/upgradeCards';
 import { t } from '../i18n';
 import type { GameScene } from './GameScene';
+
+/** Résolution du texte des cartes (multiple de la taille d'écran) : le texte est dessiné 3× plus grand puis affiché réduit, donc net, contour compris. */
+const CARD_TEXT_RES = 3;
+/** Largeur (px) du bouton « Relancer ». */
+const REROLL_W = 190;
+/** Valeur de `pressed` quand le bouton enfoncé est « Relancer » (les cartes utilisent leur indice, -1 = rien). */
+const REROLL_PRESSED = -2;
 
 export interface LevelUpData {
   /** Propositions du joueur local, ou null : il a déjà choisi (en ligne, on attend les autres joueurs). */
@@ -32,7 +40,7 @@ export class LevelUpScene extends Phaser.Scene {
   private timerBar!: Phaser.GameObjects.Graphics;
   private timerBox = { x: 0, y: 0, w: 0 };
   private waitText!: Phaser.GameObjects.Text;
-  /** Carte sur laquelle le bouton a été enfoncé DANS cette fenêtre (-1 : aucune). */
+  /** Carte (ou « Relancer », `REROLL_PRESSED`) sur laquelle le bouton a été enfoncé DANS cette fenêtre (-1 : aucune). */
   private pressed = -1;
 
   constructor() {
@@ -54,16 +62,7 @@ export class LevelUpScene extends Phaser.Scene {
 
     const dim = this.add.rectangle(0, 0, 10, 10, 0x05101c, 0.5).setOrigin(0).setAlpha(0);
     this.tweens.add({ targets: dim, alpha: 1, duration: 160 });
-    const title = this.add
-      .text(0, 0, t('levelUpPop'), {
-        fontFamily: theme.font,
-        fontSize: '28px',
-        fontStyle: 'bold',
-        color: '#9fd3ff',
-        stroke: '#13233a',
-        strokeThickness: 7,
-      })
-      .setOrigin(0.5, 1);
+    const title = this.add.image(0, 0, 'ui_levelup_title').setOrigin(0.5, 1); // art-src/levelup.png
     this.waitText = this.add
       .text(0, 0, t('waitingPlayers'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6 })
       .setOrigin(0.5)
@@ -79,14 +78,15 @@ export class LevelUpScene extends Phaser.Scene {
         // carte prismatique : pluie de particules RGB qui montent sur toute la carte
         this.prismFx.set(
           i,
-          this.add.particles(0, 0, 'fx_dot', {
+          this.add.particles(0, 0, 'fx_star', {
             speedY: { min: -38, max: -8 },
             speedX: { min: -12, max: 12 },
-            scale: { start: 1, end: 0 },
+            scale: { start: 0.4, end: 0 },
+            rotate: { start: 0, end: 160 },
             alpha: { start: 1, end: 0 },
             lifespan: { min: 600, max: 1100 },
-            frequency: 12,
-            quantity: 2,
+            frequency: 16,
+            quantity: 1,
             tint: [0xff3a3a, 0xffb43a, 0xfff03a, 0x3aff6a, 0x3ac8ff, 0x8a3aff, 0xff3aff],
             blendMode: 'ADD',
           }),
@@ -111,41 +111,52 @@ export class LevelUpScene extends Phaser.Scene {
     }
 
     // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R)
-    let rerollBtn: Phaser.GameObjects.Text | null = null;
+    let rerollBtn: Phaser.GameObjects.Container | null = null;
     if (offer.length && data.rerolls > 0) {
-      rerollBtn = this.add
-        .text(0, 0, `${t('reroll', { value: data.rerolls })}
-[R]`, { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#13233a', backgroundColor: '#9fd3ff', align: 'center', padding: { x: 26, y: 10 } })
+      // fond du bouton (art-src/bouton_reroll.png), texte blanc cerclé de noir par-dessus
+      const bg = this.add.image(0, 0, 'ui_reroll');
+      const k = REROLL_W / bg.width;
+      bg.setScale(k);
+      const label = this.add
+        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
         .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-      rerollBtn.on('pointerup', () => this.reroll());
+        .setResolution(CARD_TEXT_RES);
+      const hit = this.add.zone(0, 0, bg.displayWidth, bg.displayHeight).setInteractive({ useHandCursor: true });
+      // comme les cartes : il faut appuyer PUIS relâcher sur le bouton, dans cette fenêtre (un clic déjà enfoncé à l'ouverture ne relance rien)
+      hit.on('pointerdown', () => (this.pressed = REROLL_PRESSED));
+      hit.on('pointerup', () => {
+        if (this.pressed === REROLL_PRESSED) this.reroll();
+        this.pressed = -1;
+      });
+      rerollBtn = this.add.container(0, 0, [bg, label, hit]);
     }
 
     const layout = () => {
       const { width: w, height: h } = this.scale;
       dim.setSize(w, h);
       const n = Math.max(1, this.cards.length);
-      const vertical = w < 620;
-      const gap = 14;
-      const cw = vertical ? Math.min(w - 24, 360) : Math.min(270, (w - 40 - gap * (n - 1)) / n);
-      const ch = vertical ? 70 : 110;
-      const total = vertical ? n * ch + (n - 1) * gap : ch;
+      const vertical = w < 620; // petit écran : cartes plus serrées, textes plus petits
+      const gap = vertical ? 8 : 14;
+      const ratio = CARD.H / CARD.W;
+      // cartes en portrait, côte à côte : limitées par la largeur de l'écran et par sa hauteur (il reste de la place pour le titre, la barre de temps et « Relancer »)
+      const cw = Math.max(70, Math.min(190, (w - (vertical ? 24 : 40) - gap * (n - 1)) / n, (h * 0.46) / ratio));
+      const ch = cw * ratio;
+      const total = ch;
       // au centre de l'écran : titre, cartes, puis la barre de temps
       const top = h / 2 - total / 2;
-      title.setPosition(w / 2, top - 14 - (suggestArrow && !vertical ? 80 : 0)).setFontSize(vertical ? 20 : 28); // plus haut quand la flèche recommandée est au-dessus d'une carte
+      title.setPosition(w / 2, top - 44 - (suggestArrow ? 80 : 0)).setScale(Math.min(vertical ? 240 : 360, w - 40) / title.width); // plus haut quand la flèche recommandée est au-dessus d'une carte
       this.cards.forEach((c, i) => {
-        const x = vertical ? w / 2 : w / 2 + (i - (n - 1) / 2) * (cw + gap);
-        const y = vertical ? top + ch / 2 + i * (ch + gap) : top + ch / 2;
+        const x = w / 2 + (i - (n - 1) / 2) * (cw + gap);
+        const y = top + ch / 2;
         c.setPosition(x, y);
         this.resizeCard(c, cw, ch, vertical);
         if (suggestArrow && i === suggestIdx) {
-          // horizontal : au-dessus de la carte, pointe vers le bas ; en colonne (mobile) : à gauche, pointe vers la droite
-          suggestArrow.setText(vertical ? '▶' : '▼').setOrigin(vertical ? 1 : 0.5, vertical ? 0.5 : 1);
-          suggestArrow.setPosition(vertical ? x - cw / 2 - 6 : x, vertical ? y : y - ch / 2 - 8);
-          // le texte se pose au-dessus de la flèche (en colonne : au-dessus de la flèche, à gauche, sans sortir de l'écran)
-          suggestLabel?.setWordWrapWidth(Math.max(120, vertical ? x - cw / 2 - 12 : cw + 40), true);
-          suggestLabel?.setOrigin(vertical ? 1 : 0.5, vertical ? 0.5 : 1);
-          suggestLabel?.setPosition(vertical ? x - cw / 2 - 40 : x, vertical ? y : y - ch / 2 - 58);
+          // au-dessus de la carte, pointe vers le bas
+          suggestArrow.setText('▼').setOrigin(0.5, 1);
+          suggestArrow.setPosition(x, y - ch / 2 - 8);
+          suggestLabel?.setWordWrapWidth(Math.max(120, cw + 40), true);
+          suggestLabel?.setOrigin(0.5, 1);
+          suggestLabel?.setPosition(x, y - ch / 2 - 58);
         }
         const fx = this.prismFx.get(i);
         if (fx) {
@@ -154,11 +165,11 @@ export class LevelUpScene extends Phaser.Scene {
           fx.addEmitZone({ type: 'random', source: new Phaser.Geom.Rectangle(-cw / 2, -ch / 2, cw, ch), quantity: 1 } as Phaser.Types.GameObjects.Particles.EmitZoneData);
         }
       });
-      const barW = vertical ? cw : n * cw + (n - 1) * gap;
+      const barW = n * cw + (n - 1) * gap;
       this.timerBox = { x: w / 2 - barW / 2, y: top + total + 22, w: barW };
       this.waitText.setPosition(w / 2, this.cards.length ? top + total + 62 : h / 2);
       if (!this.cards.length) this.timerBox.y = h / 2 + 30;
-      rerollBtn?.setPosition(w / 2, top + total + (this.game_.session.online ? 96 : 54));
+      rerollBtn?.setPosition(w / 2, top + total + (this.game_.session.online ? 126 : 84)); // 30 px plus bas
     };
     layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
@@ -189,14 +200,16 @@ export class LevelUpScene extends Phaser.Scene {
   private makeCard(id: UpgradeId, index: number, count: number, prism: boolean): Phaser.GameObjects.Container {
     const def = UPGRADES[id];
     const c = this.add.container(0, 0);
-    const bg = this.add.graphics();
-    // raccourci clavier entre crochets, en bas au centre de la carte
-    const key = this.add.text(0, 0, `[${index + 1}]`, { fontFamily: theme.font, fontSize: '15px', fontStyle: 'bold', color: theme.textDim }).setOrigin(0.5, 1);
-    const name = this.add.text(0, 0, `${UPGRADE_ICONS[id]} ${t(`up_${id}`)}`, { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff' }).setOrigin(0, 0.5);
-    const desc = this.add.text(0, 0, t(`up_${id}_desc`, { value: def.value * (prism ? 2 : 1) }) + (prism ? `  (${t('prismatic')})` : ''), { fontFamily: theme.font, fontSize: '15px', color: '#dfe8ff' }).setOrigin(0, 0);
-    const stack = this.add
-      .text(0, 0, def.maxStacks < 99 ? t('upgradeCount', { value: count, max: def.maxStacks }) : '', { fontFamily: theme.font, fontSize: '13px', color: theme.textDim })
-      .setOrigin(1, 1);
+    const bg = this.add.image(0, 0, cardTexture(id, prism)); // prismatique : fond holographique
+    // nom en haut ; icône ; description ; compteur ; « Claim » sur la plaque dorée
+    const icon = this.add.image(0, 0, upgradeIconKey(id));
+    const name = this.add.text(0, 0, t(`up_${id}`), { fontFamily: theme.font, fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff', align: 'center' }).setOrigin(0.5);
+    const claim = this.add.text(0, 0, t('claim'), { fontFamily: theme.font, fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5); // sur la plaque dorée : le « bouton » de la carte
+    const desc = this.add
+      .text(0, 0, t(`up_${id}_desc`, { value: def.value * (prism ? 2 : 1) }), { fontFamily: theme.font, fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff', align: 'center' })
+      .setOrigin(0.5, 0);
+    const slots = this.makeSlots(id, def.maxStacks, count);
+    for (const txt of [name, claim, desc]) txt.setResolution(CARD_TEXT_RES); // texte rendu en haute résolution puis réduit : net malgré la réduction de la carte
     const hit = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => this.tweens.add({ targets: c, scale: 1.05, duration: 90 }));
     hit.on('pointerout', () => this.tweens.add({ targets: c, scale: 1, duration: 90 }));
@@ -206,30 +219,58 @@ export class LevelUpScene extends Phaser.Scene {
       if (this.pressed === index) this.pick(index);
       this.pressed = -1;
     });
-    c.add([bg, key, name, desc, stack, hit]);
-    c.setData({ id, bg, key, name, desc, stack, hit });
+    c.add([bg, icon, desc, slots, name, claim, hit]);
+    c.setData({ id, bg, icon, name, claim, desc, slots, hit });
     return c;
   }
 
+  /**
+   * Progression de l'upgrade en slots (images vide / plein) : une ligne par 5 prises maximum, chaque ligne centrée ; les prises faites
+   * (y compris celle qu'on s'apprête à prendre) sont pleines, les autres vides. Aucun slot pour une upgrade sans limite (Renfort). Positions en pixels de
+   * planche relatifs au centre de la carte (`CARD.slots`) : le conteneur est mis à l'échelle dans `resizeCard`.
+   */
+  private makeSlots(id: UpgradeId, max: number, count: number): Phaser.GameObjects.Container {
+    const box = this.add.container(0, 0);
+    if (max >= 99) return box;
+    const S = CARD.slots;
+    const rows = Math.ceil(max / S.cols);
+    for (let i = 0; i < max; i++) {
+      const row = Math.floor(i / S.cols);
+      const inRow = Math.min(S.cols, max - row * S.cols);
+      const col = i - row * S.cols;
+      const img = this.add.image((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep, i < count ? 'ui_slot_full' : `ui_slot_empty_${id}`);
+      img.setScale(S.size / img.width);
+      box.add(img);
+    }
+    return box;
+  }
+
+  /** Met la carte à la largeur `w` (hauteur = w × CARD.H / CARD.W) : le fond, puis chaque texte à son repère (CARD) à la même échelle. */
   private resizeCard(c: Phaser.GameObjects.Container, w: number, h: number, vertical: boolean): void {
-    const d = c.getData('id') as UpgradeId;
-    const color = UPGRADES[d].color;
-    const bg = c.getData('bg') as Phaser.GameObjects.Graphics;
-    const key = c.getData('key') as Phaser.GameObjects.Text;
+    const s = w / CARD.W;
+    const bg = c.getData('bg') as Phaser.GameObjects.Image;
+    const icon = c.getData('icon') as Phaser.GameObjects.Image;
     const name = c.getData('name') as Phaser.GameObjects.Text;
+    const claim = c.getData('claim') as Phaser.GameObjects.Text;
     const desc = c.getData('desc') as Phaser.GameObjects.Text;
-    const stack = c.getData('stack') as Phaser.GameObjects.Text;
+    const slots = c.getData('slots') as Phaser.GameObjects.Container;
     const hit = c.getData('hit') as Phaser.GameObjects.Zone;
-    bg.clear();
-    bg.fillStyle(PALETTE.panel, 0.82).fillRoundedRect(-w / 2, -h / 2, w, h, 12);
-    bg.fillStyle(color, 0.95).fillRoundedRect(-w / 2, -h / 2, 7, h, { tl: 12, tr: 0, bl: 12, br: 0 });
-    bg.lineStyle(2, color, 0.85).strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
-    key.setPosition(0, h / 2 - 5).setFontSize(vertical ? 13 : 15);
-    const tx = -w / 2 + 22;
-    const textW = w - 22 - 12;
-    name.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 18 : 26)).setFontSize(vertical ? 18 : 22);
-    desc.setWordWrapWidth(textW).setPosition(tx, -h / 2 + (vertical ? 34 : 46)).setFontSize(vertical ? 15 : 20);
-    stack.setPosition(w / 2 - 10, h / 2 - 6);
+    bg.setDisplaySize(w, h);
+    const at = (txt: Phaser.GameObjects.Text, p: { x: number; y: number }, size: number, minPx: number, stroke = 0) => {
+      txt.setFontSize(Math.max(minPx, size * s)).setPosition((p.x - CARD.W / 2) * s, (p.y - CARD.H / 2) * s);
+      if (stroke) txt.setStroke('#0a1422', Math.max(2, stroke * s));
+    };
+    icon.setPosition((CARD.icon.x - CARD.W / 2) * s, (CARD.icon.y - CARD.H / 2) * s).setScale(Math.max(CARD.icon.size * s, vertical ? 30 : 40) / Math.max(icon.width, icon.height));
+    slots.setScale(s); // positions en pixels de planche : le conteneur suit l'échelle de la carte
+    at(desc, CARD.desc, CARD.desc.size, 12, 10);
+    desc.setWordWrapWidth(CARD.desc.wrap * s, true);
+    at(name, CARD.name, CARD.name.size, 12, 9);
+    at(claim, CARD.claim, CARD.claim.size, 12, 11);
+    claim.setStroke('#000000', Math.max(2, 11 * s)); // blanc cerclé de noir
+    name.setWordWrapWidth(CARD.name.wrap * s, true);
+    // un nom trop long pour la carte est rétréci pour tenir
+    const maxNameW = CARD.name.wrap * s;
+    if (name.width > maxNameW) name.setFontSize(parseFloat(String(name.style.fontSize)) * (maxNameW / name.width));
     hit.setSize(w, h);
   }
 

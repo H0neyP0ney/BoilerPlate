@@ -38,7 +38,7 @@ export const FX_DEFAULTS = {
   /** Roquettes du power-up (fx_rocket, ligne droite) et leur traînée de fumée blanche opaque qui rétrécit jusqu'à 0 (fx_smoke). */
   rocket: { scale: 1.1, smokeScale: 0.55, smokeLifeMin: 300, smokeLifeMax: 520, smokeSpeed: 18, smokeSpread: 3 },
   /** Texte flottant : « +1 Gunner ! », « BOSS DOWN! » (taille fixée par l'appelant). */
-  text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 500, rise: 46 },
+  text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 600, rise: 30 },
   /**
    * Recrue « bonus +1 » composée (art/recruits.ts) : position (en part de la taille du globe, depuis son centre), taille
    * (part de la taille du globe) et opacité de chaque pièce ; taille affichée ; étoiles qui scintillent autour (recruit/star).

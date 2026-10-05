@@ -112,10 +112,28 @@ Consultation : projectiles (balle, blaster bleu, éclair vert, grenade en cloche
 vie, anneaux de squad, zone de soin, joystick, main du tutoriel, sol, eau, textures d'effets. Chaque aperçu rejoue la logique
 d'affichage du jeu ; curseur de ralenti.
 
+## Outils d'art (`tools/*.mjs`, Node + `pngjs`)
+
+Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/` et est découpé / recoloré par un script ; le résultat va dans `public/assets/ui/` (ou `fx/`) et est déclaré dans `src/assets/manifest.ts`. Les scripts écrivent leurs mesures (zones sombres, repères) dans la console ; elles sont reprises dans le code (`TIMELINE_ART`, `XP_ART`, `BOSS_ART`, `CARD`…).
+
+| Script | Source → sortie | Affiché par |
+|---|---|---|
+| `slice-timeline-ui.mjs` | `timeline_next_boss.png` → `ui/timeline/*` (cadre, jauge jaune 3-slice, flèche, crans, anneau) et `ui/xp/fill.png` (jauge jaune recolorée en bleu) | `view/TimelineHud.ts`, barre d'XP |
+| `slice-xp-bar.mjs` | `experience bar.png` → `ui/xp/frame.png` (cadre vidé) | `HudScene.drawXp` |
+| `slice-boss-bar.mjs` | `jauge_boss.png` → `ui/boss/frame.png` + `fill.png` (jauge de la timeline en rouge ; à lancer après `slice-timeline-ui`) | `HudScene.drawBoss` |
+| `slice-hud-buttons.mjs` | `bouton pause sound musique.png` → `ui/hud/` (bouton vide + 3 icônes) | `view/HudButtons.ts` |
+| `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_<id>.png` (11 couleurs) + `card_prism.png` (holographique) | `LevelUpScene` |
+| `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |
+| `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty_<id>.png` | slots des cartes |
+| `slice-levelup-title.mjs`, `slice-reroll-button.mjs`, `slice-star-particle.mjs`, `slice-rewarded-icon.mjs` | titre, bouton Reroll, étoile (`fx/star.png`), icône rewarded | `LevelUpScene`, `Button` du moteur |
+| `lighten-crit-digits.mjs [part]` | éclaircit le jaune des chiffres de critique (originaux sauvegardés dans `art-src/crit-original/`) | `Fx.crit` |
+
+Un changement de la source = relancer le script (les scripts sont idempotents). Le cadre vide des barres est reconstitué en recopiant en miroir le côté déjà vide de la planche.
+
 ## Test dans le panneau de prévisualisation de Claude
 
 Le navigateur du panneau fige souvent la boucle de jeu (4–10 fps, rendu qui se bloque) : après une navigation, attendre une
-trentaine de secondes avant d'interroger la page, et ne pas conclure à un bug si un effet met longtemps à apparaître. Pour
+trentaine de secondes avant d'interroger la page, et ne pas conclure à un bug si un effet met longtemps à apparaître. L'onglet masqué déclenche la pause du jeu (événement `hidden`) : `window.__game.events.off('hidden', scene.pauseGame)` l'évite en test ; les animations (tweens) n'avancent pas quand le rendu est figé. Pour
 vérifier de la logique sans dépendre du rendu, appeler `scene.session.advance(33, () => {})` à la main.
 
 ## Réglages mémorisés périmés

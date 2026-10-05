@@ -15,7 +15,9 @@ export const ZOOM_STEP = 0.1;
 /** Graduations de la réglette de volume de la musique (0 = coupée, 10 = plein volume). */
 export const MUSIC_STEPS = 10;
 /** Cran de volume de la musique à la première partie. */
-export const MUSIC_DEFAULT = 2;
+export const MUSIC_DEFAULT = 6;
+/** Gain réel de la musique au cran maximal (la réglette 0-10 est mise à l'échelle : plein volume = 1/6 du volume du fichier). */
+export const MUSIC_MAX_GAIN = 1 / 6;
 /**
  * Musique de fond (public/assets/audio), chargée en différé au lancement de la partie : OGG (léger), MP3 en secours pour les
  * navigateurs qui ne lisent pas l'OGG (vieux Safari iOS) ; un seul des deux est téléchargé. Source d'origine : art-src/audio.
@@ -52,12 +54,45 @@ export const settings = {
   starfield: flag('starfield', 'space', false),
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
   zoom: clamp(storage.get('settings.zoom', 1), ZOOM_MIN, ZOOM_MAX),
-  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 2 (dev et build Poki). */
+  /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 6. */
   musicVolume: clamp(Math.round(storage.get('settings.musicVolume', MUSIC_DEFAULT)), 0, MUSIC_STEPS),
   /** Volume des bruitages (tirs…), en crans de 0 à `MUSIC_STEPS` (menu Options). */
   sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', 6)), 0, MUSIC_STEPS),
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */
   debugMode: storage.get<boolean>('settings.debugMode', import.meta.env.DEV) === true,
+
+  /** Coupures (boutons du HUD) : le volume réglé dans Options est conservé et revient au rétablissement. */
+  musicMuted: storage.get<boolean>('settings.musicMuted', false) === true,
+  sfxMuted: storage.get<boolean>('settings.sfxMuted', false) === true,
+
+  /** La musique / les bruitages sont audibles (ni coupés, ni à 0). */
+  musicOn(): boolean {
+    return !this.musicMuted && this.musicVolume > 0;
+  },
+  sfxOn(): boolean {
+    return !this.sfxMuted && this.sfxVolume > 0;
+  },
+
+  setMusicMuted(on: boolean): void {
+    this.musicMuted = on;
+    storage.set('settings.musicMuted', on);
+  },
+  setSfxMuted(on: boolean): void {
+    this.sfxMuted = on;
+    storage.set('settings.sfxMuted', on);
+  },
+
+  /** Bouton du HUD : coupe, ou rétablit (volume remis par défaut s'il était à 0). */
+  toggleMusic(): void {
+    if (this.musicOn()) return this.setMusicMuted(true);
+    if (this.musicVolume === 0) this.setMusicVolume(MUSIC_DEFAULT);
+    this.setMusicMuted(false);
+  },
+  toggleSfx(): void {
+    if (this.sfxOn()) return this.setSfxMuted(true);
+    if (this.sfxVolume === 0) this.setSfxVolume(6);
+    this.setSfxMuted(false);
+  },
 
   /** Langue choisie dans le menu Options (null : jamais choisie, on suit le navigateur / Poki). */
   lang: ((l) => (LANGS as readonly string[]).includes(l ?? '') ? (l as Lang) : null)(storage.get<string | null>('settings.lang', null)),
@@ -71,21 +106,23 @@ export const settings = {
 
   /** Volume effectif (0 → 1) de la musique. */
   musicGain(): number {
-    return this.musicVolume / MUSIC_STEPS;
+    return this.musicMuted ? 0 : (this.musicVolume / MUSIC_STEPS) * MUSIC_MAX_GAIN;
   },
 
   /** Volume effectif (0 → 1) des bruitages. */
   sfxGain(): number {
-    return this.sfxVolume / MUSIC_STEPS;
+    return this.sfxMuted ? 0 : this.sfxVolume / MUSIC_STEPS;
   },
 
   setMusicVolume(steps: number): void {
     this.musicVolume = clamp(Math.round(steps), 0, MUSIC_STEPS);
+    if (this.musicVolume > 0) this.setMusicMuted(false); // toucher au volume rétablit le son
     storage.set('settings.musicVolume', this.musicVolume);
   },
 
   setSfxVolume(steps: number): void {
     this.sfxVolume = clamp(Math.round(steps), 0, MUSIC_STEPS);
+    if (this.sfxVolume > 0) this.setSfxMuted(false);
     storage.set('settings.sfxVolume', this.sfxVolume);
   },
 

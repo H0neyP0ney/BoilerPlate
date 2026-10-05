@@ -299,7 +299,8 @@ export class Horde {
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
       const power = a.revived ? ZOMBIE_DMG_MUL : 1; // zombie : bonus de dégâts (config)
       a.age += dt;
-      if (def.boss && a.enraged < BOSS_ENRAGE.times.length && a.age >= BOSS_ENRAGE.times[a.enraged]) {
+      const enrageTimes = def.boss?.enrageTimes ?? BOSS_ENRAGE.times;
+      if (def.boss && a.enraged < enrageTimes.length && a.age >= enrageTimes[a.enraged]) {
         a.enraged++; // un boss qui traîne s'enrage (puis une seconde fois)
         this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level: a.enraged });
       }

@@ -82,19 +82,13 @@ export class OptionsScene extends Phaser.Scene {
         },
       });
     }
-    // Tutoriel au démarrage (réglage mémorisé) : activé, il se lance au début de la prochaine partie solo ; il se désactive tout seul
-    // une fois terminé (voir `settings.tutorialDone`) ; le réactiver ici permet de le rejouer.
-    const tutorialLabel = () => `${t('tutorialAtStart')} : ${settings.tutorialDone ? t('off') : t('on')}`;
+    // Rejouer le tutoriel (et donc la première expérience) : après confirmation, la partie en cours est quittée et une nouvelle démarre avec le tutoriel.
     const tutorialBtn = new Button(this, 0, 0, {
-      label: tutorialLabel(),
+      label: t('replayTutorial'),
       variant: 'secondary',
       width: 340,
       height: 56,
-      onClick: () => {
-        settings.setTutorialDone(!settings.tutorialDone);
-        tutorialBtn.destroy();
-        this.scene.restart({ resumeGame: this.resumeGame }); // relabel simple : la scène se redessine
-      },
+      onClick: () => this.confirmReplayTutorial(),
     });
     // Langue : bascule anglais / français (mémorisée) ; la scène se redessine dans la nouvelle langue
     const langBtn: Button = new Button(this, 0, 0, {
@@ -136,6 +130,41 @@ export class OptionsScene extends Phaser.Scene {
     layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));
+  }
+
+  /** Fenêtre oui / non par-dessus le menu ; « Oui » quitte la partie en cours et relance une partie avec le tutoriel. */
+  private confirmReplayTutorial(): void {
+    const { width: w, height: h } = this.scale;
+    const cx = w / 2;
+    const cy = h / 2;
+    const items: Phaser.GameObjects.GameObject[] = [];
+    const veil = this.add.rectangle(0, 0, w, h, 0x0a1422, 0.6).setOrigin(0).setInteractive().setDepth(10);
+    const pw = Math.min(460, w - 32);
+    const box = this.add.graphics().setDepth(10);
+    box.fillStyle(PALETTE.panel, 1).fillRoundedRect(cx - pw / 2, cy - 110, pw, 220, 16);
+    box.lineStyle(3, PALETTE.panelBorder, 1).strokeRoundedRect(cx - pw / 2, cy - 110, pw, 220, 16);
+    const msg = this.add
+      .text(cx, cy - 50, t('replayTutorialConfirm'), { fontFamily: theme.font, fontSize: '24px', color: '#ffffff', fontStyle: 'bold', align: 'center', wordWrap: { width: pw - 48 } })
+      .setOrigin(0.5)
+      .setDepth(10);
+    const bw = Math.min(180, (pw - 72) / 2);
+    const no = new Button(this, cx - bw / 2 - 12, cy + 50, { label: t('no'), variant: 'secondary', width: bw, height: 56, onClick: () => items.forEach((o) => o.destroy()) });
+    const yes = new Button(this, cx + bw / 2 + 12, cy + 50, {
+      label: t('yes'),
+      width: bw,
+      height: 56,
+      onClick: () => {
+        settings.setTutorialDone(false);
+        this.resumeGame = false; // la partie en cours est abandonnée : rien à reprendre
+        const game = this.scene.get(SCENES.game) as GameScene;
+        this.scene.stop(SCENES.pause);
+        this.scene.stop();
+        void game.retry();
+      },
+    });
+    no.setDepth(11);
+    yes.setDepth(11);
+    items.push(veil, box, msg, no, yes);
   }
 
   private close(): void {

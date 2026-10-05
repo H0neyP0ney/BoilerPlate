@@ -10,6 +10,10 @@ const RING_SIZE = 256;
 const MAP_DIV = 4;
 /** Force de la déformation (part de l'écran déplacée au maximum, voir le filtre Displacement de Phaser). */
 const STRENGTH = 0.07;
+/** Masque qui annule la déformation sur les bords de l'écran (recréé quand la taille change). */
+const EDGE_KEY = 'fx_shock_edge';
+/** Largeur (part de l'écran) de la zone de bord où la déformation s'éteint : au moins `STRENGTH`, sinon le décalage dépasse la distance au bord. */
+const EDGE_FADE = 0.12;
 
 interface Pulse {
   /** Centre dans le monde. */
@@ -94,7 +98,30 @@ export class ShockDistort {
       const sc = (2 * r) / RING_SIZE;
       map.stamp(RING_KEY, undefined, sx, sy, { scaleX: sc, scaleY: sc * p.squash, alpha: (1 - k) ** 1.5 });
     }
+    map.stamp(EDGE_KEY, undefined, w / 2, h / 2); // bords neutres : sinon le filtre va chercher des pixels hors de l'écran (noir)
     map.render();
+  }
+
+  /** Masque des bords (taille de la carte) : couleur neutre, opaque au bord de l'écran et transparent à `EDGE_FADE` du bord. */
+  private buildEdgeMask(w: number, h: number): void {
+    const tm = this.scene.textures;
+    if (tm.exists(EDGE_KEY)) tm.remove(EDGE_KEY);
+    const tex = tm.createCanvas(EDGE_KEY, w, h);
+    if (!tex) throw new Error('canvas indisponible');
+    const ctx = tex.getContext();
+    const img = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const d = Math.min((x + 0.5) / w, (w - x - 0.5) / w, (y + 0.5) / h, (h - y - 0.5) / h); // distance au bord, en part de l'écran
+        const a = 1 - Math.min(1, d / EDGE_FADE);
+        const i = (y * w + x) * 4;
+        img.data[i] = 128;
+        img.data[i + 1] = 128;
+        img.data[i + 2] = 0;
+        img.data[i + 3] = Math.round(255 * a * a * (3 - 2 * a));
+      }
+    ctx.putImageData(img, 0, 0);
+    tex.refresh();
   }
 
   private ensureTextures(w: number, h: number): void {
@@ -132,6 +159,7 @@ export class ShockDistort {
       if (!this.map) throw new Error('texture dynamique indisponible');
       this.mapW = w;
       this.mapH = h;
+      this.buildEdgeMask(w, h);
     }
   }
 

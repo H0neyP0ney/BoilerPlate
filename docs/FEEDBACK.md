@@ -89,5 +89,18 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~Tutoriel : flèches et textes (Move here, Enemy incoming, Get +1 trooper, Get experience, Take power-up), recrue sur place, vagues à droite puis en cercle, HUD allégé, cadeau caché~~
 - ~~Dev : réglages mémorisés périmés supprimés automatiquement~~
 
+## Session du 05/10
+- ~~Revive spécial de la partie du tutoriel : un seul bouton « Free Revive », onde de choc qui détruit~~
+- ~~Stats de base : vitesse ×1,08, recrues ×1,3, dégâts ×1,2, PV ×1,3~~
+- ~~Gling Mère : one-shot, essaim toutes les 3 s, 3 enragements (30 s, 1:00, 1:30) ; autres boss 1:00 / 1:45~~
+- ~~Carte +10 % (3802 px)~~
+- ~~Habillage : timeline, barre d'XP, barre de vie du boss, boutons pause / son / musique, icône rewarded, cartes d'upgrade (+ prismatique holographique, icônes, slots, titre, Reroll)~~
+- ~~Mute au clic sur les boutons son / musique ; volume max de la musique ÷6 ; anglais par défaut ; musique au premier input~~
+- ~~Clic enfoncé relâché sur un bouton (Reroll, cartes, game over) qui déclenchait l'action~~
+- ~~Textes flottants de la squad : animation commune, suivi sans décrochage~~
+- ~~Glaçon repoussé par l'onde de choc avec le soldat gelé~~
+- ~~Pubs : rewarded revive + interstitielle entre parties à partir de la 4e~~
+- À valider en jeu : rendu mobile des nouvelles cartes / barres, texte français de la capsule « PROCHAIN BOSS : », fluidité des textes flottants, pubs avec le vrai SDK Poki.
+
 ## Idées de gameplay
 - Zone où il faut rester dedans pour faire dropper des choses

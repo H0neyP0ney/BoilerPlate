@@ -28,12 +28,12 @@ interface PokiSDKApi {
 }
 
 /**
- * Interrupteur des pubs Poki. FAUX pour le moment : plus aucune pub (interstitielle ni récompensée) n'est demandée
- * au SDK ; les events de gameplay (gameplayStart / Stop, measure) restent envoyés. Une « pub » passe alors
- * instantanément : la reprise / le redémarrage ne sont pas retardés et la récompense est accordée tout de suite
- * (revive gratuit). À remettre à `true` avant la soumission Poki (règles pub : voir CLAUDE.md).
+ * Interrupteur des pubs Poki. VRAI : le jeu demande au SDK les pubs récompensées (revive) et interstitielles (entre deux parties, voir la
+ * règle du jeu). Mettre à `false` coupe toutes les pubs : une « pub » passe alors instantanément (pas de retard à la reprise / au
+ * redémarrage) et la récompense est accordée tout de suite ; les events de gameplay (gameplayStart / Stop, measure) restent envoyés.
+ * Règles pub : voir CLAUDE.md.
  */
-export const ADS_ENABLED = false;
+export const ADS_ENABLED = true;
 
 declare global {
   interface Window {
@@ -123,7 +123,8 @@ class Poki {
    */
   async rewardedBreak(): Promise<boolean> {
     if (!ADS_ENABLED) return true; // pubs désactivées : récompense accordée sans pub
-    if (!this.sdk || this.adPlaying) return false;
+    if (!this.sdk) return true; // pas de SDK (développement, hébergement de test, adblock) : rien à montrer, la récompense est accordée (le jeu reste jouable)
+    if (this.adPlaying) return false;
     this.gameplayStop();
     this.adPlaying = true;
     let success = false;

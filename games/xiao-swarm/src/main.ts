@@ -24,7 +24,7 @@ void bootPokiGame({
   scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(import.meta.env.DEV ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
-    i18n.init(settings.lang ?? poki.getURLParam('lang'));
+    i18n.init(settings.lang ?? (poki.getURLParam('lang') || 'en')); // anglais par défaut (pas la langue du navigateur)
     setTheme({
       font: '"Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       panel: PALETTE.panel,

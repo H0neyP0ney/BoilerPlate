@@ -437,7 +437,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.f32(a.maxHp); // les boss dépassent 65535 PV : PV max en f32, PV courants en part du max
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
     w.u8(Math.min(255, Math.round(a.slamWind * 200)));
-    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 2) << 2));
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2));
     const def = ALIENS[a.type];
     if (def.rush) {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));

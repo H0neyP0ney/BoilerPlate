@@ -60,7 +60,7 @@ export interface AlienDef {
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
   tint?: number;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
-  boss?: { kind: 'mini' | 'final' };
+  boss?: { kind: 'mini' | 'final'; /** Âges (s) des enragements de ce boss, à la place de `BOSS_ENRAGE.times`. */ enrageTimes?: readonly number[] };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
   /**
@@ -70,7 +70,7 @@ export interface AlienDef {
   shield?: { pct: number; regenDelay: number; regenTime: number };
   /** Accélération d'approche : à moins de `range` px de sa cible, sa vitesse est multipliée par `speedMul` (pour rattraper une squad qui court). */
   dash?: { range: number; speedMul: number };
-  /** Son attaque de contact tue un soldat d'un coup (les trois boss). */
+  /** Son attaque de contact tue un soldat d'un coup (les quatre boss). */
   oneShot?: boolean;
   /** Bulle : au contact d'un soldat, le capture et le dévore (`dps` PV par seconde) en restant immobile ; la détruire le libère. */
   capture?: { dps: number };
@@ -352,7 +352,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xc01c40,
     hpBarWidth: 140,
   },
-  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4,2 s pour faire apparaître 30 glings en 1,07 s. */
+  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 3 s pour faire apparaître 30 glings en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
     hp: 500,
@@ -361,9 +361,10 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     mass: 14,
     damage: 5,
     attackCooldown: 0.6,
+    oneShot: true,
     target: 'nearest',
-    swarm: { every: 4.2, duration: 1.07, count: 30, spawn: 'gling' },
-    boss: { kind: 'mini' },
+    swarm: { every: 3, duration: 1.07, count: 30, spawn: 'gling' },
+    boss: { kind: 'mini', enrageTimes: [30, 60, 90] }, // s'enrage 3 fois (30 s, 1:00, 1:30 après son apparition)
     xp: 100,
     recruitChance: 1,
     color: 0xff5aa8,

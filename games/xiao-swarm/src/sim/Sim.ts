@@ -65,7 +65,7 @@ export class Sim {
   /** Coop : zones où un joueur mort peut être ramené par un équipier. */
   readonly reviveZones: ReviveZone[] = [];
   /** Ondes de choc en cours d'application (montée de niveau). */
-  private readonly shockwaves: { x: number; y: number; r: number; speed: number; duration: number; reach: number; t: number; hit: Map<number, { dx: number; dy: number; k: number; left: number }> }[] = [];
+  private readonly shockwaves: { x: number; y: number; r: number; speed: number; duration: number; reach: number; lethal: PlayerId | null; t: number; hit: Map<number, { dx: number; dy: number; k: number; left: number }> }[] = [];
   /** Flaques de crachat : ralentissent les soldats dedans. */
   readonly puddles: Puddle[] = [];
   /** Murs annoncés (télégraphe jaune du bâtisseur) : ils deviennent des rochers à la fin du compte à rebours. */
@@ -489,8 +489,8 @@ export class Sim {
    * touché par le front recule ensuite pendant `duration` s à `speed` px/s (plus vite au centre) : ils ne sont donc pas tous repoussés
    * au même moment, mais quand l'onde passe. Déplacement direct, pas une impulsion : un alien lourd ou rapide est repoussé comme un léger.
    */
-  shockwave(x: number, y: number, r: number, speed: number, duration: number, reach = 0): void {
-    this.shockwaves.push({ x, y, r, speed, duration, reach, t: 0, hit: new Map() });
+  shockwave(x: number, y: number, r: number, speed: number, duration: number, reach = 0, lethal: PlayerId | null = null): void {
+    this.shockwaves.push({ x, y, r, speed, duration, reach, lethal, t: 0, hit: new Map() });
   }
 
   private updateShockwaves(dt: number): void {
@@ -500,7 +500,7 @@ export class Sim {
       const p = w.reach > 0 ? Math.min(1, w.t / w.reach) : 1;
       const front = w.r * (1 - (1 - p) ** 3);
       for (const a of this.aliens) {
-        if (!a.alive) continue;
+        if (!a.alive || a.def.iceBlock) continue; // un glaçon reste en place : repoussé, il emporterait le soldat gelé qu'il contient (voir `Horde.updateIceBlock`)
         let h = w.hit.get(a.id);
         if (!h) {
           if (w.t - dt > w.reach) continue; // front arrivé au bout : un alien apparu après n'est pas repoussé
@@ -510,6 +510,11 @@ export class Sim {
           if (d > front) continue;
           h = { dx: dx / d, dy: dy / d, k: (1 - (d / w.r) * 0.6) * w.speed * (a.def.capture ? 0.35 : 1), left: w.duration }; // les bulles sont difficiles à repousser
           w.hit.set(a.id, h);
+          if (w.lethal && !a.def.boss) {
+            // revive gratuit : l'onde détruit ce qu'elle touche (les boss sont seulement repoussés)
+            this.damage(a, a.hp + a.shield + 1, w.lethal);
+            continue;
+          }
         }
         if (h.left <= 0) continue;
         const step = Math.min(dt, h.left);
@@ -749,13 +754,13 @@ export class Sim {
   // ---------- Revive ----------
 
   /** Relance une squad anéantie (pub récompensée en solo) : les aliens ne disparaissent pas, une onde de choc les repousse comme à une montée de niveau. */
-  respawnSquad(owner: PlayerId, composition: SoldierClassId[], invulnerable = REVIVE_INVULN): void {
+  respawnSquad(owner: PlayerId, composition: SoldierClassId[], invulnerable = REVIVE_INVULN, lethal = false): void {
     const sq = this.squadOf(owner);
     if (!sq) return;
     const at = { x: sq.anchor.x, y: sq.anchor.y };
     sq.spawn(composition, at);
     for (const s of sq.soldiers) s.invulnerable = invulnerable;
-    this.shockwave(at.x, at.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration, UPGRADE_REPEL.reach);
+    this.shockwave(at.x, at.y, UPGRADE_REPEL.radius, UPGRADE_REPEL.speed, UPGRADE_REPEL.duration, UPGRADE_REPEL.reach, lethal ? owner : null);
     this.events.push({ t: 'repel', x: at.x, y: at.y });
   }
 }

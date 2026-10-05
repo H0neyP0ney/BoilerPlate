@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { theme } from '@xiao/engine';
 import { DEPTH } from '../config';
-import { type UpgradeId } from '../data/progression';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
@@ -11,21 +10,6 @@ import { createEnragedFlames } from './EnragedFx';
 const CAPSULE_LIFT = 52;
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
 const CAPSULE_SCALE = 0.9;
-
-/** Icône (emoji) de chaque upgrade, affichée dans son bouton de choix. */
-export const UPGRADE_ICONS: Record<UpgradeId, string> = {
-  damage: '💥',
-  fireRate: '⚡',
-  hp: '❤️',
-  speed: '👟',
-  maxSquad: '👥',
-  magnet: '🧲',
-  recruit: '📣',
-  xpGain: '⭐',
-  reinforce: '➕',
-  range: '🎯',
-  crit: '✨',
-};
 
 /** Jaune de la zone qui pulse sous les recrues (les power-ups gardent la couleur de leur bonus : `POWERUP_INFO`). */
 export const RECRUIT_COLOR = 0xffe14a;

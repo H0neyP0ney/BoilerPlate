@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { theme } from './theme';
 
+/** Texture de l'icône « pub vidéo » des boutons `rewarded` (à charger par le jeu ; sans elle, une caméra vidéo est dessinée). */
+export const REWARDED_ICON = 'ui_rewarded';
+
 export type ButtonVariant = 'primary' | 'rewarded' | 'secondary';
 
 export interface ButtonOptions {
@@ -18,6 +21,8 @@ export interface ButtonOptions {
 export class Button extends Phaser.GameObjects.Container {
   private readonly onClick: () => void;
   private enabled = true;
+  /** Bouton enfoncé SUR ce bouton : le clic ne compte qu'à l'appui puis au relâchement dessus (un clic déjà enfoncé quand l'écran s'ouvre ne déclenche rien). */
+  private pressed = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, opts: ButtonOptions) {
     super(scene, x, y);
@@ -52,9 +57,12 @@ export class Button extends Phaser.GameObjects.Container {
     this.add(label);
 
     if (variant === 'rewarded') {
+      // icône du jeu (texture `REWARDED_ICON`, si elle est chargée) ; sinon la caméra vidéo dessinée par défaut
+      const art = scene.textures.exists(REWARDED_ICON) ? scene.add.image(0, 0, REWARDED_ICON) : null;
       const iconSize = height * 0.42;
-      const iconWidth = iconSize * 1.65;
-      const icon = videoIcon(scene, iconSize);
+      if (art) art.setScale((height * 0.55) / art.height);
+      const iconWidth = art ? art.displayWidth : iconSize * 1.65;
+      const icon = art ?? videoIcon(scene, iconSize);
       const gap = 14;
       const total = iconWidth + gap + label.width;
       icon.setPosition(-total / 2 + iconWidth / 2, 0);
@@ -67,9 +75,20 @@ export class Button extends Phaser.GameObjects.Container {
     this.add(hit);
     hit
       .on('pointerover', () => this.enabled && this.setScale(1.04))
-      .on('pointerout', () => this.setScale(1))
-      .on('pointerdown', () => this.enabled && this.setScale(0.96))
-      .on('pointerup', () => this.trigger());
+      .on('pointerout', () => {
+        this.pressed = false;
+        this.setScale(1);
+      })
+      .on('pointerdown', () => {
+        if (!this.enabled) return;
+        this.pressed = true;
+        this.setScale(0.96);
+      })
+      .on('pointerup', () => {
+        const wasPressed = this.pressed;
+        this.pressed = false;
+        if (wasPressed) this.trigger();
+      });
 
     scene.add.existing(this);
   }

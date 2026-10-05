@@ -27,8 +27,8 @@ export interface Session {
   setLocalInput(mx: number, my: number): void;
   /** Avance le temps ; les événements produits sont passés à `onEvent`. */
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void;
-  /** Revive de la squad locale (après pub récompensée). */
-  reviveLocal(): void;
+  /** Revive de la squad locale (après pub récompensée) ; `free` : revive offert, dont l'onde de choc détruit les aliens. */
+  reviveLocal(free?: boolean): void;
   /** La squad locale choisit l'upgrade `index` parmi ses propositions (en ligne : envoyé à l'hôte). */
   chooseUpgrade(index: number): void;
   /** La squad locale relance ses propositions d'upgrade (en ligne : envoyé à l'hôte). */
@@ -107,8 +107,8 @@ export class LocalSession implements Session {
     this.sim.rerollUpgrade(this.localPlayer);
   }
 
-  reviveLocal(): void {
-    this.sim.respawnSquad(this.localPlayer, this.sim.rng.pick(START_SQUADS));
+  reviveLocal(free = false): void {
+    this.sim.respawnSquad(this.localPlayer, this.sim.rng.pick(START_SQUADS), undefined, free);
   }
 
   close(): void {}

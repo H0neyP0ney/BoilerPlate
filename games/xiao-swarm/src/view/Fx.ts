@@ -23,7 +23,7 @@ export class Fx {
   /** Traînée des roquettes (fx_smoke, FX.rocket). */
   private smoke!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
-  private readonly followed: { obj: Phaser.GameObjects.Text; pos: () => { x: number; y: number } | null; last: { x: number; y: number } | null; until: number }[] = [];
+  private readonly followed: { obj: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform; pos: () => { x: number; y: number } | null; last: { x: number; y: number } | null; until: number }[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     this.build();
@@ -249,26 +249,18 @@ export class Fx {
   }
 
   /**
-   * « LEVEL UP! » : texte vert cerné de blanc qui jaillit de la squad (scale 0 → 1, Back.Out), monte et s'efface en alpha.
+   * « LEVEL UP! » : texte vert cerné de sombre qui jaillit de la squad ; il joue l'animation commune des textes flottants (`text`, réglée par FX.text).
    * Part en même temps que l'onde de choc, avant la pause qui ouvre l'écran des cartes.
    */
   levelUpText(x: number, y: number): Phaser.GameObjects.Text {
-    const t = this.scene.add
-      .text(x, y - 40, tr('levelUpPop'), { fontFamily: theme.font, fontSize: '46px', fontStyle: 'bold', color: '#5dff84', stroke: '#ffffff', strokeThickness: 9 })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.bars + 2)
-      .setScale(0.2);
-    this.scene.tweens.add({ targets: t, scale: 1, duration: 380, ease: 'Back.Out' });
-    this.scene.tweens.add({ targets: t, y: y - 150, duration: 1100, ease: 'Sine.Out' });
-    this.scene.tweens.add({ targets: t, alpha: 0, delay: 550, duration: 550, onComplete: () => t.destroy() });
-    return t;
+    return this.text(x, y - 40, tr('levelUpPop'), '#5dff84', 46, '#2a1d2e', 8); // même animation que les autres textes de la squad (FX.text)
   }
 
   /**
    * Fait suivre `obj` au point renvoyé par `pos` (ex. le centre de la squad) pendant `ms` ms : à chaque image, il est décalé du déplacement
    * du point depuis l'image précédente (les tweens de montée / fondu de l'objet continuent normalement).
    */
-  follow(obj: Phaser.GameObjects.Text, pos: () => { x: number; y: number } | null, ms: number): void {
+  follow(obj: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform, pos: () => { x: number; y: number } | null, ms: number): void {
     this.followed.push({ obj, pos, last: pos(), until: this.scene.time.now + ms });
   }
 
@@ -288,19 +280,55 @@ export class Fx {
     }
   }
 
-  text(x: number, y: number, value: string, color = '#ffffff', size = 22, stroke = '#2a1d2e'): Phaser.GameObjects.Text {
+  /**
+   * Montée + fondu d'un texte flottant (attente `FX.text.holdMs`, puis `fadeMs`). La montée est ADDITIVE : un décalage animé qu'on ajoute à la
+   * position courante, au lieu d'un tween sur `y` qui réécrirait la position à chaque image et écraserait le suivi de la squad (`follow`) :
+   * le texte se figerait dans le monde pendant la montée et la squad qui avance le laisserait derrière elle.
+   */
+  private rise(obj: Phaser.GameObjects.Text | Phaser.GameObjects.Container, onComplete: () => void): void {
     const f = FX.text;
-    const t = this.texts.acquire();
-    t.setText(value).setColor(color).setFontSize(size).setStroke(stroke, 5).setPosition(x, y).setScale(f.popFrom);
-    this.scene.tweens.add({ targets: t, scale: 1, duration: f.popMs, ease: 'Back.Out' });
+    const offset = { v: 0 };
+    let last = 0;
     this.scene.tweens.add({
-      targets: t,
-      y: y - f.rise,
-      alpha: 0,
+      targets: offset,
+      v: -f.rise,
       delay: f.holdMs,
       duration: f.fadeMs,
-      onComplete: () => this.texts.release(t),
+      onUpdate: () => {
+        obj.y += offset.v - last;
+        last = offset.v;
+      },
     });
+    this.scene.tweens.add({ targets: obj, alpha: 0, delay: f.holdMs, duration: f.fadeMs, onComplete });
+  }
+
+  /** Texte flottant précédé d'une icône (image `iconKey`) : même animation que `text`, le tout dans un conteneur détruit à la fin. */
+  iconText(x: number, y: number, iconKey: string, value: string, color = '#ffffff', size = 22, stroke = '#2a1d2e'): Phaser.GameObjects.Container {
+    const f = FX.text;
+    const box = this.scene.add.container(x, y).setDepth(DEPTH.bars + 1).setScale(f.popFrom);
+    const label = this.scene.add.text(0, 0, value, { fontFamily: theme.font, fontSize: `${size}px`, fontStyle: 'bold', color, stroke, strokeThickness: 5 }).setOrigin(0, 0.5);
+    const icon = this.scene.add.image(0, 0, iconKey);
+    icon.setScale((size * 1.5) / Math.max(icon.width, icon.height));
+    const gap = size * 0.25;
+    const total = icon.displayWidth + gap + label.width;
+    icon.setPosition(-total / 2 + icon.displayWidth / 2, 0);
+    label.setPosition(-total / 2 + icon.displayWidth + gap, 0);
+    box.add([icon, label]);
+    this.scene.tweens.add({ targets: box, scale: 1, duration: f.popMs, ease: 'Back.Out' });
+    this.rise(box, () => box.destroy());
+    return box;
+  }
+
+  text(x: number, y: number, value: string, color = '#ffffff', size = 22, stroke = '#2a1d2e', strokeWidth = 5): Phaser.GameObjects.Text {
+    const f = FX.text;
+    const t = this.texts.acquire();
+    // le texte vient du pool : on coupe ce qui restait d'un usage précédent (animations pas terminées, suivi de la squad), sinon elles se
+    // mélangent à la nouvelle et le texte s'anime de travers
+    this.scene.tweens.killTweensOf(t);
+    for (let i = this.followed.length - 1; i >= 0; i--) if (this.followed[i].obj === t) this.followed.splice(i, 1);
+    t.setText(value).setColor(color).setFontSize(size).setStroke(stroke, strokeWidth).setPosition(x, y).setScale(f.popFrom);
+    this.scene.tweens.add({ targets: t, scale: 1, duration: f.popMs, ease: 'Back.Out' });
+    this.rise(t, () => this.texts.release(t));
     return t;
   }
 

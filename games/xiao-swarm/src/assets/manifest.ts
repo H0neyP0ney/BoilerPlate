@@ -1,4 +1,5 @@
 import { range, type AssetEntry } from '@xiao/engine';
+import { UPGRADE_IDS } from '../data/progression';
 
 /**
  * Planches de sprites du jeu (fichiers dans public/assets/). Chaque visuel
@@ -37,6 +38,31 @@ export const ASSETS: AssetEntry[] = [
   ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n): AssetEntry => ({ type: 'image', id: `crit_${n}`, url: `fx/crit/${n}.png` })),
   // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
+  // Boutons du HUD (pause, son, musique) — art-src/bouton pause sound musique.png découpé par `node tools/slice-hud-buttons.mjs` : cadre vide + une icône chacun ; affichés par view/HudButtons.ts.
+  ...(['button', 'pause', 'sound', 'music'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_hud_${n}`, url: `ui/hud/${n}.png` })),
+  // Fonds des cartes d'upgrade — art-src/card_upgrade.png recoloré par `node tools/slice-upgrade-cards.mjs` (une image par upgrade, à sa couleur) ; affichés par scenes/LevelUpScene.ts.
+  ...[...UPGRADE_IDS, 'prism'].map((id): AssetEntry => ({ type: 'image', id: `ui_card_${id}`, url: `ui/cards/card_${id}.png` })),
+  // Bouton « Relancer » du choix d'upgrade — art-src/bouton_reroll.png rogné par `node tools/slice-reroll-button.mjs` ; affiché par scenes/LevelUpScene.ts.
+  { type: 'image', id: 'ui_reroll', url: 'ui/reroll.png' },
+  // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.
+  ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `ui_slot_empty_${id}`, url: `ui/slot_empty_${id}.png` })), // vide, à la couleur de la carte
+  { type: 'image', id: 'ui_slot_full', url: 'ui/slot_full.png' },
+  // Étoile des cartes prismatiques — art-src/star.png rogné par `node tools/slice-star-particle.mjs` ; particule teintée par l'émetteur de scenes/LevelUpScene.ts.
+  { type: 'image', id: 'fx_star', url: 'fx/star.png' },
+  // Icône « pub vidéo » des boutons rewarded (Revive, etc.) — art-src/rewarded.png rogné par `node tools/slice-rewarded-icon.mjs` ; lue par le Button du moteur (REWARDED_ICON).
+  { type: 'image', id: 'ui_rewarded', url: 'ui/rewarded.png' },
+  // Barre de vie du boss — art-src/jauge_boss.png découpé par `node tools/slice-boss-bar.mjs` : cadre vide + jauge rouge (la jauge de la timeline recolorée) ; affichés par scenes/HudScene.ts (drawBoss).
+  { type: 'image', id: 'ui_boss_frame', url: 'ui/boss/frame.png' },
+  { type: 'image', id: 'ui_boss_fill', url: 'ui/boss/fill.png' },
+  // Barre d'expérience — art-src/experience bar.png découpé par `node tools/slice-xp-bar.mjs` : cadre vide + jauge bleue en 3-slice ; affichés par scenes/HudScene.ts (drawXp).
+  { type: 'image', id: 'ui_xp_frame', url: 'ui/xp/frame.png' },
+  { type: 'image', id: 'ui_xp_fill', url: 'ui/xp/fill.png' },
+  // Titre « LEVEL UP! » du choix d'upgrade — art-src/levelup.png rogné par `node tools/slice-levelup-title.mjs` ; affiché par scenes/LevelUpScene.ts.
+  { type: 'image', id: 'ui_levelup_title', url: 'ui/levelup_title.png' },
+  // Icônes des upgrades — art-src/icon_upgrade.png découpé par `node tools/slice-upgrade-icons.mjs` ; affichées par view/upgradeIcons.ts (cartes, texte flottant, visionneuse).
+  ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `upgrade_icon_${id}`, url: `ui/upgrades/${id}.png` })),
+  // Timeline des vagues + « Next boss » — art-src/timeline_next_boss.png découpé par `node tools/slice-timeline-ui.mjs` ; affichés par view/TimelineHud.ts (mesures dans TIMELINE_ART).
+  ...(['frame', 'fill', 'arrow', 'tick_off', 'tick_on', 'ring'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_tl_${n}`, url: `ui/timeline/${n}.png` })),
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).

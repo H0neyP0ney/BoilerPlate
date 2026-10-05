@@ -128,6 +128,11 @@ try {
   check(!!orbClient && orbClient.life < 5, 'globe en fin de vie : le clignotement est transmis au client', orbClient ? `life ${orbClient.life}` : 'globe introuvable');
   // XP partagée (coop) : une seule barre, seuil × nombre de joueurs ; un niveau = tous les joueurs montent et choisissent
   check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 2 joueurs)', `${a.xpNeeded}`);
+  // remise à plat : un niveau déjà en cours (XP ramassée plus haut) fausserait la chronologie mesurée ci-dessous
+  for (let i = 0; i < 400 && (hs.choiceT > 0 || hs.choiceDelay > 0 || hs.squads.some((sq) => sq.offer)); i++) {
+    for (const sq of hs.squads) if (sq.offer) hs.chooseUpgrade(sq.owner, 0);
+    await tick(client);
+  }
   const levelBefore = a.level;
   b.gainXp(b.xpNeeded - b.xp + 0.01);
   // chronologie : l'onde de choc part tout de suite et le monde CONTINUE pendant LEVEL_UP_DELAY s ; la pause qui ouvre les cartes vient ensuite

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
-import { SCENES } from '../config';
+import { FREE_GAMES, SCENES } from '../config';
 import type { SoldierClassId } from '../data/classes';
 import { TUTORIAL } from '../data/tutorial';
 import { MODES, type ModeDef } from '../data/modes';
@@ -45,6 +45,8 @@ export class GameScene extends Phaser.Scene {
   /** Vitesse de la simulation (panneau Triche, dev) : 1 = normale, 0 = figée. */
   private timeScale = 1;
   private revived = false;
+  /** Partie qui a commencé par le tutoriel : la première mort offre un revive gratuit, et son onde de choc détruit les aliens (aide à la première expérience). */
+  private freeRevive = false;
   private ended = false;
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
   private upgradeOpen = false;
@@ -65,6 +67,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.revived = false;
+    this.freeRevive = false;
     this.ended = false;
     this.upgradeOpen = false;
     this.moveLocked = false;
@@ -89,6 +92,8 @@ export class GameScene extends Phaser.Scene {
         tutorial: mode.id === 'survival' && !settings.tutorialDone, // onboarding scripté à la première partie solo
       });
     }
+    // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
+    this.freeRevive = !online && !!this.session.sim.tutorial;
     this.view = new WorldView(this, this.session.sim, this.session.localPlayer);
 
     const cam = this.cameras.main;
@@ -121,7 +126,6 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch(SCENES.hud);
     this.setupDebug();
-    music.play(this, MUSIC.key, MUSIC.url, settings.musicGain()); // en boucle, sans relance si elle joue déjà
     sfx.setVolume(settings.sfxGain());
   }
 
@@ -135,7 +139,7 @@ export class GameScene extends Phaser.Scene {
       else dir.set(0, 0);
     }
     this.session.setLocalInput(dir.x, dir.y);
-    if (this.flow.state === 'ready' && this.move.active && !poki.isAdPlaying) this.flow.begin(); // pas pendant une pub : le gameplayStart serait perdu
+    if (this.flow.state === 'ready' && this.move.active && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
 
     // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
     // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.
@@ -172,6 +176,18 @@ export class GameScene extends Phaser.Scene {
         this.recorder.update(this.session.localPlayer);
       }
     }
+  }
+
+  /** Pub interstitielle avant la prochaine partie ? Pas avant les `FREE_GAMES` premières parties jouées (compteur mémorisé d'une session à l'autre). */
+  private adBeforeNextGame(): boolean {
+    return storage.get('gamesPlayed', 0) >= FREE_GAMES;
+  }
+
+  /** Premier input du joueur : le gameplay démarre (Poki) et la musique se lance (en boucle, sans relance si elle joue déjà). */
+  private beginRun(): void {
+    if (this.flow.state === 'ready') storage.set('gamesPlayed', storage.get('gamesPlayed', 0) + 1); // une partie de plus jouée (compte pour les interstitielles)
+    this.flow.begin();
+    music.play(this, MUSIC.key, MUSIC.url, settings.musicGain());
   }
 
   // ---------- Infos pour le HUD ----------
@@ -230,7 +246,7 @@ export class GameScene extends Phaser.Scene {
       else this.flow.fail();
     }
     if (e.t === 'restart') {
-      void this.flow.restart();
+      void this.flow.restart({ ad: this.adBeforeNextGame() });
       this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
       this.shownOffer = '';
     }
@@ -296,14 +312,16 @@ export class GameScene extends Phaser.Scene {
 
   readonly pauseGame =(): void => {
     if (this.session.online || this.upgradeOpen) return; // pause impossible : les autres joueurs continuent
-    if (!this.scene.isActive() || !this.flow.interrupt()) return;
+    if (!this.scene.isActive()) return;
+    // avant le premier input (état « prêt ») le gameplay n'a pas démarré : rien à interrompre côté Poki, mais la pause reste possible
+    if (this.flow.state !== 'ready' && !this.flow.interrupt()) return;
     this.scene.pause();
     this.scene.pause(SCENES.hud);
     this.scene.launch(SCENES.pause);
   };
 
-  /** Reprise après une pause : `ad` = pub de sortie de pause (écran Pause) ; non pour le menu Options. */
-  async resumeGame({ ad = true }: { ad?: boolean } = {}): Promise<void> {
+  /** Reprise après une pause : `ad` = pub de sortie de pause (désactivée : les interstitielles ne passent qu'entre deux parties). */
+  async resumeGame({ ad = false }: { ad?: boolean } = {}): Promise<void> {
     await this.flow.resume({ ad });
     this.scene.resume();
     this.scene.resume(SCENES.hud);
@@ -338,17 +356,18 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       best,
       canRevive: !online && !victory && !this.revived,
+      freeRevive: this.freeRevive && !this.revived,
       scores: scoreRows(sim.squads, this.session.localPlayer),
       title: connectionLost ? t('connectionLost') : undefined,
     };
     this.scene.launch(SCENES.gameOver, data);
   }
 
-  async revive(): Promise<boolean> {
-    if (!(await this.flow.revive())) return false;
+  async revive(free = false): Promise<boolean> {
+    if (free ? !this.flow.reviveFree() : !(await this.flow.revive())) return false;
     this.revived = true;
     this.ended = false;
-    this.session.reviveLocal();
+    this.session.reviveLocal(free);
     this.scene.resume();
     this.scene.resume(SCENES.hud);
     return true;
@@ -356,10 +375,10 @@ export class GameScene extends Phaser.Scene {
 
   async retry(): Promise<void> {
     if (this.session.online) return this.retryOnline();
-    await this.flow.restart();
+    await this.flow.restart({ ad: this.adBeforeNextGame() });
     this.scene.restart();
     // "Rejouer" est un input du joueur : le run démarre directement.
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.flow.begin());
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.beginRun());
   }
 
   /** En ligne, le seul écran de fin est « connexion perdue » : retour au solo. */

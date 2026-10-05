@@ -18,7 +18,8 @@ import { ShockDistort } from './ShockDistort';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { ROCKET_TEXTURE } from '../sim/Combat';
-import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR, UPGRADE_ICONS } from './PickupViews';
+import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR } from './PickupViews';
+import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
@@ -36,10 +37,10 @@ export const ORB_SCALE = 1.3;
 const LEVEL_WAVES = 4;
 const LEVEL_WAVE_GAP_MS = 170;
 /** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
-const BAR_GHOST_HOLD = 0.15;
+export const BAR_GHOST_HOLD = 0.15;
 /** Barre de vie d'un glaçon : bleue. */
 const ICE_BAR = 0x4aa8ff;
-const BAR_GHOST_SPEED = 4.5; // +70 % de plus
+export const BAR_GHOST_SPEED = 4.5; // +70 % de plus
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
 
@@ -325,7 +326,11 @@ export class WorldView {
       case 'recruited':
         // le halo d'arrivée (colonne) est créé avec le nouveau soldat et le suit ; ici, éclat et texte
         this.fx.burst(e.x, e.y - 20, CLASSES[e.cls].color, 16);
-        if (e.owner === this.localPlayer) this.fx.text(e.x, e.y - 60, t('recruit', { name: t(`class_${e.cls}`) }), '#ffe066', 24);
+        if (e.owner === this.localPlayer) {
+          const tx = this.fx.text(e.x, e.y - 60, t('recruit', { name: t(`class_${e.cls}`) }), '#ffe066', 24);
+          const owner = e.owner; // copié : l'événement ne doit pas être relu à chaque image
+          this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad (positions interpolées : fluide) tout en montant
+        }
         break;
       case 'upgradePicked': {
         const col = e.prism ? 0xfff3a0 : 0x7fc8ff;
@@ -335,7 +340,7 @@ export class WorldView {
         // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers)
         const up = UPGRADES[e.id as UpgradeId];
         if (up) {
-          const tx = this.fx.text(e.x, e.y - 70, `${UPGRADE_ICONS[e.id as UpgradeId]} ${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
+          const tx = this.fx.iconText(e.x, e.y - 70, upgradeIconKey(e.id as UpgradeId), `${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
           const owner = e.owner;
           this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
         }
@@ -347,7 +352,9 @@ export class WorldView {
         if (!info) break;
         this.fx.ring(e.x, e.y, 110, info.color);
         this.fx.burst(e.x, e.y - 14, info.color, 22);
-        this.fx.text(e.x, e.y - 46, `${info.icon} ${t(`pu_${e.kind}` as 'pu_stim')}`, '#ffffff', 22);
+        const tx = this.fx.text(e.x, e.y - 46, `${info.icon} ${t(`pu_${e.kind}` as 'pu_stim')}`, '#ffffff', 22);
+        const owner = e.owner;
+        this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // idem : suit la squad qui bouge
         break;
       }
       case 'heal':
@@ -416,7 +423,7 @@ export class WorldView {
     this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash, follow);
     if (w.level > 0) {
       const tx = this.fx.levelUpText(w.x, w.y);
-      if (follow) this.fx.follow(tx, follow, 1100); // « LEVEL UP! » suit la squad qui bouge
+      if (follow) this.fx.follow(tx, follow, FX.text.holdMs + FX.text.fadeMs); // « LEVEL UP! » suit la squad qui bouge, comme les autres textes
     }
   }
 

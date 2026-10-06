@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 32;
+export const PROTOCOL_VERSION = 33;
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -57,6 +57,8 @@ export interface SoldierSnap {
   facing: number;
   target: boolean;
   invulnerable: boolean;
+  /** Étourdi (slam du Scarab) : icône de tourbillon. */
+  stunned: boolean;
   /** Id de la bulle qui le tient captif (0 = libre). */
   capturedBy: number;
 }
@@ -227,6 +229,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
         facing: s.facing,
         target: s.target !== null,
         invulnerable: s.invulnerable > 0,
+        stunned: s.stun > 0,
         capturedBy: s.capturedBy,
       })),
     })),
@@ -420,7 +423,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
       w.u16(u.maxHp);
       w.u8(u.shield * 255); // part du bouclier max (0 → 255) ; `u8` borne et arrondit
       w.i16(u.aim * 10000);
-      w.u8((u.facing > 0 ? 1 : 0) | (u.target ? 2 : 0) | (u.invulnerable ? 4 : 0) | (u.capturedBy ? 8 : 0));
+      w.u8((u.facing > 0 ? 1 : 0) | (u.target ? 2 : 0) | (u.invulnerable ? 4 : 0) | (u.capturedBy ? 8 : 0) | (u.stunned ? 16 : 0));
       if (u.capturedBy) w.u32(u.capturedBy);
     }
   }
@@ -607,7 +610,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         const aim = r.i16() / 10000;
         const flags = r.u8();
         const capturedBy = flags & 8 ? r.u32() : 0;
-        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, shield, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), capturedBy });
+        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, shield, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), stunned: !!(flags & 16), capturedBy });
       }
       snap.squads.push(sq);
     }

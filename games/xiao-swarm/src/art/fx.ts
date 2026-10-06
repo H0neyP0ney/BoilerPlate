@@ -2,6 +2,10 @@ import type Phaser from 'phaser';
 import { canvasTexture } from '@xiao/engine';
 import { DAMAGE_TIERS } from '../data/damageTiers';
 
+/** Rangée de 3 pics du lurker : nombre de directions pré-dessinées par demi-tour, écart (px) entre deux pics, hauteur d'un pic, taille de la texture et ordonnée de la base du pic central. */
+export const SPIKE_BINS = 12;
+export const SPIKE3 = { spread: 44 / 3, height: 36, w: 48, h: 72, baseY: 53 } as const;
+
 /** Projectiles, particules et icônes d'effets. */
 export function makeFxTextures(scene: Phaser.Scene): void {
   canvasTexture(scene, 'fx_bullet', 22, 10, (ctx) => {
@@ -254,11 +258,11 @@ export function makeFxTextures(scene: Phaser.Scene): void {
   });
   canvasTexture(scene, 'fx_slime_ball', 26, 26, (ctx) => {
     const g = ctx.createRadialGradient(10, 9, 1, 13, 13, 12);
-    g.addColorStop(0, '#d6ecff');
-    g.addColorStop(0.35, '#5aa8ff');
-    g.addColorStop(1, '#2a5fc4');
+    g.addColorStop(0, '#ffc0cc');
+    g.addColorStop(0.35, '#b02a4a');
+    g.addColorStop(1, '#6e1230');
     ctx.fillStyle = g;
-    ctx.strokeStyle = '#1a2a5e';
+    ctx.strokeStyle = '#3a0818';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.arc(13, 14, 10.5, 0, Math.PI * 2);
@@ -285,6 +289,46 @@ export function makeFxTextures(scene: Phaser.Scene): void {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
+  });
+  // Rangée de 3 pics du lurker (une texture par direction, `SPIKE_BINS` par demi-tour) : les 3 pointes sont alignées sur la perpendiculaire à la ligne de pics,
+  // le tout dessiné une fois ; le jeu pose un sprite par colonne au lieu de redessiner des triangles à chaque frame.
+  for (let k = 0; k < SPIKE_BINS; k++) {
+    const th = (k * Math.PI) / SPIKE_BINS;
+    canvasTexture(scene, `fx_spike3_${k}`, SPIKE3.w, SPIKE3.h, (ctx) => {
+      ctx.fillStyle = '#e8dcc0';
+      for (const o of [-SPIKE3.spread, 0, SPIKE3.spread]) {
+        const bx = SPIKE3.w / 2 - Math.sin(th) * o;
+        const by = SPIKE3.baseY + Math.cos(th) * o;
+        ctx.beginPath();
+        ctx.moveTo(bx - 6, by);
+        ctx.lineTo(bx + 6, by);
+        ctx.lineTo(bx, by - SPIKE3.height);
+        ctx.closePath();
+        ctx.fill();
+      }
+    });
+  }
+  // Tourbillon d'étourdissement : spirale jaune à contour sombre, qui tourne au-dessus de la tête.
+  canvasTexture(scene, 'fx_stun', 32, 32, (ctx) => {
+    const spiral = (): void => {
+      ctx.beginPath();
+      for (let t = 0; t <= 4.2 * Math.PI; t += 0.15) {
+        const r = 1.5 + t * 1.8;
+        const x = 16 + Math.cos(t) * r;
+        const y = 16 + Math.sin(t) * r;
+        if (t === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#3a2a08';
+    ctx.lineWidth = 6.5;
+    spiral();
+    ctx.strokeStyle = '#ffe14a';
+    ctx.lineWidth = 3.2;
+    spiral();
   });
   canvasTexture(scene, 'fx_ring', 128, 128, (ctx) => {
     ctx.strokeStyle = '#fff';

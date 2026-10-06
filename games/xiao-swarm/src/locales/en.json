@@ -126,6 +126,7 @@
   "scoreAliens": "Aliens killed",
   "scoreDamage": "Damage dealt",
   "allyDown": "Ally down",
+  "bossTip": "BOSS",
   "restartIn": "New game in {value} s",
   "chooseUpgradeShort": "Pick: 1 / 2 / 3",
   "reroll": "Reroll ({value})",

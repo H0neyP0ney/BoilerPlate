@@ -28,6 +28,8 @@ export const REVIVE_TIME = 2;
 export const REVIVE_SQUAD_RATIO = 0.6;
 /** Invincibilité (s, les soldats clignotent) d'un joueur qui vient d'être réanimé par un équipier. */
 export const REVIVE_INVULN = 3;
+/** Revive (solo) : part de l'effectif maximal atteint dans la partie avec laquelle la squad réapparaît (minimum 1 soldat). */
+export const REVIVE_SQUAD_FRACTION = 0.6;
 export const GRAB_IMMUNE = 2;
 /**
  * Soldat isolé (tiré par une langue, emmené par une bulle, repoussé…) : au-delà de `radius + DETACH_EXTRA` px de la squad il sort du mouvement
@@ -57,7 +59,7 @@ export const SQUAD_BASE = { damage: 1.2, fireRate: 1.15, hp: 1.3, speed: 1.08, r
  * +30 % de vitesse de déplacement et d'attaque et −30 % de cooldown des capacités spéciales (cumulés ; le gain de cooldown plafonne à ×10).
  * Les flammes d'enragé sont plus denses à partir du niveau 2.
  */
-export const BOSS_ENRAGE = { every: 30, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
+export const BOSS_ENRAGE = { every: 60, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
 /**

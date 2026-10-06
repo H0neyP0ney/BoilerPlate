@@ -149,15 +149,22 @@ export class TimelineHud {
     const fillEnd = fillL + fillW;
 
     // crans de vague : gris à venir, blanc passés
-    let n = 0;
+    // (jamais deux crans collés : au moins 1 px d'écran de vide entre deux, quitte à en masquer)
+    const times: number[] = [];
     for (const e of sim.mode.waves.timeline) {
       if (e.config !== undefined) continue;
-      for (const at of entryTimes(e)) {
-        if (at <= prev || at >= next.at) continue;
-        const tick = this.tick(n++);
-        const passed = at <= cursor;
-        tick.setTexture(passed ? KEYS.tickOn : KEYS.tickOff).setVisible(true).setScale(k).setPosition(fillL + minW + (fillMax - minW) * ((at - prev) / span), slotCy);
-      }
+      for (const at of entryTimes(e)) if (at > prev && at < next.at) times.push(at);
+    }
+    times.sort((x, y) => x - y);
+    const tickW = this.scene.textures.get(KEYS.tickOff).getSourceImage().width * k;
+    let n = 0;
+    let lastX = -Infinity;
+    for (const at of times) {
+      const x = fillL + minW + (fillMax - minW) * ((at - prev) / span);
+      if (x - lastX < tickW + 1) continue;
+      lastX = x;
+      const tick = this.tick(n++);
+      tick.setTexture(at <= cursor ? KEYS.tickOn : KEYS.tickOff).setVisible(true).setScale(k).setPosition(x, slotCy);
     }
     for (let i = n; i < this.ticks.length; i++) this.ticks[i].setVisible(false);
 

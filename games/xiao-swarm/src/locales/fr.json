@@ -126,6 +126,7 @@
   "scoreAliens": "Aliens tués",
   "scoreDamage": "Dégâts infligés",
   "allyDown": "Allié à terre",
+  "bossTip": "BOSS",
   "restartIn": "Nouvelle partie dans {value} s",
   "chooseUpgradeShort": "Choisis : 1 / 2 / 3",
   "reroll": "Relancer ({value})",

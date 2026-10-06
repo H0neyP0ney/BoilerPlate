@@ -4,6 +4,7 @@ import { DEPTH, ORB_BLINK_TIME, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPH
 import { TICK_RATE } from '../net/Session';
 import { ALIENS } from '../data/aliens';
 import { soldierSpriteId } from '../art/playerVariants';
+import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { tierOfTexture } from '../data/damageTiers';
 import { TUTORIAL } from '../data/tutorial';
@@ -38,6 +39,16 @@ const LEVEL_WAVES = 4;
 const LEVEL_WAVE_GAP_MS = 170;
 /** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
 export const BAR_GHOST_HOLD = 0.15;
+/** Sous le feu, chaque coup relance l'attente de la part blanche mais ×`BAR_GHOST_HOLD_DECAY` de moins que le précédent (elle finit par rejoindre la rouge). */
+export const BAR_GHOST_HOLD_DECAY = 0.6;
+export interface BarGhost { last: number; ghost: number; hold: number; hits: number }
+/** Un coup vient d'être pris (`ratio` < `st.last`) : relance l'attente de la part blanche, de plus en plus courte au fil de la rafale. */
+export function ghostHit(st: BarGhost, ratio: number): void {
+  if (ratio >= st.last - 1e-4) return;
+  if (st.ghost <= st.last + 1e-4) st.hits = 0; // la blanche avait rattrapé la rouge : nouvelle rafale
+  st.hold = BAR_GHOST_HOLD * BAR_GHOST_HOLD_DECAY ** st.hits;
+  st.hits++;
+}
 /** Barre de vie d'un glaçon : bleue. */
 const ICE_BAR = 0x4aa8ff;
 export const BAR_GHOST_SPEED = 4.5; // +70 % de plus
@@ -93,13 +104,15 @@ export class WorldView {
   private readonly ground: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly beams: Phaser.GameObjects.Graphics;
+  /** Sprites des rangées de pics du lurker (un par colonne de 3 pics, réutilisés d'une frame à l'autre). */
+  private readonly spikeSprites: Phaser.GameObjects.Image[] = [];
   private readonly colors = new Map<PlayerId, number>();
   /** Bulles d'upgrade, power-ups, globes, compteurs d'escouade. */
   private readonly pickups: PickupViews;
   /** Halos d'apparition en cours : ils suivent leur soldat / leur squad au lieu de rester à l'endroit où ils sont nés. */
   private readonly followers: { parts: { img: Phaser.GameObjects.Image; dy: number }[]; pos: () => { x: number; y: number } | null }[] = [];
   /** Barres de vie : part blanche qui traîne derrière la part colorée (voir `bar`), par id d'unité ; `barsSeen` = ids dessinés cette frame. */
-  private readonly barGhosts = new Map<number, { last: number; ghost: number; hold: number }>();
+  private readonly barGhosts = new Map<number, BarGhost>();
   private readonly barsSeen = new Set<number>();
 
   constructor(
@@ -123,6 +136,12 @@ export class WorldView {
 
   /** Pas de colonne d'arrivée avant cet instant (ms) : départ de partie, réapparition, relance. */
   private quietUntil = 0;
+
+  /** Le point (x, y) est-il dans la vue de la caméra (marge `m` px) ? Sert à ne dessiner / animer que ce qu'on voit. */
+  private onScreen(x: number, y: number, m = 0): boolean {
+    const v = this.scene.cameras.main.worldView;
+    return x > v.x - m && x < v.right + m && y > v.y - m && y < v.bottom + m;
+  }
 
   /** Couleur d'anneau d'un joueur, attribuée à sa première apparition (arrivée en cours de partie comprise). */
   colorOf(owner: PlayerId): number {
@@ -157,13 +176,14 @@ export class WorldView {
       case 'alienDied': {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'boss_crab' ? 40 : 10);
-        // gelée et flaques : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
+        // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
         if (e.alien === 'slime' || e.alien === 'shooter') {
           const size = e.alien === 'shooter' ? 1.6 : 1;
-          const light = e.alien === 'shooter' ? 0xcfe6ff : 0xc8ffb0;
+          const light = e.alien === 'shooter' ? 0xffc9d4 : 0xc8ffb0;
           this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
-          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, size);
         }
+        // flaque au sol de la couleur de l'alien, pour tous (taille proportionnelle à son socle : slime = 1)
+        if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, Math.max(0.6, Math.min(3.5, def.radius / ALIENS.slime.radius)));
         if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
           sfx.play(this.scene, SFX.blast.key, SFX.blast);
@@ -498,6 +518,9 @@ export class WorldView {
       let v = this.aliens.get(a.id);
       if (!v) {
         v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil); // départ de partie / arrivée d'un client : pas de trou
+        v.onPop = (x, y, r) => {
+          if (this.onScreen(x, y, 120)) this.fx.dust(x, y, r); // poussière seulement si c'est à l'écran
+        };
         this.aliens.set(a.id, v);
       }
       v.seen = true;
@@ -819,7 +842,7 @@ export class WorldView {
     // trous d'apparition des aliens : se creusent, l'alien en sort, puis le trou s'efface
     for (const v of this.aliens.values()) {
       const h = v.hole();
-      if (!h) continue;
+      if (!h || !this.onScreen(h.x, h.y, h.radius + 60)) continue;
       const r = h.radius * h.open;
       g.fillStyle(0x6a4a30, 0.9 * h.alpha).fillEllipse(h.x, h.y + 4, r * 2.3, r * 1.25);
       g.fillStyle(0x1a0f0a, 0.95 * h.alpha).fillEllipse(h.x, h.y + 5, r * 1.8, r * 0.95);
@@ -859,7 +882,7 @@ export class WorldView {
     for (const v of this.aliens.values()) {
       const a = v.state;
       const L = a.def.lurk;
-      if (!L || a.lurkPhase === 0) continue;
+      if (!L || a.lurkPhase === 0 || !this.onScreen(a.x, a.y, a.radius * 2 + L.length + 60)) continue; // hors écran (télégraphe des pics compris) : rien à dessiner
       const open = a.lurkPhase === 1 ? 1 - a.lurkT / L.digTime : a.lurkPhase === 5 ? a.lurkT / L.rise : 1;
       const r = a.radius * 1.55 * open;
       g.fillStyle(0x6a4a30, 0.9).fillEllipse(a.x, a.y + 4, r * 2.3, r * 1.25); // rebord de terre
@@ -883,6 +906,7 @@ export class WorldView {
       const B = a.def.burrow;
       if (!B || a.lurkPhase === 0) continue;
       const hole = (x: number, y: number, r: number, alpha: number): void => {
+        if (!this.onScreen(x, y, r * 2 + 40)) return; // hors écran : pas de trou
         g.fillStyle(0x6a4a30, 0.9 * alpha).fillEllipse(x, y + 4, r * 2.3, r * 1.25); // rebord de terre
         g.fillStyle(0x1a0f0a, 0.95 * alpha).fillEllipse(x, y + 5, r * 1.8, r * 0.95); // trou
         g.fillStyle(0x000000, 0.7 * alpha).fillEllipse(x, y + 7, r * 1.1, r * 0.55);
@@ -1039,7 +1063,7 @@ export class WorldView {
     const l = this.beams;
     l.clear();
     this.drawTongues(l, dt);
-    this.drawSpikes(l);
+    this.drawSpikes();
     this.drawCasts(l, time);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tr = this.tracers[i];
@@ -1054,31 +1078,43 @@ export class WorldView {
     }
   }
 
-  /** Lignes de pics du lurker : des pointes d'os qui jaillissent du sol de proche en proche, le front avance avec la phase 4. */
-  private drawSpikes(l: Phaser.GameObjects.Graphics): void {
+  /**
+   * Lignes de pics du lurker : des pointes d'os qui jaillissent du sol de proche en proche, le front avance avec la phase 4. Chaque colonne de 3 pics est UN
+   * sprite (texture pré-dessinée `fx_spike3_k` selon la direction de la ligne, voir `art/fx.ts`), étiré en hauteur quand le front passe : aucun tracé par frame.
+   */
+  private drawSpikes(): void {
+    let n = 0;
+    const step = 28;
     for (const v of this.aliens.values()) {
       const a = v.state;
       const L = a.def.lurk;
       if (!L || a.lurkPhase !== 4) continue;
+      if (!this.onScreen(a.x, a.y, L.length + 80)) continue; // hors écran : rien à dessiner
       const p = 1 - a.lurkT / L.sweep;
       const front = p * L.length;
       const cos = Math.cos(a.spikeAng);
       const sin = Math.sin(a.spikeAng);
       const fade = p > 0.75 ? 1 - (p - 0.75) / 0.25 * 0.6 : 1;
-      const rows = [-L.width / 3, 0, L.width / 3];
-      for (let d = 18; d <= front; d += 22) {
+      const bin = Math.round((((a.spikeAng % Math.PI) + Math.PI) % Math.PI) / (Math.PI / SPIKE_BINS)) % SPIKE_BINS; // direction de la rangée, à un demi-tour près
+      const key = `fx_spike3_${bin}`;
+      for (let d = 18, col = 0; d <= front; d += step, col++) {
         const rise = Math.min(1, (front - d) / 70 + 0.25); // la pointe sort du sol quand le front passe
-        const h = 36 * rise;
-        for (let i = 0; i < rows.length; i++) {
-          const off = rows[i] + ((d / 22 + i) % 2 ? 4 : -4);
-          const x = a.x + cos * d - sin * off;
-          const y = a.y + sin * d + cos * off;
-          l.fillStyle(0x2a1d2e, 0.55 * fade).fillEllipse(x, y + 2, 14, 6);
-          l.fillStyle(0xe8dcc0, fade).fillTriangle(x - 6, y, x + 6, y, x + (i - 1) * 2, y - h);
-          l.lineStyle(1.5, 0x6a4a3a, fade).strokeTriangle(x - 6, y, x + 6, y, x + (i - 1) * 2, y - h);
+        const off = col % 2 ? 4 : -4; // quinconce d'une colonne à l'autre
+        let img = this.spikeSprites[n];
+        if (!img) {
+          img = this.scene.add.image(0, 0, key).setOrigin(0.5, SPIKE3.baseY / SPIKE3.h).setDepth(DEPTH.fx);
+          this.spikeSprites[n] = img;
         }
+        img
+          .setTexture(key)
+          .setVisible(true)
+          .setAlpha(fade)
+          .setScale(1, rise)
+          .setPosition(a.x + cos * d - sin * off, a.y + sin * d + cos * off);
+        n++;
       }
     }
+    for (let i = n; i < this.spikeSprites.length; i++) this.spikeSprites[i].setVisible(false);
   }
 
   /**
@@ -1091,8 +1127,8 @@ export class WorldView {
     let ghost = r;
     if (id !== undefined) {
       this.barsSeen.add(id);
-      const st = this.barGhosts.get(id) ?? { last: r, ghost: r, hold: 0 };
-      if (r < st.last - 1e-4) st.hold = BAR_GHOST_HOLD; // nouveau coup : la barre blanche attend un instant sur l'ancienne vie
+      const st = this.barGhosts.get(id) ?? { last: r, ghost: r, hold: 0, hits: 0 };
+      ghostHit(st, r); // nouveau coup : la barre blanche attend un instant sur l'ancienne vie (de moins en moins sous le feu)
       if (r >= st.ghost) st.ghost = r; // soin : pas de traînard
       else if (st.hold > 0) st.hold -= dt;
       else st.ghost = Math.max(r, st.ghost - BAR_GHOST_SPEED * dt);

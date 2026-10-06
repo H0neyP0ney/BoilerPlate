@@ -80,7 +80,7 @@ export class Combat {
       const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
       const rangeMul = squad.stats.get('range');
       for (const s of squad.soldiers) {
-        if (s.capturedBy) continue; // avalé par une bulle : ne tire plus
+        if (s.capturedBy || s.stun > 0) continue; // avalé par une bulle ou étourdi : ne tire plus
         const weapon = s.def.weapon;
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;

@@ -69,7 +69,6 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 3 }, { type: 'slime', count: 4 }] },
       { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 4 }, { type: 'gling', count: 4 }] },
       { name: 'Deux kamikazes', groups: [{ type: 'kamikaze', count: 3 }] },
-      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 2 }, { type: 'slime', count: 4 }] },
     ],
     4: [
       { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
@@ -80,6 +79,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Un gros', groups: [{ type: 'shooter', count: 2 }, { type: 'slime', count: 7 }] },
       { name: 'Artillerie', groups: [{ type: 'shooter', count: 4 }, { type: 'gling', count: 6 }] },
       { name: 'Mélange', groups: [{ type: 'shooter', count: 2 }, { type: 'toad', count: 2 }, { type: 'kamikaze', count: 4 }] },
+      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 2 }, { type: 'slime', count: 4 }] },
     ],
     6: [
       { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'burner', count: 4 }, { type: 'slime', count: 6 }] },

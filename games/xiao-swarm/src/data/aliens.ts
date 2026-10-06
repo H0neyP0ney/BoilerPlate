@@ -18,7 +18,7 @@ export interface AlienDef {
   /** Flotte (ombre décollée, rebond plus ample). */
   floats?: boolean;
   /** Slam de zone : knockback + dégâts autour de lui. */
-  slam?: { radius: number; damage: number; cooldown: number; knockback: number };
+  slam?: { radius: number; damage: number; cooldown: number; knockback: number; /** Étourdit les soldats touchés (s) : ils ne bougent ni ne tirent. */ stun?: number };
   /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui explosent au sol (zone `aoe`). */
   lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean };
   /**
@@ -165,7 +165,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     revivable: true,
     xp: 6,
     recruitChance: 0.1,
-    color: 0x4aa8ff,
+    color: 0x9b1c3c, // rouge bordeaux (boule lobée, éclats et flaque de mort)
     hpBarWidth: 40,
   },
   /** Kamikaze : fonce sur les soldats ; le tuer déclenche une explosion retardée (il faut le tuer de loin). */
@@ -203,7 +203,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Rhinocéros : lent à quatre pattes, mais charge toutes les 5 s dans une zone signalée en rouge. */
   charger: {
     id: 'charger',
-    hp: 130,
+    hp: 390, // ×3
     speed: 40,
     radius: 24,
     mass: 5,
@@ -267,14 +267,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Lurker : s'enterre sur le trajet anticipé de la squad et la frappe d'une ligne de pics (comme les lurkers de StarCraft). */
   lurker: {
     id: 'lurker',
-    hp: 120,
+    hp: 360, // ×3
     speed: 120,
     radius: 18,
     mass: 2,
     damage: 0,
     attackCooldown: 1,
     target: 'nearest',
-    lurk: { lead: 2.4, digRange: 140, digTime: 0.7, rise: 0.6, wait: 7, trigger: 360, aim: 0.6, length: 380, width: 44, sweep: 0.5, damage: 30, cooldown: 1.6, buriedDmg: 0.2 },
+    lurk: { lead: 2.4, digRange: 140, digTime: 0.7, rise: 0.6, wait: 7, trigger: 360, aim: 0.6, length: 380, width: 44, sweep: 0.5, damage: 60, cooldown: 1.6, buriedDmg: 0.2 },
     xp: 8,
     recruitChance: 0.08,
     color: 0x7a5a9a,
@@ -283,7 +283,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
     id: 'bubble',
-    hp: 720,
+    hp: 2160, // ×3
     speed: 210,
     radius: 22,
     mass: 3,
@@ -292,7 +292,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    capture: { dps: 17.5 },
+    capture: { dps: 25 },
     xp: 12,
     recruitChance: 0,
     color: 0x8fe0ff,
@@ -336,16 +336,16 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   boss_scarab: {
     id: 'boss_scarab',
     hp: 3200,
-    speed: 50,
+    speed: 150, // ×3
     radius: 68,
     mass: 50,
     damage: 15,
     attackCooldown: 1.2,
     oneShot: true,
     target: 'center',
-    slam: { radius: 190, damage: 30, cooldown: 2, knockback: 650 },
+    slam: { radius: 190, damage: 30, cooldown: 2, knockback: 650, stun: 1.2 }, // grosse onde de choc : étourdit les soldats
     shield: { pct: 0.05, regenDelay: 5, regenTime: 4 },
-    burrow: { every: 8, dig: 0.6, wait: 1.6, rise: 0.47, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 },
+    burrow: { every: 5, dig: 0.6, wait: 1.6, rise: 0.47, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 }, // s'enterre plus souvent (8 → 5 s)
     boss: { kind: 'mini' },
     xp: 400,
     recruitChance: 1,
@@ -363,7 +363,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
-    swarm: { every: 3, duration: 1.07, count: 30, spawn: 'gling' },
+    swarm: { every: 4, duration: 1.07, count: 22, spawn: 'gling' },
     boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1,

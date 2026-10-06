@@ -1,4 +1,5 @@
 import { FixedStep } from '@xiao/engine/sim';
+import { REVIVE_SQUAD_FRACTION } from '../config';
 import { START_SQUADS } from '../data/classes';
 import type { ModeDef } from '../data/modes';
 import { BotBrain } from '../sim/bots';
@@ -108,7 +109,10 @@ export class LocalSession implements Session {
   }
 
   reviveLocal(free = false): void {
-    this.sim.respawnSquad(this.localPlayer, this.sim.rng.pick(START_SQUADS), undefined, free);
+    const peak = this.sim.squadOf(this.localPlayer)?.peakComposition ?? [];
+    const n = Math.max(1, Math.ceil(peak.length * REVIVE_SQUAD_FRACTION));
+    const comp = peak.length ? Array.from({ length: n }, (_, i) => peak[Math.floor((i * peak.length) / n)]) : this.sim.rng.pick(START_SQUADS); // part de l'effectif max, classes réparties
+    this.sim.respawnSquad(this.localPlayer, comp, undefined, free);
   }
 
   close(): void {}

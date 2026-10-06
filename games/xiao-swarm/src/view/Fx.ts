@@ -14,6 +14,11 @@ const CRIT_SCALE = 0.7;
 /** Grossissement du texte (chiffres et « ! ») de la bulle de critique, la bulle elle-même ne change pas. */
 const CRIT_TEXT_GROW = 1.35;
 
+/** Flaques de mort groupées : au-delà de `PUDDLE_MAX_BATCHES` lots de même couleur dans ce rayon (px) et cette durée (ms), on n'en pose plus. */
+const PUDDLE_MERGE_RADIUS = 45;
+const PUDDLE_MERGE_MS = 700;
+const PUDDLE_MAX_BATCHES = 2;
+
 export class Fx {
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
   private gloopBig!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -22,6 +27,7 @@ export class Fx {
   private fire!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Traînée des roquettes (fx_smoke, FX.rocket). */
   private smoke!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private dustPuff!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
   private readonly followed: { obj: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform; pos: () => { x: number; y: number } | null; last: { x: number; y: number } | null; until: number }[] = [];
 
@@ -46,6 +52,17 @@ export class Fx {
     this.gloopSmall?.destroy();
     this.fire?.destroy();
     this.smoke?.destroy();
+    this.dustPuff?.destroy();
+    this.dustPuff = this.scene.add
+      .particles(0, 0, 'fx_smoke', {
+        speed: { min: 18, max: 70 },
+        scale: { start: 0.4, end: 1.1 },
+        alpha: { start: 0.55, end: 0 },
+        tint: 0xb9a78c,
+        lifespan: { min: 450, max: 800 },
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx - 2);
     const k = FX.rocket;
     this.smoke = this.scene.add
       .particles(0, 0, 'fx_smoke', {
@@ -106,6 +123,16 @@ export class Fx {
       .setDepth(DEPTH.fx);
   }
 
+  /** Nuage de poussière quand une unité sort du sol (trou d'apparition, lurker, Scarab) : à n'appeler que si l'unité est à l'écran. */
+  dust(x: number, y: number, radius: number): void {
+    const n = Math.round(6 + radius / 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * radius;
+      this.dustPuff.emitParticleAt(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.5, 1);
+    }
+  }
+
   /** Une bouffée de fumée de roquette en (x, y) (traînée : appelée à chaque frame derrière la fusée). */
   rocketSmoke(x: number, y: number): void {
     const s = FX.rocket.smokeSpread;
@@ -123,8 +150,27 @@ export class Fx {
   }
 
   /** Flash de tir ; l'appelant le repositionne à chaque frame tant qu'il est actif (il se détruit seul). */
+  /** Dernières flaques posées (position, couleur, instant, nombre de lots) : sert à ne pas empiler des dizaines de flaques identiques au même endroit. */
+  private readonly recentPuddles: { x: number; y: number; color: number; at: number; batches: number }[] = [];
+
+  /** Faux si ≥ `PUDDLE_MAX_BATCHES` lots de la même couleur viennent d'être posés dans `PUDDLE_MERGE_RADIUS` px (morts groupées : une grosse tache suffit). */
+  private puddleRoom(x: number, y: number, color: number): boolean {
+    const now = this.scene.time.now;
+    const list = this.recentPuddles;
+    for (let i = list.length - 1; i >= 0; i--) if (now - list[i].at > PUDDLE_MERGE_MS) list.splice(i, 1);
+    const near = list.find((r) => r.color === color && Math.hypot(r.x - x, r.y - y) < PUDDLE_MERGE_RADIUS);
+    if (near) {
+      if (near.batches >= PUDDLE_MAX_BATCHES) return false;
+      near.batches++;
+      return true;
+    }
+    list.push({ x, y, color, at: now, batches: 1 });
+    return true;
+  }
+
   /** Quelques flaques au sol (nombre, position, taille, orientation et durée aléatoires) qui rétrécissent et s'effacent lentement. */
   puddles(x: number, y: number, color: number, size = 1): void {
+    if (!this.puddleRoom(x, y, color)) return;
     const p = FX.puddle;
     const n = Phaser.Math.Between(p.countMin, p.countMax);
     for (let i = 0; i < n; i++) {

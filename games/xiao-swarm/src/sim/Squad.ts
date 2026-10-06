@@ -38,6 +38,8 @@ export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'ma
  */
 export class Squad {
   readonly soldiers: SoldierState[] = [];
+  /** Composition de la squad quand elle a été à son effectif maximal de la partie (base du revive : `REVIVE_SQUAD_FRACTION`). */
+  peakComposition: SoldierClassId[] = [];
   readonly anchor = { x: 0, y: 0, radius: 18 };
   private readonly steerV = { x: 0, y: 0 };
   private readonly slotTarget = { x: 0, y: 0, radius: 0 };
@@ -306,6 +308,7 @@ export class Squad {
       invulnerable: 0,
       capturedBy: 0,
       frozen: false,
+      stun: 0,
       grabbed: 0,
     };
     this.soldiers.push(s);
@@ -334,6 +337,7 @@ export class Squad {
       this.soldiers.splice(i, 1);
       this.dirty = true;
     }
+    if (this.soldiers.length > this.peakComposition.length) this.peakComposition = this.soldiers.map((s) => s.def.id);
     return dead;
   }
 
@@ -398,9 +402,21 @@ export class Squad {
     for (const s of this.soldiers) {
       // prisonnier d'une bulle : elle le porte ; si la bulle a disparu, il est libre
       if (s.capturedBy) {
+        if (s.invulnerable > 0) s.invulnerable -= dt; // décompté aussi dans une bulle / un glaçon (la charge du rhinocéros en donne un à un soldat gelé)
         if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
         s.capturedBy = 0;
         s.frozen = false;
+      }
+      if (s.stun > 0) {
+        // étourdi : immobile (seul le recul agit), ne rejoint pas son slot
+        s.stun -= dt;
+        s.vx = s.vy = 0;
+        s.x += s.kx * dt;
+        s.y += s.ky * dt;
+        s.kx = damp(s.kx, 0, CROWD.knockDamp, dt);
+        s.ky = damp(s.ky, 0, CROWD.knockDamp, dt);
+        if (s.invulnerable > 0) s.invulnerable -= dt;
+        continue;
       }
       if (s.grabbed > 0) s.grabbed -= dt;
       const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;

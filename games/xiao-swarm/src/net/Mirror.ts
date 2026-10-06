@@ -278,6 +278,7 @@ export class Mirror {
         invulnerable: 0,
         capturedBy: 0,
         frozen: false,
+        stun: 0,
         grabbed: 0,
       };
       this.soldiers.set(u.id, s);
@@ -292,6 +293,7 @@ export class Mirror {
     s.facing = u.facing;
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
+    s.stun = u.stunned ? 1 : 0;
     s.invulnerable = u.invulnerable ? 1 : 0;    s.capturedBy = u.capturedBy;
     this.setGoal(s, u.x, u.y);
     return s;
@@ -336,6 +338,7 @@ export class Mirror {
         rushWind: 0,
         rushT: 0,
         rushDx: 0,
+        rushHits: new Set<number>(),
         rushDy: 0,
         rushX: a.x,
         rushY: a.y,
@@ -353,6 +356,7 @@ export class Mirror {
         revived: false,
         enraged: 0,
         noXp: false,
+        noRecruit: false,
         age: 0,
         swarmCd: 0,
         swarmT: 0,

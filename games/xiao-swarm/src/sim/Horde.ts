@@ -119,6 +119,7 @@ export class Horde {
       rushWind: 0,
       rushT: 0,
       rushDx: 0,
+      rushHits: new Set<number>(),
       rushDy: 0,
       rushX: x,
       rushY: y,
@@ -135,7 +136,8 @@ export class Horde {
       trailCd: 0,
       revived,
       enraged: 0,
-      noXp: this.sim.waves.replaying, // rejeu de vague pendant un combat de boss : pas de globe d'XP
+      noXp: this.sim.waves.replaying, // rejeu de vague pendant un combat de boss : pas de globe d'XP (mais des recrues possibles)
+      noRecruit: false,
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
       swarmT: 0,
@@ -199,6 +201,7 @@ export class Horde {
     if (!this.canSpawn(type)) return;
     const made = this.create(ALIENS[type], x, y, hpFrac, revived);
     made.noXp = true; // invoqué (essaim de la Gling Mère) ou ressuscité (chaman) : ne laisse jamais de globe d'XP
+    made.noRecruit = true; // ni de recrue
     this.sim.aliens.push(made);
   }
 
@@ -440,7 +443,10 @@ export class Horde {
         if (a.rushWind > 0) {
           a.rushWind -= dt;
           speed = 0;
-          if (a.rushWind <= 0) a.rushT = r.length / r.speed;
+          if (a.rushWind <= 0) {
+            a.rushT = r.length / r.speed;
+            a.rushHits.clear();
+          }
         } else if (a.rushT > 0) {
           a.rushT -= dt;
           gx = a.rushDx;
@@ -832,11 +838,11 @@ export class Horde {
     }
   }
 
-  /** Soldats sur le passage du charger : gros dégâts + recul dans le sens de la charge (une seule fois chacun : invulnérabilité brève). */
+  /** Soldats sur le passage du charger : gros dégâts + recul dans le sens de la charge (une seule fois chacun par charge : `rushHits`). */
   private rushHit(a: AlienState): void {
     const r = a.def.rush!;
     for (const s of this.sim.soldierHash.query(a.x, a.y, r.width / 2 + a.radius + 60, this.scratchS)) {
-      if (!s.alive || s.invulnerable > 0) continue;
+      if (!s.alive || a.rushHits.has(s.id)) continue;
       const dx = s.x - a.x;
       const dy = s.y - a.y;
       const along = dx * a.rushDx + dy * a.rushDy;
@@ -845,7 +851,7 @@ export class Horde {
       this.sim.damageSoldier(s, r.damage);
       s.kx += (a.rushDx * r.knockback) / s.mass;
       s.ky += (a.rushDy * r.knockback) / s.mass;
-      s.invulnerable = 0.6;
+      a.rushHits.add(s.id); // une seule fois par charge (pas d'invulnérabilité : les autres aliens peuvent le frapper)
     }
   }
 
@@ -876,6 +882,7 @@ export class Horde {
       if (!s.alive || d > slam.radius + s.radius) continue;
       s.kx += (dx / d) * slam.knockback;
       s.ky += (dy / d) * slam.knockback;
+      if (slam.stun) s.stun = Math.max(s.stun, slam.stun);
       this.sim.damageSoldier(s, slam.damage);
     }
   }

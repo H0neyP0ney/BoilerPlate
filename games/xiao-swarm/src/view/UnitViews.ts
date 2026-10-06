@@ -66,8 +66,11 @@ export class SoldierView {
   private readonly hasGun: boolean;
   private readonly animated: boolean;
 
+  /** Icône de tourbillon au-dessus d'un soldat étourdi (créée à la demande). */
+  private stunIcon?: Phaser.GameObjects.Image;
+
   constructor(
-    scene: Phaser.Scene,
+    private readonly scene: Phaser.Scene,
     readonly state: SoldierState,
     readonly ringColor: number,
     slot = 0,
@@ -134,6 +137,10 @@ export class SoldierView {
     }
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
     this.body.setPosition(this.rx, this.ry + bob).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));
+    if (s.stun > 0) {
+      this.stunIcon ??= this.scene.add.image(0, 0, 'fx_stun').setScale(0.9);
+      this.stunIcon.setVisible(true).setPosition(this.rx, this.ry - 44 + bob).setRotation(-time * 7).setDepth(DEPTH.actors + this.ry + 3);
+    } else this.stunIcon?.setVisible(false);
 
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
@@ -170,6 +177,7 @@ export class SoldierView {
   }
 
   destroy(): void {
+    this.stunIcon?.destroy();
     this.body.destroy();
     this.gun.destroy();
   }
@@ -188,6 +196,9 @@ export class AlienView {
   private spawnT = 0;
   /** Temps écoulé depuis l'apparition (s) ; au-delà de la durée totale, plus de trou (0 pour les aliens présents d'emblée : ils n'en ont pas). */
   private emergeT: number;
+  /** Appelé une fois quand l'unité jaillit du sol (poussière) : posé par la vue du monde, qui sait si elle est à l'écran. */
+  onPop?: (x: number, y: number, radius: number) => void;
+  private prevPhase = 0;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly id: string;
   private readonly animated: boolean;
@@ -234,6 +245,12 @@ export class AlienView {
     this.ry = lerp(a.py, a.y, alpha);
     const hidden = this.emergeT < EMERGE_OPEN; // le trou se creuse : l'alien n'est pas encore sorti
     this.emergeT += dt;
+    if (hidden && this.emergeT >= EMERGE_OPEN) this.onPop?.(this.rx, this.ry, a.radius * 1.3); // sort de son trou d'apparition
+    // lurker (phase 5) et Scarab (phase 3) : ressortent de terre
+    if (a.lurkPhase !== this.prevPhase) {
+      if ((a.def.lurk && a.lurkPhase === 5) || (a.def.burrow && a.lurkPhase === 3)) this.onPop?.(this.rx, this.ry, a.radius * 1.4);
+      this.prevPhase = a.lurkPhase;
+    }
     if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
 
     // Squash / lévitation procéduraux seulement sans planche animée.

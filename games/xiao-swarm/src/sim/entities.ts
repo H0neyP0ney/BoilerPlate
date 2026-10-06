@@ -48,6 +48,8 @@ export interface SoldierState extends Body {
   capturedBy: number;
   /** Pris dans un glaçon (et non avalé par une bulle) : reste attaquable par les aliens. Simulation hôte seulement. */
   frozen: boolean;
+  /** Temps restant (s) d'étourdissement (slam du Scarab) : il ne bouge ni ne tire, mais reste attaquable. */
+  stun: number;
   /**
    * Temps restant (s) d'un « grab » (langue) : tant qu'il est > GRAB_HOLD il est tiré hors de la formation (il ne rejoint pas son
    * slot), et jusqu'à 0 il est immunisé contre tout autre grab (langue ou bulle).
@@ -75,6 +77,8 @@ export interface AlienState extends Body {
   rushWind: number;
   rushT: number;
   rushDx: number;
+  /** Soldats déjà touchés par la charge en cours (une seule fois chacun) ; vidé au début de chaque charge. */
+  rushHits: Set<number>;
   rushDy: number;
   /** Point de départ du couloir de charge (là où l'alien s'est arrêté pour annoncer) : le télégraphe s'y ancre, chez l'hôte comme chez les clients. */
   rushX: number;
@@ -106,6 +110,8 @@ export interface AlienState extends Body {
   age: number;
   /** Ne laisse aucun globe d'XP : envoyé par un rejeu de vague pendant un combat de boss (pas de farm en laissant le boss en vie), invoqué ou ressuscité. */
   noXp: boolean;
+  /** Invoqué ou ressuscité : ne laisse jamais de recrue (les aliens des vagues rejouées pendant un boss, eux, en laissent). */
+  noRecruit: boolean;
   /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */
   lurkPhase: number;
   lurkT: number;

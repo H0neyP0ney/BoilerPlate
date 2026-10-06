@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
 import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
-import { BAR_GHOST_HOLD, BAR_GHOST_SPEED } from '../view/WorldView';
+import { BAR_GHOST_SPEED, ghostHit, type BarGhost } from '../view/WorldView';
 import { HUD_ART, makeHudButton } from '../view/HudButtons';
 import { TimelineHud } from '../view/TimelineHud';
 import { staleDropped } from '../dev/staleOverrides';
@@ -70,11 +70,12 @@ export class HudScene extends Phaser.Scene {
   private bossFrame!: Phaser.GameObjects.Image;
   private bossGhost!: Phaser.GameObjects.NineSlice;
   private bossFill!: Phaser.GameObjects.NineSlice;
-  private bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0 };
+  private bossGhostState: BarGhost & { id: number } = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
   private bossName!: Phaser.GameObjects.Text;
   private tutorialArrow!: Phaser.GameObjects.Graphics;
   private tutorialLabel!: Phaser.GameObjects.Text;
   private bossArrow!: Phaser.GameObjects.Graphics;
+  private bossTip!: Phaser.GameObjects.Text;
   /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
   private reviveArrow!: Phaser.GameObjects.Graphics;
   /** « Ally down » au-dessus de chaque flèche verte (un texte par zone de réanimation, créés à la demande). */
@@ -142,7 +143,7 @@ export class HudScene extends Phaser.Scene {
     this.bossFrame.setDepth(0);
     this.bossGhost.setDepth(0.1);
     this.bossFill.setDepth(0.2);
-    this.bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0 };
+    this.bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
     this.xpShown = 0; // la scène est réutilisée à chaque partie
     this.xpLevelSeen = 0;
     this.xpWrap = false;
@@ -150,6 +151,10 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
       .setOrigin(0.5);
     this.bossArrow = this.add.graphics();
+    this.bossTip = this.add
+      .text(0, 0, t('bossTip'), { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ff6a6a', stroke: '#2a0a08', strokeThickness: 5 })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
     this.reviveArrow = this.add.graphics();
     // onboarding : flèches vers le point vert / la recrue / le power-up, bulle au-dessus de la flèche, bandeau du haut
     this.tutorialArrow = this.add.graphics();
@@ -263,6 +268,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const boss = g.session.sim.aliens.find((a) => a.alive && a.def.boss);
     this.bossBar.clear();
     this.bossArrow.clear();
+    this.bossTip.setVisible(false);
     this.bossName.setVisible(!!boss);
     this.bossFrame.setVisible(!!boss);
     this.bossGhost.setVisible(false);
@@ -279,8 +285,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const ratio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
     const st = this.bossGhostState;
     const dt = Math.min(0.1, this.game.loop.delta / 1000);
-    if (st.id !== boss.id) Object.assign(st, { id: boss.id, last: ratio, ghost: ratio, hold: 0 });
-    if (ratio < st.last - 1e-4) st.hold = BAR_GHOST_HOLD;
+    if (st.id !== boss.id) Object.assign(st, { id: boss.id, last: ratio, ghost: ratio, hold: 0, hits: 0 });
+    ghostHit(st, ratio);
     if (ratio >= st.ghost) st.ghost = ratio;
     else if (st.hold > 0) st.hold -= dt;
     else st.ghost = Math.max(ratio, st.ghost - BAR_GHOST_SPEED * dt);
@@ -327,6 +333,11 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       px - c * 4 - s * 11, py - s * 4 + c * 11,
       px - c * 4 + s * 11, py - s * 4 - c * 11,
     );
+    // tip « BOSS » au-dessus de la flèche (sous elle quand la flèche est tout en haut), gardé dans l'écran
+    const half = this.bossTip.width / 2 + 4;
+    const above = py - 34 > this.bossTip.height;
+    this.bossTip.setText(t('bossTip')).setOrigin(0.5, above ? 1 : 0).setVisible(true)
+      .setPosition(Math.max(half, Math.min(width - half, px)), above ? py - 30 * pulse : py + 30 * pulse);
   }
 
   /**
@@ -613,10 +624,10 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.roomText.setPosition(14 + 44 + 8 + 10, top + 10);
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
     this.alienText.setOrigin(1, 1).setPosition(width - 14, height - 34); // nombre d'aliens juste au-dessus
-    // boutons de dev en bas à gauche, alignés sur une ligne
+    // boutons de dev en bas à gauche, en colonne (le premier tout en bas, les suivants au-dessus)
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];
-    devBtns.forEach((b, i) => b.setPosition(14 + i * (44 + 8) + 22, bottomY));
+    devBtns.forEach((b, i) => b.setPosition(14 + 22, bottomY - i * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height * 0.22);

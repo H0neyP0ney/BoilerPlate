@@ -14,7 +14,7 @@ export const DEFAULT_MOVE_KEYS: MoveKeyCodes = { up: 'KeyW', down: 'KeyS', left:
 
 /**
  * Direction de déplacement unifiée : joystick flottant (tactile + drag souris)
- * ou clavier (touches rebindables, par défaut WASD ; flèches et pavé numérique 1-9 toujours actifs). `vector` a une longueur entre 0 et 1.
+ * ou clavier (touches rebindables, par défaut WASD ; flèches toujours actives). `vector` a une longueur entre 0 et 1.
  */
 export class MoveInput {
   readonly vector = new Phaser.Math.Vector2();
@@ -61,11 +61,10 @@ export class MoveInput {
     const k = this.keys;
     const c = this.keyCodes();
     const p = this.pressed;
-    // pavé numérique : 8 2 4 6 = haut bas gauche droite, 7 9 1 3 = diagonales
-    const left = k.LEFT.isDown || p.has(c.left) || k.NUMPAD_FOUR.isDown || k.NUMPAD_SEVEN.isDown || k.NUMPAD_ONE.isDown;
-    const right = k.RIGHT.isDown || p.has(c.right) || k.NUMPAD_SIX.isDown || k.NUMPAD_NINE.isDown || k.NUMPAD_THREE.isDown;
-    const up = k.UP.isDown || p.has(c.up) || k.NUMPAD_EIGHT.isDown || k.NUMPAD_SEVEN.isDown || k.NUMPAD_NINE.isDown;
-    const down = k.DOWN.isDown || p.has(c.down) || k.NUMPAD_TWO.isDown || k.NUMPAD_ONE.isDown || k.NUMPAD_THREE.isDown;
+    const left = k.LEFT.isDown || p.has(c.left);
+    const right = k.RIGHT.isDown || p.has(c.right);
+    const up = k.UP.isDown || p.has(c.up);
+    const down = k.DOWN.isDown || p.has(c.down);
     if (left) v.x -= 1;
     if (right) v.x += 1;
     if (up) v.y -= 1;
@@ -81,5 +80,5 @@ export class MoveInput {
 /** Joystick plein régime : part du rayon sous laquelle le doigt (ou la souris) ne donne aucune direction. */
 const DEADZONE = 0.12;
 
-/** Touches toujours actives (non rebindables) : flèches + pavé numérique. Les touches de lettres passent par `keyCodes`. */
-const KEYS = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NUMPAD_ONE', 'NUMPAD_TWO', 'NUMPAD_THREE', 'NUMPAD_FOUR', 'NUMPAD_SIX', 'NUMPAD_SEVEN', 'NUMPAD_EIGHT', 'NUMPAD_NINE'] as const;
+/** Touches toujours actives (non rebindables) : les flèches. Les autres touches passent par `keyCodes`. */
+const KEYS = ['UP', 'DOWN', 'LEFT', 'RIGHT'] as const;

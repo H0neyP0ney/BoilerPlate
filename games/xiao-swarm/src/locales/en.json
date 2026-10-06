@@ -13,7 +13,7 @@
   "pressKey": "Press a key…",
   "keyReserved": "{key} is reserved",
   "resetKeys": "Reset to defaults",
-  "keysNote": "Arrow keys and the numpad always move your squad.",
+  "keysNote": "Arrow keys always move your squad.",
   "back": "Back",
   "hintDrag": "Drag to move your squad",
   "hintTutoMove": "{keys} to move",

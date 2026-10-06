@@ -1,7 +1,7 @@
 /**
  * Touches rebindables du joueur (menu Options > Hotkeys) : déplacement, choix d'upgrade et relance. Les touches sont identifiées par leur code
  * PHYSIQUE (`KeyboardEvent.code`) : « KeyW » est la touche à la place du W d'un QWERTY, donc Z sur un AZERTY ; les défauts marchent ainsi sur tous
- * les claviers sans rien régler. Les flèches et le pavé numérique restent toujours actifs pour se déplacer (voir `MoveInput`).
+ * les claviers sans rien régler. Les flèches restent toujours actives pour se déplacer (voir `MoveInput`).
  * Ce module ne dépend ni de Phaser ni de `settings` ; l'état (touches choisies) vit dans `settings.hotkeys`.
  */
 export const HOTKEY_ACTIONS = ['up', 'down', 'left', 'right', 'pick1', 'pick2', 'pick3', 'reroll'] as const;

@@ -207,8 +207,8 @@ export const PALETTE = {
   allyRing: 0x39c6ff,
   hpAlly: 0x5ee05e,
   hpEnemy: 0xe84a4a,
-  /** Barre de bouclier (soldats avec le power-up, Scarab) : bleue, au-dessus de la barre de PV. */
-  shield: 0x4aa8ff,
+  /** Barre de bouclier (celui du Scarab : les soldats n'en ont plus) : grise, au-dessus de la barre de PV et dans la barre de boss du HUD. */
+  shield: 0xa8aeb8,
   hpBack: 0x1a1a24,
   text: '#ffffff',
   textDim: '#a9c3dd',

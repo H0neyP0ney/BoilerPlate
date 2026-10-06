@@ -13,7 +13,7 @@
   "pressKey": "Appuie sur une touche…",
   "keyReserved": "{key} est réservée",
   "resetKeys": "Rétablir par défaut",
-  "keysNote": "Les flèches et le pavé numérique déplacent toujours ton escouade.",
+  "keysNote": "Les flèches déplacent toujours ton escouade.",
   "back": "Retour",
   "hintDrag": "Glisse pour déplacer ton escouade",
   "hintTutoMove": "{keys} pour bouger",

@@ -14,7 +14,7 @@ import type { UpgradeId } from './progression';
  *   4. vague 3 : encore plus grosse, sans XP ; une recrue et un power-up de soin seulement ; puis le tutoriel se termine.
  *
  * Valeurs d'XP : le niveau 1 coûte `xpToNext(1)` = 10 XP (data/progression.ts). Vague 1 : aucune XP (pas de globe) ;
- * vague 2 : 12 XP (≥ 10 : un seul level-up, et 12 < 10 + xpToNext(2) = 29).
+ * vague 2 : 12 XP (≥ 10 : un seul level-up, et 12 < 10 + xpToNext(2) = 52).
  */
 export interface TutorialGroup {
   type: AlienId;

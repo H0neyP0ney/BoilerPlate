@@ -9,8 +9,18 @@ import type { SquadStat } from '../sim/Squad';
 /** Globes d'XP : valeur (XP) de chaque taille, de la plus petite à la plus grosse. */
 export const XP_ORB_VALUES = [1, 3, 8] as const;
 
-/** XP à accumuler pour passer du niveau `level` au suivant. */
-export const xpToNext = (level: number): number => 10 + 8 * (level - 1) + Math.round(1.2 * (level - 1) ** 2);
+/**
+ * XP à accumuler pour passer du niveau `level` au suivant (niveaux 1 à 40). Courbe à « bosse de départ » : les premiers niveaux coûtent plus cher (le 2 : 42 au lieu de 19,
+ * le 5 : 93 au lieu de 61) pour espacer les montées de niveau du début, puis elle rejoint l'ancienne courbe (10 + 8(n−1) + 1,2(n−1)²) un peu en dessous :
+ * l'XP cumulée pour atteindre le niveau 21 (≈ 6 min) est la même qu'avant (4684). Table fixe plutôt qu'une formule : pas de `Math.exp` dans la simulation
+ * (une dernière décimale différente selon le navigateur pourrait décaler un arrondi). Le niveau 1 reste à 10 : le tutoriel en dépend.
+ */
+const XP_TABLE = [
+  10, 42, 60, 77, 93, 111, 129, 149, 170, 192, 217, 244, 273, 304, 338, 374, 412, 453, 496, 540, 588, 638, 691, 745, 802, 861, 922, 986, 1052, 1119, 1190, 1262, 1337, 1413, 1492, 1573, 1656, 1742, 1829, 1919,
+] as const;
+/** Au-delà du niveau 40 : l'ancienne formule × cette échelle (continuité avec la table). */
+const XP_TAIL_SCALE = 0.8935;
+export const xpToNext = (level: number): number => XP_TABLE[level - 1] ?? Math.round((10 + 8 * (level - 1) + Math.round(1.2 * (level - 1) ** 2)) * XP_TAIL_SCALE);
 
 /** Découpe l'XP d'un alien en globes (les plus gros d'abord, au plus `max` globes). */
 export function splitXp(value: number, max = 9): number[] {  // `max` = nombre maximal de globes (Infinity : aucune limite, boss)

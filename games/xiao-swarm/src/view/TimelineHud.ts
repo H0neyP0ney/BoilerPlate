@@ -50,6 +50,8 @@ const KEYS = {
 const RING_LIVE = 'ui_tl_ring_live';
 /** Échelle maximale (pixels d'écran par pixel de planche) : la barre fait alors ~390 px (0,58 réduit de 15 %). */
 const U_MAX = 0.493;
+/** La jauge jaune dépasse de la zone sombre de ce nombre de pixels d'écran à gauche et à droite. */
+const FILL_GROW = 1;
 /** Précision de l'angle de la jauge circulaire (pas par tour). */
 const RING_STEPS = 360;
 
@@ -139,8 +141,8 @@ export class TimelineHud {
 
     // jauge jaune : toujours visible, elle démarre à sa largeur minimale (les deux extrémités arrondies) et atteint le bout de la zone sombre à p = 1 ;
     // la flèche est collée à son bout (donc jamais en avance sur la jauge)
-    const fillL = slotL + ART.pad * u;
-    const fillMax = slotW - 2 * ART.pad * u;
+    const fillL = slotL + ART.pad * u - FILL_GROW;
+    const fillMax = slotW - 2 * ART.pad * u + 2 * FILL_GROW;
     const minW = 2 * ART.fillCap.lr * k;
     const fillW = minW + (fillMax - minW) * p;
     this.fill.setVisible(true).setScale(k).setPosition(fillL, slotCy).setSize(fillW / k, this.fill.height);

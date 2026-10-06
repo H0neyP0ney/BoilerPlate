@@ -59,7 +59,12 @@ export const SQUAD_BASE = { damage: 1.2, fireRate: 1.15, hp: 1.3, speed: 1.08, r
  * +30 % de vitesse de déplacement et d'attaque et −30 % de cooldown des capacités spéciales (cumulés ; le gain de cooldown plafonne à ×10).
  * Les flammes d'enragé sont plus denses à partir du niveau 2.
  */
-export const BOSS_ENRAGE = { every: 60, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const;
+export const BOSS_ENRAGE = { every: 45, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const; // 45 s (était 60)
+/**
+ * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts de cette part (+10 % de PV, de vitesse, de dégâts et de
+ * cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance de la partie.
+ */
+export const BOSS_ESCALATION = 0.1;
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
 export const CAPTIVE_VULN = 3;
 /**
@@ -96,8 +101,6 @@ export const PICKUP = { magnetRadius: 110, pickRadius: 34, maxSpeed: 1400 };
 /** Globes d'XP : durée de vie au sol (s) ; l'affichage s'en sert pour l'animation d'apparition (scale Back.Out sur les `XP_ORB_POP` premières secondes). */
 export const XP_ORB_LIFE = 45;
 export const XP_ORB_POP = 0.3;
-/** Power-up bouclier : le bouclier de chaque soldat vaut cette part de ses PV max (consommé avant eux, dure jusqu'à sa perte). */
-export const SHIELD_FRACTION = 1 / 3;
 
 /** Multiplicateur de dégâts d'un coup critique (la chance de critique vient de la stat `crit` de la squad, en %, 0 de base). */
 export const CRIT_MUL = 2;
@@ -144,9 +147,9 @@ export const CROWD_DEFAULTS = {
   /** Réactivité individuelle minimale : vitesse voulue = écart au slot × gain (1/s). */
   gainMin: 8,
   /** Écart aléatoire de réactivité entre soldats (0 = tous identiques = formation rigide). */
-  gainSpread: 3,
+  gainSpread: 6,
   /** Vivacité de la vitesse vers la vitesse voulue (1/s) : plus grand = accélère / freine plus sec. */
-  velDamp: 18,
+  velDamp: 30,
   /** Vitesse max d'un soldat qui rattrape son slot, en multiple de `speed`. */
   maxSpeedMul: 1.35,
   /** Force de la séparation entre soldats (0 = ils se traversent, 1 = repoussés d'un coup). */
@@ -156,11 +159,11 @@ export const CROWD_DEFAULTS = {
   /** Décor : largeur (px) de la zone douce autour des hitbox où les unités glissent au lieu de buter (0 = hitbox dure seule). */
   wallMargin: 22,
   /** Décor : vitesse (px/s) qui écarte doucement de la hitbox, maximale au contact. */
-  wallPush: 90,
+  wallPush: 50,
   /** Décor : part de la vitesse « dans le mur » convertie en glissade le long du bord (0 = elle s'annule, 1 = tout glisse). */
-  wallNudge: 0.9,
-  /** Temps à l'arrêt avant que le Medic soigne (s). */
-  stillDelay: 0.5,
+  wallNudge: 1.5,
+  /** Temps à l'arrêt avant que le Medic soigne (s). 0 = il soigne dès que la squad s'arrête (ancienne valeur : 0,5). */
+  stillDelay: 0,
 };
 
 export type CrowdKey = keyof typeof CROWD_DEFAULTS;

@@ -30,6 +30,7 @@ export class RunFlow {
   begin(): void {
     if (this._state !== 'ready') return;
     this._state = 'playing';
+    poki.resetOnce(); // une partie = un jeu de paliers neuf (le revive ne repasse pas par ici : pas de doublon)
     poki.gameplayStart();
     poki.measure('run', this.runId, 'start');
   }
@@ -82,6 +83,7 @@ export class RunFlow {
   /** Revive offert (sans pub : aide à la première partie). Reprend le jeu comme `revive`. */
   reviveFree(): boolean {
     if (this._state !== 'dead') return false;
+    poki.measure('reward', 'free_revive', 'interact');
     this._state = 'playing';
     poki.gameplayStart();
     poki.measure('reward', 'free_revive', 'complete');

@@ -187,7 +187,7 @@ export class Combat {
     for (let i = 0; i < n; i++) {
       const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
-      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_DMG_MUL : 1), lob.aoe, lob.texture, a.team, 'aliens');
+      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
     }
   }
 
@@ -251,7 +251,7 @@ export class Combat {
       const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_DMG_MUL : 1), sp.aoe, sp.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
       p.puddle = sp.puddle.radius;
       p.puddleTtl = sp.puddle.ttl;
       p.puddleSlow = sp.puddle.slow;

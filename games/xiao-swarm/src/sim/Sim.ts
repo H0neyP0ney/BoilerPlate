@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
+import { BOSS_ESCALATION, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
@@ -73,6 +73,8 @@ export class Sim {
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
+  /** Boss et mini-boss tués depuis le début de la partie (voir `escalation`). */
+  bossKills = 0;
   readonly alienHash = new SpatialHash<AlienState>(64);
   readonly soldierHash = new SpatialHash<SoldierState>(64);
   readonly horde: Horde;
@@ -151,6 +153,7 @@ export class Sim {
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
+    this.bossKills = 0;
     this.choiceT = 0;
     this.choiceDelay = 0;
     this.sharedXpPool = 0;
@@ -405,6 +408,11 @@ export class Sim {
     return amount - taken;
   }
 
+  /** Multiplicateur appliqué à tout alien qui apparaît maintenant : ×(1 + `BOSS_ESCALATION`) par boss ou mini-boss déjà tué. */
+  get escalation(): number {
+    return (1 + BOSS_ESCALATION) ** this.bossKills;
+  }
+
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */
   damage(u: Unit, amount: number, attacker: PlayerId | null, dirX = 0, dirY = 0): void {
     if (u.kind === 'soldier') {
@@ -412,6 +420,7 @@ export class Sim {
       return;
     }
     if (!u.alive) return;
+    if (u.def.iceBlock && attacker !== null) amount = 1; // glaçon : chaque coup d'un soldat lui retire 1 PV, quelle que soit sa puissance (le bris sans prisonnier passe avec `attacker` nul)
     if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
     if (u.def.burrow && u.lurkPhase >= 1 && u.lurkPhase <= 2) amount *= u.def.burrow.buriedDmg; // Scarab sous terre
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
@@ -675,6 +684,7 @@ export class Sim {
     if (squad && !a.def.iceBlock) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.boss) {
+      this.bossKills++; // escalade : les aliens suivants sont plus forts
       this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
     }
@@ -696,7 +706,7 @@ export class Sim {
     }
     const bomb = a.def.deathBlast;
     if (bomb) {
-      this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage, knock: bomb.knockback });
+      this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.esc, knock: bomb.knockback });
       this.events.push({ t: 'fuse', x: a.x, y: a.y, r: bomb.radius, delay: bomb.delay, alien: a.def.id });
     }
     if (a.tut && this.tutorial) {

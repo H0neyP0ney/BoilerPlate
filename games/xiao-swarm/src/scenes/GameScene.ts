@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
 import { FREE_GAMES, INTERSTITIALS_ENABLED, SCENES } from '../config';
+import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
 import type { SoldierClassId } from '../data/classes';
 import { TUTORIAL } from '../data/tutorial';
 import { MODES, type ModeDef } from '../data/modes';
@@ -60,6 +61,10 @@ export class GameScene extends Phaser.Scene {
   /** Après un choix d'upgrade, le joystick (souris / tactile) reste ignoré tant que le joueur n'a pas relâché puis re-cliqué : le clic sur la carte d'upgrade ne doit pas lancer le déplacement. Le clavier n'est pas concerné. */
   private moveLocked = false;
   private readonly camTarget = { x: 0, y: 0 };
+  /** Analytics (docs/ANALYTICS.md) : étape du tutoriel en cours, prochain palier de temps et dernier niveau de vague déjà notés. */
+  private tutoPhase = '';
+  private nextTimeMilestone = 0;
+  private lastLevelSent = 0;
 
   constructor() {
     super(SCENES.game);
@@ -72,6 +77,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeOpen = false;
     this.moveLocked = false;
     this.shownOffer = '';
+    this.tutoPhase = '';
     this.scene.stop(SCENES.levelUp); // une fenêtre d'upgrade restée ouverte d'une partie précédente
     if (import.meta.env.DEV) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
@@ -105,7 +111,7 @@ export class GameScene extends Phaser.Scene {
     cam.startFollow(this.camTarget, false, 0.12, 0.12);
     cam.centerOn(c.x, c.y);
 
-    this.move = new MoveInput(this, { joystickFullSpeed: true });
+    this.move = new MoveInput(this, { joystickFullSpeed: true, keyCodes: () => settings.moveKeys() }); // touches rebindables (Options > Hotkeys)
     this.watching = '';
     // à terre : un clic (hors boutons du HUD) regarde l'équipier suivant
     const onClick = (_p: Phaser.Input.Pointer, over: unknown[]): void => {
@@ -157,6 +163,7 @@ export class GameScene extends Phaser.Scene {
     if (running) {
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.checkEnd();
+      this.trackProgress();
     }
     // choix d'upgrade : le monde est figé ; on dessine l'état à son dernier pas (alpha 1), sinon l'interpolation fait trembler les projectiles
     this.view.render(running && sim.choiceT <= 0 ? this.session.alpha : 1, dt, secs);
@@ -185,9 +192,46 @@ export class GameScene extends Phaser.Scene {
 
   /** Premier input du joueur : le gameplay démarre (Poki) et la musique se lance (en boucle, sans relance si elle joue déjà). */
   private beginRun(): void {
-    if (this.flow.state === 'ready') storage.set('gamesPlayed', storage.get('gamesPlayed', 0) + 1); // une partie de plus jouée (compte pour les interstitielles)
+    const newRun = this.flow.state === 'ready';
+    if (newRun) storage.set('gamesPlayed', storage.get('gamesPlayed', 0) + 1); // une partie de plus jouée (compte pour les interstitielles)
     this.flow.begin();
+    if (newRun) {
+      this.nextTimeMilestone = 0;
+      this.lastLevelSent = 0;
+      const games = storage.get('gamesPlayed', 0);
+      if ((RETENTION_MILESTONES as readonly number[]).includes(games)) poki.measure('retention', `game-${games}`, 'reached'); // combien de joueurs rejouent
+      const tuto = this.session.sim.tutorial;
+      if (tuto?.active) this.trackTutorial(tuto.phase); // 1re étape déjà posée par la simulation
+    }
     music.play(this, MUSIC.key, MUSIC.url, settings.musicGain());
+  }
+
+  /**
+   * Analytics, entonnoir du tutoriel : chaque étape s'ouvre (`start`) et ferme la précédente (`complete`) ; `all` = le tutoriel entier.
+   * La 1re étape (`move1`) est posée par la simulation avant le premier input, donc avant que cette scène l'écoute : `beginRun` la rattrape.
+   */
+  private trackTutorial(phase: string): void {
+    if (phase === this.tutoPhase) return;
+    if (this.tutoPhase) poki.measure('tutorial', this.tutoPhase, 'complete');
+    else poki.measure('tutorial', 'all', 'start');
+    this.tutoPhase = phase === 'done' ? '' : phase;
+    if (phase === 'done') poki.measure('tutorial', 'all', 'complete');
+    else poki.measure('tutorial', phase, 'start');
+  }
+
+  /** Analytics : paliers de temps et de niveau de vague atteints, une fois par partie (pas pendant le tutoriel, dont la timeline est différente). */
+  private trackProgress(): void {
+    const sim = this.session.sim;
+    if (!this.flow.isPlaying || this.ended || sim.tutorial?.active) return;
+    const time = this.runTime;
+    while (this.nextTimeMilestone < TIME_MILESTONES.length && time >= TIME_MILESTONES[this.nextTimeMilestone]) {
+      poki.measureOnce('time', `${TIME_MILESTONES[this.nextTimeMilestone++]}s`, 'reached');
+    }
+    const level = this.waveNumber;
+    if (level > this.lastLevelSent) {
+      this.lastLevelSent = level;
+      poki.measureOnce('level', level, 'reached');
+    }
   }
 
   // ---------- Infos pour le HUD ----------
@@ -234,10 +278,13 @@ export class GameScene extends Phaser.Scene {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown' || e.t === 'bossEnrage') this.events.emit('boss', e); // bandeau / flèche du HUD
     if (e.t === 'boss') this.recorder?.noteBoss(e.alien, e.kind);
+    if (e.t === 'boss') poki.measureOnce('boss', e.alien, 'start');
+    if (e.t === 'bossDown') poki.measureOnce('boss', e.alien, 'complete');
     if (e.t === 'tutorial') {
-      poki.measure('onboarding', e.phase, 'complete');
+      this.trackTutorial(e.phase);
       if (e.phase === 'done') settings.setTutorialDone(true); // terminé : les parties suivantes sautent l'onboarding
     }
+    if (e.t === 'upgradePicked' && e.owner === this.session.localPlayer) poki.measure('upgrade', e.id, e.prism ? 'prism' : 'picked');
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
     // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
     if (e.t === 'gameEnd') {
@@ -307,6 +354,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Appelé par la fenêtre de choix : relance les propositions (la fenêtre se rouvre avec le nouveau tirage). */
   rerollUpgrade(): void {
+    poki.measure('upgrade', 'reroll', 'interact');
     this.session.rerollUpgrade();
   }
 
@@ -342,6 +390,12 @@ export class GameScene extends Phaser.Scene {
     else this.flow.fail();
     const online = this.session.online;
     const sim = this.session.sim;
+    if (!victory && !connectionLost) {
+      // analytics : à quel niveau de vague la squad est tombée, et sur quel boss (s'il y en avait un en vie)
+      poki.measureOnce('death', `level-${this.waveNumber}`, 'reached');
+      const boss = sim.aliens.find((a) => a.alive && a.def.boss);
+      if (boss) poki.measureOnce('boss', boss.def.id, 'fail');
+    }
     const time = Math.floor(this.runTime);
     const best = online ? time : Math.max(time, storage.get('bestTime', 0));
     if (!online) storage.set('bestTime', best);
@@ -374,6 +428,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   async retry(): Promise<void> {
+    poki.measure('game', 'retry', 'interact');
     if (this.session.online) return this.retryOnline();
     await this.flow.restart({ ad: this.adBeforeNextGame() });
     this.scene.restart();

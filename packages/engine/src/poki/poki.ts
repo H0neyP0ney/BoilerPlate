@@ -48,6 +48,8 @@ class Poki {
   private inGameplay = false;
   private adPlaying = false;
   private mutedBeforeAd = false;
+  /** Événements `measureOnce` déjà envoyés dans la partie en cours. */
+  private readonly sent = new Set<string>();
 
   /** À appeler avant de créer le jeu. Ne rejette jamais. */
   async init(): Promise<void> {
@@ -138,10 +140,30 @@ class Poki {
     return success;
   }
 
-  /** Events de jeu (https://developers.poki.com/guide/game-events). */
+  /**
+   * Events de jeu (https://developers.poki.com/guide/game-events). `start` → `complete` / `fail` forment un entonnoir de progression,
+   * `visible` → `interact` un bouton affiché puis cliqué (même `category` et même `what`) ; toute autre action = « % de parties qui l'ont atteint ».
+   * Aucun event pendant une pub.
+   */
   measure(category: string, what: string | number, action: string): void {
+    if (this.adPlaying) return;
     const clean = (v: string | number) => String(v).replace(/[/^]/g, '-');
-    this.call((s) => s.measure?.(clean(category), clean(what), clean(action)));
+    const [c, w, a] = [clean(category), clean(what), clean(action)];
+    if (import.meta.env.DEV) log.info(`[poki] measure ${c}/${w}/${a}`);
+    this.call((s) => s.measure?.(c, w, a));
+  }
+
+  /** Comme `measure`, mais une seule fois par partie (paliers de temps, de niveau…) : `resetOnce()` au début de chaque partie (`RunFlow.begin`). */
+  measureOnce(category: string, what: string | number, action: string): void {
+    const key = `${category}^${what}^${action}`;
+    if (this.sent.has(key)) return;
+    this.sent.add(key);
+    this.measure(category, what, action);
+  }
+
+  /** Une nouvelle partie commence : les paliers `measureOnce` peuvent repartir. */
+  resetOnce(): void {
+    this.sent.clear();
   }
 
   /** Paramètre d'URL : passe par Poki en prod, fallback sur location.search en local. */

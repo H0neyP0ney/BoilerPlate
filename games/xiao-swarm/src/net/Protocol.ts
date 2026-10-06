@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 33;
+export const PROTOCOL_VERSION = 34; // 34 : le power-up bouclier n'existe plus (liste des types de power-ups)
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -188,7 +188,7 @@ const TEXTURES = [
 ];
 
 const SNAPSHOT_TAG = 0x53;
-const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'shield'];
+const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {

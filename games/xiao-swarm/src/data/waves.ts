@@ -142,6 +142,8 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 119, level: 3 },
     { at: 120, level: 9, config: 1 },
     { at: 127, level: 2, every: 8, until: 159 },
+    { at: 128, level: 3, every: 4, until: 156 }, // après le Rhinocéros : kamikazes en continu (la zone creuse de 127 à 159 s)
+    { at: 134, level: 4, every: 6, until: 158 },
     { at: 161.5, level: 2 },
     { at: 162.5, level: 3, every: 2, until: 166.5 },
     { at: 163.5, level: 2 },
@@ -153,12 +155,19 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 177.5, level: 3, every: 2, until: 185.5 },
     { at: 178, level: 5, every: 2, until: 186 },
     { at: 179, level: 4, every: 2, until: 185 },
+    { at: 188, level: 4, every: 3, until: 212 }, // trou de 186 à 213 s : grenouilles, shooters et kamikazes
+    { at: 192, level: 5, every: 6, until: 212 },
     { at: 194, level: 3, every: 8, until: 210 },
+    { at: 200, level: 3, every: 4, until: 212 },
     { at: 213.5, level: 3, every: 2, until: 225.5 },
     { at: 216.5, level: 5, every: 2, until: 224.5 },
     { at: 217, level: 4, every: 2, until: 225 },
+    { at: 227, level: 4, every: 2.5, until: 245 }, // 226-246 s : encore creux avant la montée vers le Scarab
+    { at: 230, level: 5, every: 5, until: 245 },
     { at: 233.5, level: 3 },
+    { at: 238, level: 6 },
     { at: 241.5, level: 3 },
+    { at: 244, level: 6 },
     { at: 246, level: 3, every: 2, until: 250 },
     { at: 251, level: 4 },
     { at: 252, level: 6 },

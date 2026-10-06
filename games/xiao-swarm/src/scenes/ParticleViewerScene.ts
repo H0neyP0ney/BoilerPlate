@@ -1,10 +1,16 @@
 import Phaser from 'phaser';
 import { sprites } from '@xiao/engine';
-import { SCENES, VISUAL, VIEW_BG } from '../config';
+import { DEPTH, SCENES, UPGRADE_REPEL, VISUAL, VIEW_BG } from '../config';
 import { fxSnippet, resetFx, saveFxToCode, setFx } from '../debugFx';
 import { button, checkbox, colorInput, header, heading, line, note, panel, select, slider } from '../dev/devUi';
 import { FX, type FxName } from '../fxParams';
+import { createEnragedFlames } from '../view/EnragedFx';
+import { ALIENS } from '../data/aliens';
+import { iceLook } from '../view/IceBlockFx';
 import { Fx } from '../view/Fx';
+import { drawField } from '../view/PickupViews';
+import { createPrismRain, setPrismZone } from '../view/PrismFx';
+import { ShockDistort } from '../view/ShockDistort';
 import { RecruitView } from '../view/UnitViews';
 import { makeRecruitTextures } from '../art/recruits';
 import { CLASSES } from '../data/classes';
@@ -25,11 +31,8 @@ interface Spec {
   hint?: string;
 }
 
-/** Effets sans bloc de réglages dans `FX` (composés d'autres effets ou à paramètres fixes dans Fx.ts) : lecture seule. */
-type FixedEffect = 'spiral' | 'column' | 'death';
-
 interface EffectDef {
-  id: FxName | FixedEffect;
+  id: FxName;
   label: string;
   where: string;
   specs: Spec[];
@@ -53,7 +56,7 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'explosion',
     label: 'Explosion (flammes + onde)',
-    where: 'Grenade, mort du Flammeur, mort du boss ; la taille de l\'onde vient de l\'événement.',
+    where: 'Mort du Flammeur, kamikaze, mort du boss (les fissures au sol sont dans « Fissures ») ; la taille de l\'onde vient de l\'événement.',
     specs: [
       { key: 'count', label: 'Particules', min: 1, max: 100, step: 1 },
       { key: 'speedMin', label: 'Vitesse min', min: 0, max: 500, step: 5 },
@@ -174,20 +177,183 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'spiral',
     label: 'Spirale (montée de niveau)',
-    where: "Onde de montée de niveau : bras de lumière qui tournent en s'écartant (paramètres fixes dans Fx.spiral ; aplatissement = celui des ondes de choc).",
-    specs: [],
+    where: "Bras de lumière qui tournent en s'écartant ; aplatissement = celui des ondes de choc. Le rayon vient de l'événement.",
+    specs: [
+      { key: 'durationMs', label: 'Durée (ms)', min: 200, max: 3000, step: 50 },
+      { key: 'arms', label: 'Bras', min: 1, max: 8, step: 1 },
+      { key: 'perArm', label: 'Points par bras', min: 4, max: 40, step: 1 },
+      { key: 'turns', label: 'Tours', min: 0, max: 4, step: 0.05 },
+      { key: 'size', label: 'Taille des points', min: 0.2, max: 3, step: 0.05 },
+    ],
   },
   {
     id: 'column',
     label: 'Colonne de lumière',
-    where: "Nouvelle recrue dans la squad : colonne qui monte et s'estompe, avec halo (paramètres fixes dans Fx.column).",
-    specs: [],
+    where: "Nouvelle recrue dans la squad : colonne qui monte et s'estompe, avec halo (taille et durée par défaut ; la mort d'un soldat et la prise d'upgrade ont les leurs).",
+    specs: [
+      { key: 'height', label: 'Hauteur (px)', min: 40, max: 400, step: 5 },
+      { key: 'durationMs', label: 'Durée (ms)', min: 200, max: 3000, step: 50 },
+      { key: 'glowScale', label: 'Halo : taille au départ', min: 0.2, max: 4, step: 0.05 },
+      { key: 'glowEnd', label: 'Halo : taille à la fin', min: 0.5, max: 6, step: 0.1 },
+    ],
   },
   {
     id: 'death',
     label: "Perte d'un soldat",
-    where: "Composé : éclat, gerbe de gouttes, flaque, double onde, flash blanc, colonne rouge et croix (combine les effets ci-dessus).",
-    specs: [],
+    where: "Composé : éclats, gerbe de gouttes, flaque, double onde, flash blanc, colonne rouge et croix (réutilise les effets ci-dessus, dont leurs réglages).",
+    specs: [
+      { key: 'burstCount', label: 'Éclats colorés', min: 0, max: 100, step: 1 },
+      { key: 'flashCount', label: 'Éclats blancs', min: 0, max: 60, step: 1 },
+      { key: 'gloopSize', label: 'Gouttes : taille ×', min: 0, max: 4, step: 0.1 },
+      { key: 'puddleSize', label: 'Flaque : taille ×', min: 0, max: 4, step: 0.1 },
+      { key: 'ringBig', label: 'Onde colorée : rayon', min: 20, max: 300, step: 5 },
+      { key: 'ringSmall', label: 'Onde blanche : rayon', min: 20, max: 300, step: 5 },
+      { key: 'flashScale', label: 'Flash blanc : taille', min: 0.5, max: 8, step: 0.1 },
+      { key: 'flashMs', label: 'Flash blanc : durée (ms)', min: 50, max: 1000, step: 10 },
+      { key: 'columnHeight', label: 'Colonne : hauteur', min: 40, max: 400, step: 5 },
+      { key: 'columnMs', label: 'Colonne : durée (ms)', min: 200, max: 2000, step: 50 },
+      { key: 'crossSize', label: 'Croix : taille', min: 10, max: 80, step: 1 },
+    ],
+  },
+  {
+    id: 'cracks',
+    label: 'Fissures noires au sol',
+    where: "Sous les grosses explosions (kamikaze, Flamer, boss) : fissures noires et trace de brûlure noir / gris qui restent un moment puis s'effacent. Le rayon vient de l'événement ; le rayon min décide quelles explosions fissurent le sol.",
+    specs: [
+      { key: 'minRadius', label: 'Rayon min des explosions', min: 0, max: 300, step: 5, hint: "Seules les explosions d'au moins ce rayon (px) fissurent le sol ; 0 = toutes" },
+      { key: 'scale', label: 'Taille ×', min: 0.3, max: 3, step: 0.05, hint: "Diamètre des fissures en multiple du diamètre de l'explosion" },
+      { key: 'alpha', label: 'Opacité', min: 0, max: 1, step: 0.05, hint: '0 = pas de fissures' },
+      { key: 'holdMs', label: 'Visibles (ms)', min: 0, max: 6000, step: 50, hint: 'Temps avant le début du fondu' },
+      { key: 'fadeMs', label: 'Fondu (ms)', min: 100, max: 10000, step: 100 },
+      { key: 'scorchAlpha', label: 'Trace noire : opacité', min: 0, max: 1, step: 0.05, hint: 'Tache de brûlure noir / gris sous les fissures ; 0 = pas de trace' },
+      { key: 'scorchScale', label: 'Trace noire : taille ×', min: 0.3, max: 3, step: 0.05, hint: "Diamètre en multiple du diamètre de l'explosion" },
+      { key: 'scorchHoldMs', label: 'Trace noire : visible (ms)', min: 0, max: 10000, step: 100 },
+      { key: 'scorchFadeMs', label: 'Trace noire : fondu (ms)', min: 100, max: 20000, step: 100 },
+    ],
+  },
+  {
+    id: 'shake',
+    label: "Secousses d'écran",
+    where: "Slam d'un alien, mort d'un de tes soldats, mort d'un gros alien (la secousse des explosions est dans « Explosion »). Amplitude = part de l'écran.",
+    specs: [
+      { key: 'slamMs', label: 'Slam : durée (ms)', min: 0, max: 800, step: 10 },
+      { key: 'slamAmount', label: 'Slam : amplitude', min: 0, max: 0.03, step: 0.001 },
+      { key: 'deathMs', label: 'Mort d\'un soldat : durée (ms)', min: 0, max: 800, step: 10 },
+      { key: 'deathAmount', label: 'Mort d\'un soldat : amplitude', min: 0, max: 0.03, step: 0.001 },
+      { key: 'bigKillMs', label: 'Gros alien : durée (ms)', min: 0, max: 800, step: 10 },
+      { key: 'bigKillAmount', label: 'Gros alien : amplitude', min: 0, max: 0.03, step: 0.001 },
+    ],
+  },
+  {
+    id: 'dust',
+    label: "Poussière d'apparition",
+    where: "Une unité sort du sol (trou d'apparition, lurker, Scarab) : bouffées de poussière. Le rayon vient de l'unité.",
+    specs: [
+      { key: 'countBase', label: 'Bouffées de base', min: 0, max: 30, step: 1 },
+      { key: 'countPerRadius', label: 'Bouffées par px de rayon', min: 0, max: 1, step: 0.01 },
+      { key: 'speedMin', label: 'Vitesse min', min: 0, max: 200, step: 1 },
+      { key: 'speedMax', label: 'Vitesse max', min: 0, max: 300, step: 1 },
+      { key: 'scaleStart', label: 'Taille au départ', min: 0, max: 3, step: 0.05 },
+      { key: 'scaleEnd', label: 'Taille à la fin', min: 0, max: 4, step: 0.05 },
+      { key: 'alpha', label: 'Opacité au départ', min: 0, max: 1, step: 0.05 },
+      { key: 'lifeMin', label: 'Durée min (ms)', min: 50, max: 2000, step: 10 },
+      { key: 'lifeMax', label: 'Durée max (ms)', min: 50, max: 3000, step: 10 },
+      { key: 'color', label: 'Couleur', min: 0, max: 0, step: 1, color: true },
+    ],
+  },
+  {
+    id: 'crit',
+    label: 'Bulle de critique',
+    where: "Coup critique : bulle « ! » avec les dégâts, qui pop, reste un instant puis monte en s'effaçant.",
+    specs: [
+      { key: 'scale', label: 'Taille finale', min: 0.2, max: 2, step: 0.05 },
+      { key: 'textGrow', label: 'Chiffres : grossissement', min: 0.5, max: 2.5, step: 0.05, hint: 'La bulle garde sa taille, seuls les chiffres grossissent' },
+      { key: 'popMs', label: 'Apparition (ms)', min: 0, max: 600, step: 10 },
+      { key: 'holdMs', label: 'Pause avant de monter (ms)', min: 0, max: 1500, step: 10 },
+      { key: 'riseMs', label: 'Montée (ms)', min: 50, max: 2000, step: 10 },
+      { key: 'rise', label: 'Montée (px)', min: 0, max: 150, step: 1 },
+    ],
+  },
+  {
+    id: 'enraged',
+    label: "Flammes d'enragé",
+    where: "Alien ressuscité par un chaman, soldat sous stimpack : flammes rouges qui montent du corps. Aperçu : une unité de 20 px de rayon pendant 2 s.",
+    specs: [
+      { key: 'spreadX', label: 'Largeur de la source (× rayon)', min: 0.1, max: 1.5, step: 0.05 },
+      { key: 'speedYMin', label: 'Montée min', min: 0, max: 300, step: 5 },
+      { key: 'speedYMax', label: 'Montée max', min: 0, max: 400, step: 5 },
+      { key: 'speedX', label: 'Dérive latérale', min: 0, max: 80, step: 1 },
+      { key: 'scaleStart', label: 'Taille au départ', min: 0.1, max: 3, step: 0.05 },
+      { key: 'alpha', label: 'Opacité au départ', min: 0, max: 1, step: 0.05 },
+      { key: 'lifeMin', label: 'Durée min (ms)', min: 100, max: 2000, step: 10 },
+      { key: 'lifeMax', label: 'Durée max (ms)', min: 100, max: 3000, step: 10 },
+    ],
+  },
+  {
+    id: 'levelWave',
+    label: 'Ondes de montée de niveau',
+    where: "Ondes de choc blanches répétées + déformation de l'écran (WebGL ; désactivée si l'option « shockwave » est coupée). Le rayon et la durée viennent de UPGRADE_REPEL (config.ts).",
+    specs: [
+      { key: 'waves', label: "Nombre d'ondes", min: 1, max: 8, step: 1 },
+      { key: 'gapMs', label: 'Écart entre deux (ms)', min: 50, max: 600, step: 10 },
+      { key: 'distort', label: "Déformation de l'écran", min: 0, max: 0.12, step: 0.005, hint: "Part de l'écran déplacée au maximum ; au-delà de 0,12 les bords de l'écran apparaissent" },
+    ],
+  },
+  {
+    id: 'healZone',
+    label: 'Croix de soin (globe)',
+    where: "Globe de soin : des croix vertes naissent au hasard dans la zone et montent en s'effaçant. Aperçu : un globe de 6 s ; le rayon vient du jeu (slider « Rayon »).",
+    specs: [
+      { key: 'everyMs', label: 'Une croix toutes les (ms)', min: 20, max: 1000, step: 10, hint: 'Par globe, avec ±40 % de variation' },
+      { key: 'scale', label: 'Taille', min: 0.3, max: 4, step: 0.05 },
+      { key: 'rise', label: 'Montée (px)', min: 0, max: 150, step: 1 },
+      { key: 'durationMs', label: 'Durée (ms)', min: 200, max: 3000, step: 50 },
+      { key: 'alpha', label: 'Opacité', min: 0, max: 1, step: 0.05 },
+    ],
+  },
+  {
+    id: 'ice',
+    label: 'Glaçon (coups, fissures)',
+    where: "Soldat gelé : le glaçon a 50 PV, un coup de soldat = 1 PV, pas de barre de vie. Il rétrécit, se fissure par étages et crache des éclats à chaque coup, puis se brise. Aperçu : un glaçon qui encaisse un coup toutes les 0,2 s.",
+    specs: [
+      { key: 'shardCount', label: 'Éclats par coup', min: 0, max: 40, step: 1 },
+      { key: 'breakMul', label: 'Éclats à la rupture (×)', min: 1, max: 8, step: 0.5 },
+      { key: 'shardSpeedMin', label: 'Éclats : vitesse min', min: 0, max: 400, step: 5 },
+      { key: 'shardSpeedMax', label: 'Éclats : vitesse max', min: 0, max: 500, step: 5 },
+      { key: 'shardScale', label: 'Éclats : taille', min: 0.1, max: 3, step: 0.05 },
+      { key: 'shardLifeMin', label: 'Éclats : durée min (ms)', min: 50, max: 1500, step: 10 },
+      { key: 'shardLifeMax', label: 'Éclats : durée max (ms)', min: 50, max: 2000, step: 10 },
+      { key: 'shardGravity', label: 'Éclats : gravité', min: 0, max: 1000, step: 10 },
+      { key: 'minScale', label: 'Taille aux derniers PV', min: 0.1, max: 1, step: 0.05, hint: '1 = le glaçon ne rétrécit pas' },
+      { key: 'crack1', label: 'Fissures 1 sous (part de PV)', min: 0, max: 1, step: 0.05 },
+      { key: 'crack2', label: 'Fissures 2 sous (part de PV)', min: 0, max: 1, step: 0.05 },
+      { key: 'crack3', label: 'Fissures 3 sous (part de PV)', min: 0, max: 1, step: 0.05 },
+    ],
+  },
+  {
+    id: 'stasis',
+    label: 'Globe de stase (flocon)',
+    where: "Power-up stase : zone bleue au sol qui ralentit les aliens, avec un grand flocon à plat au centre. Aperçu : une zone de 5 s ; le rayon vient du jeu (450 px, ici le slider « Rayon »).",
+    specs: [
+      { key: 'iconSize', label: 'Flocon : taille (× rayon du globe)', min: 0.05, max: 0.6, step: 0.01 },
+      { key: 'iconMax', label: 'Flocon : taille max (px)', min: 20, max: 250, step: 5 },
+      { key: 'iconAlpha', label: 'Flocon : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'spin', label: 'Flocon : rotation (tours / s)', min: -1, max: 1, step: 0.01 },
+    ],
+  },
+  {
+    id: 'prism',
+    label: 'Pluie prismatique (cartes)',
+    where: "Carte d'upgrade prismatique : particules arc-en-ciel qui montent sur toute la carte. Aperçu : une carte de 190 × 278 px pendant 3 s.",
+    specs: [
+      { key: 'every', label: 'Une particule toutes les (ms)', min: 4, max: 120, step: 1 },
+      { key: 'speedYMin', label: 'Montée min', min: 0, max: 200, step: 1 },
+      { key: 'speedYMax', label: 'Montée max', min: 0, max: 200, step: 1 },
+      { key: 'speedX', label: 'Dérive latérale', min: 0, max: 100, step: 1 },
+      { key: 'scaleStart', label: 'Taille au départ', min: 0.1, max: 2, step: 0.05 },
+      { key: 'lifeMin', label: 'Durée min (ms)', min: 100, max: 3000, step: 10 },
+      { key: 'lifeMax', label: 'Durée max (ms)', min: 100, max: 4000, step: 10 },
+    ],
   },
   {
     id: 'recruit',
@@ -220,6 +386,8 @@ const EFFECTS: EffectDef[] = [
 const isParam = (id: EffectDef['id']): id is FxName => id in FX;
 
 const ZOOMS = [1, 1.5, 2, 3];
+/** PV d'un glaçon (données du jeu) : l'aperçu en encaisse autant, un coup à la fois. */
+const ICE_HP = ALIENS.iceballer.ice!.blockHp;
 
 export class ParticleViewerScene extends Phaser.Scene {
   private fx!: Fx;
@@ -239,6 +407,15 @@ export class ParticleViewerScene extends Phaser.Scene {
   private radius = 100;
   private ringColor = 0xff6a6a;
   private shakePreview = true;
+  /** Aperçus : dégâts de la bulle de critique, secousse jouée, déformation d'écran des ondes de niveau. */
+  private critDmg = 123;
+  private shakeKind: 'slam' | 'death' | 'bigKill' = 'slam';
+  private shock!: ShockDistort;
+  /** Aperçu du globe de stase : zone dessinée à chaque image jusqu'à `until` (ms de la scène). */
+  private field?: { kind: 'heal' | 'stasis'; x: number; y: number; until: number; nextCross: number };
+  /** Aperçu du glaçon : image, fissures, PV restants (sur 20) et prochain coup. */
+  private ice?: { body: Phaser.GameObjects.Image; cracks: Phaser.GameObjects.Image; x: number; y: number; hp: number; next: number };
+  private fieldG?: Phaser.GameObjects.Graphics;
   /** Aperçu de la recrue gunner composée (effet « recruit »). */
   private recruit?: RecruitView;
   private recruitAt = { x: 0, y: 0 };
@@ -250,6 +427,7 @@ export class ParticleViewerScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(VIEW_BG);
     this.fx = new Fx(this);
+    this.shock = new ShockDistort(this);
     this.buildPanel();
     this.setBackground(true);
     if (this.textures.exists('soldier_trooper')) {
@@ -326,7 +504,88 @@ export class ParticleViewerScene extends Phaser.Scene {
       case 'death':
         this.fx.death(x, y, this.tint);
         break;
+      case 'cracks':
+        this.fx.cracks(x, y, this.radius);
+        break;
+      case 'shake': {
+        const k = FX.shake;
+        const [ms, amount] = this.shakeKind === 'slam' ? [k.slamMs, k.slamAmount] : this.shakeKind === 'death' ? [k.deathMs, k.deathAmount] : [k.bigKillMs, k.bigKillAmount];
+        if (amount > 0) this.cameras.main.shake(ms, amount);
+        break;
+      }
+      case 'dust':
+        this.fx.dust(x, y, this.radius);
+        break;
+      case 'crit':
+        this.fx.crit(x, y - 20, this.critDmg);
+        break;
+      case 'enraged': {
+        const flames = createEnragedFlames(this, 20);
+        flames.setPosition(x, y);
+        this.time.delayedCall(2000, () => {
+          flames.stop();
+          this.time.delayedCall(900, () => flames.destroy());
+        });
+        break;
+      }
+      case 'prism': {
+        const rain = createPrismRain(this);
+        setPrismZone(rain, x, y, 190, 278);
+        rain.setDepth(20);
+        this.time.delayedCall(3000, () => {
+          rain.stop();
+          this.time.delayedCall(1300, () => rain.destroy());
+        });
+        break;
+      }
+      case 'stasis':
+        this.field = { kind: 'stasis', x, y, until: this.time.now + 5000, nextCross: 0 };
+        break;
+      case 'healZone':
+        this.field = { kind: 'heal', x, y, until: this.time.now + 6000, nextCross: 0 };
+        break;
+      case 'ice':
+        this.showIce(x, y);
+        break;
+      case 'levelWave': {
+        const ms = UPGRADE_REPEL.reach * 1000;
+        const { waves, gapMs } = FX.levelWave;
+        for (let i = 0; i < waves; i++) this.time.delayedCall(i * gapMs, () => this.fx.ring(x, y, UPGRADE_REPEL.radius, 0xffffff, ms));
+        this.shock.start(x, y, UPGRADE_REPEL.radius, ms, waves, gapMs, FX.ring.squash);
+        break;
+      }
     }
+  }
+
+  /** Glaçon d'aperçu en (x, y) : `ICE_HP` PV, un coup toutes les 0,2 s ; mêmes aspects que dans le jeu (`iceLook`), éclats puis rupture. */
+  private showIce(x: number, y: number): void {
+    this.ice?.body.destroy();
+    this.ice?.cracks.destroy();
+    const body = this.add.image(x, y, 'alien_iceblock').setDepth(6).setAlpha(0.82);
+    const cracks = this.add.image(x, y, 'alien_iceblock_cracks_1').setDepth(6.1).setVisible(false);
+    this.ice = { body, cracks, x, y, hp: ICE_HP, next: this.time.now + 600 };
+  }
+
+  private updateIce(): void {
+    const ice = this.ice;
+    if (!ice) return;
+    if (this.time.now >= ice.next) {
+      ice.next = this.time.now + 200;
+      ice.hp--;
+      if (ice.hp <= 0) {
+        this.fx.iceShards(ice.x, ice.y - 8, FX.ice.shardCount * FX.ice.breakMul);
+        ice.body.destroy();
+        ice.cracks.destroy();
+        this.ice = undefined;
+        return;
+      }
+      this.fx.iceShards(ice.x, ice.y - 8);
+    }
+    const look = iceLook(ice.hp / ICE_HP);
+    const size = (52 / 64) * 2 * look.scale; // le glaçon du jeu : rayon 26 px, texture de 64 px, zoom 2 de la vue
+    ice.body.setScale(size);
+    ice.cracks.setVisible(look.stage > 0).setScale(size);
+    if (look.stage > 0) ice.cracks.setTexture(`alien_iceblock_cracks_${look.stage}`);
   }
 
   /** (Re)crée l'aperçu de la recrue en (x, y), avec les réglages courants (texture redessinée, étoiles recréées). */
@@ -339,6 +598,26 @@ export class ParticleViewerScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    this.shock.update();
+    if (this.field) {
+      const g = (this.fieldG ??= this.add.graphics().setDepth(DEPTH.ground + 4));
+      const left = (this.field.until - this.time.now) / 1000;
+      g.clear();
+      if (left <= 0) this.field = undefined;
+      else {
+        const f = this.field;
+        const fade = Math.min(1, left / 1.2);
+        drawField(g, f.kind, f.x, f.y, this.radius, fade, time / 1000);
+        if (f.kind === 'heal' && this.time.now >= f.nextCross) {
+          // même tirage que dans le jeu (PickupViews.syncHealZones) : point au hasard dans l'ellipse du globe
+          f.nextCross = this.time.now + FX.healZone.everyMs * (0.6 + Math.random() * 0.8);
+          const a = Math.random() * Math.PI * 2;
+          const d = Math.sqrt(Math.random()) * this.radius * 0.92;
+          this.fx.healZoneCross(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.7, fade);
+        }
+      }
+    }
+    this.updateIce();
     this.recruit?.sync(1, time / 1000);
   }
 
@@ -367,10 +646,20 @@ export class ParticleViewerScene extends Phaser.Scene {
         slider('Particules demandées (aperçu)', { min: 1, max: 60, step: 1, get: () => this.burstCount, set: (v) => (this.burstCount = v), hint: '10 touche, 14 mort de soldat, 16 recrutement, 40 boss' }).row,
       );
     }
-    if (e.id === 'explosion' || e.id === 'ring' || e.id === 'spiral') {
+    if (['explosion', 'ring', 'spiral', 'cracks', 'dust', 'stasis', 'healZone'].includes(e.id)) {
       this.paramBox.append(
-        slider('Rayon (aperçu)', { min: 30, max: 260, step: 5, get: () => this.radius, set: (v) => (this.radius = v), hint: '70 grenade, 120 mort du Flammeur, 160 boss' }).row,
+        slider('Rayon (aperçu)', { min: 30, max: 260, step: 5, get: () => this.radius, set: (v) => (this.radius = v), hint: '70 grenade, 95 kamikaze, 120 mort du Flammeur, 160 boss' }).row,
       );
+    }
+    if (e.id === 'crit') this.paramBox.append(slider('Dégâts (aperçu)', { min: 1, max: 9999, step: 1, get: () => this.critDmg, set: (v) => (this.critDmg = v) }).row);
+    if (e.id === 'shake') {
+      const kind = select('Secousse jouée (aperçu)', [['slam', 'Slam (alien)'], ['death', "Mort d'un soldat"], ['bigKill', "Mort d'un gros alien"]]);
+      kind.select.value = this.shakeKind;
+      kind.select.addEventListener('change', () => {
+        this.shakeKind = kind.select.value as typeof this.shakeKind;
+        this.play(0, 0);
+      });
+      this.paramBox.append(kind.row);
     }
     if (e.id === 'ring' || e.id === 'spiral') this.paramBox.append(colorInput('Couleur (aperçu)', () => this.ringColor, (v) => (this.ringColor = v)).row);
     if (e.id === 'explosion') this.paramBox.append(checkbox("Secousse d'écran dans l'aperçu", this.shakePreview, (v) => (this.shakePreview = v)));
@@ -387,7 +676,7 @@ export class ParticleViewerScene extends Phaser.Scene {
       const get = () => block[s.key];
       const set = (v: number) => {
         setFx(id, s.key as never, v);
-        if (['burst', 'explosion', 'impact', 'gloop', 'rocket'].includes(id)) this.fx.build(); // émetteurs recréés avec les nouvelles valeurs
+        if (['burst', 'explosion', 'impact', 'gloop', 'rocket', 'dust', 'ice'].includes(id)) this.fx.build(); // émetteurs recréés avec les nouvelles valeurs
         if (e.id === 'recruit') this.showRecruit(this.recruitAt.x, this.recruitAt.y); // image redessinée, étoiles recréées
       };
       const c = s.color ? colorInput(s.label, get, (v) => set(v)) : slider(s.label, { min: s.min, max: s.max, step: s.step, get, set, hint: s.hint });

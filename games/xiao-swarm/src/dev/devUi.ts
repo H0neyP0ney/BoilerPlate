@@ -1,4 +1,4 @@
-import { setDocked } from './dock';
+import { blockPointerThrough, setDocked } from './dock';
 
 /**
  * Petits éléments d'interface DOM pour les visionneuses de dev (particules, divers) : panneau, listes, boutons,
@@ -9,6 +9,7 @@ export function panel(width = 300): HTMLDivElement {
   p.style.cssText =
     `position:fixed;top:8px;left:8px;z-index:99999;width:${width}px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;` +
     'background:rgba(0,0,0,0.78);color:#dfe;font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:8px';
+  blockPointerThrough(p);
   return p;
 }
 

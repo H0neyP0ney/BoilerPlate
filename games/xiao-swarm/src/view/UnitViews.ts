@@ -4,6 +4,7 @@ import { DEPTH, RECRUIT } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
+import { iceLook } from './IceBlockFx';
 import { soldierSpriteId } from '../art/playerVariants';
 import { hasComposedRecruit, recruitSpriteId, RECRUIT_STAR } from '../art/recruits';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
@@ -206,6 +207,10 @@ export class AlienView {
 
   /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Glaçon : fissures par-dessus, PV vus à la frame précédente (un coup = une baisse), et rappel posé par la vue du monde pour les éclats. */
+  private iceCracks?: Phaser.GameObjects.Image;
+  private lastIceHp = -1;
+  onIceHit?: (x: number, y: number) => void;
   private flameLevel = 0;
 
   constructor(
@@ -288,6 +293,22 @@ export class AlienView {
     if (a.def.iceBlock) {
       // glaçon : devant le soldat gelé, qu'on voit à travers
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(0.82);
+      // plus de barre de vie : le glaçon rétrécit et se fissure à mesure qu'il perd des PV, et crache des éclats à chaque coup (`onIceHit`)
+      const look = iceLook(a.hp / a.maxHp);
+      this.body.setScale(this.body.scaleX * look.scale, this.body.scaleY * look.scale);
+      if (this.lastIceHp >= 0 && a.hp < this.lastIceHp) this.onIceHit?.(this.rx, this.ry - a.radius * 0.3);
+      this.lastIceHp = a.hp;
+      if (look.stage > 0) {
+        this.iceCracks ??= this.scene.add.image(0, 0, 'alien_iceblock_cracks_1');
+        this.iceCracks
+          .setTexture(`alien_iceblock_cracks_${look.stage}`)
+          .setVisible(true)
+          .setOrigin(this.body.originX, this.body.originY)
+          .setPosition(this.body.x, this.body.y)
+          .setScale(this.body.scaleX, this.body.scaleY)
+          .setFlipX(this.body.flipX)
+          .setDepth(this.body.depth + 0.1);
+      } else this.iceCracks?.setVisible(false);
     } else if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
@@ -342,6 +363,7 @@ export class AlienView {
 
   destroy(): void {
     this.body.destroy();
+    this.iceCracks?.destroy();
     this.zombieFx?.destroy();
   }
 }

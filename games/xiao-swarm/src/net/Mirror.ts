@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SHIELD_FRACTION, SQUAD } from '../config';
+import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
@@ -287,8 +287,8 @@ export class Mirror {
     s.vy = u.vy;
     s.hp = u.hp;
     s.maxHp = u.maxHp;
-    s.maxShield = u.shield > 0 ? u.maxHp * SHIELD_FRACTION : 0;
-    s.shield = u.shield * s.maxShield;
+    s.maxShield = 0; // plus aucun bouclier de soldat (seuls certains aliens en ont)
+    s.shield = 0;
     s.aim = u.aim;
     s.facing = u.facing;
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
@@ -358,6 +358,9 @@ export class Mirror {
         noXp: false,
         noRecruit: false,
         age: 0,
+        esc: 1,
+        revives: 0,
+        reviveLock: 0,
         swarmCd: 0,
         swarmT: 0,
         swarmAcc: 0,

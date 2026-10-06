@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
-import { Button, music, sfx, StepSlider, theme } from '@xiao/engine';
+import { Button, device, music, sfx, StepSlider, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { i18n, LANGS, LANG_NAMES, t, type Lang } from '../i18n';
 import { MUSIC_STEPS, settings, SFX } from '../settings';
 import type { GameScene } from './GameScene';
+import { buildHotkeysPage } from './hotkeysPage';
 
 export interface OptionsData {
   /** Ouvert depuis le HUD en solo : la partie a été mise en pause et reprend à la fermeture. */
   resumeGame?: boolean;
+  /** Page à afficher : le menu (défaut) ou la page des raccourcis clavier (Hotkeys). */
+  page?: 'hotkeys';
 }
 
 /**
@@ -23,6 +26,10 @@ export class OptionsScene extends Phaser.Scene {
 
   create(data: OptionsData): void {
     this.resumeGame = data?.resumeGame === true;
+    if (data?.page === 'hotkeys') {
+      buildHotkeysPage(this, () => this.scene.restart({ resumeGame: this.resumeGame })); // « Retour » : le menu, sans toucher à la partie en pause
+      return;
+    }
     const { width, height } = this.scale;
     const dim = this.add.rectangle(0, 0, width, height, 0x0a1422, 0.75).setOrigin(0).setInteractive();
     const panel = this.add.graphics();
@@ -82,6 +89,10 @@ export class OptionsScene extends Phaser.Scene {
         },
       });
     }
+    // Raccourcis clavier (déplacement, choix d'upgrade, relance) : seulement avec un clavier, donc pas sur téléphone.
+    const hotkeysBtn = device.isTouch
+      ? undefined
+      : new Button(this, 0, 0, { label: t('hotkeys'), variant: 'secondary', width: 340, height: 56, onClick: () => this.scene.restart({ resumeGame: this.resumeGame, page: 'hotkeys' }) });
     // Rejouer le tutoriel (et donc la première expérience) : après confirmation, la partie en cours est quittée et une nouvelle démarre avec le tutoriel.
     const tutorialBtn = new Button(this, 0, 0, {
       label: t('replayTutorial'),
@@ -108,7 +119,7 @@ export class OptionsScene extends Phaser.Scene {
     const layout = () => {
       const { width: w, height: h } = this.scale;
       const pw = Math.min(520, w - 32);
-      const ph = debugBtn ? 610 : 540;
+      const ph = (debugBtn ? 610 : 540) + (hotkeysBtn ? 70 : 0);
       const cx = w / 2;
       const top = h / 2 - ph / 2;
       dim.setSize(w, h);
@@ -122,9 +133,14 @@ export class OptionsScene extends Phaser.Scene {
       sfxLabel.setPosition(cx - 170, top + 202);
       sfxValue.setPosition(cx + 170, top + 202);
       sfxSlider.setPosition(cx, top + 248).setScale(Math.min(1, (pw - 60) / 360));
-      tutorialBtn.setPosition(cx, top + 330);
-      langBtn.setPosition(cx, top + 400);
-      debugBtn?.setPosition(cx, top + 470);
+      let by = top + 330;
+      if (hotkeysBtn) {
+        hotkeysBtn.setPosition(cx, by);
+        by += 70;
+      }
+      tutorialBtn.setPosition(cx, by);
+      langBtn.setPosition(cx, by + 70);
+      debugBtn?.setPosition(cx, by + 140);
       close.setPosition(cx, top + ph - 52);
     };
     layout();

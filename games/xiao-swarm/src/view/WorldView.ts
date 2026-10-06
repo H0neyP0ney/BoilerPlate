@@ -28,6 +28,12 @@ export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0
 
 /** Hauteur maximale (px) de l'arc d'une grenade en cloche (effet d'affichage uniquement). */
 export const LOB_HEIGHT = 55;
+/** Couleurs des télégraphes rouges des attaques d'aliens (charge, saut, lob, mèche, pics, surgissement) : rouge sombre, un peu plus vif qu'avant (0xff2a2a / 0xff4a3a à l'origine, puis 0xaa2a1a / 0xb8402a). */
+const TELEGRAPH_FILL = 0xc8281c;
+const TELEGRAPH_LINE = 0xd23c26;
+/** Explosion de la boule du shooter (bordeaux) : couleur de l'éclaboussure, des flaques et de l'onde, et reflet clair des gouttes. */
+const SHOOTER_BLAST = 0xa82846;
+const SHOOTER_BLAST_LIGHT = 0xf4b9c8;
 /** Durée (s) avant l'impact pendant laquelle la zone d'une boule ennemie est signalée en rouge. */
 const TELEGRAPH_S = 0.8;
 /** Distance (px) de vol sur laquelle une balle rejoint sa trajectoire depuis la bouche du canon dessinée. */
@@ -35,8 +41,8 @@ const MUZZLE_BLEND_PX = 40;
 /** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
 export const ORB_SCALE = 1.3;
 /** Montée de niveau : nombre d'ondes de choc blanches successives et délai (ms) entre deux. */
-const LEVEL_WAVES = 4;
-const LEVEL_WAVE_GAP_MS = 170;
+/** PV de base à partir desquels la mort d'un alien secoue l'écran (charger 390, lurker 360, bulle 2160, mini-boss ; hors slimes, gling…). */
+const BIG_KILL_HP = 300;
 /** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
 export const BAR_GHOST_HOLD = 0.15;
 /** Sous le feu, chaque coup relance l'attente de la part blanche mais ×`BAR_GHOST_HOLD_DECAY` de moins que le précédent (elle finit par rejoindre la rouge). */
@@ -49,8 +55,6 @@ export function ghostHit(st: BarGhost, ratio: number): void {
   st.hold = BAR_GHOST_HOLD * BAR_GHOST_HOLD_DECAY ** st.hits;
   st.hits++;
 }
-/** Barre de vie d'un glaçon : bleue. */
-const ICE_BAR = 0x4aa8ff;
 export const BAR_GHOST_SPEED = 4.5; // +70 % de plus
 /** Taille relative d'un globe d'XP selon sa valeur (petit, moyen, gros). */
 export const orbSize = (value: number): number => (value >= 8 ? 1.25 : value >= 3 ? 0.85 : 0.55);
@@ -126,10 +130,15 @@ export class WorldView {
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
     this.beams = scene.add.graphics().setDepth(DEPTH.fx);
-    this.pickups = new PickupViews(scene, sim, (id) => {
-      const v = this.soldiers.get(id);
-      return v ? { x: v.rx, y: v.ry } : undefined;
-    });
+    this.pickups = new PickupViews(
+      scene,
+      sim,
+      (id) => {
+        const v = this.soldiers.get(id);
+        return v ? { x: v.rx, y: v.ry } : undefined;
+      },
+      this.fx,
+    );
     for (const sq of sim.squads) this.colorOf(sq.owner);
     this.quietUntil = scene.time.now + 1000; // les soldats déjà présents au chargement n'ont pas de colonne d'arrivée
   }
@@ -176,6 +185,7 @@ export class WorldView {
       case 'alienDied': {
         const def = ALIENS[e.alien];
         this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'boss_crab' ? 40 : 10);
+        if (def.iceBlock && nearCam(e.x, e.y)) this.fx.iceShards(e.x, e.y - def.radius * 0.3, FX.ice.shardCount * FX.ice.breakMul); // le glaçon se brise
         // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
         if (e.alien === 'slime' || e.alien === 'shooter') {
           const size = e.alien === 'shooter' ? 1.6 : 1;
@@ -184,6 +194,8 @@ export class WorldView {
         }
         // flaque au sol de la couleur de l'alien, pour tous (taille proportionnelle à son socle : slime = 1)
         if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, Math.max(0.6, Math.min(3.5, def.radius / ALIENS.slime.radius)));
+        // gros alien (charger, lurker, bulle, mini-boss) : légère secousse rapide ; le crabe final a déjà celle de son explosion
+        if (e.alien !== 'boss_crab' && def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.bigKillMs, FX.shake.bigKillAmount);
         if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
           sfx.play(this.scene, SFX.blast.key, SFX.blast);
@@ -194,7 +206,7 @@ export class WorldView {
       case 'soldierDied': {
         this.corpse(e.id, e.cls, e.x, e.y, this.sim.squadOf(e.owner)?.slot ?? 0);
         this.fx.death(e.x, e.y, CLASSES[e.cls].color);
-        if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(160, 0.009);
+        if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(FX.shake.deathMs, FX.shake.deathAmount);
         break;
       }
       case 'shot':
@@ -329,19 +341,19 @@ export class WorldView {
           break;
         }
         if (e.style === 'slime') {
-          // boule de slime : éclaboussure bleue au sol plutôt que des flammes
-          this.fx.gloop(e.x, e.y, 0x5aa8ff, 0xcfe6ff, e.r / 60);
-          this.fx.puddles(e.x, e.y, 0x5aa8ff, e.r / 70);
-          this.fx.ring(e.x, e.y, e.r, 0x5aa8ff);
+          // boule rouge (bordeaux) du shooter : éclaboussure de la même couleur au sol plutôt que des flammes
+          this.fx.gloop(e.x, e.y, SHOOTER_BLAST, SHOOTER_BLAST_LIGHT, e.r / 60);
+          this.fx.puddles(e.x, e.y, SHOOTER_BLAST, e.r / 70);
+          this.fx.ring(e.x, e.y, e.r, SHOOTER_BLAST);
           break;
         }
-        // pas de secousse pour les petites explosions (grenades), sinon l'écran tremble en permanence
-        this.fx.explosion(e.x, e.y, e.r, e.r >= 100 && nearCam(e.x, e.y));
+        // pas de secousse pour les petites explosions (grenades, roquettes), sinon l'écran tremble en permanence ; 95 = le kamikaze y est
+        this.fx.explosion(e.x, e.y, e.r, e.r >= 95 && nearCam(e.x, e.y));
         if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`
         break;
       case 'slam':
         this.fx.ring(e.x, e.y, e.r, 0xff6a6a);
-        if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(220, 0.01);
+        if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.slamMs, FX.shake.slamAmount);
         break;
       case 'recruited':
         // le halo d'arrivée (colonne) est créé avec le nouveau soldat et le suit ; ici, éclat et texte
@@ -364,7 +376,6 @@ export class WorldView {
           const owner = e.owner;
           this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
         }
-        if (e.owner === this.localPlayer) this.scene.cameras.main.shake(80, 0.003);
         break;
       }
       case 'powerup': {
@@ -430,17 +441,17 @@ export class WorldView {
     const ms = UPGRADE_REPEL.reach * 1000;
     const owner = w.owner;
     const follow = owner ? () => this.squadFocus(owner) : undefined;
-    // onde de choc BLANCHE répétée LEVEL_WAVES fois (la première est celle qui repousse les aliens quand son front les touche) + déformation de l'écran
-    for (let i = 0; i < LEVEL_WAVES; i++) {
+    // onde de choc BLANCHE répétée `FX.levelWave.waves` fois (la première est celle qui repousse les aliens quand son front les touche) + déformation de l'écran
+    for (let i = 0; i < FX.levelWave.waves; i++) {
       const draw = (): void => {
         const at = follow?.() ?? w; // l'onde part du centre ACTUEL de la squad, et le suit tant qu'elle grossit
         const ring = this.fx.ring(at.x, at.y, UPGRADE_REPEL.radius, 0xffffff, ms);
         if (follow) this.followers.push({ parts: [{ img: ring, dy: 0 }], pos: follow });
       };
       if (i === 0) draw();
-      else this.scene.time.delayedCall(i * LEVEL_WAVE_GAP_MS, draw);
+      else this.scene.time.delayedCall(i * FX.levelWave.gapMs, draw);
     }
-    this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, LEVEL_WAVES, LEVEL_WAVE_GAP_MS, FX.ring.squash, follow);
+    this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, FX.levelWave.waves, FX.levelWave.gapMs, FX.ring.squash, follow);
     if (w.level > 0) {
       const tx = this.fx.levelUpText(w.x, w.y);
       if (follow) this.fx.follow(tx, follow, FX.text.holdMs + FX.text.fadeMs); // « LEVEL UP! » suit la squad qui bouge, comme les autres textes
@@ -456,7 +467,7 @@ export class WorldView {
     this.syncProjectiles(alpha);
     this.syncOrbs(alpha, time);
     this.syncRocks();
-    this.pickups.sync(time);
+    this.pickups.sync(time, alpha);
     this.followHalos();
     this.updateFuses(dt, time);
     this.updateFires(time);
@@ -520,6 +531,9 @@ export class WorldView {
         v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil); // départ de partie / arrivée d'un client : pas de trou
         v.onPop = (x, y, r) => {
           if (this.onScreen(x, y, 120)) this.fx.dust(x, y, r); // poussière seulement si c'est à l'écran
+        };
+        v.onIceHit = (x, y) => {
+          if (this.onScreen(x, y, 120)) this.fx.iceShards(x, y); // éclats de glace à chaque coup sur un glaçon
         };
         this.aliens.set(a.id, v);
       }
@@ -895,9 +909,9 @@ export class WorldView {
         const hw = L.width / 2;
         const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
           [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(a.x + cos * u - sin * w, a.y + sin * u + cos * w));
-        g.fillStyle(0xff2a2a, 0.1 + 0.2 * k).fillPoints(quad(L.length, hw), true);
-        g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(quad(L.length * k, hw * k), true);
-        g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
+        g.fillStyle(TELEGRAPH_FILL, 0.1 + 0.2 * k).fillPoints(quad(L.length, hw), true);
+        g.fillStyle(TELEGRAPH_FILL, 0.15 + 0.2 * k).fillPoints(quad(L.length * k, hw * k), true);
+        g.lineStyle(3, TELEGRAPH_LINE, 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
       }
     }
     // Scarab : trou sous lui qui se creuse puis se rebouche, et trou d'arrivée DERRIÈRE la squad qui se forme (zone rouge qui se remplit) avant sa sortie
@@ -920,9 +934,9 @@ export class WorldView {
         hole(a.leapX, a.leapY, R * k, 1); // le trou d'arrivée se forme
         const f = Math.min(1, el / B.wait);
         const pulse = a.lurkT < 0.6 && Math.sin(this.scene.time.now / 45) > 0 ? 0.15 : 0;
-        g.fillStyle(0xff2a2a, 0.1 + 0.2 * f + pulse).fillEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
-        g.fillStyle(0xff2a2a, 0.15 + 0.25 * f).fillEllipse(a.leapX, a.leapY, B.radius * 2 * f, B.radius * 1.4 * f);
-        g.lineStyle(4, 0xff4a3a, 0.6 + 0.4 * f).strokeEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
+        g.fillStyle(TELEGRAPH_FILL, 0.1 + 0.2 * f + pulse).fillEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
+        g.fillStyle(TELEGRAPH_FILL, 0.15 + 0.25 * f).fillEllipse(a.leapX, a.leapY, B.radius * 2 * f, B.radius * 1.4 * f);
+        g.lineStyle(4, TELEGRAPH_LINE, 0.6 + 0.4 * f).strokeEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
       }
       if (a.lurkPhase === 3) hole(a.x, a.y, R, a.lurkT / B.rise); // le boss ressort : le trou s'efface
     }
@@ -946,16 +960,16 @@ export class WorldView {
       const k = 1 - p.life / TELEGRAPH_S; // 0 → 1 jusqu'à l'impact
       const ix = p.x + p.vx * p.life;
       const iy = p.y + p.vy * p.life;
-      g.fillStyle(0xff2a2a, 0.1 + 0.22 * k).fillEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
-      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k).fillEllipse(ix, iy, p.aoe * 2 * k, p.aoe * 1.4 * k);
-      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokeEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.1 + 0.22 * k).fillEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.12 + 0.2 * k).fillEllipse(ix, iy, p.aoe * 2 * k, p.aoe * 1.4 * k);
+      g.lineStyle(3, TELEGRAPH_LINE, 0.5 + 0.4 * k).strokeEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
     }
     // Télégraphes rouges : explosion retardée d'un kamikaze (zone qui se remplit) et couloir de charge du rhinocéros
     for (const f of this.fuses) {
       const k = 1 - f.t / f.dur;
-      g.fillStyle(0xff2a2a, 0.1 + 0.22 * k).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
-      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k).fillEllipse(f.x, f.y, f.r * 2 * k, f.r * 1.4 * k);
-      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.1 + 0.22 * k).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.12 + 0.2 * k).fillEllipse(f.x, f.y, f.r * 2 * k, f.r * 1.4 * k);
+      g.lineStyle(3, TELEGRAPH_LINE, 0.5 + 0.4 * k).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
     }
     // Saut écrasant (crabe) : zone d'impact qui se remplit jusqu'à l'atterrissage
     for (const v of this.aliens.values()) {
@@ -966,9 +980,9 @@ export class WorldView {
       if (toLand <= 0) continue;
       const k = 1 - toLand / (L.windup + L.flight);
       const pulse = toLand < 0.35 && Math.sin(this.scene.time.now / 45) > 0 ? 0.15 : 0;
-      g.fillStyle(0xff2a2a, 0.12 + 0.2 * k + pulse).fillEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
-      g.fillStyle(0xff2a2a, 0.15 + 0.25 * k).fillEllipse(a.leapX, a.leapY, L.radius * 2 * k, L.radius * 1.4 * k);
-      g.lineStyle(4, 0xff4a3a, 0.6 + 0.4 * k).strokeEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.12 + 0.2 * k + pulse).fillEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
+      g.fillStyle(TELEGRAPH_FILL, 0.15 + 0.25 * k).fillEllipse(a.leapX, a.leapY, L.radius * 2 * k, L.radius * 1.4 * k);
+      g.lineStyle(4, TELEGRAPH_LINE, 0.6 + 0.4 * k).strokeEllipse(a.leapX, a.leapY, L.radius * 2, L.radius * 1.4);
     }
     for (const v of this.aliens.values()) {
       const a = v.state;
@@ -996,9 +1010,9 @@ export class WorldView {
       const y0 = a.rushY;
       const V = (x: number, y: number) => new Phaser.Math.Vector2(x, y);
       const lane = (len: number) => [V(x0 + nx, y0 + ny), V(x0 - nx, y0 - ny), V(x0 - nx + dx * len, y0 - ny + dy * len), V(x0 + nx + dx * len, y0 + ny + dy * len)];
-      g.fillStyle(0xff2a2a, wind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
-      if (wind > 0) g.fillStyle(0xff2a2a, 0.15 + 0.2 * k).fillPoints(lane(L * k), true);
-      g.lineStyle(3, 0xff4a3a, 0.5 + 0.4 * k).strokePoints(lane(L), true);
+      g.fillStyle(TELEGRAPH_FILL, wind > 0 ? 0.1 + 0.12 * k : 0.12).fillPoints(lane(L), true);
+      if (wind > 0) g.fillStyle(TELEGRAPH_FILL, 0.15 + 0.2 * k).fillPoints(lane(L * k), true);
+      g.lineStyle(3, TELEGRAPH_LINE, 0.5 + 0.4 * k).strokePoints(lane(L), true);
     }
     // traces de brûlure au sol sous les flammes
     for (const f of this.fireImgs.values()) {
@@ -1027,7 +1041,6 @@ export class WorldView {
         const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
         this.bar(b, v.rx, y, 30, s.hp / s.maxHp, color, s.id, dt);
       }
-      if (s.shield > 0) this.bar(b, v.rx, y - 8, 30, s.shield / s.maxShield, PALETTE.shield); // bouclier : barre bleue au-dessus des PV
     }
     const bossSeen = new Set<number>();
     for (const v of this.aliens.values()) {
@@ -1037,7 +1050,7 @@ export class WorldView {
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss;
-      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, a.def.iceBlock ? ICE_BAR : PALETTE.hpEnemy, a.id, dt);
+      if (hurt && !a.def.iceBlock) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt); // un glaçon n'a pas de barre : il se fissure et rétrécit (AlienView)
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
       if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
       if (boss) {

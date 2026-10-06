@@ -1,4 +1,5 @@
-import { clamp, storage } from '@xiao/engine';
+import { clamp, storage, type MoveKeyCodes } from '@xiao/engine';
+import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
 import { i18n, LANGS, type Lang } from './i18n';
 
 /**
@@ -165,5 +166,35 @@ export const settings = {
   setStarfield(on: boolean): void {
     this.starfield = on;
     storage.set('settings.starfield', on);
+  },
+
+  /** Touches choisies par le joueur (menu Options > Hotkeys) : déplacement, choix d'upgrade, relance. Voir `hotkeys.ts`. */
+  hotkeys: parseHotkeys(storage.get<unknown>('settings.hotkeys', {})) as Record<HotkeyAction, HotkeyBind>,
+
+  /** Code physique de la touche d'une action. */
+  hotkeyCode(action: HotkeyAction): string {
+    return this.hotkeys[action].code;
+  },
+
+  /** Touches de déplacement pour `MoveInput` (relues à chaque image : un changement dans les options s'applique tout de suite). */
+  moveKeys(): MoveKeyCodes {
+    const h = this.hotkeys;
+    return { up: h.up.code, down: h.down.code, left: h.left.code, right: h.right.code };
+  },
+
+  /** Assigne une touche à une action ; si une autre action l'avait déjà, les deux touches s'échangent (jamais deux actions sur la même touche). */
+  setHotkey(action: HotkeyAction, code: string, label?: string): void {
+    const previous = this.hotkeys[action];
+    for (const other of Object.keys(this.hotkeys) as HotkeyAction[]) {
+      if (other !== action && this.hotkeys[other].code === code) this.hotkeys[other] = previous;
+    }
+    this.hotkeys[action] = { code, label };
+    storage.set('settings.hotkeys', this.hotkeys);
+  },
+
+  /** Remet toutes les touches par défaut. */
+  resetHotkeys(): void {
+    for (const a of Object.keys(HOTKEY_DEFAULTS) as HotkeyAction[]) this.hotkeys[a] = { code: HOTKEY_DEFAULTS[a] };
+    storage.set('settings.hotkeys', this.hotkeys);
   },
 };

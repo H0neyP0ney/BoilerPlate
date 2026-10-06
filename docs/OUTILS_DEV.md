@@ -66,9 +66,10 @@ sans navigateur (expert doit durer plus longtemps que standard, déterminisme).
 
 ## Visionneuse de particules (`?particles`, `src/fxParams.ts`, `src/debugFx.ts`)
 
-Tous les effets de `view/Fx.ts` : éclaboussure, explosion (flammes + onde), onde de choc, soin, texte flottant, impact de balle, éclatement de gelée, flaques, flash de tir, roquette + fumée, recrue (bonus +1) ; plus en lecture seule la spirale de montée de niveau, la colonne de lumière et la perte d'un soldat (paramètres fixes dans `Fx.ts`). Sliders de
+**Tous** les effets visuels du jeu, 24 entrées, chacune rejouable et avec son bloc de réglages dans `FX_DEFAULTS` : éclaboussure, explosion (flammes + onde + secousse), **fissures noires au sol** (avec une trace de brûlure noir / gris dessous), onde de choc, soin, texte flottant, impact de balle, éclatement de gelée, flaques, flash de tir, roquette + fumée, spirale et colonne de lumière, perte d'un soldat, **secousses d'écran** (slam, mort d'un soldat, mort d'un gros alien), poussière d'apparition, bulle de critique, flammes d'enragé, **croix de soin** dans les globes de soin, **glaçon** (éclats à chaque coup, fissures, taille qui rétrécit), globe de **stase** (flocon), **ondes de montée de niveau** (avec la déformation de l'écran), pluie prismatique des cartes, recrue (bonus +1). Sliders de
 vitesse / taille / opacité / durée / quantité / couleur / secousse, aperçu en boucle ou au clic, Gunner de référence (case pour
-le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS`.
+le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS` ; **Save** réécrit les valeurs de tous les effets dans `fxParams.ts`, **Reset** revient à la dernière sauvegarde.
+**Règle** : tout nouvel effet (particules, tween, secousse, décor au sol) lit ses valeurs dans `FX` (`fxParams.ts`) et a une entrée dans la visionneuse (`EFFECTS`, `ParticleViewerScene.ts`) avec son aperçu ; pas de nombre codé en dur dans `Fx.ts` / `WorldView.ts`. Les effets partagés par le jeu et la visionneuse vivent dans `view/` (`Fx.ts`, `EnragedFx.ts`, `PrismFx.ts`, `ShockDistort.ts`).
 
 ## Visionneuse d'obstacles (`?obstacles`, `src/data/obstacles.ts`, `src/debugObstacles.ts`)
 

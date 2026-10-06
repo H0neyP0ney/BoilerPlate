@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { device, music, sfx, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
+import { keyLabel } from '../hotkeys';
 import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
@@ -218,7 +219,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     this.hint.setVisible(g.flow.state === 'ready');
-    this.hintLabel.setText(s.sim.tutorial?.active ? t(device.isTouch ? 'hintTutoDrag' : 'hintTutoMove') : device.isTouch ? t('hintDrag') : t('hintKeys'));
+    this.hintLabel.setText(s.sim.tutorial?.active ? (device.isTouch ? t('hintTutoDrag') : t('hintTutoMove', { keys: this.moveKeysText() })) : device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.drawXp();
     this.drawBoss();
     // pendant un combat de boss, sa barre de vie (drawBoss) prend la place de la timeline
@@ -572,6 +573,12 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
   }
 
+  /** « WASD » (ou les touches choisies : « ZQSD », « I / J / K / L »…) pour le texte du tutoriel. */
+  private moveKeysText(): string {
+    const l = [settings.hotkeys.up, settings.hotkeys.left, settings.hotkeys.down, settings.hotkeys.right].map(keyLabel);
+    return l.every((x) => x.length === 1) ? l.join('') : l.join(' / ');
+  }
+
   private makeHint(): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const label = this.add
@@ -594,7 +601,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     } else {
       // clavier : vraies touches W / A S D dessinées (une touche s'enfonce à tour de rôle)
       label.setY(96);
-      const caps: [string, number, number][] = [['W', 0, -26], ['A', -52, 26], ['S', 0, 26], ['D', 52, 26]];
+      const caps: [string, number, number][] = [[keyLabel(settings.hotkeys.up), 0, -26], [keyLabel(settings.hotkeys.left), -52, 26], [keyLabel(settings.hotkeys.down), 0, 26], [keyLabel(settings.hotkeys.right), 52, 26]]; // touches choisies dans Options > Hotkeys
       caps.forEach(([letter, kx, ky], i) => {
         const key = this.add.container(kx, ky);
         const g = this.add.graphics();

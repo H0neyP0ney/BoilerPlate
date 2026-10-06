@@ -6,6 +6,91 @@ import { DAMAGE_TIERS } from '../data/damageTiers';
 export const SPIKE_BINS = 12;
 export const SPIKE3 = { spread: 44 / 3, height: 36, w: 48, h: 72, baseY: 53 } as const;
 
+/** Fissures noires au sol après une explosion (`fx_cracks_<n>`) : nombre de variantes dessinées et côté (px) de chaque texture carrée. Les fissures touchent presque le bord. */
+export const CRACK_VARIANTS = 3;
+export const CRACK_SIZE = 256;
+/** Traces de brûlure noir / gris sous les fissures (`fx_scorch_<n>`, même côté que les fissures). */
+export const SCORCH_VARIANTS = 2;
+
+/** Trace de brûlure : taches de suie superposées (centre noir, bord gris qui se dissout) et quelques éclaboussures ; seedée comme les fissures. */
+function drawScorch(ctx: CanvasRenderingContext2D, variant: number): void {
+  let seed = 0x7f4a7c15 ^ (variant * 0x27d4eb2f);
+  const rnd = (): number => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const c = CRACK_SIZE / 2;
+  const R = c - 4;
+  const blob = (x: number, y: number, r: number, core: number, mid: number): void => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(8,8,8,${core})`);
+    g.addColorStop(0.55, `rgba(42,40,40,${mid})`);
+    g.addColorStop(1, 'rgba(60,58,58,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  blob(c, c, R * 0.72, 0.8, 0.45); // le gros de la tache, centré
+  for (let i = 0; i < 9; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = rnd() * R * 0.5;
+    blob(c + Math.cos(a) * d, c + Math.sin(a) * d, R * (0.3 + rnd() * 0.4), 0.5, 0.3); // lobes irréguliers
+  }
+  ctx.fillStyle = 'rgba(20,20,20,0.55)';
+  for (let i = 0; i < 46; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = R * (0.45 + rnd() * 0.5);
+    ctx.beginPath();
+    ctx.arc(c + Math.cos(a) * d, c + Math.sin(a) * d, 1.5 + rnd() * 4.5, 0, Math.PI * 2);
+    ctx.fill(); // éclaboussures de suie autour
+  }
+}
+
+/**
+ * Fissures noires qui partent du centre : un halo brûlé très léger, puis des failles en zigzag qui s'amincissent vers leur bout, avec quelques
+ * branches. Dessin déterministe par variante (générateur seedé) : pas de `Math.random`, mêmes textures à chaque lancement.
+ */
+function drawCracks(ctx: CanvasRenderingContext2D, variant: number): void {
+  let seed = 0x9e3779b1 ^ (variant * 0x85ebca6b);
+  const rnd = (): number => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const c = CRACK_SIZE / 2;
+  const R = c - 6; // longueur maximale d'une faille
+  const halo = ctx.createRadialGradient(c, c, 0, c, c, R * 0.55);
+  halo.addColorStop(0, 'rgba(0,0,0,0.55)');
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, CRACK_SIZE, CRACK_SIZE);
+  ctx.strokeStyle = '#000';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  /** Une faille en zigzag de (x, y) vers l'angle `a` sur `len` px : épaisseur `w0` au départ, 1 px au bout ; `branches` : sous-failles possibles. */
+  const crack = (x: number, y: number, a: number, len: number, w0: number, branches: number): void => {
+    const steps = Math.max(4, Math.round(len / 11));
+    let px = x;
+    let py = y;
+    for (let i = 1; i <= steps; i++) {
+      a += (rnd() - 0.5) * 0.9; // le zigzag
+      const step = len / steps;
+      const nx = px + Math.cos(a) * step;
+      const ny = py + Math.sin(a) * step;
+      ctx.lineWidth = Math.max(1, w0 * (1 - (i - 1) / steps));
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+      px = nx;
+      py = ny;
+      if (branches > 0 && i > 1 && i < steps - 1 && rnd() < 0.3) crack(px, py, a + (rnd() < 0.5 ? -1 : 1) * (0.5 + rnd() * 0.6), len * (0.25 + rnd() * 0.3) * (1 - i / steps) * 1.6, ctx.lineWidth * 0.7, branches - 1);
+    }
+  };
+  const n = 8 + Math.floor(rnd() * 3);
+  for (let k = 0; k < n; k++) crack(c, c, ((k + rnd() * 0.6) / n) * Math.PI * 2, R * (0.55 + rnd() * 0.45), 5 + rnd() * 3, 2);
+}
+
 /** Projectiles, particules et icônes d'effets. */
 export function makeFxTextures(scene: Phaser.Scene): void {
   canvasTexture(scene, 'fx_bullet', 22, 10, (ctx) => {
@@ -290,6 +375,8 @@ export function makeFxTextures(scene: Phaser.Scene): void {
       ctx.fill();
     }
   });
+  for (let v = 0; v < CRACK_VARIANTS; v++) canvasTexture(scene, `fx_cracks_${v}`, CRACK_SIZE, CRACK_SIZE, (ctx) => drawCracks(ctx, v));
+  for (let v = 0; v < SCORCH_VARIANTS; v++) canvasTexture(scene, `fx_scorch_${v}`, CRACK_SIZE, CRACK_SIZE, (ctx) => drawScorch(ctx, v));
   // Rangée de 3 pics du lurker (une texture par direction, `SPIKE_BINS` par demi-tour) : les 3 pointes sont alignées sur la perpendiculaire à la ligne de pics,
   // le tout dessiné une fois ; le jeu pose un sprite par colonne au lieu de redessiner des triangles à chaque frame.
   for (let k = 0; k < SPIKE_BINS; k++) {

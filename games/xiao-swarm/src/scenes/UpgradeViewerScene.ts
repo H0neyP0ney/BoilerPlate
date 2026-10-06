@@ -1,32 +1,36 @@
 import Phaser from 'phaser';
-import { theme } from '@xiao/engine';
-import { PALETTE, SCENES, VIEW_BG } from '../config';
+import { SCENES, VIEW_BG } from '../config';
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
 import { getDefaultUpgradeStats, getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
-import { button, header, line, note, panel, slider } from '../dev/devUi';
+import { button, checkbox, header, line, note, panel, slider } from '../dev/devUi';
 import { t } from '../i18n';
-import { upgradeIconKey } from '../view/upgradeIcons';
+import { CARD, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
 
 /**
- * Visionneuse d'upgrades (dev uniquement) : toutes les cartes de choix d'upgrade affichées d'un coup, comme dans la fenêtre de montée de
- * niveau. Un clic sur une carte la sélectionne et ouvre son panneau de stats (bonus, nombre de prises max) pour l'équilibrage :
- * les cartes se mettent à jour en direct, Save écrit dans data/progression.ts, Reset revient à la dernière sauvegarde.
+ * Visionneuse d'upgrades (dev uniquement) : toutes les cartes de choix d'upgrade affichées d'un coup, dessinées par le même code que la fenêtre
+ * de montée de niveau (`view/upgradeCards.ts` : fond en image, icône, nom, description, slots, « Claim »). Un clic sur une carte la sélectionne
+ * et ouvre son panneau de stats (bonus, nombre de prises max) pour l'équilibrage : les cartes se mettent à jour en direct, Save écrit dans
+ * data/progression.ts, Reset revient à la dernière sauvegarde. Le panneau de gauche règle l'aperçu (prises faites, carte prismatique).
  */
-const CARD_W = 270;
-const CARD_H = 110;
+const CARD_W = 200;
+const CARD_H = (CARD_W * CARD.H) / CARD.W;
 const GAP = 16;
 
 interface Card {
   id: UpgradeId;
   box: Phaser.GameObjects.Container;
-  bg: Phaser.GameObjects.Graphics;
-  desc: Phaser.GameObjects.Text;
-  stack: Phaser.GameObjects.Text;
+  /** Carte dessinée (reconstruite à chaque `refresh` : les valeurs, les slots et le fond peuvent changer). */
+  view?: Phaser.GameObjects.Container;
+  /** Cadre de sélection. */
+  frame: Phaser.GameObjects.Graphics;
 }
 
 export class UpgradeViewerScene extends Phaser.Scene {
   private cards: Card[] = [];
   private selected: UpgradeId | null = null;
+  /** Aperçu : prises faites (celle qu'on s'apprête à prendre comprise) et carte prismatique (bonus ×2, fond holographique). */
+  private previewCount = 1;
+  private previewPrism = false;
   private panel?: HTMLDivElement;
   private statsPanel?: HTMLDivElement;
 
@@ -51,36 +55,25 @@ export class UpgradeViewerScene extends Phaser.Scene {
 
   private makeCard(id: UpgradeId): Card {
     const box = this.add.container(0, 0);
-    const bg = this.add.graphics();
-    const badge = this.add.graphics();
-    const color = UPGRADES[id].color;
-    badge.fillStyle(color, 1).fillCircle(-CARD_W / 2 + 14 + 18, 0, 18).lineStyle(2, 0xffffff, 0.7).strokeCircle(-CARD_W / 2 + 14 + 18, 0, 18);
-    const icon = this.add.image(-CARD_W / 2 + 32, 0, upgradeIconKey(id));
-    icon.setScale(28 / Math.max(icon.width, icon.height));
-    const tx = -CARD_W / 2 + 14 + 36 + 10;
-    const name = this.add.text(tx, -CARD_H / 2 + 24, t(`up_${id}`), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0, 0.5);
-    const desc = this.add.text(tx, -CARD_H / 2 + 40, '', { fontFamily: theme.font, fontSize: '15px', color: '#dfe8ff', wordWrap: { width: CARD_W - (tx + CARD_W / 2) - 10 } });
-    const stack = this.add.text(CARD_W / 2 - 10, CARD_H / 2 - 6, '', { fontFamily: theme.font, fontSize: '13px', color: theme.textDim }).setOrigin(1, 1);
-    const idText = this.add.text(tx, CARD_H / 2 - 6, id, { fontFamily: theme.font, fontSize: '12px', color: theme.textDim }).setOrigin(0, 1);
+    const frame = this.add.graphics();
     const hit = this.add.zone(0, 0, CARD_W, CARD_H).setInteractive({ useHandCursor: true });
     hit.on('pointerup', () => this.select(id));
-    box.add([bg, badge, icon, name, desc, stack, idText, hit]);
-    const card = { id, box, bg, desc, stack };
+    box.add([frame, hit]);
+    const card: Card = { id, box, frame };
     this.refresh(card);
     return card;
   }
 
-  /** Redessine une carte : cadre (surligné si sélectionnée), description et nombre de prises avec les valeurs courantes. */
+  /** Redessine une carte avec les valeurs courantes (bonus, prises max) et l'aperçu choisi ; cadre blanc si elle est sélectionnée. */
   private refresh(c: Card): void {
-    const u = UPGRADES[c.id];
-    const color = u.color;
-    const sel = this.selected === c.id;
-    c.bg.clear();
-    c.bg.fillStyle(PALETTE.panel, 0.9).fillRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 12);
-    c.bg.fillStyle(color, 0.95).fillRoundedRect(-CARD_W / 2, -CARD_H / 2, 7, CARD_H, { tl: 12, tr: 0, bl: 12, br: 0 });
-    c.bg.lineStyle(sel ? 4 : 2, sel ? 0xffffff : color, sel ? 1 : 0.85).strokeRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 12);
-    c.desc.setText(t(`up_${c.id}_desc`, { value: u.value }));
-    c.stack.setText(u.maxStacks < 99 ? `max ×${u.maxStacks}` : '');
+    c.view?.destroy();
+    const count = Math.min(this.previewCount, UPGRADES[c.id].maxStacks);
+    const view = buildUpgradeCard(this, c.id, count, this.previewPrism);
+    resizeUpgradeCard(view, CARD_W, CARD_H, false);
+    c.box.addAt(view, 1); // au-dessus du cadre, sous la zone cliquable
+    c.view = view;
+    c.frame.clear();
+    if (this.selected === c.id) c.frame.lineStyle(4, 0xffffff, 1).strokeRoundedRect(-CARD_W / 2 - 4, -CARD_H / 2 - 4, CARD_W + 8, CARD_H + 8, 14);
   }
 
   private select(id: UpgradeId): void {
@@ -181,6 +174,21 @@ export class UpgradeViewerScene extends Phaser.Scene {
     p.append(
       header("Visionneuse d'upgrades", () => this.scene.start(SCENES.game)),
       note('Toutes les cartes de choix à la montée de niveau. Clique sur une carte pour régler ses stats (bonus, prises max).'),
+      slider('Prises (aperçu)', {
+        min: 1,
+        max: 10,
+        step: 1,
+        get: () => this.previewCount,
+        set: (v) => {
+          this.previewCount = Math.round(v);
+          this.refreshAll();
+        },
+        hint: 'Nombre de slots pleins sur les cartes (la prise qu’on s’apprête à faire comprise)',
+      }).row,
+      checkbox('Carte prismatique (bonus ×2)', this.previewPrism, (v) => {
+        this.previewPrism = v;
+        this.refreshAll();
+      }),
     );
     document.body.append(p);
     this.panel = p;

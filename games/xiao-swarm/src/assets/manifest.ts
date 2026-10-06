@@ -100,9 +100,9 @@ export const ASSETS: AssetEntry[] = [
       alien_boss_gling: {
         originX: 0.563,
         originY: 0.956,
-        scale: 0.91,
+        scale: 1.03,
         shadow: 1.4,
-        anchors: { 'walk:right': [0.4883, 0.7115], 'walk:left': [0.5196, 0.7115] },
+        anchors: { 'walk:right': [0.4995, 0.745], 'walk:left': [0.5196, 0.745] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 8), fps: 8 },
@@ -122,11 +122,11 @@ export const ASSETS: AssetEntry[] = [
       alien_iceballer: {
         originX: 0.618,
         originY: 0.952,
-        scale: 0.67,
-        shadow: 0.95,
+        scale: 0.8,
+        shadow: 1.2,
         muzzleFlash: true,
         muzzle: [0.32, 0.35],
-        anchors: { 'walk:right': [0.5046, 0.8544], 'walk:left': [0.4848, 0.8544] },
+        anchors: { 'walk:right': [0.519, 0.8451], 'walk:left': [0.4848, 0.8451] },
         muzzles: {
           walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]],
         },
@@ -170,8 +170,8 @@ export const ASSETS: AssetEntry[] = [
       alien_shooter: {
         originX: 0.558,
         originY: 0.936,
-        scale: 1.51,
-        shadow: 1.25,
+        scale: 1.32,
+        shadow: 1.05,
         muzzleFlash: true,
         muzzle: [0.2, 0.41],
         anchors: { 'walk:right': [0.4379, 0.8643], 'walk:left': [0.5621, 0.8643] },
@@ -263,8 +263,8 @@ export const ASSETS: AssetEntry[] = [
       alien_kamikaze: {
         originX: 0.481,
         originY: 0.914,
-        scale: 1.63,
-        shadow: 2.35,
+        scale: 1.45,
+        shadow: 2,
         anchors: { 'walk:right': [0.4906, 0.7764], 'walk:left': [0.5015, 0.7764], 'idle:right': [0.482, 0.635], 'idle:left': [0.4966, 0.6325] },
         facesLeft: true,
         anims: {
@@ -285,8 +285,8 @@ export const ASSETS: AssetEntry[] = [
       alien_toad: {
         originX: 0.502,
         originY: 0.931,
-        scale: 1.98,
-        shadow: 3,
+        scale: 1.51,
+        shadow: 2.15,
         muzzleFlash: true,
         muzzle: [0.26, 0.47],
         anchors: { 'walk:right': [0.4944, 0.8187], 'walk:left': [0.498, 0.8187] },
@@ -309,11 +309,11 @@ export const ASSETS: AssetEntry[] = [
       alien_spitter: {
         originX: 0.509,
         originY: 0.915,
-        scale: 2.24,
-        shadow: 2.7,
+        scale: 1.78,
+        shadow: 2.1,
         muzzleFlash: true,
         muzzle: [0.57, 0.27],
-        anchors: { 'walk:right': [0.4375, 0.7795], 'walk:left': [0.4988, 0.7795] },
+        anchors: { 'walk:right': [0.4707, 0.7601], 'walk:left': [0.4988, 0.7601] },
         muzzles: {
           walk: [[0.404, 0.6703], [0.3985, 0.6961], [0.3985, 0.6574], [0.3929, 0.7155], [0.404, 0.6832], [0.404, 0.7025], [0.3874, 0.6832], [0.3985, 0.709], [0.3929, 0.709]],
         },
@@ -447,7 +447,7 @@ export const ASSETS: AssetEntry[] = [
         originY: 0.918,
         scale: 1.83,
         shadow: 2.2,
-        anchors: { 'walk:right': [0.4778, 0.7823], 'walk:left': [0.5033, 0.7823] },
+        anchors: { 'walk:right': [0.5045, 0.73], 'walk:left': [0.5033, 0.73] },
         anims: {
           idle: { frames: range(0, 8), fps: 6 },
           walk: { frames: range(0, 8), fps: 12 },

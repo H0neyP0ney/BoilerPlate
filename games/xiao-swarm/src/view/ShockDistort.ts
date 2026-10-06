@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { FX } from '../fxParams';
 import { settings } from '../settings';
 
 /** Clés des textures (globales au jeu) : anneau de déformation pré-calculé, carte de déformation redessinée à chaque image. */
@@ -8,11 +9,9 @@ const MAP_KEY = 'fx_shock_map';
 const RING_SIZE = 256;
 /** Réduction de la carte de déformation par rapport à l'écran (1/4 : largement suffisant, c'est une carte lisse). */
 const MAP_DIV = 4;
-/** Force de la déformation (part de l'écran déplacée au maximum, voir le filtre Displacement de Phaser). */
-const STRENGTH = 0.07;
 /** Masque qui annule la déformation sur les bords de l'écran (recréé quand la taille change). */
 const EDGE_KEY = 'fx_shock_edge';
-/** Largeur (part de l'écran) de la zone de bord où la déformation s'éteint : au moins `STRENGTH`, sinon le décalage dépasse la distance au bord. */
+/** Largeur (part de l'écran) de la zone de bord où la déformation s'éteint : au moins `FX.levelWave.distort`, sinon le décalage dépasse la distance au bord. */
 const EDGE_FADE = 0.12;
 
 interface Pulse {
@@ -78,7 +77,7 @@ export class ShockDistort {
     const h = Math.max(16, Math.round(cam.height / MAP_DIV));
     this.ensureTextures(w, h);
     const map = this.map!;
-    if (!this.filter) this.filter = cam.filters.external.addDisplacement(MAP_KEY, STRENGTH, STRENGTH);
+    if (!this.filter) this.filter = cam.filters.external.addDisplacement(MAP_KEY, FX.levelWave.distort, FX.levelWave.distort) // force : part de l'écran déplacée au maximum;
     map.clear();
     map.fill(0x808000); // neutre : (0,5 ; 0,5) = aucun déplacement
     const wv = cam.worldView;

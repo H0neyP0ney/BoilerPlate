@@ -4,7 +4,7 @@ import { findAttractor, inPickRange, pulledAttractor, pullStrongly, pullToward }
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'shield'];
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel l'XP est aspirée. */
 const MAGNET_RADIUS = 1000;
@@ -118,10 +118,6 @@ export class PowerUps {
         break;
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
-        break;
-      case 'shield':
-        // chaque soldat vivant reçoit un bouclier (1/3 de ses PV max) qui dure jusqu'à ce qu'il l'ait perdu ; un second power-up le remplit de nouveau
-        squad.shieldAll();
         break;
     }
   }

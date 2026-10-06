@@ -50,9 +50,9 @@ export interface AlienDef {
   /**
    * Slime de glace : tire en LIGNE DROITE une boucle de glace (vitesse `speed` px/s) vers la position de la squad au moment du tir, avec une anticipation partielle (`lead` × le déplacement de la squad pendant le trajet), à moins de
    * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) : chacun est pris dans un glaçon
-   * (`iceBlock`, `blockHpMul` × les PV d'un soldat de base) qui ne fond jamais : il faut le détruire. Le soldat gelé reste attaquable par les aliens.
+   * (`iceBlock`, `blockHp` = 50 PV fixes, 1 PV perdu par coup d'un soldat) qui ne fond jamais : il faut le détruire. Le soldat gelé reste attaquable par les aliens.
    */
-  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; blockHpMul: number; texture: string };
+  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; blockHp: number; texture: string };
   /** Plafond d'aliens de cette espèce dans UNE vague (par squad), invités et mise à l'échelle comprises (slime de glace : 2). */
   maxPerWave?: number;
   /** Glaçon : alien immobile et inoffensif qui retient un soldat gelé (`captive`) ; le détruire le libère. Pas de kill, ni XP, ni recrue. */
@@ -77,7 +77,8 @@ export interface AlienDef {
   /** Sa flaque reste au sol à sa mort (une seule fois par alien) : un chaman peut le ressusciter. */
   revivable?: boolean;
   /** Chaman : à portée d'une flaque de slime mort, incante `cast` s puis ressuscite le slime avec `hpFrac` de ses PV. */
-  revive?: { range: number; cooldown: number; cast: number; hpFrac: number };
+  /** Chaman : après `maxRevives` résurrections il ne peut plus en lancer pendant `lockout` s (puis le compte repart de zéro). */
+  revive?: { range: number; cooldown: number; cast: number; hpFrac: number; maxRevives: number; lockout: number };
   /** XP laissée à la mort, en globes bleus (voir data/progression.ts). */
   xp: number;
   /** Kamikaze : à sa mort le corps reste sur place, clignote `delay` s (zone rouge) puis explose : dégâts + recul aux soldats. */
@@ -178,7 +179,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 2,
     attackCooldown: 0.4,
     target: 'nearest',
-    deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 560 },
+    deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 2200 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp : ~147 px (×2 ; 1100 ≈ 73 px, 560 d'origine ≈ 37 px)
     xp: 3,
     recruitChance: 0.03,
     color: 0xe8333a, // rouge de l'araignée (éclaboussure à la mort)
@@ -210,7 +211,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 5,
     attackCooldown: 0.5,
     target: 'nearest',
-    rush: { cooldown: 5, windup: 0.675, length: 416, width: 80, speed: 720, damage: 35, knockback: 700 },
+    rush: { cooldown: 5, windup: 0.675, length: 416, width: 80, speed: 720, damage: 35, knockback: 1600 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     xp: 10,
     recruitChance: 0.15,
     color: 0xb03a3a,
@@ -242,7 +243,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 1.5,
     attackCooldown: 0.5,
     target: 'nearest',
-    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1 }, // le ressuscité est un ZOMBIE (5 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
+    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30 }, // le ressuscité est un ZOMBIE (5 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
     xp: 8,
     recruitChance: 0.1,
     color: 0xffd84a,
@@ -258,7 +259,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 2,
     attackCooldown: 0.5,
     target: 'nearest',
-    wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 134, rock: { radius: 22, ttl: 8 } },
+    wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 134, rock: { radius: 22, ttl: 5.6 } }, // −30 % (était 8 s)
     xp: 4,
     recruitChance: 0.04,
     color: 0x9a8066,
@@ -292,7 +293,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    capture: { dps: 25 },
+    capture: { dps: 50 }, // digestion 2× plus rapide (était 25)
     xp: 12,
     recruitChance: 0,
     color: 0x8fe0ff,
@@ -325,7 +326,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 3.6, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 850 },
+    rush: { cooldown: 3.6, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
     boss: { kind: 'mini' },
     xp: 150,
     recruitChance: 1,
@@ -355,7 +356,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 3 s pour faire apparaître 30 glings en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
-    hp: 500,
+    hp: 650, // +30 % (500)
     speed: 85,
     radius: 38,
     mass: 14,
@@ -381,17 +382,17 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.5,
     target: 'nearest',
     maxPerWave: 2,
-    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, blockHpMul: 12, texture: 'fx_ice_ball' },
+    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, blockHp: 50, texture: 'fx_ice_ball' },
     revivable: true,
     xp: 5,
     recruitChance: 0.07,
     color: 0x7fd8ff,
     hpBarWidth: 30,
   },
-  /** Glaçon : retient un soldat gelé. PV fixés à la création (`blockHpMul` × un soldat de base, `Horde.freezeSoldier`). */
+  /** Glaçon : retient un soldat gelé. 50 PV (`ice.blockHp`) : chaque coup d'un soldat en retire 1 (`Sim.damage`), quelle que soit sa puissance ; pas de barre de vie, il se fissure et rétrécit (`view/IceBlockFx.ts`). */
   iceblock: {
     id: 'iceblock',
-    hp: 1,
+    hp: 50,
     speed: 0,
     radius: 26,
     mass: 1000,

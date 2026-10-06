@@ -12,7 +12,7 @@ export { device } from './core/device';
 export { createI18n, type I18n, type Vars } from './core/i18n';
 
 // Input & UI
-export { MoveInput } from './input/MoveInput';
+export { DEFAULT_MOVE_KEYS, MoveInput, type MoveKeyCodes } from './input/MoveInput';
 export { VirtualJoystick } from './ui/VirtualJoystick';
 export { Button, type ButtonOptions, type ButtonVariant } from './ui/Button';
 export { theme, setTheme, type Theme } from './ui/theme';

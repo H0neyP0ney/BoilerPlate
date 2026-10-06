@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Button, storage, theme } from '@xiao/engine';
+import { Button, poki, storage, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { t } from '../i18n';
 import { buildScoreboard, scoreboardHeight, type ScoreRow } from '../view/Scoreboard';
@@ -71,6 +71,7 @@ export class GameOverScene extends Phaser.Scene {
     if (data.freeRevive) {
       // partie qui suit le tutoriel : un seul bouton, le revive offert
       const free: Button = new Button(this, cx, cy + 5 + up, { label: t('freeRevive'), width: 360, height: 88, onClick: () => this.revive(free, true) });
+      poki.measure('reward', 'free_revive', 'visible'); // affiché, puis `interact` au clic (RunFlow.reviveFree)
       this.input.keyboard!.on('keydown-ENTER', () => free.trigger());
       this.input.keyboard!.on('keydown-SPACE', () => free.trigger());
       return;
@@ -85,6 +86,7 @@ export class GameOverScene extends Phaser.Scene {
         height: 72,
         onClick: () => this.revive(revive),
       });
+      poki.measure('reward', 'revive', 'visible'); // affiché, puis `interact` au clic (RunFlow.revive)
     }
 
     if (!storage.isPersistent()) {

@@ -157,6 +157,38 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     slime(ctx, '#b8dcff', '#3a78d8');
   });
   canvasTexture(scene, 'alien_iceballer', 48, 48, (ctx) => slime(ctx, '#e4f8ff', '#3fb0ee'));
+  // Fissures du glaçon, par étage (1 à 3, cumulatives : l'étage 2 contient celles de l'étage 1) : traits bleu sombre doublés d'un reflet blanc, sur la même grille 64×64 que le glaçon.
+  for (let stage = 1; stage <= 3; stage++) {
+    canvasTexture(scene, `alien_iceblock_cracks_${stage}`, 64, 64, (ctx) => {
+      let seed = 0x3c6ef372;
+      const rnd = (): number => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 0x100000000;
+      };
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const count = [0, 3, 6, 10][stage];
+      for (let i = 0; i < 10; i++) {
+        // tous les traits sont tirés dans le même ordre : seuls les `count` premiers sont dessinés (étages cumulatifs)
+        const a = (i / 10) * Math.PI * 2 + rnd() * 0.5;
+        const pts: [number, number][] = [];
+        let r = 27 - rnd() * 4;
+        for (let s = 0; s < 4; s++) {
+          const jitter = (rnd() - 0.5) * 0.5;
+          pts.push([32 + Math.cos(a + jitter) * r, 32 + Math.sin(a + jitter) * r]);
+          r -= 4 + rnd() * 5;
+        }
+        if (i >= count) continue;
+        for (const [color, width, dx] of [['rgba(30,80,140,0.9)', 2, 0], ['rgba(255,255,255,0.85)', 1, 1]] as const) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.beginPath();
+          pts.forEach(([x, y], k) => (k === 0 ? ctx.moveTo(x + dx, y) : ctx.lineTo(x + dx, y)));
+          ctx.stroke();
+        }
+      }
+    });
+  }
   // Glaçon : cube de glace translucide (le soldat gelé se voit à travers), facettes claires et reflets.
   canvasTexture(scene, 'alien_iceblock', 64, 64, (ctx) => {
     const g = ctx.createLinearGradient(8, 6, 56, 58);

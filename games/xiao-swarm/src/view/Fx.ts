@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Pool, theme } from '@xiao/engine';
+import { CRACK_SIZE, CRACK_VARIANTS, SCORCH_VARIANTS } from '../art/fx';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
 import { t as tr } from '../i18n';
@@ -9,15 +10,17 @@ import { t as tr } from '../i18n';
  * éclaboussures, explosions, ondes de choc, textes flottants, soins.
  * Tous les réglages viennent de `fxParams.ts` (éditables dans la visionneuse de particules).
  */
-/** Taille finale de la bulle de critique (bulle + chiffres), −30 %. */
-const CRIT_SCALE = 0.7;
-/** Grossissement du texte (chiffres et « ! ») de la bulle de critique, la bulle elle-même ne change pas. */
-const CRIT_TEXT_GROW = 1.35;
 
 /** Flaques de mort groupées : au-delà de `PUDDLE_MAX_BATCHES` lots de même couleur dans ce rayon (px) et cette durée (ms), on n'en pose plus. */
+/** Rayon d'explosion (px) pour lequel la secousse vaut `FX.explosion.shakeAmount` ; plus petit = plus léger, plus grand = plus fort. */
+const SHAKE_REF_RADIUS = 120;
 const PUDDLE_MERGE_RADIUS = 45;
 const PUDDLE_MERGE_MS = 700;
 const PUDDLE_MAX_BATCHES = 2;
+/** Fissures de sol visibles en même temps au maximum : une pluie de kamikazes ne couvre pas tout l'écran de noir. */
+const MAX_CRACKS = 24;
+/** Traces de brûlure visibles en même temps au maximum (elles durent plus longtemps que les fissures). */
+const MAX_SCORCH = 30;
 
 export class Fx {
   private splat!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -28,6 +31,8 @@ export class Fx {
   /** Traînée des roquettes (fx_smoke, FX.rocket). */
   private smoke!: Phaser.GameObjects.Particles.ParticleEmitter;
   private dustPuff!: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Éclats de glace (fx_dot bleu clair, retombent) : coups sur un glaçon et rupture (FX.ice). */
+  private shards!: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly texts: Pool<Phaser.GameObjects.Text>;
   private readonly followed: { obj: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform; pos: () => { x: number; y: number } | null; last: { x: number; y: number } | null; until: number }[] = [];
 
@@ -53,13 +58,26 @@ export class Fx {
     this.fire?.destroy();
     this.smoke?.destroy();
     this.dustPuff?.destroy();
+    this.shards?.destroy();
+    const ic = FX.ice;
+    this.shards = this.scene.add
+      .particles(0, 0, 'fx_dot', {
+        speed: { min: ic.shardSpeedMin, max: ic.shardSpeedMax },
+        scale: { start: ic.shardScale, end: 0 },
+        lifespan: { min: ic.shardLifeMin, max: Math.max(ic.shardLifeMin, ic.shardLifeMax) },
+        gravityY: ic.shardGravity,
+        tint: [0xeaf9ff, 0x9fe3ff, 0x6fd8ff],
+        emitting: false,
+      })
+      .setDepth(DEPTH.fx);
+    const d = FX.dust;
     this.dustPuff = this.scene.add
       .particles(0, 0, 'fx_smoke', {
-        speed: { min: 18, max: 70 },
-        scale: { start: 0.4, end: 1.1 },
-        alpha: { start: 0.55, end: 0 },
-        tint: 0xb9a78c,
-        lifespan: { min: 450, max: 800 },
+        speed: { min: d.speedMin, max: d.speedMax },
+        scale: { start: d.scaleStart, end: d.scaleEnd },
+        alpha: { start: d.alpha, end: 0 },
+        tint: d.color,
+        lifespan: { min: d.lifeMin, max: Math.max(d.lifeMin, d.lifeMax) },
         emitting: false,
       })
       .setDepth(DEPTH.fx - 2);
@@ -125,7 +143,7 @@ export class Fx {
 
   /** Nuage de poussière quand une unité sort du sol (trou d'apparition, lurker, Scarab) : à n'appeler que si l'unité est à l'écran. */
   dust(x: number, y: number, radius: number): void {
-    const n = Math.round(6 + radius / 3);
+    const n = Math.round(FX.dust.countBase + radius * FX.dust.countPerRadius);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const d = Math.sqrt(Math.random()) * radius;
@@ -216,7 +234,80 @@ export class Fx {
     const e = FX.explosion;
     this.fire.explode(e.count, x, y);
     this.ring(x, y, radius, e.ringColor);
-    if (shake && e.shakeAmount > 0) this.scene.cameras.main.shake(e.shakeMs, e.shakeAmount);
+    if (radius >= FX.cracks.minRadius) this.cracks(x, y, radius);
+    // l'amplitude suit le rayon : `shakeAmount` vaut pour un rayon de référence (120 = le Flamer), bornée pour rester lisible (kamikaze 95 ≈ ×0,8, crabe 160 ≈ ×1,3)
+    if (shake && e.shakeAmount > 0) this.scene.cameras.main.shake(e.shakeMs, e.shakeAmount * Math.max(0.5, Math.min(1.6, radius / SHAKE_REF_RADIUS)));
+  }
+
+  private activeCracks = 0;
+
+  /**
+   * Fissures noires au sol sous une explosion : l'une des `CRACK_VARIANTS` textures, miroir au hasard, écrasée comme l'onde de choc (vue de dessus
+   * en perspective), sous les flaques. Elles restent `FX.cracks.holdMs` puis s'effacent en alpha ; au plus `MAX_CRACKS` en même temps.
+   */
+  cracks(x: number, y: number, radius: number): void {
+    const c = FX.cracks;
+    this.scorch(x, y, radius);
+    if (c.alpha <= 0 || this.activeCracks >= MAX_CRACKS) return;
+    this.activeCracks++;
+    const k = (radius * 2 * c.scale) / CRACK_SIZE;
+    const img = this.scene.add
+      .image(x, y, `fx_cracks_${Phaser.Math.Between(0, CRACK_VARIANTS - 1)}`)
+      .setDepth(DEPTH.groundFx - 0.6)
+      .setFlip(Math.random() < 0.5, Math.random() < 0.5)
+      .setScale(k, k * FX.ring.squash)
+      .setAlpha(c.alpha);
+    this.scene.tweens.add({
+      targets: img,
+      alpha: 0,
+      delay: c.holdMs,
+      duration: c.fadeMs,
+      ease: 'Sine.In',
+      onComplete: () => {
+        this.activeCracks--;
+        img.destroy();
+      },
+    });
+  }
+
+  private activeScorch = 0;
+
+  /** Trace de brûlure noir / gris sous les fissures : plus large, elle reste plus longtemps puis s'efface (FX.cracks.scorch*) ; au plus `MAX_SCORCH` en même temps. */
+  private scorch(x: number, y: number, radius: number): void {
+    const c = FX.cracks;
+    if (c.scorchAlpha <= 0 || this.activeScorch >= MAX_SCORCH) return;
+    this.activeScorch++;
+    const k = (radius * 2 * c.scorchScale) / CRACK_SIZE;
+    const img = this.scene.add
+      .image(x, y, `fx_scorch_${Phaser.Math.Between(0, SCORCH_VARIANTS - 1)}`)
+      .setDepth(DEPTH.groundFx - 0.7)
+      .setFlip(Math.random() < 0.5, Math.random() < 0.5)
+      .setScale(k, k * FX.ring.squash)
+      .setAlpha(c.scorchAlpha);
+    this.scene.tweens.add({
+      targets: img,
+      alpha: 0,
+      delay: c.scorchHoldMs,
+      duration: c.scorchFadeMs,
+      ease: 'Sine.In',
+      onComplete: () => {
+        this.activeScorch--;
+        img.destroy();
+      },
+    });
+  }
+
+  /** Éclats de glace à l'impact sur un glaçon (`count` : `FX.ice.shardCount` par défaut, × `breakMul` à la rupture). */
+  iceShards(x: number, y: number, count = FX.ice.shardCount): void {
+    this.shards.explode(Math.max(1, Math.round(count)), x, y);
+  }
+
+  /** Une croix verte qui monte dans un globe de soin (point choisi par l'appelant) ; `a` : opacité du globe (il s'efface à la fin). */
+  healZoneCross(x: number, y: number, a = 1): void {
+    const h = FX.healZone;
+    const img = this.scene.add.image(x, y, 'fx_plus').setDepth(DEPTH.fx).setScale(h.scale * 0.5).setAlpha(h.alpha * a);
+    this.scene.tweens.add({ targets: img, scale: h.scale, duration: Math.min(220, h.durationMs * 0.25), ease: 'Back.Out' });
+    this.scene.tweens.add({ targets: img, y: y - h.rise, alpha: 0, delay: h.durationMs * 0.25, duration: h.durationMs * 0.75, ease: 'Sine.In', onComplete: () => img.destroy() });
   }
 
   ring(x: number, y: number, radius: number, color: number, durationMs = FX.ring.durationMs): Phaser.GameObjects.Image {
@@ -239,7 +330,7 @@ export class Fx {
    * Chaque particule part avec un léger retard le long de son bras (elles dessinent une spirale), rétrécit et s'estompe en
    * arrivant. Même aplatissement que les anneaux (`FX.ring.squash`) pour rester posé sur le sol. Onde de montée de niveau.
    */
-  spiral(x: number, y: number, radius: number, color: number, durationMs = 900, arms = 3, perArm = 14, turns = 1.1): void {
+  spiral(x: number, y: number, radius: number, color: number, durationMs = FX.spiral.durationMs, arms = FX.spiral.arms, perArm = FX.spiral.perArm, turns = FX.spiral.turns): void {
     const squash = FX.ring.squash;
     for (let a = 0; a < arms; a++) {
       for (let i = 0; i < perArm; i++) {
@@ -257,7 +348,7 @@ export class Fx {
           onUpdate: () => {
             const r = radius * state.k;
             const ang = base + state.k * turns * Math.PI * 2;
-            img.setPosition(x + Math.cos(ang) * r, y + Math.sin(ang) * r * squash).setScale(0.8 * (1 - state.k * 0.65)).setAlpha(1 - state.k * state.k);
+            img.setPosition(x + Math.cos(ang) * r, y + Math.sin(ang) * r * squash).setScale(FX.spiral.size * (1 - state.k * 0.65)).setAlpha(1 - state.k * state.k);
           },
           onComplete: () => img.destroy(),
         });
@@ -266,14 +357,14 @@ export class Fx {
   }
 
   /** Colonne de lumière qui monte et s'estompe (nouvelle recrue dans la squad, mort d'un soldat…). */
-  column(x: number, y: number, color: number, height = 130, durationMs = 800): { img: Phaser.GameObjects.Image; dy: number }[] {
+  column(x: number, y: number, color: number, height = FX.column.height, durationMs = FX.column.durationMs): { img: Phaser.GameObjects.Image; dy: number }[] {
     const img = this.scene.add.image(x, y + 6, 'fx_column').setOrigin(0.5, 1).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx);
     const k = height / 220;
     img.setScale(k * 1.5, k * 0.6).setAlpha(1);
     this.scene.tweens.add({ targets: img, scaleX: k * 0.5, scaleY: k * 1.3, duration: durationMs, ease: 'Cubic.Out' });
     this.scene.tweens.add({ targets: img, alpha: 0, delay: durationMs * 0.25, duration: durationMs * 0.75, onComplete: () => img.destroy() });
-    const glow = this.scene.add.image(x, y, 'fx_glow').setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx).setScale(1.2);
-    this.scene.tweens.add({ targets: glow, alpha: 0, scale: 2.4, duration: durationMs * 0.7, onComplete: () => glow.destroy() });
+    const glow = this.scene.add.image(x, y, 'fx_glow').setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx).setScale(FX.column.glowScale);
+    this.scene.tweens.add({ targets: glow, alpha: 0, scale: FX.column.glowEnd, duration: durationMs * 0.7, onComplete: () => glow.destroy() });
     return [
       { img, dy: 6 },
       { img: glow, dy: 0 },
@@ -282,16 +373,17 @@ export class Fx {
 
   /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */
   death(x: number, y: number, color: number): void {
-    this.burst(x, y - 20, color, 44);
-    this.burst(x, y - 24, 0xffffff, 20);
-    this.gloop(x, y - 16, color, 0xffffff, 1.8);
-    this.puddles(x, y, color, 1.2);
-    this.ring(x, y, 130, color);
-    this.ring(x, y, 75, 0xffffff);
-    const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(3.4);
-    this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: 260, onComplete: () => flash.destroy() });
-    this.column(x, y, 0xff4a4a, 170, 700);
-    this.text(x, y - 46, '✖', '#ff5a5a', 34);
+    const d = FX.death;
+    this.burst(x, y - 20, color, d.burstCount);
+    this.burst(x, y - 24, 0xffffff, d.flashCount);
+    this.gloop(x, y - 16, color, 0xffffff, d.gloopSize);
+    this.puddles(x, y, color, d.puddleSize);
+    this.ring(x, y, d.ringBig, color);
+    this.ring(x, y, d.ringSmall, 0xffffff);
+    const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(d.flashScale);
+    this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: d.flashMs, onComplete: () => flash.destroy() });
+    this.column(x, y, 0xff4a4a, d.columnHeight, d.columnMs);
+    this.text(x, y - 46, '✖', '#ff5a5a', d.crossSize);
   }
 
   /**
@@ -385,13 +477,13 @@ export class Fx {
   crit(x: number, y: number, dmg: number): void {
     const txt = String(Math.round(dmg));
     const glyphs = [...txt.split(''), 'bang'].map((g) => `crit_${g}`);
-    const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3 * CRIT_SCALE);
+    const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3 * FX.crit.scale);
     if (glyphs.every((g) => this.scene.textures.exists(g)) && this.scene.textures.exists('crit_bubble')) {
       const SCALE = 0.7;
       const gap = -7; // chiffres serrés (les glyphes ont une marge transparente)
-      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE * CRIT_TEXT_GROW));
+      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE * FX.crit.textGrow));
       const total = imgs.reduce((n, im) => n + im.displayWidth + gap, -gap);
-      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total / CRIT_TEXT_GROW + 40) / 136), 0.7); // la bulle garde sa taille : seul le texte grossit
+      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total / FX.crit.textGrow + 40) / 136), 0.7); // la bulle garde sa taille : seul le texte grossit
       let cx = -total / 2;
       for (const im of imgs) {
         im.setPosition(cx + im.displayWidth / 2, 1);
@@ -401,8 +493,8 @@ export class Fx {
     } else {
       box.add(this.scene.add.text(0, 0, `! ${txt}`, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffe14a', stroke: '#8a1a00', strokeThickness: 5 }).setOrigin(0.5));
     }
-    this.scene.tweens.add({ targets: box, scale: CRIT_SCALE, duration: 140, ease: 'Back.Out' });
-    this.scene.tweens.add({ targets: box, y: box.y - 34, alpha: 0, delay: 300, duration: 420, onComplete: () => box.destroy() });
+    this.scene.tweens.add({ targets: box, scale: FX.crit.scale, duration: FX.crit.popMs, ease: 'Back.Out' });
+    this.scene.tweens.add({ targets: box, y: box.y - FX.crit.rise, alpha: 0, delay: FX.crit.holdMs, duration: FX.crit.riseMs, onComplete: () => box.destroy() });
   }
 
   heal(x: number, y: number): void {
@@ -418,5 +510,6 @@ export class Fx {
     this.gloopSmall.destroy();
     this.fire.destroy();
     this.smoke.destroy();
+    this.shards.destroy();
   }
 }

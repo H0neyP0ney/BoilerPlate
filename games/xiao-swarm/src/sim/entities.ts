@@ -108,6 +108,11 @@ export interface AlienState extends Body {
   enraged: number;
   /** Temps écoulé depuis l'apparition (s), pour l'enragement des boss. */
   age: number;
+  /** Escalade à sa création (`Sim.escalation` : ×1,1 par boss tué avant son apparition) : multiplie ses PV, sa vitesse, ses dégâts et sa cadence. */
+  esc: number;
+  /** Chaman : résurrections lancées depuis le dernier repos, et repos restant (s) après `revive.maxRevives` d'entre elles. */
+  revives: number;
+  reviveLock: number;
   /** Ne laisse aucun globe d'XP : envoyé par un rejeu de vague pendant un combat de boss (pas de farm en laissant le boss en vie), invoqué ou ressuscité. */
   noXp: boolean;
   /** Invoqué ou ressuscité : ne laisse jamais de recrue (les aliens des vagues rejouées pendant un boss, eux, en laissent). */
@@ -158,7 +163,7 @@ export interface Projectile {
 }
 
 /** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
-export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'shield';
+export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets';
 
 /** Power-up au sol : petit boost immédiat ramassé par une squad ; disparaît vite si personne ne le prend. */
 export interface PowerUpState {

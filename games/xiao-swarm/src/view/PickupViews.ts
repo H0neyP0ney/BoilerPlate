@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
-import { theme } from '@xiao/engine';
+import { lerp, theme } from '@xiao/engine';
 import { DEPTH } from '../config';
+import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { createEnragedFlames } from './EnragedFx';
+import type { Fx } from './Fx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
 const CAPSULE_LIFT = 52;
@@ -20,7 +22,6 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   heal: { icon: '💚', color: 0x5dff84 },
   stasis: { icon: '❄️', color: 0x6fd8ff },
   rockets: { icon: '🚀', color: 0xff7a3a },
-  shield: { icon: '🛡️', color: 0x4aa8ff },
 };
 
 /** Pastille d'un power-up (disque coloré + emoji), centrée sur (0, 0) ; partagée avec la visionneuse d'unités. */
@@ -34,13 +35,47 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
   return scene.add.container(0, 0, [g, icon]);
 }
 
+/**
+ * Flocon à six branches posé à plat au sol (même aplatissement que les ondes de choc) : un trait blanc sur un halo bleu glacé et un contour bleu sombre, avec deux
+ * paires de petites branches par bras, qui tourne lentement. `size` = longueur d'un bras (px), `a` = opacité globale.
+ */
+function drawSnowflake(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, a: number, time: number): void {
+  const squash = FX.ring.squash;
+  const rot = time * FX.stasis.spin * Math.PI * 2;
+  const seg = (px: number, py: number, qx: number, qy: number): void => {
+    g.lineBetween(x + px, y + py * squash, x + qx, y + qy * squash);
+  };
+  const w = Math.max(3, size * 0.075);
+  for (const [width, color, alpha] of [[w * 3.6, 0x0a3a6a, 0.4], [w * 2.4, 0x6fd8ff, 0.55], [w, 0xffffff, 1]] as const) { // contour bleu sombre (lisible sur le sol clair), halo glacé, trait blanc
+    g.lineStyle(width, color, alpha * a * FX.stasis.iconAlpha);
+    for (let k = 0; k < 6; k++) {
+      const th = rot + (k * Math.PI) / 3;
+      const ux = Math.cos(th);
+      const uy = Math.sin(th);
+      seg(0, 0, ux * size, uy * size); // le bras
+      for (const [t, len] of [[0.5, 0.34], [0.78, 0.22]] as const) {
+        const bx = ux * size * t;
+        const by = uy * size * t;
+        for (const s of [-1, 1]) {
+          const bth = th + (s * Math.PI) / 3;
+          seg(bx, by, bx + Math.cos(bth) * size * len, by + Math.sin(bth) * size * len); // une branche de chaque côté
+        }
+      }
+    }
+  }
+  g.fillStyle(0xffffff, 0.9 * a * FX.stasis.iconAlpha).fillEllipse(x, y, size * 0.2, size * 0.2 * squash);
+}
+
 /** Globe persistant au sol (soin ou stase) de rayon `r`, d'opacité `a` ; partagé avec la visionneuse de bonus. */
 export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis', x: number, y: number, r: number, a: number, time: number): void {
   const beat = 0.5 + 0.5 * Math.sin(time * 4);
   const col = kind === 'heal' ? 0x5dff84 : 0x6fd8ff;
   g.fillStyle(col, (0.12 + 0.08 * beat) * a).fillEllipse(x, y, r * 2, r * 1.4);
   g.lineStyle(3, col, (0.5 + 0.3 * beat) * a).strokeEllipse(x, y, r * 2, r * 1.4);
-  if (kind === 'stasis') g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(x, y, r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
+  if (kind === 'stasis') {
+    g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(x, y, r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
+    drawSnowflake(g, x, y, Math.min(FX.stasis.iconMax, r * FX.stasis.iconSize), a, time); // grosse icône de flocon au centre
+  }
   else g.fillStyle(0xffffff, 0.2 * a).fillEllipse(x, y - 8 * beat, 26, 16);
 }
 
@@ -72,6 +107,10 @@ export class PickupViews {
   /** Flammes d'enragé de chaque soldat sous stimpack (même effet que les aliens ressuscités). */
   private readonly rageFx = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
   private readonly powerups = new Map<number, Phaser.GameObjects.Container>();
+  /** Position de simulation du tick courant et du précédent, par power-up : la simulation ne le déplace qu'à 30 Hz (aspiration), l'affichage l'interpole. */
+  private readonly powerupPos = new Map<number, { px: number; py: number; x: number; y: number }>();
+  /** Position affichée (interpolée) de chaque power-up, pour le cercle au sol. */
+  private readonly powerupShown = new Map<number, { x: number; y: number }>();
   private readonly counts = new Map<PlayerId, { box: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; x: number; y: number; shown: string }>();
 
   constructor(
@@ -79,18 +118,42 @@ export class PickupViews {
     private readonly sim: Sim,
     /** Position affichée (interpolée) d'un soldat, par id. */
     private readonly posOf: (soldierId: number) => { x: number; y: number } | undefined,
+    /** Effets partagés (croix de soin des globes). */
+    private readonly fx: Fx,
   ) {}
 
   /** Appelé chaque frame (avant le dessin du sol) : crée / déplace / détruit les objets. */
-  sync(time: number): void {
-    this.syncPowerups(time);
+  sync(time: number, alpha = 1): void {
+    this.syncPowerups(time, alpha);
+    this.syncHealZones();
     this.syncCounts();
     this.syncSyringes(time);
   }
 
+  // ---------- Globes de soin : croix vertes ----------
+
+  /** Prochain instant (ms de la scène) où chaque globe de soin lâche une croix. */
+  private readonly zoneNext = new Map<number, number>();
+
+  /** Des croix vertes naissent au hasard dans chaque globe de soin et montent en s'effaçant (FX.healZone). */
+  private syncHealZones(): void {
+    const now = this.scene.time.now;
+    const live = new Set<number>();
+    for (const f of this.sim.powerups.fields) {
+      if (f.kind !== 'heal') continue;
+      live.add(f.id);
+      if (now < (this.zoneNext.get(f.id) ?? 0)) continue;
+      this.zoneNext.set(f.id, now + FX.healZone.everyMs * (0.6 + Math.random() * 0.8));
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * f.r * 0.92; // dans l'ellipse du globe (demi-axes r et 0,7 r, comme `drawField`)
+      this.fx.healZoneCross(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.7, Math.min(1, f.ttl / 1.2));
+    }
+    for (const id of this.zoneNext.keys()) if (!live.has(id)) this.zoneNext.delete(id);
+  }
+
   // ---------- Power-ups ----------
 
-  private syncPowerups(time: number): void {
+  private syncPowerups(time: number, alpha: number): void {
     const live = new Set<number>();
     for (const p of this.sim.powerups.items) {
       live.add(p.id);
@@ -99,13 +162,26 @@ export class PickupViews {
         box = makePowerUpIcon(this.scene, p.kind).setPosition(p.x, p.y).setScale(0.2);
         this.scene.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.Out' });
         this.powerups.set(p.id, box);
+        this.powerupPos.set(p.id, { px: p.x, py: p.y, x: p.x, y: p.y });
       }
+      const pos = this.powerupPos.get(p.id)!;
+      if (pos.x !== p.x || pos.y !== p.y) {
+        pos.px = pos.x;
+        pos.py = pos.y;
+        pos.x = p.x;
+        pos.y = p.y;
+      }
+      const x = lerp(pos.px, pos.x, alpha);
+      const y = lerp(pos.py, pos.y, alpha);
+      this.powerupShown.set(p.id, { x, y });
       const blink = p.life < 3.5 && Math.sin(time * 18) > 0;
-      box.setPosition(p.x, p.y - 14 + Math.sin(time * 4 + p.id) * 4).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
+      box.setPosition(x, y - 14 + Math.sin(time * 4 + p.id) * 4).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
     }
     for (const [id, box] of this.powerups) {
       if (live.has(id)) continue;
       this.powerups.delete(id);
+      this.powerupPos.delete(id);
+      this.powerupShown.delete(id);
       this.scene.tweens.add({ targets: box, alpha: 0, scale: 1.6, duration: 240, onComplete: () => box.destroy() });
     }
   }
@@ -196,7 +272,10 @@ export class PickupViews {
     for (const f of this.sim.powerups.fields) {
       drawField(g, f.kind as 'heal' | 'stasis', f.x, f.y, f.r, Math.min(1, f.ttl / 1.2), time);
     }
-    for (const p of this.sim.powerups.items) drawPickupSpot(g, p.x, p.y, POWERUP_INFO[p.kind].color, time, p.id);
+    for (const p of this.sim.powerups.items) {
+      const at = this.powerupShown.get(p.id) ?? p;
+      drawPickupSpot(g, at.x, at.y, POWERUP_INFO[p.kind].color, time, p.id);
+    }
     // bonus actifs
     for (const sq of this.sim.squads) {
       if (!sq.alive) continue;
@@ -209,6 +288,8 @@ export class PickupViews {
     for (const fx of this.rageFx.values()) fx.destroy();
     this.rageFx.clear();
     this.powerups.clear();
+    this.powerupPos.clear();
+    this.powerupShown.clear();
     this.counts.clear();
   }
 }

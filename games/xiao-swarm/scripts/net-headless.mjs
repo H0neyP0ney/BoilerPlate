@@ -269,27 +269,17 @@ try {
   hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
   check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
   hs.aliens.length = 0;
-  // power-up bouclier : chaque soldat vivant reçoit 1/3 de ses PV max, consommé avant les PV, reflété chez le client
+  // plus aucun bouclier de soldat : le power-up a disparu (seuls certains aliens, comme le Scarab, en ont)
   const onS = a.soldiers.find((s) => s.alive);
-  hs.powerups.items.push({ id: 9004, kind: 'shield', x: onS.x, y: onS.y, life: 5 });
-  for (let i = 0; i < 4; i++) await tick(client);
-  const shielded = a.soldiers.filter((s) => s.alive);
-  check(shielded.length > 0 && shielded.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6 && s.maxShield === s.shield), 'bouclier : chaque soldat reçoit 1/3 de ses PV max', `${shielded[0]?.shield.toFixed(1)} pour ${shielded[0]?.maxHp}`);
-  const cs0 = client.sim.squadOf(a.owner).soldiers.find((s) => s.id === onS.id);
-  check(!!cs0 && cs0.shield > 0 && Math.abs(cs0.shield / cs0.maxShield - 1) < 0.01, 'bouclier : reflété chez le client (barre pleine)');
-  { onS.invulnerable = 0; const hp0 = onS.hp; const sh0 = onS.shield; hs.damageSoldier(onS, 10); check(onS.hp === hp0 && Math.abs(onS.shield - (sh0 - 10)) < 1e-6, 'bouclier : consommé avant les PV', `${onS.shield.toFixed(1)} restant`);
-    hs.damageSoldier(onS, onS.shield + 5); check(onS.shield === 0 && Math.abs(onS.hp - (hp0 - 5)) < 1e-6, 'bouclier : le surplus passe sur les PV, puis plus de bouclier', `${onS.hp.toFixed(1)} PV`); }
-  // renforts express : proposés et pris même squad pleine (dépassement du cap), et bouclier plein pour tous les soldats, renforts compris
+  check(a.soldiers.every((s) => s.shield === 0 && s.maxShield === 0), 'aucun soldat n’a de bouclier');
+  // renforts express : proposés et pris même squad pleine (dépassement du cap), sans aucun bouclier
   { const n0 = a.soldiers.length; a.stats.add('maxSquad', { flat: n0 - a.maxSize }); // plafond = taille actuelle : squad pleine
-    a.pendingLevels = 1; a.offer = ['reinforce']; a.offerPrism = [false]; a.soldiers.forEach((s) => { s.shield = 0; });
+    a.pendingLevels = 1; a.offer = ['reinforce']; a.offerPrism = [false];
     const before = new Set(a.soldiers);
     a.chooseUpgrade(0);
     check(a.soldiers.length === n0 + 3 && a.size > a.maxSize, 'renforts express : +3 soldats même squad pleine (dépasse le cap)', `${a.size}/${a.maxSize}`);
     const fresh = a.soldiers.filter((s) => !before.has(s));
-    check(fresh.length === 3 && fresh.every((s) => Math.abs(s.shield - s.maxHp / 3) < 1e-6) && [...before].every((s) => s.shield === 0), 'renforts express : bouclier plein pour les renforts seulement, pas pour le reste de la squad');
-    for (let i = 0; i < 4; i++) await tick(client);
-    const cFresh =client.sim.squadOf(a.owner).soldiers.filter((s) => fresh.some((f) => f.id === s.id));
-    check(cFresh.length === 3 && cFresh.every((s) => s.shield > 0), 'renforts express : bouclier des renforts reflété chez le client');
+    check(fresh.length === 3 && a.soldiers.every((s) => s.shield === 0), 'renforts express : aucun bouclier, ni pour les renforts ni pour le reste de la squad');
     // plus proposés quand la squad dépasse déjà son max de 3 (ou plus) ; encore proposés à +2
     const { REINFORCE_MAX_OVERCAP } = await vite.ssrLoadModule('/src/config.ts');
     const offers = (over) => { a.stats.add('maxSquad', { flat: a.size - over - a.maxSize }); let seen = false;

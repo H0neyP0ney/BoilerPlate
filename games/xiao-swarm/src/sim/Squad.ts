@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SHIELD_FRACTION, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -231,20 +231,8 @@ export class Squad {
         const r = this.radius * 0.5;
         const s = this.recruit('trooper', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r });
         s.invulnerable = 1;
-        this.shield(s); // bouclier plein pour les renforts seulement, pas pour le reste de la squad
       }
     }
-  }
-
-  /** Bouclier plein pour un soldat : `SHIELD_FRACTION` de ses PV max. */
-  shield(s: SoldierState): void {
-    s.maxShield = s.maxHp * SHIELD_FRACTION;
-    s.shield = s.maxShield;
-  }
-
-  /** Bouclier plein pour tous les soldats vivants (power-up bouclier). */
-  shieldAll(): void {
-    for (const s of this.soldiers) if (s.alive) this.shield(s);
   }
 
   get isHealing(): boolean {

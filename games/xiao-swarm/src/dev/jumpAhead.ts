@@ -21,7 +21,7 @@ export type JumpId = keyof typeof JUMPS;
  * Préférences du joueur entre les 3 cartes proposées (% des upgrades prises dans les parties enregistrées, docs/bench/runs, 291 choix) :
  * la carte retenue à chaque niveau de la partie avancée est tirée avec ces poids.
  */
-const PICK_WEIGHTS: Record<UpgradeId, number> = { damage: 17.9, crit: 12, hp: 11, fireRate: 10.7, maxSquad: 9.3, speed: 8.6, range: 7.9, reinforce: 6.5, magnet: 6.5, recruit: 5.2, xpGain: 4.5 };
+const PICK_WEIGHTS: Record<UpgradeId, number> = { damage: 17.9, crit: 12, hp: 11, fireRate: 10.7, maxSquad: 9.3, speed: 8.6, range: 7.9, reinforce: 6.5, magnet: 6.5, recruit: 5.2, xpGain: 4.5, teamSpirit: 6, lastStand: 3, bossHunter: 5 };
 
 /**
  * Partie avancée (outil de test, hors ligne), au point `id` de `JUMPS` : terrain vidé, timeline des vagues reprise juste après l'apparition

@@ -10,6 +10,7 @@ import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
 import { BAR_GHOST_SPEED, ghostHit, type BarGhost } from '../view/WorldView';
 import { HUD_ART, makeHudButton } from '../view/HudButtons';
 import { TimelineHud } from '../view/TimelineHud';
+import { UPGRADE_PINK } from '../view/GlobeGlitter';
 import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
 import { iconCheat, iconCrowd, iconDifficulty, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
@@ -81,6 +82,8 @@ export class HudScene extends Phaser.Scene {
   private bossTip!: Phaser.GameObjects.Text;
   /** Flèche verte vers la zone de réanimation d'un équipier mort (au bord de l'écran si la zone est hors champ, sinon au-dessus d'elle). */
   private reviveArrow!: Phaser.GameObjects.Graphics;
+  /** Flèches roses vers les globes d'upgrade du joueur local hors de l'écran (`drawUpgradeOrbArrows`). */
+  private orbArrow!: Phaser.GameObjects.Graphics;
   /** « Ally down » au-dessus de chaque flèche verte (un texte par zone de réanimation, créés à la demande). */
   private reviveLabels: Phaser.GameObjects.Text[] = [];
   /** Coop : scoreboard de l'écran de fin. */
@@ -160,6 +163,7 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setVisible(false);
     this.reviveArrow = this.add.graphics();
+    this.orbArrow = this.add.graphics();
     // onboarding : flèches vers le point vert / la recrue / le power-up, bulle au-dessus de la flèche, bandeau du haut
     this.tutorialArrow = this.add.graphics();
     this.tutorialLabel = this.add
@@ -228,6 +232,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     // pendant un combat de boss, sa barre de vie (drawBoss) prend la place de la timeline
     this.timeline.update(this.game_.session.sim, this.endText.visible || !!this.game_.session.sim.tutorial?.active || this.game_.session.sim.aliens.some((a) => a.alive && !!a.def.boss));
     this.drawReviveArrow();
+    this.drawUpgradeOrbArrows();
     this.drawTutorial();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
     const coop = !g.mode.pvp; // survie à plusieurs : on regarde ses équipiers (en PvP on réapparaît)
@@ -352,6 +357,41 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const top = above ? y - gap - txt.height : y + gap;
     txt.setOrigin(0.5, 0).setPosition(Math.max(half, Math.min(this.scale.width - half, x)), top);
     return top;
+  }
+
+  /**
+   * Flèche rose (même gabarit que celle du boss) au bord de l'écran vers chaque globe d'upgrade du joueur local hors champ : ces globes
+   * n'expirent jamais (`Chests.ts`), la flèche évite de les oublier.
+   */
+  private drawUpgradeOrbArrows(): void {
+    const g = this.game_;
+    const a = this.orbArrow;
+    a.clear();
+    const me = g.localSquad;
+    if (!me?.alive) return;
+    const { width, height } = this.scale;
+    const wv = g.cameras.main.worldView;
+    const m = 46;
+    const pulse = 1 + (0.5 + 0.5 * Math.sin(this.time.now / 170)) * 0.14;
+    for (const o of g.session.sim.upgradeOrbs.items) {
+      if (o.owner !== me.owner) continue;
+      const sx = ((o.x - wv.x) / wv.width) * width;
+      const sy = ((o.y - wv.y) / wv.height) * height;
+      if (sx > m && sx < width - m && sy > m && sy < height - m) continue; // à l'écran : pas de flèche
+      const ang = Math.atan2(sy - height / 2, sx - width / 2);
+      const c = Math.cos(ang);
+      const s = Math.sin(ang);
+      const edge = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
+      const px = width / 2 + c * edge;
+      const py = height / 2 + s * edge;
+      a.fillStyle(0x2a0a22, 0.75).fillCircle(px, py, 22 * pulse);
+      a.lineStyle(3, UPGRADE_PINK, 1).strokeCircle(px, py, 22 * pulse);
+      a.fillStyle(UPGRADE_PINK, 1).fillTriangle(
+        px + c * 19, py + s * 19,
+        px - c * 4 - s * 10, py - s * 4 + c * 10,
+        px - c * 4 + s * 10, py - s * 4 - c * 10,
+      );
+    }
   }
 
   /**

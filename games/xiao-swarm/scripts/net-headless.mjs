@@ -382,7 +382,7 @@ try {
   const scarab = hs.aliens[0];
   scarab.age = 1; // sorti de son trou d'apparition (invulnérable avant)
   check(Math.abs(scarab.maxShield - scarab.maxHp * 0.05) < 1e-6 && scarab.shield === scarab.maxShield, 'scarab : bouclier = 5 % de ses PV max', `${Math.round(scarab.maxShield)} / ${Math.round(scarab.maxHp)}`);
-  hs.damage(scarab, 100, host.localPlayer);
+  hs.damage(scarab, 100, null); // sans attaquant : indépendant des upgrades tirées plus haut (Chasseur de boss)
   check(scarab.hp === scarab.maxHp && Math.abs(scarab.shield - (scarab.maxShield - 100)) < 1e-6, 'scarab : le bouclier encaisse avant les PV');
   const snapSc = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
   const scSnap = snapSc?.aliens.find((x) => x.id === scarab.id);

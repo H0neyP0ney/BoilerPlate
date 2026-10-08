@@ -13,9 +13,12 @@ export const SQUAD = {
 
 /**
  * Grab (langue) : l'unité tirée garde sa liberté de mouvement (aucun stun). Pendant `GRAB_OUT` s elle ne compte plus pour le
- * mouvement de foule (centre, slots, laisse) ; elle reste immunisée contre tout autre grab pendant `GRAB_IMMUNE` s.
+ * mouvement de foule (centre, slots, laisse) : la traction (~0,5 s) puis encore 1 s ; elle reste immunisée contre tout autre grab pendant `GRAB_IMMUNE` s.
+ * Un soldat avalé par une bulle (`capturedBy`) ou gelé (`frozen`) en est sorti aussi, tant que dure l'état puis encore `RELEASE_OUT` s (`Squad.isOut`).
  */
-export const GRAB_OUT = 0.7;
+export const GRAB_OUT = 1.5;
+/** Soldat libéré d'une bulle ou d'un glaçon : encore hors du mouvement de foule pendant ce délai (s). */
+export const RELEASE_OUT = 1;
 
 /** Zone de réanimation (coop) : rayon (px) et temps (s) qu'un équipier doit y passer pour ramener un joueur mort. */
 export const REVIVE_RADIUS = 80;
@@ -200,8 +203,8 @@ export const DIFFICULTY_DEFAULTS = {
   // ---- aides au joueur
   /** Power-ups : premier à `powerupFirst` s, puis un toutes les `powerupEveryMin`-`powerupEveryMax` s, `powerupMax` au sol au plus (entier). */
   powerupFirst: 20,
-  powerupEveryMin: 11.7,
-  powerupEveryMax: 18.3,
+  powerupEveryMin: 10.6, // fréquence +10 % le 09/10 (ajout du power-up Relance ; 11,7 et 18,3 avant)
+  powerupEveryMax: 16.6,
   powerupMax: 3,
   /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
   rocketIdleRange: 1000,

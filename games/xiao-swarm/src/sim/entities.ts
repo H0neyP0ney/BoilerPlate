@@ -174,7 +174,7 @@ export interface Projectile {
 }
 
 /** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
-export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets';
+export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'reroll';
 
 /** Power-up au sol : petit boost immédiat ramassé par une squad ; disparaît vite si personne ne le prend. */
 export interface PowerUpState {

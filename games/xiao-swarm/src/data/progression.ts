@@ -42,7 +42,7 @@ export function splitXp(value: number, max = 9): number[] {  // `max` = nombre m
   return out;
 }
 
-export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'reinforce' | 'range' | 'crit';
+export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'reinforce' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'bossHunter';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -72,7 +72,14 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0x4fe0d0 },
   /** Effet instantané : `value` gunners rejoignent l'escouade, même au-delà de la taille max, avec un bouclier plein. Plus proposée dès que la squad dépasse déjà son max de `REINFORCE_MAX_OVERCAP` (config.ts). */
   reinforce: { id: 'reinforce', maxStacks: 99, value: 3, color: 0xffa94d },
+  /** Esprit d'équipe : +1,5 % de dégâts par soldat vivant de la squad, par prise (stat `teamSpirit`, lue par `Combat.update`). */
+  teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 0.015 }, maxStacks: 4, value: 1.5, color: 0xa8e04a },
+  /** Dernier rempart : +2 % de dégâts par soldat MANQUANT (taille max de la squad − soldats vivants), par prise : 2, 4, 6, 8 % (stat `lastStand`, lue par `Combat.update`). */
+  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.02 }, maxStacks: 4, value: 2, color: 0xe0304f },
+  /** Chasseur de boss : +30 % de dégâts aux boss et mini-boss par prise (stat `bossHunter`, lue par `Sim.damage`). */
+  bossHunter: { id: 'bossHunter', stat: 'bossHunter', mod: { flat: 0.3 }, maxStacks: 4, value: 30, color: 0xe05ae0 },
 };
+
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /**

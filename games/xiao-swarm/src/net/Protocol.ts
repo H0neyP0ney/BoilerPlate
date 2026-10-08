@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 45; // 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 46; // 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -80,6 +80,8 @@ export interface SquadSnap {
   dealt: number;
   maxSize: number;
   healing: boolean;
+  /** Dernier rempart actif (upgrade `lastStand`) : aura et texte chez tous les joueurs. */
+  lastStand: boolean;
   /** Progression (XP) : niveau, XP dans le niveau, propositions d'upgrade (index dans UPGRADE_IDS) et nombre de prises de chacune. */
   level: number;
   xp: number;
@@ -216,7 +218,7 @@ const TEXTURES = [
 const SNAPSHOT_TAG = 0x53;
 /** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (jungle 3802, royale 4800). */
 const POS_SCALE = 4;
-const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
+const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
@@ -240,6 +242,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       dealt: sq.dealt,
       maxSize: sq.maxSize,
       healing: sq.isHealing,
+      lastStand: sq.lastStand,
       level: sq.level,
       xp: sq.xp,
       offer: sq.offer ? sq.offer.map((id) => UPGRADE_IDS.indexOf(id)) : [],
@@ -457,7 +460,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(sq.slot);
     w.u32(Math.round(sq.dealt));
     w.u8(sq.maxSize);
-    w.u8(sq.healing ? 1 : 0);
+    w.u8((sq.healing ? 1 : 0) | (sq.lastStand ? 2 : 0));
     w.u8(Math.min(255, sq.level));
     w.u16(Math.min(65535, Math.round(sq.xp * 10)));
     w.u8(sq.offer.length);
@@ -692,7 +695,10 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), maxSize: r.u8(), healing: r.u8() === 1, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), maxSize: r.u8(), healing: false, lastStand: false, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
+      const flags = r.u8();
+      sq.healing = (flags & 1) !== 0;
+      sq.lastStand = (flags & 2) !== 0;
       sq.level = r.u8();
       sq.xp = r.u16() / 10;
       const nOffer = r.u8();

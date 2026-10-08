@@ -26,6 +26,7 @@ const PLATE = [64, 518, 408, 632];
 const COLORS = {
   damage: 0xff6a4a, fireRate: 0xffd166, hp: 0x6fdc6f, range: 0xffa07a, crit: 0xffe14a, speed: 0x7dd3ff,
   maxSquad: 0xb388ff, magnet: 0x5aa8ff, recruit: 0xff8fc8, xpGain: 0x4fe0d0, reinforce: 0xffa94d,
+  teamSpirit: 0xa8e04a, lastStand: 0xe0304f, bossHunter: 0xe05ae0,
 };
 
 function rgb2hsl(r, g, b) {

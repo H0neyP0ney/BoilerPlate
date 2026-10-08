@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -27,7 +27,7 @@ export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number,
   arena.constrain(anchor);
 }
 
-export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit';
+export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'bossHunter';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -51,7 +51,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: DIFFICULTY.squadDamage, fireRate: DIFFICULTY.squadFireRate, hp: 1, speed: DIFFICULTY.squadSpeed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: DIFFICULTY.squadRecruit, xpGain: 1, range: 1, crit: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: DIFFICULTY.squadDamage, fireRate: DIFFICULTY.squadFireRate, hp: 1, speed: DIFFICULTY.squadSpeed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: DIFFICULTY.squadRecruit, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0, bossHunter: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -65,6 +65,8 @@ export class Squad {
   peakSize = 0;
   /** Bonus temporaires (s restantes) des power-ups : stimpack (vitesse et cadence ×2),  */
   readonly buffs = { stim: 0 };
+  /** Dernier rempart actif (upgrade `lastStand` prise et au moins un soldat manquant) : calculé par `Combat.update` chez l'hôte, passe dans le snapshot (aura). */
+  lastStand = false;
   private pendingLevels = 0;
   readonly picked: Partial<Record<UpgradeId, number>> = {};
   moving = false;
@@ -108,6 +110,8 @@ export class Squad {
   resetRun(): void {
     this.soldiers.length = 0;
     this.detached.clear();
+    this.released.clear();
+    this.held.clear();
     this.crowd.length = 0;
     this.newcomers.length = 0;
     this.stats.reset();
@@ -118,6 +122,7 @@ export class Squad {
     this.rerolls = Math.round(DIFFICULTY.rerolls);
     this.peakSize = 0;
     this.buffs.stim = 0;
+    this.lastStand = false;
     this.pendingLevels = 0;
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
     this.kills = 0;
@@ -323,6 +328,11 @@ export class Squad {
     }
   }
 
+  /** Soldats manquants par rapport à la taille max de la squad (Dernier rempart). */
+  get missing(): number {
+    return Math.max(0, this.maxSize - this.soldiers.length);
+  }
+
   get isHealing(): boolean {
     return this.stillTime > CROWD.stillDelay && this.soldiers.some((s) => s.def.heal);
   }
@@ -421,9 +431,30 @@ export class Squad {
   /** Soldats isolés de la squad (voir `DETACH_EXTRA`) : hors du mouvement de foule jusqu'à leur retour au contact. */
   private readonly detached = new Set<SoldierState>();
 
-  /** Hors formation : avalé par une bulle, fraîchement tiré par une langue, ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots). */
+  /** Soldats libérés d'une bulle ou d'un glaçon : temps restant (s) hors du mouvement de foule (`RELEASE_OUT`). */
+  private readonly released = new Map<SoldierState, number>();
+  /** Soldats avalés ou gelés au pas précédent (pour détecter leur libération). */
+  private readonly held = new Set<SoldierState>();
+
+  /**
+   * Hors formation : avalé par une bulle ou gelé (puis encore `RELEASE_OUT` s après la libération), tiré par une langue (`GRAB_OUT` s),
+   * ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots).
+   */
   private isOut(s: SoldierState): boolean {
-    return s.capturedBy !== 0 || s.frozen > 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+    return s.capturedBy !== 0 || s.frozen > 0 || this.released.has(s) || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+  }
+
+  /** Libération d'une bulle ou d'un glaçon : le soldat reste hors du mouvement de foule `RELEASE_OUT` s. */
+  private updateReleased(dt: number): void {
+    for (const [s, t] of this.released) {
+      if (t - dt <= 0 || !s.alive) this.released.delete(s);
+      else this.released.set(s, t - dt);
+    }
+    for (const s of this.soldiers) {
+      if (s.capturedBy !== 0 || s.frozen > 0) this.held.add(s);
+      else if (this.held.delete(s)) this.released.set(s, RELEASE_OUT);
+    }
+    for (const s of this.held) if (!s.alive) this.held.delete(s);
   }
 
   /** Met à jour les soldats isolés : sortie au-delà de `radius + DETACH_EXTRA`, retour sous `radius + REJOIN_EXTRA` (hystérésis, d'après le centre du tick précédent). */
@@ -450,6 +481,7 @@ export class Squad {
     const total = this.soldiers.length;
     if (total === 0) return;
     this.updateDetached();
+    this.updateReleased(dt);
     this.crowd.length = 0;
     for (const s of this.soldiers) if (!this.isOut(s)) this.crowd.push(s);
     if (this.crowd.length === 0) this.crowd.push(...this.soldiers); // tous hors formation : on garde la squad entière comme repère

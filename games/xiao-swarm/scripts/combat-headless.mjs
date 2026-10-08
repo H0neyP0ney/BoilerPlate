@@ -584,7 +584,7 @@ try {
     check(alive499 && !orb2.alive && sim.xp.orbs.length === 0, 'orbe de glace : détruit par la squad après 500 dégâts, sans XP');
   }
 
-  // ---- priorité de tir : libérer un allié (glaçon d'un allié gelé, bulle qui a avalé un allié) avant tout autre alien, même plus proche
+  // ---- tir sans priorité (09/10) : la cible la plus proche, alien ou glaçon d'un allié gelé (une bulle qui a avalé un allié n'est pas prioritaire)
   {
     const { sim } = fresh(22);
     clearAliens(sim);
@@ -609,10 +609,10 @@ try {
       shooter.x = 1500; shooter.y = 1500;
       return shooter.target;
     };
-    const first = aim();
-    iced.frozen = 0; // glaçon brisé : reste la bulle
+    const first = aim(); // slime à 40 px, glaçon à 150, bulle à 220
+    iced.x = 1500 + 20; // glaçon plus proche que le slime
     const second = aim();
-    check(first === iced && second === bubble, 'tir : un soldat libère d’abord ses alliés (glaçon, puis bulle), avant l’alien le plus proche', `1re cible ${first?.kind}${first === iced ? ' (glaçon)' : ''}, 2e ${second?.def?.id ?? second?.kind}`);
+    check(first === slime && second === iced, 'tir : un soldat vise le plus proche (alien ou glaçon d’un allié), sans priorité', `1re cible ${first?.def?.id ?? first?.kind}, 2e ${second?.kind}${second === iced ? ' (glaçon)' : ''}`);
   }
 
   // ---- boss tué : « clear screen », tous les autres aliens meurent comme si le joueur les avait tués (XP, explosion des kamikazes…), un autre boss est épargné

@@ -473,12 +473,11 @@ export class Sim {
     if (!u.alive || !this.horde.targetable(u)) return; // dans son trou d'apparition ou totalement enterré : intouchable
     if (this.horde.burial(u) === 'semi') amount *= BURIED.semiDmg; // semi-enterré (lurker en embuscade)
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
+    const sq = attacker ? this.squadOf(attacker) : undefined;
+    if (sq && u.def.boss) amount *= 1 + sq.stats.get('bossHunter'); // upgrade Chasseur de boss (boss et mini-boss)
     const effective = Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
     this.metrics.dealt += effective;
-    if (attacker) {
-      const sq = this.squadOf(attacker);
-      if (sq) sq.dealt += effective;
-    }
+    if (sq) sq.dealt += effective;
     u.shieldT = 0; // tout coup relance le délai de régénération du bouclier
     u.hp -= this.absorb(u, amount);
     u.kx += (dirX * 40) / u.mass;

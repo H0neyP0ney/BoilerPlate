@@ -22,6 +22,7 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   heal: { icon: '💚', color: 0x5dff84 },
   stasis: { icon: '❄️', color: 0x6fd8ff },
   rockets: { icon: '🚀', color: 0xff7a3a },
+  reroll: { icon: '🎲', color: 0xc78bff },
 };
 
 // couleurs et hauteur communes à tous les globes au sol : voir `GlobeGlitter.ts`

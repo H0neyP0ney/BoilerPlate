@@ -122,7 +122,7 @@ export class Recruits {
 
   /** Soin en zone centré sur `main` : 100 % des PV max pour lui, `HEAL_AREA.otherPct` pour les soldats de sa squad à portée. L'affichage détecte la hausse de PV. */
   private healArea(main: SoldierState, squad: Squad): void {
-    main.hp = main.maxHp;
+    main.hp = Math.max(main.hp, main.maxHp); // garde un éventuel overheal (Medic)
     for (const o of squad.soldiers) {
       if (o === main || !o.alive || o.hp >= o.maxHp) continue;
       if ((o.x - main.x) ** 2 + (o.y - main.y) ** 2 > HEAL_AREA.radius ** 2) continue;

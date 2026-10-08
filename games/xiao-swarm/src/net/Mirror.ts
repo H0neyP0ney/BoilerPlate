@@ -112,6 +112,7 @@ export class Mirror {
       squad.offerPrism = sq.offerPrism;
       squad.rerolls = sq.rerolls;
       squad.buffs.stim = sq.stim;
+      squad.lastStand = sq.lastStand;
       UPGRADE_IDS.forEach((id, i) => (squad.picked[id] = sq.picked[i]));
       squad.stats.reset();
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });

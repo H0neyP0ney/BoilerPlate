@@ -21,6 +21,7 @@ import { FX } from '../fxParams';
 import { teleColor, teleInner, teleOuter } from './telegraph';
 import { ROCKET_TEXTURE } from '../sim/Combat';
 import { CHEST_GOLD, LootViews } from './LootViews';
+import { HEAL_FIELD } from '../sim/PowerUps';
 import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR } from './PickupViews';
 import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
@@ -981,6 +982,18 @@ export class WorldView {
       const w = shadowWidth(v.state.def.id);
       g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx, v.ry, w, w * (0.9 / 2.1));
     }
+    // Dernier rempart (upgrade) : aura rouge qui pulse sous chaque soldat dès qu'il manque un soldat, plus intense quand il en manque davantage
+    for (const sq of this.sim.squads) {
+      if (!sq.lastStand || sq.maxSize <= 0) continue;
+      const k = Math.min(1, sq.missing / sq.maxSize); // part de la squad perdue
+      const pulse = 0.5 + Math.sin(time * 6) * 0.5;
+      for (const s of sq.soldiers) {
+        const v = this.soldiers.get(s.id);
+        if (!v || !this.onScreen(v.rx, v.ry, 60)) continue;
+        g.fillStyle(UPGRADES.lastStand.color, (0.05 + pulse * 0.05) + k * 0.2).fillEllipse(v.rx, v.ry, 58, 26);
+        g.lineStyle(2, UPGRADES.lastStand.color, (0.15 + pulse * 0.15) + k * 0.5).strokeEllipse(v.rx, v.ry, 58, 26);
+      }
+    }
     for (const sq of this.sim.squads) {
       if (!sq.isHealing) continue;
       for (const s of sq.soldiers) {
@@ -1191,10 +1204,19 @@ export class WorldView {
       const s = v.state;
       const y = v.ry - (s.def.id === 'bruiser' ? 66 : 58);
       const frozen = s.frozen > 0;
-      if (s.hp < s.maxHp || frozen) {
+      const over = s.hp > s.maxHp; // overheal (globe de soin) : barre toujours affichée tant qu'il dure
+      if (s.hp < s.maxHp || frozen || over) {
         // gelé : sa barre de vie reste affichée (il est attaquable dans son glaçon), même pleine
         const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
-        this.bar(b, v.rx, y, 30, s.hp / s.maxHp, color, s.id, dt);
+        // overheal : même largeur de barre, qui représente alors le max de l'overheal ; cran blanc au niveau du max normal, surplus plus foncé
+        const scale = over ? s.maxHp * (1 + HEAL_FIELD.overheal) : s.maxHp;
+        this.bar(b, v.rx, y, 30, s.hp / scale, color, s.id, dt);
+        if (over) {
+          const x0 = v.rx - 15;
+          const notch = 30 * (s.maxHp / scale);
+          b.fillStyle(darken(color, 0.55), 1).fillRect(x0 + notch, y, 30 * Math.min(1, s.hp / scale) - notch, 5);
+          b.fillStyle(0xffffff, 1).fillRect(x0 + notch - 0.75, y - 1.5, 1.5, 8);
+        }
       }
       // PV du glaçon (gel, `FREEZE.hp`) : barre bleue au-dessus de la barre de vie ; les tirs alliés la vident
       if (frozen) this.bar(b, v.rx, y - 8, 30, Math.min(1, s.frozen / FREEZE.hp), ICE_BAR_COLOR);
@@ -1311,4 +1333,9 @@ export class WorldView {
     if (ghost > r) g.fillStyle(0xffffff, 0.95).fillRect(x - w / 2, y, w * ghost, h);
     g.fillStyle(color, 1).fillRect(x - w / 2, y, w * r, h);
   }
+}
+
+/** Couleur 0xRRGGBB assombrie (`k` < 1). */
+function darken(color: number, k: number): number {
+  return (Math.round(((color >> 16) & 255) * k) << 16) | (Math.round(((color >> 8) & 255) * k) << 8) | Math.round((color & 255) * k);
 }

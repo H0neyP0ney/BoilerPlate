@@ -80,6 +80,10 @@ export class Combat {
     for (const squad of this.sim.squads) {
       const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
       const rangeMul = squad.stats.get('range');
+      // upgrades Esprit d'équipe (+x % de dégâts par soldat vivant) et Dernier rempart (+x % par soldat manquant sous la taille max)
+      const stand = squad.stats.get('lastStand');
+      squad.lastStand = stand > 0 && squad.missing > 0;
+      const damageMul = squad.stats.get('damage') * (1 + squad.stats.get('teamSpirit') * squad.soldiers.length + stand * squad.missing);
       for (const s of squad.soldiers) {
         if (s.capturedBy || s.frozen > 0 || s.stun > 0) continue; // avalé par une bulle, gelé ou étourdi : ne tire plus
         const weapon = s.def.weapon;
@@ -87,12 +91,11 @@ export class Combat {
         s.retarget -= dt;
         if (s.retarget <= 0 || (s.target && !s.target.alive)) {
           const range = weapon.range * rangeMul;
-          // PRIORITÉ : libérer un allié à portée — le glaçon d'un allié gelé, ou la bulle qui a avalé un allié (le plus proche des deux) —
-          // avant tout autre alien
+          // cible la plus proche, sans priorité : un alien (pas dans son trou d'apparition ni totalement enterré : intouchable) ou le
+          // glaçon d'un allié gelé (les coups alliés le brisent) ; une bulle qui a avalé un allié est un alien comme un autre
           const ice = soldierHash.nearest(s.x, s.y, range, (o) => o.alive && o.frozen > 0 && o !== s && this.sim.allied(s.owner, o), this.scratchS);
-          const bubble = alienHash.nearest(s.x, s.y, range, (a) => a.alive && !!a.captive && this.sim.allied(s.owner, a.captive) && this.sim.horde.targetable(a), this.scratchA);
-          let target: Unit | undefined = ice && bubble ? (Math.hypot(ice.x - s.x, ice.y - s.y) <= Math.hypot(bubble.x - s.x, bubble.y - s.y) ? ice : bubble) : (ice ?? bubble);
-          target ??= alienHash.nearest(s.x, s.y, range, (a) => a.alive && this.sim.horde.targetable(a), this.scratchA); // pas un alien dans son trou d'apparition ni totalement enterré (intouchable)
+          const alien = alienHash.nearest(s.x, s.y, range, (a) => a.alive && this.sim.horde.targetable(a), this.scratchA);
+          let target: Unit | undefined = ice && alien ? (Math.hypot(ice.x - s.x, ice.y - s.y) < Math.hypot(alien.x - s.x, alien.y - s.y) ? ice : alien) : (ice ?? alien);
           if (!target && pvp) {
             target = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.team !== s.team, this.scratchS);
           }
@@ -107,7 +110,7 @@ export class Combat {
         s.aim = Math.atan2(t.y - 10 - (s.y - 17), t.x - s.x);
         s.facing = Math.cos(s.aim) >= 0 ? 1 : -1;
         if (s.cooldown <= 0) {
-          this.fire(s, t, weapon, squad.stats.get('damage'), rangeMul, Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
+          this.fire(s, t, weapon, damageMul, rangeMul, Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
           s.cooldown += weapon.cooldown;
           if (s.cooldown < 0) s.cooldown = 0;
         }

@@ -21,8 +21,8 @@ export const CARD = {
   name: { x: 232, y: 108, size: 54, wrap: 340 },
   /** Icône (emoji), sous le nom. */
   icon: { x: 232, y: 232, size: 130 },
-  /** Description (largeur de retour à la ligne comprise). */
-  desc: { x: 232, y: 322, size: 46, wrap: 320 },
+  /** Description (largeur de retour à la ligne comprise) : haut du texte à `y` ; sur 2 lignes (« \n »), centrée en `y2` entre l'icône et une rangée de slots. */
+  desc: { x: 232, y: 322, y2: 352, size: 46, wrap: 320 },
   /** Slots de progression (une prise = un slot plein) : `cols` par ligne, lignes centrées autour de `y`, `size` = côté d'un slot, `step` / `rowStep` = pas horizontal / vertical. */
   slots: { y: 456, size: 44, step: 54, rowStep: 50, cols: 5 },
   /** « Claim » sur la plaque dorée. */
@@ -94,7 +94,14 @@ export function resizeUpgradeCard(c: Phaser.GameObjects.Container, w: number, h:
   icon.setPosition((CARD.icon.x - CARD.W / 2) * s, (CARD.icon.y - CARD.H / 2) * s).setScale(Math.max(CARD.icon.size * s, vertical ? 30 : 40) / Math.max(icon.width, icon.height));
   slots.setScale(s); // positions en pixels de planche : le conteneur suit l'échelle de la carte
   at(desc, CARD.desc, CARD.desc.size, 12, 10);
-  desc.setWordWrapWidth(CARD.desc.wrap * s, true);
+  // une description trop longue est rétrécie pour tenir sur une ligne (sinon la 2e ligne recouvre les slots) ; seul un « \n » explicite fait une ligne de plus
+  desc.setWordWrapWidth(0);
+  const maxDescW = CARD.desc.wrap * s;
+  if (desc.width > maxDescW) desc.setFontSize(parseFloat(String(desc.style.fontSize)) * (maxDescW / desc.width));
+  desc.setLineSpacing(-0.3 * parseFloat(String(desc.style.fontSize))); // interligne resserré : une description sur 2 lignes reste au-dessus des slots
+  const twoLines = desc.text.includes('\n');
+  desc.setOrigin(0.5, twoLines ? 0.5 : 0);
+  if (twoLines) desc.setY((CARD.desc.y2 - CARD.H / 2) * s);
   at(name, CARD.name, CARD.name.size, 12, 9);
   at(claim, CARD.claim, CARD.claim.size, 12, 11);
   claim.setStroke('#000000', Math.max(2, 11 * s)); // blanc cerclé de noir

@@ -96,6 +96,9 @@ export const BOT_UPGRADE_PRIORITY: Record<UpgradeId, number> = {
   crit: 6,
   magnet: 4,
   recruit: 3,
+  teamSpirit: 6,
+  lastStand: 3,
+  bossHunter: 4,
 };
 
 /** Plafond de bots dans une partie coop (avec l'hôte et les clients : `MAX_PLAYERS` au total). */

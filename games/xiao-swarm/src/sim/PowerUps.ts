@@ -4,12 +4,15 @@ import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from '.
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll'];
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
-/** Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. */
-const HEAL_FIELD = { r: 167, ttl: 10, perSec: 0.24 }; // rayon +10 % (152 avant le 07/10)
+/**
+ * Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. `overheal` : part des PV max qu'il peut ajouter AU-DELÀ du max
+ * (0,3 = jusqu'à 130 %) ; ce surplus ne redescend jamais tout seul, seuls les dégâts l'entament.
+ */
+export const HEAL_FIELD = { r: 184, ttl: 10, perSec: 0.264, overheal: 0.3 }; // 09/10 : soin et rayon +10 % (0,24 et 167 avant), overheal
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
 const STASIS_FIELD = { r: 382.5, ttl: 8, slow: 0.2 }; // rayon −15 % (450 avant le 08/10)
 const ROCKETS = 30;
@@ -17,7 +20,7 @@ const ROCKETS = 30;
 /**
  * Power-ups : de temps en temps un petit boost apparaît près d'une squad vivante et disparaît vite si personne ne le prend.
  * Ramassé par un soldat, il applique son effet à sa squad : stimpack, aimant à XP (coup unique), globe de soin (persistant), globe de
- * stase (persistant), rafale de roquettes. Seul l'hôte / le solo simule ; l'état passe dans les snapshots.
+ * stase (persistant), rafale de roquettes, relance (+1 relance des choix d'upgrade). Seul l'hôte / le solo simule ; l'état passe dans les snapshots.
  */
 export class PowerUps {
   readonly items: PowerUpState[] = [];
@@ -73,8 +76,9 @@ export class PowerUps {
       if (f.kind !== 'heal') continue;
       for (const sq of this.sim.squads) {
         for (const s of sq.soldiers) {
-          if (!s.alive || s.hp >= s.maxHp || (s.x - f.x) ** 2 + (s.y - f.y) ** 2 > (f.r + s.radius) ** 2) continue;
-          s.hp = Math.min(s.maxHp, s.hp + s.maxHp * HEAL_FIELD.perSec * dt);
+          if (!s.alive || (s.x - f.x) ** 2 + (s.y - f.y) ** 2 > (f.r + s.radius) ** 2) continue;
+          const cap = s.maxHp * (1 + HEAL_FIELD.overheal);
+          if (s.hp < cap) s.hp = Math.min(cap, s.hp + s.maxHp * HEAL_FIELD.perSec * dt);
         }
       }
     }
@@ -119,6 +123,9 @@ export class PowerUps {
         break;
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
+        break;
+      case 'reroll':
+        squad.rerolls++; // une relance de plus pour les choix d'upgrade
         break;
     }
   }

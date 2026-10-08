@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -17,6 +17,13 @@ export interface AlienDef {
   target: TargetPref;
   /** Flotte (ombre décollée, rebond plus ample). */
   floats?: boolean;
+  /**
+   * Alien-projectile (orbe de glace du slime de glace) : lancé en ligne droite à `speed` px/s pendant `life` s au plus, il vole au-dessus du
+   * décor. Au contact d'un soldat : `damage` et gel (onde de rayon `ring`), puis il se brise ; il se brise aussi au bout de sa course. PV
+   * `hp` exacts (sans multiplicateur de difficulté) : la squad peut le détruire en lui tirant dessus (barre de vie toujours affichée). Ni XP,
+   * ni recrue, ni trou d'apparition, jamais recyclé.
+   */
+  projectile?: { life: number; ring: number };
   /** Mêlée en zone : chaque coup au contact (`damage`, toutes les `attackCooldown` s) touche tous les soldats à moins de `cleave` px de lui, pas un seul. */
   cleave?: number;
   /**
@@ -32,8 +39,12 @@ export interface AlienDef {
   frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
   /** Slam de zone : knockback + dégâts autour de lui. */
   slam?: { radius: number; damage: number; cooldown: number; knockback: number; /** Étourdit les soldats touchés (s) : ils ne bougent ni ne tirent. */ stun?: number };
-  /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui explosent au sol (zone `aoe`). */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean };
+  /**
+   * Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui
+   * explosent au sol (zone `aoe`). Point visé : la cible + son déplacement pendant le vol × une part tirée au hasard dans `lead` (min, max ;
+   * [1, 1] par défaut = anticipation complète), ± `scatter` px (22 par défaut, 70 si plusieurs boules).
+   */
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number };
   /**
    * Murs : quand une squad est à portée (`range`), télégraphe jaune pendant `windup` s puis fait surgir `count` murs allongés (`length` px,
    * faits de rochers de rayon `rock.radius`, durée `rock.ttl` s) en arc, à `ring` px du centre de la squad, côté opposé au lanceur :
@@ -44,17 +55,25 @@ export interface AlienDef {
    * Lurker : anticipe où ira la squad (centre + vitesse × `lead` s), s'y rend puis s'ENTERRE (`digTime` s ; un trou reste visible).
    * Enterré et immobile, il attend jusqu'à `wait` s qu'un soldat entre à `trigger` px : il vise (`aim` s, ligne rouge) puis lance
    * une ligne de pics (`length` × `width` px) qui s'étend progressivement en `sweep` s et blesse (`damage`) chaque soldat une fois
-   * quand le front le traverse. Entre deux lignes : `cooldown` s. Enterré, il subit `buriedDmg` × les dégâts. Sans proie au bout
-   * de `wait` s, il ressort (`rise` s) et repart.
+   * quand le front le traverse. Entre deux lignes : `cooldown` s. Semi-enterré (`BURIED` : 50 % des dégâts, haut du sprite visible). Sans proie au bout
+   * de `wait` s, il ressort (`rise` s) et repart ; après une ligne de pics, il n'attend plus que `rewait` s (la squad a fui : il ressort vite).
    */
-  lurk?: { lead: number; digRange: number; digTime: number; rise: number; wait: number; trigger: number; aim: number; length: number; width: number; sweep: number; damage: number; cooldown: number; buriedDmg: number };
+  lurk?: { lead: number; digRange: number; digTime: number; rise: number; wait: number; rewait: number; trigger: number; aim: number; length: number; width: number; sweep: number; damage: number; cooldown: number };
   /**
-   * Téléportation sous terre (Scarab) : toutes les `every` s il s'enterre (`dig` s, un trou se creuse sous lui), reste invisible et très protégé
-   * (`buriedDmg` × les dégâts), pendant que un trou se forme DERRIÈRE la squad (côté opposé au boss, à `behind` px de son centre ; la position
-   * se verrouille pour les 40 % de `wait` restants, la zone rouge se remplit), puis il en ressort (`rise` s) : onde de choc de rayon `radius`
-   * (dégâts `damage`, recul `knockback`) au moment où il surgit.
+   * Téléportation sous terre (Scarab) : toutes les `every` s il s'enterre (`dig` s, un trou se creuse sous lui), reste totalement enterré
+   * (`BURIED` : invisible et intouchable) `wait` s, pendant que le télégraphe rouge vise LE CENTRE DE LA SQUAD, sans anticipation (« bouge, ça va te
+   * sauter dessus ») : il la suit, puis se verrouille `lock` s avant la sortie (le temps de s'échapper, la zone rouge se remplit), puis il en
+   * ressort (`rise` s) : onde de choc de rayon `radius` (dégâts `damage`, recul `knockback`) au moment où il surgit. En ressortant, il choisit
+   * où sera la squad dans `lead` s (sa course) et fonce tout droit vers ce point, direction verrouillée, jusqu'à l'atteindre (`lunge` s au plus).
    */
-  burrow?: { every: number; dig: number; wait: number; rise: number; behind: number; radius: number; damage: number; knockback: number; buriedDmg: number };
+  burrow?: { every: number; dig: number; wait: number; lock: number; rise: number; radius: number; damage: number; knockback: number; lead: number; lunge: number };
+  /**
+   * Pluie de stalactites (Scarab) : une fois ressorti de terre (`burrow`), il fait tomber `count` stalactites sur de petites zones autour de la
+   * squad visée : `onSoldiers` sur des soldats (leur position au lancer), les autres au hasard à moins de `spread` px de son centre. Chaque
+   * zone est annoncée `delay` s (télégraphe rouge, les suivantes décalées de `stagger` s), puis la stalactite tombe : dégâts `damage` et
+   * recul `knockback` dans un rayon `radius`.
+   */
+  stalactites?: { count: number; onSoldiers: number; spread: number; radius: number; delay: number; stagger: number; damage: number; knockback: number };
   /**
    * Essaim (boss Gling) : toutes les `every` s de marche, il s'arrête `duration` s et fait apparaître `count` aliens `spawn` en continu
    * (régulièrement répartis sur la durée), autour de lui.
@@ -65,7 +84,7 @@ export interface AlienDef {
    * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) :
    * il est pris dans la glace (`FREEZE` de config.ts : 50 PV de gel, 1 PV par coup d'un allié) qui ne fond jamais : ses alliés doivent la briser. Il reste attaquable par les aliens.
    */
-  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; texture: string };
+  ice?: { range: number; cooldown: number; lead: number; orb: AlienId };
   /** Plafond d'aliens de cette espèce dans UNE vague (par squad), invités et mise à l'échelle comprises (slime de glace : 2). */
   maxPerWave?: number;
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
@@ -179,7 +198,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 5,
     attackCooldown: 0.5,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball' }, // portée -20 %
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45 }, // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.1,
@@ -250,7 +269,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.45,
     target: 'nearest',
     spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, texture: 'fx_spit' }, // boules vertes, plus de flaque (07/10)
-    cloud: { every: 6, range: 560, lead: 0.6, radius: 95, ttl: 3.5, slow: 0.5 }, // nuage violet ralentissant posé sur la squad (07/10)
+    // nuage ralentissant retiré pour l'instant (08/10) ; pour le remettre : cloud: { every: 6, range: 560, lead: 0.6, radius: 66.5, ttl: 3.5, slow: 0.5 }
     xp: 4,
     recruitChance: 0.04,
     color: 0xb060e0,
@@ -302,7 +321,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 0,
     attackCooldown: 1,
     target: 'nearest',
-    lurk: { lead: 2.4, digRange: 140, digTime: 0.7, rise: 0.6, wait: 7, trigger: 360, aim: 0.6, length: 380, width: 44, sweep: 0.5, damage: 60, cooldown: 1.6, buriedDmg: 0.2 },
+    lurk: { lead: 2.4, digRange: 140, digTime: 0.7, rise: 0.6, wait: 7, rewait: 2, trigger: 360, aim: 0.6, length: 380, width: 44, sweep: 0.5, damage: 60, cooldown: 1.6 },
     xp: 8,
     recruitChance: 0.08,
     color: 0x7a5a9a,
@@ -357,7 +376,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 3.6, windup: 0.5, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
+    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
     boss: { kind: 'mini' },
     xp: 150,
     recruitChance: 1,
@@ -365,7 +384,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0x22b6ed, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 100,
   },
-  /** Mini-boss (5:00) : Scarab, slam de zone dévastateur. */
+  /** Mini-boss (5:00) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
     hp: 1500,
@@ -376,9 +395,9 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.2,
     oneShot: true,
     target: 'center',
-    slam: { radius: 190, damage: 30, cooldown: 2, knockback: 650, stun: 1.2 }, // grosse onde de choc : étourdit les soldats
-    shield: { pct: 0.05, regenDelay: 5, regenTime: 4 },
-    burrow: { every: 5, dig: 0.6, wait: 1.6, rise: 0.47, behind: 300, radius: 180, damage: 30, knockback: 600, buriedDmg: 0.1 }, // s'enterre plus souvent (8 → 5 s)
+    shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, // plus de slam (08/10) : remplacé par la pluie de stalactites
+    stalactites: { count: 6, onSoldiers: 3, spread: 260, radius: 55, delay: 1.1, stagger: 0.12, damage: 80, knockback: 300 },
+    burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 30, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad, verrouillé 1,5 s avant (08/10)
     boss: { kind: 'mini' },
     xp: 400,
     recruitChance: 1,
@@ -415,12 +434,30 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.5,
     target: 'nearest',
     maxPerWave: 2,
-    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, texture: 'fx_ice_ball' },
+    ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'ice_orb' }, // lance un orbe de glace destructible (08/10 ; un flocon avant)
     revivable: true,
     xp: 5,
     recruitChance: 0.07,
     color: 0x7fd8ff,
     goo: 0x2e93b4, // couleur principale de son sprite (éclats et flaque de mort)
+    hpBarWidth: 30,
+  },
+  /** Orbe de glace lancé par le slime de glace : projectile destructible (500 PV), gèle le soldat touché. */
+  ice_orb: {
+    id: 'ice_orb',
+    hp: 500,
+    speed: 403,
+    radius: 14,
+    mass: 0.5,
+    damage: 6,
+    attackCooldown: 1,
+    target: 'nearest',
+    floats: true,
+    projectile: { life: 1.56, ring: 44 }, // portée du lanceur × 1,5 / vitesse : il file un peu au-delà de sa cible
+    xp: 0,
+    recruitChance: 0,
+    color: 0x9fe3ff,
+    goo: 0x9fe3ff,
     hpBarWidth: 30,
   },
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */

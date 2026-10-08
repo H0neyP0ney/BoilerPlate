@@ -276,6 +276,8 @@ Le design prévoit néanmoins la possibilité d’avoir des ennemis spécialisé
 
 Cela permet de créer des types d’ennemis avec des rôles tactiques différents.
 
+**Recyclage des traînards (anti-fuite).** Fuir en rond ne doit pas être une stratégie gagnante. Un alien laissé loin derrière (hors écran, à plus de 1000 px de toutes les squads depuis 5 s) tire au sort. Trois fois sur quatre (méthode Vampire Survivors), il s’enterre puis ressort du sol hors écran **devant** la squad, dans sa direction de course, avec ses PV. Une fois sur quatre, il passe en **mode contournement** : il anticipe la course du joueur (y compris en rond) et prend un flanc pour lui couper la route et l’encercler. La horde ne s’accumule plus derrière le joueur ni au centre de son cercle : celui qui fuit finit par foncer dedans (`RELOCATE` et `CHASE` dans `config.ts`, mesure : `npm run sim:chase`).
+
 ---
 
 ## 12. Obstacles

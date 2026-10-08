@@ -931,7 +931,7 @@ ${id}` : id;
       ...(kind === 'alien'
         ? [
             line(
-              button('▶ Tester (4 Gunners contre 1)', () => {
+              button('▶ Test', () => {
                 this.registry.set('alienTest', { alien: id as AlienId, back: this.selected } satisfies AlienTestRequest);
                 this.scene.start(SCENES.game);
               }),

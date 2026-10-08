@@ -157,6 +157,32 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
     slime(ctx, '#b8dcff', '#3a78d8');
   });
   canvasTexture(scene, 'alien_iceballer', 48, 48, (ctx) => slime(ctx, '#e4f8ff', '#3fb0ee'));
+  // Orbe de glace (projectile destructible du slime de glace) : sphère bleu glacier, reflet, éclats de givre, contour foncé.
+  canvasTexture(scene, 'alien_ice_orb', 40, 40, (ctx) => {
+    const g = ctx.createRadialGradient(15, 14, 2, 20, 20, 17);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.35, '#bdeeff');
+    g.addColorStop(1, '#3f9fdc');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(20, 20, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#e8fbff'; // givre : petites branches de flocon
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 6; k++) {
+      const t = (k / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(20 + Math.cos(t) * 4, 20 + Math.sin(t) * 4);
+      ctx.lineTo(20 + Math.cos(t) * 11, 20 + Math.sin(t) * 11);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#1d3d5c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(20, 20, 16, 0, Math.PI * 2);
+    ctx.stroke();
+  });
   // Fissures du glaçon, par étage (1 à 3, cumulatives : l'étage 2 contient celles de l'étage 1) : traits bleu sombre doublés d'un reflet blanc, sur la même grille 64×64 que le glaçon.
   for (let stage = 1; stage <= 3; stage++) {
     canvasTexture(scene, `alien_iceblock_cracks_${stage}`, 64, 64, (ctx) => {

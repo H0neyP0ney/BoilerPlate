@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BOSS_ESCALATION, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
+import { BURIED, BOSS_ESCALATION, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
@@ -7,7 +7,7 @@ import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
 import { Combat } from './Combat';
-import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Unit, WallTelegraph } from './entities';
+import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
@@ -36,6 +36,11 @@ export interface SimConfig {
   choiceTimeout?: boolean;
   /** Onboarding scripté au début de la partie (solo seulement) : voir `sim/Tutorial.ts`. */
   tutorial?: boolean;
+  /**
+   * Partie en ligne (hôte et clients, `HostSession` / `ClientSession`) : XP partagée par tous les joueurs, zones de réanimation
+   * (`ModeDef.reviveZones`). Faux seul hors ligne. Remplace l'ancien mode `coop` (08/10).
+   */
+  online?: boolean;
 }
 
 /** Durée (s) pendant laquelle la flaque d'un slime mort peut encore être ressuscitée. */
@@ -70,6 +75,8 @@ export class Sim {
   readonly puddles: Puddle[] = [];
   /** Murs annoncés (télégraphe jaune du bâtisseur) : ils deviennent des rochers à la fin du compte à rebours. */
   readonly walls: WallTelegraph[] = [];
+  /** Stalactites annoncées (Scarab) : passent par le snapshot (télégraphe chez les clients). */
+  readonly stalactites: Stalactite[] = [];
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
@@ -110,16 +117,19 @@ export class Sim {
     this.waves = new WaveRunner(
       config.mode.waves,
       (type, count) => {
-        // Difficulté dynamique : chaque joueur vivant en plus ajoute 75 % d'ennemis (2 joueurs = ×1,75, 1 seul vivant = retour à ×1).
-        // Un boss, lui, n'apparaît qu'une fois, avec des PV × le nombre de squads vivantes.
-        // Le plafond d'aliens est appliqué par type dans Horde.spawnNear (les costauds gardent une réserve de places).
+        // Difficulté dynamique : chaque joueur vivant en plus ajoute `EXTRA_PLAYER_ALIENS` (75 %) d'ennemis (2 joueurs = ×1,75, 1 seul vivant =
+        // retour à ×1). Un boss, lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de
+        // squads avant le 08/10).
+        // Plafond d'aliens à l'apparition appliqué par type dans Horde.spawnNear (`ModeDef.maxAliens`, réserve pour les costauds) ; au-delà de
+        // `WAVE_CAP.pauseAbove` aliens vivants, la timeline se met en pause.
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
+        const playersMul = 1 + EXTRA_PLAYER_ALIENS * (squads.length - 1);
         if (ALIENS[type].boss) {
-          this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, squads.length);
+          this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, playersMul);
         } else {
           // chaque joueur en plus ajoute `EXTRA_PLAYER_ALIENS` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
-          const share = (1 + EXTRA_PLAYER_ALIENS * (squads.length - 1)) / squads.length;
+          const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
           for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * DIFFICULTY.alienCountMul * share)), SPAWN_DISTANCE);
         }
@@ -144,6 +154,7 @@ export class Sim {
     this.reviveZones.length = 0;
     this.puddles.length = 0;
     this.walls.length = 0;
+    this.stalactites.length = 0;
     this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
@@ -176,6 +187,7 @@ export class Sim {
     this.fires.length = 0;
     this.puddles.length = 0;
     this.walls.length = 0;
+    this.stalactites.length = 0;
     this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
@@ -207,9 +219,9 @@ export class Sim {
   private sharedXpPool = 0;
   private sharedLevel = 1;
 
-  /** XP mutualisée : en coop, tous les joueurs remplissent la même barre, plus longue (× nombre de joueurs). */
+  /** XP mutualisée : en ligne, tous les joueurs remplissent la même barre, plus longue (× nombre de joueurs). */
   get sharedXp(): boolean {
-    return this.mode.id === 'coop';
+    return this.config.online === true;
   }
 
   /** Multiplicateur du seuil de niveau (XP partagée : × nombre de joueurs). */
@@ -402,6 +414,7 @@ export class Sim {
     this.updateFires(dt);
     this.updateReviveZones(dt);
     this.updateWalls(dt);
+    this.updateStalactites(dt);
     this.updatePuddles(dt);
     this.powerups.update(dt);
     this.updateShockwaves(dt);
@@ -445,9 +458,8 @@ export class Sim {
       else this.damageSoldier(u, amount, attacker);
       return;
     }
-    if (!u.alive || this.horde.isEmerging(u)) return; // encore dans son trou d'apparition : invulnérable
-    if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
-    if (u.def.burrow && u.lurkPhase >= 1 && u.lurkPhase <= 2) amount *= u.def.burrow.buriedDmg; // Scarab sous terre
+    if (!u.alive || !this.horde.targetable(u)) return; // dans son trou d'apparition ou totalement enterré : intouchable
+    if (this.horde.burial(u) === 'semi') amount *= BURIED.semiDmg; // semi-enterré (lurker en embuscade)
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     const effective = Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
     this.metrics.dealt += effective;
@@ -484,6 +496,31 @@ export class Sim {
   addWall(x: number, y: number, angle: number, length: number, windup: number, rockR: number, ttl: number): void {
     this.walls.push({ id: this.ids.get(), x, y, angle, length, rockR, ttl, t: windup, dur: windup });
     if (this.walls.length > 30) this.walls.shift();
+  }
+
+  /** Annonce une stalactite : zone de rayon `r` en (`x`, `y`), impact `delay` s plus tard. */
+  addStalactite(x: number, y: number, r: number, delay: number, damage: number, knockback: number): void {
+    this.stalactites.push({ id: this.ids.get(), x, y, r, t: delay, dur: delay, damage, knockback });
+    if (this.stalactites.length > 60) this.stalactites.shift();
+  }
+
+  /** Stalactites qui tombent : à l'impact, dégâts et recul aux soldats dans la zone. */
+  private updateStalactites(dt: number): void {
+    for (let i = this.stalactites.length - 1; i >= 0; i--) {
+      const k = this.stalactites[i];
+      if ((k.t -= dt) > 0) continue;
+      this.stalactites.splice(i, 1);
+      this.events.push({ t: 'stalactite', x: k.x, y: k.y, r: k.r });
+      for (const s of this.soldierHash.query(k.x, k.y, k.r + 30, this.scratchSoldiers)) {
+        const dx = s.x - k.x;
+        const dy = s.y - k.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (!s.alive || d > k.r + s.radius) continue;
+        s.kx += (dx / d) * k.knockback;
+        s.ky += (dy / d) * k.knockback;
+        this.damageSoldier(s, k.damage);
+      }
+    }
   }
 
   private updateWalls(dt: number): void {
@@ -612,15 +649,13 @@ export class Sim {
   /** Flaque de flammes : brûle les soldats dedans pendant `ttl` s. */
   addFire(x: number, y: number, r: number, ttl: number, dps: number): void {
     const f: FirePatch = { id: this.ids.get(), x, y, r, ttl, dps };
-    this.fires.push(f);
-    this.events.push({ t: 'fire', id: f.id, x, y, r, ttl });
+    this.fires.push(f); // affichage : `WorldView.syncFires` suit cette liste (snapshot en ligne), pas d'événement
     if (this.fires.length > 150) this.endFire(this.fires[0]);
   }
 
   private endFire(f: FirePatch): void {
     const i = this.fires.indexOf(f);
     if (i >= 0) this.fires.splice(i, 1);
-    this.events.push({ t: 'fireEnd', id: f.id });
   }
 
   /** Durée des flammes, et brûlure des soldats qui marchent dedans (par petits coups toutes les 0,25 s). */
@@ -735,16 +770,10 @@ export class Sim {
       this.bossKills++; // escalade : les aliens suivants sont plus forts
       this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
+      this.wipeAliens(a, killer);
+      this.powerups.drop('magnet', a.x, a.y, true); // aimant garanti (il reste jusqu'à ce qu'on le ramasse) : récupérer tout le butin du clear screen
     }
-    if (a.captive) {
-      // la bulle éclate : le soldat est libéré (brève protection, petit recul)
-      const s = a.captive;
-      a.captive = null;
-      s.capturedBy = 0;
-      s.invulnerable = 1.2;
-      s.ky += 120;
-      this.events.push({ t: 'release', soldier: s.id, x: s.x, y: s.y });
-    }
+    this.releaseCaptive(a);
     if (a.def.revivable && !a.revived) {
       const c: Corpse = { id: this.ids.get(), x: a.x, y: a.y, type: a.def.id, ttl: CORPSE_TTL, claimed: 0 };
       this.corpses.push(c);
@@ -762,6 +791,29 @@ export class Sim {
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
+  }
+
+  /** Bulle qui meurt : son prisonnier est libéré (brève protection, petit recul). */
+  private releaseCaptive(a: AlienState): void {
+    const s = a.captive;
+    if (!s) return;
+    a.captive = null;
+    s.capturedBy = 0;
+    s.invulnerable = 1.2;
+    s.ky += 120;
+    this.events.push({ t: 'release', soldier: s.id, x: s.x, y: s.y });
+  }
+
+  /**
+   * Boss tué : « clear screen ». Tous les autres aliens de la carte meurent avec lui, exactement comme si le joueur qui a tué le boss les
+   * avait tués (XP et recrues selon leurs marques habituelles, flaques, explosion des kamikazes…) : pas de décalage d'XP entre ceux qui
+   * tuent le boss vite et les autres. Un autre boss encore en vie est épargné.
+   */
+  private wipeAliens(boss: AlienState, killer: PlayerId | null): void {
+    for (const o of this.aliens) {
+      if (o === boss || !o.alive || o.def.boss) continue;
+      this.killAlien(o, killer);
+    }
   }
 
   /** Boucle de glace : gèle le seul soldat touché ; `ring` = rayon (px) de l'onde visuelle de l'impact. */
@@ -818,7 +870,7 @@ export class Sim {
       }
       if (hadSoldiers && sq.size === 0) {
         this.events.push({ t: 'squadWiped', owner: sq.owner });
-        if (this.mode.reviveZones && !this.reviveZones.some((z) => z.owner === sq.owner)) {
+        if (this.mode.reviveZones && this.config.online && !this.reviveZones.some((z) => z.owner === sq.owner)) {
           const last = deadOfSquad[deadOfSquad.length - 1];
           this.reviveZones.push({ owner: sq.owner, x: last.x, y: last.y, r: REVIVE_RADIUS, progress: 0 });
         }

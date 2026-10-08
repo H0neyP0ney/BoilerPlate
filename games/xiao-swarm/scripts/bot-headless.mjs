@@ -23,7 +23,7 @@ try {
     const hub = new LoopbackHub();
     const transport = hub.createTransport();
     const roomCode = await transport.host();
-    const host = new HostSession({ mode: MODES.coop, seed: runSeed, transport, roomCode, bots: extraBots, botLevel: level });
+    const host = new HostSession({ mode: MODES.survival, seed: runSeed, transport, roomCode, bots: extraBots, botLevel: level });
     const me = new CoopBot(host.localPlayer, runSeed + 7, level);
     const events = { gameEnd: 0, victory: 0, alienDied: 0, soldierDied: 0, levelUp: 0, firstEnd: 0 };
     const runs = []; // durée (s de jeu) de chaque partie

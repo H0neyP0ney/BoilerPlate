@@ -358,6 +358,37 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.ellipse(9.5, 9.5, 3, 2, -0.6, 0, Math.PI * 2);
     ctx.fill();
   });
+  // Petit bloc de glace (éclat d'un glaçon touché) : losange bleu clair facetté, reflet blanc, contour foncé.
+  canvasTexture(scene, 'fx_ice_chunk', 14, 14, (ctx) => {
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(7, 1.5);
+    ctx.lineTo(12.5, 6);
+    ctx.lineTo(8.5, 12.5);
+    ctx.lineTo(2, 9.5);
+    ctx.lineTo(2.5, 4);
+    ctx.closePath();
+    ctx.fillStyle = '#9fe3ff';
+    ctx.fill();
+    ctx.fillStyle = '#e8f8ff'; // face éclairée
+    ctx.beginPath();
+    ctx.moveTo(7, 1.5);
+    ctx.lineTo(12.5, 6);
+    ctx.lineTo(7.5, 7);
+    ctx.lineTo(2.5, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#1d3d5c';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(7, 1.5);
+    ctx.lineTo(12.5, 6);
+    ctx.lineTo(8.5, 12.5);
+    ctx.lineTo(2, 9.5);
+    ctx.lineTo(2.5, 4);
+    ctx.closePath();
+    ctx.stroke();
+  });
   // Flaque irrégulière (blanche, teintée à l'affichage) : quelques lobes autour d'un centre.
   canvasTexture(scene, 'fx_puddle', 64, 64, (ctx) => {
     ctx.fillStyle = '#fff';
@@ -383,15 +414,21 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     const th = (k * Math.PI) / SPIKE_BINS;
     canvasTexture(scene, `fx_spike3_${k}`, SPIKE3.w, SPIKE3.h, (ctx) => {
       ctx.fillStyle = '#e8dcc0';
-      for (const o of [-SPIKE3.spread, 0, SPIKE3.spread]) {
-        const bx = SPIKE3.w / 2 - Math.sin(th) * o;
-        const by = SPIKE3.baseY + Math.cos(th) * o;
+      ctx.strokeStyle = '#2a1d14'; // contour foncé : les pics se détachent du sol
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      // du plus éloigné (haut de l'image) au plus proche : le contour d'un pic de devant passe sur celui de derrière
+      const bases = [-SPIKE3.spread, 0, SPIKE3.spread]
+        .map((o) => ({ bx: SPIKE3.w / 2 - Math.sin(th) * o, by: SPIKE3.baseY + Math.cos(th) * o }))
+        .sort((p, q) => p.by - q.by);
+      for (const { bx, by } of bases) {
         ctx.beginPath();
         ctx.moveTo(bx - 6, by);
         ctx.lineTo(bx + 6, by);
         ctx.lineTo(bx, by - SPIKE3.height);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
       }
     });
   }

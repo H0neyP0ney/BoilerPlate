@@ -74,6 +74,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
       { name: 'Grenouilles', groups: [{ type: 'toad', count: 3 }, { type: 'kamikaze', count: 3 }] },
       { name: 'Langue + essaim', groups: [{ type: 'toad', count: 2 }, { type: 'gling', count: 8 }] },
+      { name: 'Cracheurs', groups: [{ type: 'spitter', count: 2 }, { type: 'slime', count: 4 }] }, // le spitter dès 1:15 (08/10)
     ],
     5: [
       { name: 'Un gros', groups: [{ type: 'shooter', count: 2 }, { type: 'slime', count: 7 }] },
@@ -116,14 +117,17 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 40, level: 3 },
     { at: 42, level: 2, every: 8, until: 58 },
     { at: 60, level: 9, config: 4 },
+    { at: 61, level: 2, every: 3, until: 70 }, // après chaque boss (clear screen, carte vide) : vagues serrées tout de suite (08/10)
     { at: 64.5, level: 2 },
     { at: 71, level: 2 },
+    { at: 75, level: 4, config: 4 }, // spitters entre la Gling Mère et l'Alpha Rhino (08/10)
     { at: 76, level: 2 },
     { at: 84, level: 2, every: 2, until: 88 },
     { at: 89.5, level: 3 },
     { at: 91, level: 2 },
     { at: 92.5, level: 3 },
     { at: 94.5, level: 2 },
+    { at: 95, level: 4, config: 4 },
     { at: 96, level: 3 },
     { at: 97.5, level: 2 },
     { at: 99, level: 3 },
@@ -141,6 +145,8 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 118, level: 2 },
     { at: 119, level: 3 },
     { at: 120, level: 9, config: 1 },
+    { at: 121, level: 3, every: 2.5, until: 136 },
+    { at: 123, level: 4, every: 5, until: 148 },
     { at: 127, level: 2, every: 8, until: 159 },
     { at: 128, level: 3, every: 4, until: 156 }, // après le Rhinocéros : kamikazes en continu (la zone creuse de 127 à 159 s)
     { at: 134, level: 4, every: 6, until: 158 },
@@ -200,6 +206,8 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 298, level: 6 },
     { at: 299, level: 4, every: 8, until: 323 },
     { at: 300, level: 9, config: 2 },
+    { at: 301, level: 5, every: 2, until: 321 },
+    { at: 303, level: 6, every: 5, until: 328 },
     { at: 328, level: 7 },
     { at: 335.5, level: 5, every: 2, until: 343.5 },
     { at: 346, level: 5, every: 2, until: 350 },

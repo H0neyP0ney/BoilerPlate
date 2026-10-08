@@ -3,7 +3,7 @@
 Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter, puis ce qui est ~~fait (rayé)~~.
 
 ## Visuel / lisibilité
-- Allié « marqué » : repérer plus facilement un allié (à préciser)
+- ~~Allié « marqué » : repérer plus facilement un allié~~
 - ~~Couleur de chaque joueur en multi (soldats recolorés + anneau, barre et capsule à la couleur de l'emplacement du joueur) : validé en jeu~~
 - ~~Visuel des aliens ressuscités (enragés) par le Chaman : validé en jeu~~
 - ~~Voir plus de globes d'XP avec l'upgrade XP : le bonus agrandit maintenant le butin au sol (nombre / taille des globes), plus la valeur au ramassage~~
@@ -26,7 +26,6 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~À terre en multi : un clic passe à l'équipier vivant suivant (cycle)~~
 
 ## Upgrades / progression
-- Recrue spécialisée : +2 gunners ? / +2 gros gunners ? (à préciser)
 - ~~Chance de critique (upgrade Crit, 30 % max, ×2)~~
 - ~~Upgrade XP : agit sur le butin au sol (nombre / taille des globes), pas à l'absorption~~
 - ~~Portée : +10 % par prise, 5 prises max~~
@@ -44,7 +43,6 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~Mêlée du Scarab et du crabe : tuent aussi un soldat d'un coup, comme le rhino (délai 1,2 s)~~
 - ~~Charge : une unité qui charge est impoussable, mais l'onde de choc du level up l'interrompt : c'est voulu, on garde~~
 - ~~Plus d'aliens par joueur en coop : +75 % validé~~
-- Plus d'apparition d'aliens quand il y en a déjà trop : la suspension de la timeline à 150 aliens a été retirée pour l'instant (la timeline n'est jamais bloquée)
 - ~~Scarab : s'enterre, un trou se forme derrière la squad (zone rouge visible), il en ressort après ~3 s avec une onde de choc (toutes les 14 s, puis 8 s)~~
 - ~~Mêlée du premier boss (rhino) : tue un soldat d'un coup~~
 - ~~Mêlée de tous les aliens : délai ÷2 et dégâts ÷2 (même DPS, coups plus rapides ; rhino : délai inchangé)~~
@@ -60,7 +58,6 @@ Retours du 04/10/2026. Dans chaque catégorie : d'abord ce qui reste à traiter,
 - ~~Tutoriel : les ennemis apparaissent tous au même endroit~~
 
 ## Bugs / exploits
-- Exploit de tempo : le joueur peut farmer le boss (en le gardant vivant) ; la boucle sur les 3 dernières vagues a été retirée car elle ne l'empêchait pas, à repenser
 - ~~« Tue instant full mass » : c'était la relance solo avec la vidéo, qui supprimait tous les aliens proches ; réglé (onde de choc à la place)~~
 - ~~Pause du jeu seulement avec la popup de choix d'upgrade : validé en jeu (rien à changer)~~
 - ~~Jitter des projectiles pendant la pause du choix d'upgrade~~

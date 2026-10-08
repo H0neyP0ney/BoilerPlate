@@ -65,6 +65,12 @@ export interface AlienState extends Body {
   target: SoldierState | null;
   goalX: number;
   goalY: number;
+  /** Temps passé à plus de `RELOCATE.far` px de toutes les squads (recyclage des traînards ; négatif : répit d'un alien en contournement). */
+  farT: number;
+  /** Mode contournement (`CHASE`) : 0 = poursuite directe ; sinon côté pris pour couper la route de la squad (−1 → 1). */
+  flank: number;
+  /** Recyclage : temps restant (s) de l'enfouissement avant le déplacement (0 = ne s'enterre pas) ; immobile pendant ce temps. */
+  sinkT: number;
   retarget: number;
   attackCd: number;
   slamWind: number;
@@ -178,6 +184,10 @@ export interface PowerUpState {
   life: number;
   /** Aimant (power-up) : joueur vers qui le power-up est aspiré (simulation seulement). */
   pulled?: string;
+  /** Attrapé (attiré par un soldat ou aspiré par l'aimant) : ne disparaît plus et ne clignote plus (`Pickup.catchItem`). */
+  caught?: boolean;
+  /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
+  pullV?: number;
 }
 
 /** Zone persistante laissée par un power-up : globe de soin (soigne les soldats dedans) ou de stase (ralentit énormément les aliens). */
@@ -192,6 +202,19 @@ export interface Field {
 
 /** Flaque laissée par un crachat : ralentit les soldats qui s'y trouvent (`slow` = facteur de vitesse, < 1). */
 /** Mur annoncé (télégraphe jaune) : à la fin du compte à rebours, une ligne de rochers surgit. */
+/** Stalactite qui va tomber (Scarab) : zone annoncée (télégraphe) puis impact quand `t` atteint 0. */
+export interface Stalactite {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  /** Temps restant avant l'impact, et durée totale du télégraphe (s). */
+  t: number;
+  dur: number;
+  damage: number;
+  knockback: number;
+}
+
 export interface WallTelegraph {
   id: number;
   x: number;
@@ -258,6 +281,10 @@ export interface XpOrb {
   life: number;
   /** Aimant (power-up) : joueur vers qui le globe est aspiré (sim seulement). */
   pulled?: string;
+  /** Attrapé (attiré par un soldat ou aspiré par l'aimant) : ne disparaît plus et ne clignote plus (`Pickup.catchItem`). */
+  caught?: boolean;
+  /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
+  pullV?: number;
 }
 
 export interface RecruitState {
@@ -270,6 +297,10 @@ export interface RecruitState {
   life: number;
   /** Aimant (power-up) : joueur vers qui la recrue est aspirée (simulation seulement). */
   pulled?: string;
+  /** Attrapé (attiré par un soldat ou aspiré par l'aimant) : ne disparaît plus et ne clignote plus (`Pickup.catchItem`). */
+  caught?: boolean;
+  /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
+  pullV?: number;
   /** Saut en cloche à l'apparition (simulation seulement : le client n'en a pas besoin, il déduit l'arc de `life`). */
   hop?: { vx: number; vy: number; t: number };
   /** Tutoriel : recrue qui ne disparaît pas tant qu'elle n'est pas ramassée. */

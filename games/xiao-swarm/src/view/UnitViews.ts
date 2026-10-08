@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
-import { DEPTH, FREEZE, RECRUIT } from '../config';
+import { BURIED, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
@@ -26,6 +26,8 @@ const FLASH_REST = 0.07;
 const EMERGE_OPEN = 0.4;
 const EMERGE_POP = 0.3;
 const EMERGE_FADE = 0.4;
+/** Ligne de sol d'un sprite enfoncé (`AlienView.groundCut`) : px sous le point d'ancrage (centre de l'ombre portée et du trou). */
+const GROUND_CUT_DY = 3;
 
 /**
  * Point d'origine (bouche du canon, de la langue…) en monde d'un sprite de planche : le point de la frame jouée (placé dans la
@@ -73,6 +75,10 @@ export class SoldierView {
 
   /** Icône de tourbillon au-dessus d'un soldat étourdi (créée à la demande). */
   private stunIcon?: Phaser.GameObjects.Image;
+  /** Montée de niveau : copies blanches du corps et de l'arme posées par-dessus (`levelFlash`), et temps écoulé depuis le flash (ms). */
+  private whiteBody?: Phaser.GameObjects.Image;
+  private whiteGun?: Phaser.GameObjects.Image;
+  private whiteMs = Infinity;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -172,6 +178,40 @@ export class SoldierView {
     this.body.setAlpha(blink ? 0.45 : 1);
     this.gun.setAlpha(blink ? 0.45 : 1);
     this.syncIce(s.frozen);
+    this.syncLevelFlash(dt);
+  }
+
+  /** Montée de niveau : le soldat devient tout blanc puis repasse à sa couleur en fondu (`FX.levelFlash`). */
+  levelFlash(): void {
+    this.whiteMs = 0;
+  }
+
+  /** Copie blanche (remplissage) de `src` posée exactement par-dessus, d'opacité `a` (créée au premier flash). */
+  private whiteCopy(img: Phaser.GameObjects.Image | undefined, src: Phaser.GameObjects.Sprite, a: number): Phaser.GameObjects.Image {
+    const w = img ?? this.scene.add.image(0, 0, src.texture.key, src.frame.name).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    return w
+      .setTexture(src.texture.key, src.frame.name)
+      .setOrigin(src.originX, src.originY)
+      .setPosition(src.x, src.y)
+      .setScale(src.scaleX, src.scaleY)
+      .setRotation(src.rotation)
+      .setFlip(src.flipX, src.flipY)
+      .setDepth(src.depth + 0.05)
+      .setVisible(src.visible)
+      .setAlpha(a * src.alpha);
+  }
+
+  private syncLevelFlash(dt: number): void {
+    const f = FX.levelFlash;
+    this.whiteMs += dt * 1000;
+    const a = this.whiteMs <= f.holdMs ? 1 : 1 - (this.whiteMs - f.holdMs) / Math.max(1, f.fadeMs);
+    if (a <= 0) {
+      this.whiteBody?.setVisible(false);
+      this.whiteGun?.setVisible(false);
+      return;
+    }
+    this.whiteBody = this.whiteCopy(this.whiteBody, this.body, a);
+    if (this.hasGun) this.whiteGun = this.whiteCopy(this.whiteGun, this.gun, a);
   }
 
   /**
@@ -216,6 +256,8 @@ export class SoldierView {
 
   destroy(): void {
     this.stunIcon?.destroy();
+    this.whiteBody?.destroy();
+    this.whiteGun?.destroy();
     this.ice?.destroy();
     this.iceCracks?.destroy();
     this.body.destroy();
@@ -252,7 +294,9 @@ export class AlienView {
   private flameLevel = 0;
   /** Charge (chargeur, rhinocéros) : délai avant la prochaine silhouette fantôme laissée derrière lui. */
   private ghostT = 0;
-  /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : l'ombre portée n'apparaît qu'une fois dehors. */
+  /** Abscisse vers laquelle il regarde, quoi qu'il fasse (lurker enterré : sa proie, posée par `WorldView`) ; null : il regarde où il va. */
+  lookAt: number | null = null;
+  /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : opacité de son ombre portée (fondu). */
   outOfGround = 1;
 
   constructor(
@@ -261,7 +305,9 @@ export class AlienView {
     emerge = false,
   ) {
     // lurker (il creuse son propre trou) et ressuscité (il sort de sa flaque) n'ont pas de trou d'apparition
-    this.emergeT = emerge && !state.def.lurk && !state.revived ? 0 : EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
+    this.emergeT = emerge && !state.def.lurk && !state.revived && !state.def.projectile ? 0 : EMERGE_OPEN + EMERGE_POP + EMERGE_FADE; // un projectile n'a pas de trou
+    // sort d'un trou d'apparition : il monte hors du sol (sprite rogné de 0 à 100 %, `groundCut`) au lieu de surgir en grossissant
+    if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
@@ -293,8 +339,39 @@ export class AlienView {
     this.scene.tweens.add({ targets: g, alpha: 0, duration: GHOST.life * 1000, ease: 'Quad.easeIn', onComplete: () => g.destroy() });
   }
 
+  /** Le sprite est rogné par le bas (`setCrop`). */
+  private cut = false;
+
+  /**
+   * Ne montre que le haut du sprite (part `show`, 0 → 1, en partant du haut) : il s'enfonce dans le sol. La ligne de coupe glisse du bas de
+   * l'image jusqu'au sol (point d'ancrage = centre de l'ombre portée et du trou) pendant le premier quart de l'enfoncement, puis y reste :
+   * semi-enterré, le haut du sprite dépasse du trou au lieu de flotter sous le sol. 1 = entier, 0 = invisible.
+   */
+  private groundCut(show: number): void {
+    const b = this.body;
+    if (show >= 0.999) {
+      if (this.cut) b.setCrop();
+      this.cut = false;
+      return;
+    }
+    if (show <= 0.01) {
+      b.setVisible(false);
+      return;
+    }
+    const dh = b.displayHeight;
+    const top = b.y - b.originY * dh;
+    const cutY = top + show * dh; // ligne de coupe avant décalage
+    const ground = this.ry + GROUND_CUT_DY; // fond du trou, juste sous le centre de l'ombre
+    const k = Math.min(1, (1 - show) / 0.25);
+    b.setCrop(0, 0, b.frame.width, b.frame.height * show);
+    b.setY(b.y + (ground - cutY) * k);
+    this.cut = true;
+  }
+
   /** Trou d'apparition sous l'alien (null : aucun) : `open` 0 → 1 pendant qu'il se creuse, `alpha` qui tombe à 0 quand l'alien en est sorti. */
   hole(): { x: number; y: number; radius: number; open: number; alpha: number } | null {
+    // s'enterre (recyclage des traînards) : le trou s'ouvre sous lui pendant qu'il s'enfonce
+    if (this.state.sinkT > 0) return { x: this.rx, y: this.ry, radius: this.state.radius * 1.3, open: Math.min(1, (1 - this.state.sinkT / RELOCATE.sink) * 2.5), alpha: 1 };
     const total = EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
     if (this.emergeT >= total) return null;
     const alpha = this.emergeT < EMERGE_OPEN + EMERGE_POP ? 1 : 1 - (this.emergeT - EMERGE_OPEN - EMERGE_POP) / EMERGE_FADE;
@@ -313,7 +390,10 @@ export class AlienView {
       if ((a.def.lurk && a.lurkPhase === 5) || (a.def.burrow && a.lurkPhase === 3)) this.onPop?.(this.rx, this.ry, a.radius * 1.4);
       this.prevPhase = a.lurkPhase;
     }
-    if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
+    if (a.def.lurk && (a.lurkPhase === 3 || a.lurkPhase === 4)) this.facing = Math.cos(a.spikeAng) >= 0 ? 1 : -1; // vise / lance ses pics : face à la ligne
+    else if (this.lookAt !== null) {
+      if (Math.abs(this.lookAt - this.rx) > 6) this.facing = this.lookAt > this.rx ? 1 : -1; // enterré : face à sa proie (soldat le plus proche)
+    } else if (Math.abs(a.vx) > 8) this.facing = a.vx > 0 ? 1 : -1;
 
     // Squash / lévitation procéduraux seulement sans planche animée.
     const t = time * 7 + this.phase;
@@ -345,36 +425,35 @@ export class AlienView {
       }
     } else this.ghostT = 0;
     this.outOfGround = hidden ? 0 : this.spawnT; // trou d'apparition : dehors une fois sorti (pop terminé)
-    if (a.def.lurk) {
-      // lurker : s'enfonce dans son trou (phase 1), invisible enterré (2-4), ressort (5)
-      const L = a.def.lurk;
-      const vis = a.lurkPhase === 1 ? a.lurkT / L.digTime : a.lurkPhase >= 2 && a.lurkPhase <= 4 ? 0 : a.lurkPhase === 5 ? 1 - a.lurkT / L.rise : 1;
-      this.outOfGround = Math.min(this.outOfGround, vis);
-      this.body
-        .setVisible(vis > 0.03)
-        .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
-        .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
-        .setY(this.body.y + (1 - vis) * a.radius * 0.7);
-    }
     if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
       if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
     }
 
-    if (hidden) this.body.setVisible(false);
-    else if (!a.def.lurk) this.body.setVisible(true); // le lurker gère lui-même sa visibilité (enterré)
-    if (a.def.burrow) {
-      // Scarab : s'enfonce dans son trou (phase 1), invisible sous terre (2), ressort du trou d'arrivée (3)
-      const B = a.def.burrow;
-      const vis = a.lurkPhase === 1 ? a.lurkT / B.dig : a.lurkPhase === 2 ? 0 : a.lurkPhase === 3 ? 1 - a.lurkT / B.rise : 1;
-      this.outOfGround = Math.min(this.outOfGround, vis);
-      this.body
-        .setVisible(vis > 0.03)
-        .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
-        .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
-        .setY(this.body.y + (1 - vis) * a.radius * 0.5);
+    this.body.setVisible(!hidden);
+    // enfouissement : `show` = part du sprite au-dessus du sol, en partant du haut (BURIED). Lurker : s'enfonce (1) jusqu'à n'en laisser
+    // dépasser que le haut, semi-enterré (2-4), ressort (5). Scarab : s'enfonce (1), totalement enterré (2), ressort (3). Recyclage : s'enfonce.
+    let show = 1;
+    if (a.def.lurk) {
+      const L = a.def.lurk;
+      const semi = BURIED.semiShow;
+      if (a.lurkPhase === 1) show = semi + (1 - semi) * Math.max(0, a.lurkT / L.digTime);
+      else if (a.lurkPhase >= 2 && a.lurkPhase <= 4) show = semi;
+      else if (a.lurkPhase === 5) show = semi + (1 - semi) * (1 - Math.max(0, a.lurkT / L.rise));
     }
+    if (a.def.burrow) {
+      const B = a.def.burrow;
+      if (a.lurkPhase === 1) show = Math.max(0, a.lurkT / B.dig);
+      else if (a.lurkPhase === 2) show = 0;
+      else if (a.lurkPhase === 3) show = 1 - Math.max(0, a.lurkT / B.rise);
+    }
+    if (a.sinkT > 0) show = Math.min(show, a.sinkT / RELOCATE.sink);
+    // trou d'apparition : le trou se creuse (invisible), puis il monte hors du sol en `EMERGE_POP` s (0 → 100 % du sprite)
+    if (this.emergeT < EMERGE_OPEN + EMERGE_POP) show = Math.min(show, Math.max(0, (this.emergeT - EMERGE_OPEN) / EMERGE_POP));
+    this.groundCut(show);
+    // ombre portée : s'efface en douceur pendant qu'il s'enfonce (nulle une fois semi-enterré) et revient pendant qu'il ressort
+    this.outOfGround = Math.min(this.outOfGround, Math.max(0, Math.min(1, (show - BURIED.semiShow) / (1 - BURIED.semiShow))));
     if (a.revived || a.enraged) this.syncZombieFx();
 
     if (this.rest > 0) this.rest -= dt;

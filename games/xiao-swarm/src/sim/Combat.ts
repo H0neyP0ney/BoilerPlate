@@ -1,5 +1,6 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, ZOMBIE_DMG_MUL } from '../config';
+import { ALIENS } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
@@ -85,10 +86,13 @@ export class Combat {
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;
         if (s.retarget <= 0 || (s.target && !s.target.alive)) {
-          let target: Unit | undefined = alienHash.nearest(s.x, s.y, weapon.range * rangeMul, (a) => a.alive && !this.sim.horde.isEmerging(a), this.scratchA); // pas un alien encore dans son trou (invulnérable)
-          // un allié gelé à portée, plus proche que l'alien visé : on tire sur sa glace pour le libérer
-          const ice = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.frozen > 0 && o !== s && this.sim.allied(s.owner, o), this.scratchS);
-          if (ice && (!target || Math.hypot(ice.x - s.x, ice.y - s.y) < Math.hypot(target.x - s.x, target.y - s.y))) target = ice;
+          const range = weapon.range * rangeMul;
+          // PRIORITÉ : libérer un allié à portée — le glaçon d'un allié gelé, ou la bulle qui a avalé un allié (le plus proche des deux) —
+          // avant tout autre alien
+          const ice = soldierHash.nearest(s.x, s.y, range, (o) => o.alive && o.frozen > 0 && o !== s && this.sim.allied(s.owner, o), this.scratchS);
+          const bubble = alienHash.nearest(s.x, s.y, range, (a) => a.alive && !!a.captive && this.sim.allied(s.owner, a.captive) && this.sim.horde.targetable(a), this.scratchA);
+          let target: Unit | undefined = ice && bubble ? (Math.hypot(ice.x - s.x, ice.y - s.y) <= Math.hypot(bubble.x - s.x, bubble.y - s.y) ? ice : bubble) : (ice ?? bubble);
+          target ??= alienHash.nearest(s.x, s.y, range, (a) => a.alive && this.sim.horde.targetable(a), this.scratchA); // pas un alien dans son trou d'apparition ni totalement enterré (intouchable)
           if (!target && pvp) {
             target = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.team !== s.team, this.scratchS);
           }
@@ -185,22 +189,26 @@ export class Combat {
     const lob = a.def.lob!;
     const { rng } = this.sim;
     const n = lob.count ?? 1;
-    const scatter = n > 1 ? 70 : 22; // plusieurs blobs : ils retombent éparpillés autour de la cible
+    const scatter = lob.scatter ?? (n > 1 ? 70 : 22); // plusieurs blobs : ils retombent éparpillés autour de la cible
     this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
     for (let i = 0; i < n; i++) {
-      const lx = target.x + target.vx * lob.flight + rng.range(-scatter, scatter);
-      const ly = target.y + target.vy * lob.flight + rng.range(-scatter, scatter);
+      const lead = lob.lead ? rng.range(lob.lead[0], lob.lead[1]) : 1; // part de l'anticipation (au hasard : pas toujours pile devant)
+      const lx = target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter);
+      const ly = target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter);
       this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
     }
   }
 
-  /** Slime de glace : boucle de glace en ligne droite vers la position ACTUELLE de la squad visée ; elle gèle les soldats qu'elle touche. */
+  /**
+   * Slime de glace : lance un orbe de glace (alien-projectile `ice.orb`, destructible) en ligne droite vers la squad visée, avec une
+   * anticipation partielle (`lead` × son déplacement pendant le trajet) ; il gèle le soldat qu'il touche.
+   */
   iceShot(a: AlienState, target: SoldierState): void {
     const ice = a.def.ice!;
+    const speed = ALIENS[ice.orb].speed;
     const squad = this.sim.squadOf(target.owner);
     const mx = a.x;
     const my = a.y - a.radius * 0.6;
-    // vise le centre de la squad, décalé de `lead` × son déplacement pendant le trajet de la boucle (anticipation partielle)
     let vx = 0;
     let vy = 0;
     if (squad) {
@@ -217,27 +225,11 @@ export class Combat {
       }
     }
     const base = squad?.center ?? target;
-    const travel = Math.hypot(base.x - mx, base.y - my) / ice.speed;
+    const travel = Math.hypot(base.x - mx, base.y - my) / speed;
     const c = { x: base.x + vx * travel * ice.lead, y: base.y + vy * travel * ice.lead };
     const d = Math.hypot(c.x - mx, c.y - my) || 1;
     this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: mx, y: my });
-    const p = this.projectiles.acquire();
-    p.x = p.px = mx;
-    p.y = p.py = my;
-    p.vx = ((c.x - mx) / d) * ice.speed;
-    p.vy = ((c.y - my) / d) * ice.speed;
-    p.life = p.maxLife = (ice.range * 1.5) / ice.speed; // continue un peu au-delà de la cible, puis se brise
-    p.damage = ice.damage;
-    p.pierce = 0;
-    p.flame = false;
-    p.crit = false;
-    p.lob = false;
-    p.aoe = 0;
-    p.knock = 0;
-    p.freeze = ice.zone;
-    p.texture = ice.texture;
-    p.team = a.team;
-    p.owner = 'aliens';
+    this.sim.horde.launch(ice.orb, mx, a.y, (c.x - mx) / d, (c.y - my) / d); // posé au sol sous la bouche (il flotte au-dessus de son ombre)
   }
 
   /**
@@ -399,7 +391,7 @@ export class Combat {
       const fromAlien = p.team === 'aliens';
       if (!fromAlien) {
         for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
-          if (this.sim.horde.isEmerging(a) || !this.overlaps(p, a, hitR)) continue; // dans son trou : la balle passe au-dessus
+          if (!this.sim.horde.targetable(a) || !this.overlaps(p, a, hitR)) continue; // dans son trou ou sous terre : la balle passe au-dessus
           if (p.aoe > 0) {
             // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris)
             this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300);

@@ -44,8 +44,8 @@ export const FX_DEFAULTS = {
   crit: { scale: 0.7, textGrow: 1.35, popMs: 140, holdMs: 300, riseMs: 420, rise: 34 },
   /** Flammes d'enragé (fx_flame, additif) : aliens ressuscités par un chaman et soldats sous stimpack. `spreadX` = largeur de la source, en part du rayon de l'unité. */
   enraged: { spreadX: 0.7, speedYMin: 45, speedYMax: 100, speedX: 14, scaleStart: 0.8, alpha: 0.95, lifeMin: 380, lifeMax: 650 },
-  /** Spirale de lumière (fx_glow) : bras qui tournent en s'écartant ; `size` = taille des points au départ. */
-  spiral: { durationMs: 900, arms: 3, perArm: 14, turns: 1.1, size: 0.8 },
+  /** Montée de niveau : chaque soldat de la squad devient tout blanc `holdMs` ms puis repasse à sa couleur en fondu (`fadeMs`). */
+  levelFlash: { holdMs: 100, fadeMs: 650 },
   /** Colonne de lumière (fx_column) qui monte et s'estompe, avec halo : nouvelle recrue dans la squad (taille et durée par défaut). */
   column: { height: 130, durationMs: 800, glowScale: 1.2, glowEnd: 2.4 },
   /** Perte d'un soldat (composé) : éclats, gouttes, flaque, double onde, flash blanc, colonne rouge et croix. */
@@ -54,8 +54,13 @@ export const FX_DEFAULTS = {
   prism: { every: 16, speedYMin: 8, speedYMax: 38, speedX: 12, scaleStart: 0.4, lifeMin: 600, lifeMax: 1100 },
   /** Croix vertes qui montent dans les globes de soin (fx_plus) : une toutes les ~`everyMs` ms par globe, au hasard dans la zone ; `scale` = taille, `rise` = montée (px). */
   healZone: { everyMs: 140, scale: 1.4, rise: 46, durationMs: 1100, alpha: 0.9 },
-  /** Glaçon (soldat gelé) : éclats à chaque coup (`shard*`, × `breakMul` quand il se brise), taille qui rétrécit jusqu'à `minScale` aux derniers PV, fissures qui s'ajoutent quand la part de PV restante passe sous `crack1` / `crack2` / `crack3`. */
-  ice: { shardCount: 6, shardSpeedMin: 40, shardSpeedMax: 190, shardScale: 1.1, shardLifeMin: 350, shardLifeMax: 700, shardGravity: 380, breakMul: 3, minScale: 0.5, crack1: 0.7, crack2: 0.4, crack3: 0.15 },
+  /**
+   * Glaçon (soldat gelé) : éclats à chaque coup (`shard*`, × `breakMul` quand il se brise), et petits BLOCS de glace (`chunk*`, texture
+   * `fx_ice_chunk`) qui sautent en cloche (élan horizontal ±`chunkSpread`, vers le haut `chunkUpMin`-`chunkUpMax` px/s, gravité
+   * `chunkGravity`), retombent `chunkFall` px sous le point d'impact puis s'effacent en `chunkFadeMs` ms. Taille aux derniers PV : `minScale`
+   * (1 = il ne rétrécit pas, 08/10) ; fissures qui s'ajoutent quand la part de PV restante passe sous `crack1` / `crack2` / `crack3`.
+   */
+  ice: { shardCount: 6, shardSpeedMin: 40, shardSpeedMax: 190, shardScale: 1.1, shardLifeMin: 350, shardLifeMax: 700, shardGravity: 380, breakMul: 3, minScale: 1, crack1: 0.7, crack2: 0.4, crack3: 0.15, chunkCount: 3, chunkScale: 1, chunkSpread: 120, chunkUpMin: 180, chunkUpMax: 300, chunkGravity: 900, chunkFall: 14, chunkFadeMs: 250 },
   /** Petits flocons qui montent dans le globe de stase (fx_ice_ball) : un toutes les ~`everyMs` ms, au hasard dans la zone ; taille `scaleMin`-`scaleMax`, montée `rise` (px) en `durationMs`, rotation `spin` (tours / s), opacité de départ `alpha`. */
   stasis: { everyMs: 35, scaleMin: 0.15, scaleMax: 0.35, rise: 80, durationMs: 1500, alpha: 0.85, spin: 0.4 },
   /** Ondes de montée de niveau : nombre d'ondes blanches, écart entre deux, force de la déformation de l'écran (part de l'écran déplacée au maximum). */

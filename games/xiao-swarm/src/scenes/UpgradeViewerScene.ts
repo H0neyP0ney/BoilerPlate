@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
 import { SCENES, VIEW_BG } from '../config';
-import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
+import { DISABLED_UPGRADES, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
 import { getDefaultUpgradeStats, getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
 import { button, checkbox, header, line, note, panel, slider } from '../dev/devUi';
 import { t } from '../i18n';
 import { CARD, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
+
+/** Opacité d'une upgrade désactivée (`DISABLED_UPGRADES`), comme les unités inactives de la vue d'unités. */
+const DISABLED_ALPHA = 0.25;
 
 /**
  * Visionneuse d'upgrades (dev uniquement) : toutes les cartes de choix d'upgrade affichées d'un coup, dessinées par le même code que la fenêtre
@@ -72,6 +75,7 @@ export class UpgradeViewerScene extends Phaser.Scene {
     resizeUpgradeCard(view, CARD_W, CARD_H, false);
     c.box.addAt(view, 1); // au-dessus du cadre, sous la zone cliquable
     c.view = view;
+    view.setAlpha(DISABLED_UPGRADES.includes(c.id) ? DISABLED_ALPHA : 1); // désactivée (jamais proposée) : transparente, comme les unités inactives
     c.frame.clear();
     if (this.selected === c.id) c.frame.lineStyle(4, 0xffffff, 1).strokeRoundedRect(-CARD_W / 2 - 4, -CARD_H / 2 - 4, CARD_W + 8, CARD_H + 8, 14);
   }

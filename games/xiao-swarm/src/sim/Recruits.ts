@@ -2,7 +2,7 @@ import { clamp, Rng, type Point } from '@xiao/engine/sim';
 import { RECRUIT } from '../config';
 import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState } from './entities';
-import { findAttractor, inPickRange, pulledAttractor, pullStrongly, pullToward } from './Pickup';
+import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
@@ -67,7 +67,7 @@ export class Recruits {
       const r = this.items[i];
       r.px = r.x;
       r.py = r.y;
-      r.life -= dt;
+      if (!r.caught) r.life -= dt; // attrapée : elle ne disparaît plus
       if (r.age !== undefined) r.age += dt;
       if (r.life <= 0) {
         this.noteExpired(r);
@@ -90,6 +90,7 @@ export class Recruits {
       if (r.pulled && !pulled) r.pulled = undefined; // plus personne à qui elle sert : recrue normale
       const a = pulled ?? findAttractor(this.sim, r.x, r.y, accept);
       if (!a) continue;
+      catchItem(r, a.squad.owner); // attirée : elle ne disparaît plus ni ne clignote, et suit cette squad
       const s = a.soldier;
       if (inPickRange(a)) {
         const squad = a.squad;
@@ -105,8 +106,7 @@ export class Recruits {
         this.items.splice(i, 1);
         continue;
       }
-      if (pulled) pullStrongly(r, a, dt);
-      else pullToward(r, a, dt); // comme les globes d'XP : plus elle est proche, plus elle accélère vers le soldat
+      chase(r, s.x, s.y, a.dist, a.stat, dt); // accélère jusqu'à une vitesse max très rapide : impossible à distancer
     }
   }
 
@@ -132,7 +132,7 @@ export class Recruits {
     for (const r of this.items) {
       if (Math.hypot(squad.center.x - r.x, squad.center.y - r.y) > radius) continue;
       r.pulled = squad.owner;
-      r.life = Math.max(r.life, 10); // elle ne disparaît pas en route
+      catchItem(r); // elle ne disparaît pas en route
     }
   }
 

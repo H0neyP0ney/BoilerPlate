@@ -12,8 +12,8 @@ export interface AlienTestRequest {
   back: string;
 }
 
-/** Test d'un alien : nombre de Gunners, distance d'apparition de l'alien (px), délai avant le suivant (s). */
-const TEST = { soldiers: 4, distance: 420, respawn: 1.5 };
+/** Test d'un alien : nombre de Troopers, distance d'apparition de l'alien (px), délai avant le suivant (s). */
+const TEST = { soldiers: 1, distance: 420, respawn: 1.5 };
 
 /** Mode du test : celui de la survie, sans aucune vague (seul l'alien testé est sur la carte). */
 export function alienTestMode(): ModeDef {
@@ -21,9 +21,9 @@ export function alienTestMode(): ModeDef {
 }
 
 /**
- * Test d'un alien (dev, depuis sa vue détaillée) : 4 Gunners contre 1 alien, en situation de jeu. Rien d'autre ne vient perturber le
+ * Test d'un alien (dev, depuis sa vue détaillée) : 1 Trooper contre 1 alien, en situation de jeu. Rien d'autre ne vient perturber le
  * duel : pas de vagues, ni globes d'XP, ni recrues, ni power-ups, ni escalade. L'alien tué revient après `TEST.respawn` s ; la squad
- * anéantie revient à 4 Gunners (pas de fin de partie). Panneau : bilan des duels, « Recommencer », « Quitter le test » (retour à la vue).
+ * anéantie revient à 1 Trooper (pas de fin de partie). Panneau : bilan des duels, « Recommencer », « Quitter le test » (retour à la vue).
  */
 export class AlienTest {
   private alien: AlienState | null = null;
@@ -48,7 +48,7 @@ export class AlienTest {
       'font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:6px;align-items:center';
     const title = document.createElement('div');
     title.style.cssText = 'font-weight:bold;color:#ffd166';
-    title.textContent = `Test : ${req.alien} — ${TEST.soldiers} Gunners contre 1`;
+    title.textContent = `Test : ${req.alien} — ${TEST.soldiers} Trooper${TEST.soldiers > 1 ? 's' : ''} contre 1`;
     this.status.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap;text-align:center';
     this.panel.append(title, this.status, line(button('Recommencer', () => this.reset()), button('Quitter le test', () => quit(req.back))));
     document.body.append(this.panel);
@@ -56,7 +56,7 @@ export class AlienTest {
     this.reset();
   }
 
-  /** Nouveau duel : squad remise à 4 Gunners (niveau 1, sans upgrade), aliens retirés, alien testé de nouveau sur la carte. */
+  /** Nouveau duel : squad remise à 1 Trooper (niveau 1, sans upgrade), aliens retirés, alien testé de nouveau sur la carte. */
   reset(): void {
     this.sim.aliens.length = 0;
     this.resetSquad();

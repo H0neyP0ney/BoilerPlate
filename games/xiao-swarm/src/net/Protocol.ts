@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 36; // 36 : gel = état du soldat (PV de gel, drapeau 32) ; plus d'alien glaçon
+export const PROTOCOL_VERSION = 42; // 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -29,7 +29,8 @@ export type ClientMessage =
 /** Hôte → client. */
 export type HostMessage =
   | { t: 'welcome'; v: number; mode: string; seed: number; you: PlayerId; host: PlayerId }
-  | { t: 'events'; list: SimEvent[] }
+  /** `seq` : numéro du snapshot envoyé avec ces événements (le client les joue en même temps que lui, après son tampon d'interpolation). */
+  | { t: 'events'; seq: number; list: SimEvent[] }
   | { t: 'refused'; reason: string };
 
 export function parseMessage<T>(data: string): T | null {
@@ -122,6 +123,8 @@ export interface AlienSnap {
   castCorpse: number;
   /** Zombie (ressuscité par un chaman). */
   zombie: boolean;
+  /** S'enterre avant d'être déplacé (recyclage des traînards, v39 : bit 16 des drapeaux de l'alien). */
+  sinking: boolean;
   /** Niveau d'enragement d'un boss (0 à 2). */
   enraged: number;
   /** Lurker : phase, temps restant dans la phase (s) et direction des pics. */
@@ -158,6 +161,8 @@ export interface ProjectileSnap {
 }
 
 export interface Snapshot {
+  /** Numéro d'envoi (compteur de frames de l'hôte) : ordonne le tampon d'interpolation du client (`tick` se fige pendant l'écran de fin). */
+  seq: number;
   tick: number;
   time: number;
   /** Position dans la timeline des vagues (s) : peut différer de `time` (suspendue, boucle de boss). */
@@ -181,20 +186,41 @@ export interface Snapshot {
   rocks: { id: number; x: number; y: number; r: number; ttl: number }[];
   /** Murs annoncés (télégraphe jaune) : centre, direction, longueur, demi-largeur, temps restant et durée du télégraphe. */
   walls: { id: number; x: number; y: number; angle: number; length: number; r: number; ttl: number; t: number; dur: number }[];
+  /**
+   * Flammes au sol (traînée des burners) : identifiant modulo 65536, position au pixel, rayon. Dans le snapshot et pas en événements :
+   * un `fireEnd` perdu (canal non fiable) laissait chez le client une flamme affichée pour toujours.
+   */
+  fires: { id: number; x: number; y: number; r: number }[];
+  /** Stalactites annoncées par le Scarab (v40) : zone, temps restant avant l'impact et durée du télégraphe (s). */
+  stalactites: { id: number; x: number; y: number; r: number; t: number; dur: number }[];
+  /**
+   * Effets de tir depuis le snapshot précédent, en binaire au lieu d'événements JSON (v38 : c'était l'essentiel du débit des événements) :
+   * tirs de soldats (id du tireur, position du tir ; la classe et la visée se lisent sur le soldat), impacts de balle (texture du tir) et
+   * unités touchées (id). Remplis par `HostSession`, rejoués en `SimEvent` par `ClientSession`.
+   */
+  shots: { id: number; x: number; y: number }[];
+  impacts: { x: number; y: number; texture: string }[];
+  hits: number[];
 }
 
 const CLASS_IDS = Object.keys(CLASSES) as SoldierClassId[];
 const ALIEN_IDS = Object.keys(ALIENS) as AlienId[];
 const TEXTURES = [
-  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : a.ice ? [a.ice.texture] : []))]),
+  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
 ];
 
 const SNAPSHOT_TAG = 0x53;
+/** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (jungle 3802, royale 4800). */
+const POS_SCALE = 4;
 const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
   return {
+    seq: sim.tick,
+    shots: [],
+    impacts: [],
+    hits: [],
     tick: sim.tick,
     time: sim.time,
     cursor: sim.waves.cursor,
@@ -259,6 +285,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       castT: a.castT,
       castCorpse: a.castCorpse,
       zombie: a.revived,
+      sinking: a.sinkT > 0,
       enraged: a.enraged,
       lurkPhase: a.lurkPhase,
       lurkT: a.lurkT,
@@ -285,6 +312,8 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     puddles: sim.puddles.map((p) => ({ id: p.id, x: p.x, y: p.y, r: p.r, ttl: p.ttl, slow: p.slow, frost: p.frost })),
     rocks: sim.arena.rocks.map((k) => ({ id: k.id, x: k.x, y: k.y, r: k.radius, ttl: k.ttl })),
     walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
+    fires: sim.fires.map((f) => ({ id: f.id, x: f.x, y: f.y, r: f.r })),
+    stalactites: sim.stalactites.map((k) => ({ id: k.id & 0xffff, x: k.x, y: k.y, r: k.r, t: k.t, dur: k.dur })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
   };
 }
@@ -317,6 +346,10 @@ class Writer {
     this.need(2);
     this.view.setInt16(this.o, Math.max(-32768, Math.min(32767, Math.round(v))), true);
     this.o += 2;
+  }
+  /** Coordonnée de carte au 1/4 de pixel sur 16 bits (−8192 → 8191 px, v38 ; f32 avant) : 2 octets de moins par coordonnée. */
+  pos(v: number): void {
+    this.i16(v * POS_SCALE);
   }
   u32(v: number): void {
     this.need(4);
@@ -362,6 +395,9 @@ class Reader {
     this.o += 2;
     return v;
   }
+  pos(): number {
+    return this.i16() / POS_SCALE;
+  }
   u32(): number {
     const v = this.view.getUint32(this.o, true);
     this.o += 4;
@@ -389,6 +425,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     from = w.size;
   };
   w.u8(SNAPSHOT_TAG);
+  w.u32(s.seq);
   w.u32(s.tick);
   w.f32(s.time);
   w.f32(s.cursor);
@@ -418,8 +455,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     for (const u of sq.soldiers) {
       w.u32(u.id);
       w.u8(CLASS_IDS.indexOf(u.cls));
-      w.f32(u.x);
-      w.f32(u.y);
+      w.pos(u.x);
+      w.pos(u.y);
       w.i16(u.vx);
       w.i16(u.vy);
       w.u16(Math.max(0, u.hp));
@@ -438,14 +475,14 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   for (const a of s.aliens) {
     w.u32(a.id);
     w.u8(ALIEN_IDS.indexOf(a.type));
-    w.f32(a.x);
-    w.f32(a.y);
+    w.pos(a.x);
+    w.pos(a.y);
     w.i16(a.vx);
     w.i16(a.vy);
     w.f32(a.maxHp); // les boss dépassent 65535 PV : PV max en f32, PV courants en part du max
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
     w.u8(Math.min(255, Math.round(a.slamWind * 200)));
-    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2));
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2) | (a.sinking ? 16 : 0));
     const def = ALIENS[a.type];
     if (def.rush) {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));
@@ -482,8 +519,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   for (const r of s.recruits) {
     w.u32(r.id);
     w.u8(CLASS_IDS.indexOf(r.cls));
-    w.f32(r.x);
-    w.f32(r.y);
+    w.pos(r.x);
+    w.pos(r.y);
     w.u8(Math.min(255, Math.round(r.life * 10)));
   }
 
@@ -491,8 +528,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   w.u16(s.projectiles.length);
   for (const p of s.projectiles) {
     w.u16(p.id);
-    w.f32(p.x);
-    w.f32(p.y);
+    w.pos(p.x);
+    w.pos(p.y);
     w.i16(p.vx);
     w.i16(p.vy);
     w.u8(TEXTURES.indexOf(p.texture));
@@ -508,8 +545,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   w.u16(s.orbs.length);
   for (const o of s.orbs) {
     w.u16(o.id);
-    w.f32(o.x);
-    w.f32(o.y);
+    w.pos(o.x);
+    w.pos(o.y);
     w.u8((Math.min(127, o.value) & 0x7f) | (o.blink ? 0x80 : 0)); // valeur ≤ 127 (borné), bit 7 = clignote
   }
 
@@ -576,6 +613,39 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(Math.min(255, Math.round(k.dur * 50)));
   }
   mark('walls');
+  w.u8(Math.min(255, s.fires.length));
+  for (const f of s.fires.slice(0, 255)) {
+    w.u16(f.id & 0xffff);
+    w.u16(Math.max(0, Math.min(65535, Math.round(f.x))));
+    w.u16(Math.max(0, Math.min(65535, Math.round(f.y))));
+    w.u8(Math.min(255, Math.round(f.r)));
+  }
+  mark('fires');
+  w.u8(Math.min(255, s.stalactites.length));
+  for (const k of s.stalactites.slice(0, 255)) {
+    w.u16(k.id);
+    w.pos(k.x);
+    w.pos(k.y);
+    w.u8(Math.round(k.r));
+    w.u8(Math.round(k.t * 50));
+    w.u8(Math.round(k.dur * 50));
+  }
+  mark('stalactites');
+  w.u16(s.shots.length);
+  for (const f of s.shots) {
+    w.u32(f.id);
+    w.pos(f.x);
+    w.pos(f.y);
+  }
+  w.u16(s.impacts.length);
+  for (const f of s.impacts) {
+    w.pos(f.x);
+    w.pos(f.y);
+    w.u8(TEXTURES.indexOf(f.texture));
+  }
+  w.u16(s.hits.length);
+  for (const id of s.hits) w.u32(id);
+  mark('fx');
   return w.result();
 }
 
@@ -584,7 +654,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
   try {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
-    const snap: Snapshot = { tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [] };
+    const seq = r.u32();
+    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
@@ -605,8 +676,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       for (let j = 0; j < n; j++) {
         const id = r.u32();
         const cls = CLASS_IDS[r.u8()];
-        const x = r.f32();
-        const y = r.f32();
+        const x = r.pos();
+        const y = r.pos();
         const vx = r.i16();
         const vy = r.i16();
         const hp = r.u16();
@@ -625,8 +696,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nAliens; i++) {
       const id = r.u32();
       const type = ALIEN_IDS[r.u8()];
-      const x = r.f32();
-      const y = r.f32();
+      const x = r.pos();
+      const y = r.pos();
       const vx = r.i16();
       const vy = r.i16();
       const maxHp = r.f32();
@@ -673,19 +744,19 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         spikeAng = r.f32();
       }
       const shield = def.shield ? r.u8() / 255 : 0;
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), sinking: !!(aflags & 16), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();
     for (let i = 0; i < nRecruits; i++) {
-      snap.recruits.push({ id: r.u32(), cls: CLASS_IDS[r.u8()], x: r.f32(), y: r.f32(), life: r.u8() / 10 });
+      snap.recruits.push({ id: r.u32(), cls: CLASS_IDS[r.u8()], x: r.pos(), y: r.pos(), life: r.u8() / 10 });
     }
 
     const nProj = r.u16();
     for (let i = 0; i < nProj; i++) {
       const id = r.u16();
-      const x = r.f32();
-      const y = r.f32();
+      const x = r.pos();
+      const y = r.pos();
       const vx = r.i16();
       const vy = r.i16();
       const texture = TEXTURES[r.u8()];
@@ -700,8 +771,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     const nOrbs = r.u16();
     for (let i = 0; i < nOrbs; i++) {
       const id = r.u16();
-      const x = r.f32();
-      const y = r.f32();
+      const x = r.pos();
+      const y = r.pos();
       const v = r.u8();
       snap.orbs.push({ id, x, y, value: v & 0x7f, blink: (v & 0x80) !== 0 });
     }
@@ -724,6 +795,16 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nRocks; i++) snap.rocks.push({ id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10 });
     const nWalls = r.u8();
     for (let i = 0; i < nWalls; i++) snap.walls.push({ id: r.u32(), x: r.f32(), y: r.f32(), angle: r.f32(), length: r.u16(), r: r.u16(), ttl: r.u8() / 10, t: r.u8() / 50, dur: r.u8() / 50 });
+    const nFires = r.u8();
+    for (let i = 0; i < nFires; i++) snap.fires.push({ id: r.u16(), x: r.u16(), y: r.u16(), r: r.u8() });
+    const nStal = r.u8();
+    for (let i = 0; i < nStal; i++) snap.stalactites.push({ id: r.u16(), x: r.pos(), y: r.pos(), r: r.u8(), t: r.u8() / 50, dur: r.u8() / 50 });
+    const nShots = r.u16();
+    for (let i = 0; i < nShots; i++) snap.shots.push({ id: r.u32(), x: r.pos(), y: r.pos() });
+    const nImpacts = r.u16();
+    for (let i = 0; i < nImpacts; i++) snap.impacts.push({ x: r.pos(), y: r.pos(), texture: TEXTURES[r.u8()] ?? TEXTURES[0] });
+    const nHits = r.u16();
+    for (let i = 0; i < nHits; i++) snap.hits.push(r.u32());
     return snap;
   } catch {
     return null;

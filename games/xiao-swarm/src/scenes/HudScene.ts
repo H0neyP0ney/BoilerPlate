@@ -160,7 +160,7 @@ export class HudScene extends Phaser.Scene {
     // onboarding : flèches vers le point vert / la recrue / le power-up, bulle au-dessus de la flèche, bandeau du haut
     this.tutorialArrow = this.add.graphics();
     this.tutorialLabel = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6, backgroundColor: '#13233acc', padding: { x: 12, y: 6 } })
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6, padding: { x: 12, y: 6 } }) // fond : rectangle à coins arrondis dessiné dans `tutorialArrow`
       .setOrigin(0.5, 1)
       .setVisible(false);
     this.endText = this.add
@@ -227,7 +227,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.drawReviveArrow();
     this.drawTutorial();
     const dead = s.online && s.connection === 'connected' && !g.localSquad?.alive;
-    const coop = g.mode.id === 'coop';
+    const coop = !g.mode.pvp; // survie à plusieurs : on regarde ses équipiers (en PvP on réapparaît)
     this.respawnText.setVisible(dead && !this.endText.visible).setText(coop ? t('spectating') : t('respawning')).setFontSize(coop ? 24 : 34);
     if (this.endText.visible) {
       const left = Math.max(0, Math.ceil((this.endAt - this.time.now) / 1000));
@@ -335,10 +335,20 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       px - c * 4 + s * 11, py - s * 4 - c * 11,
     );
     // tip « BOSS » au-dessus de la flèche (sous elle quand la flèche est tout en haut), gardé dans l'écran
-    const half = this.bossTip.width / 2 + 4;
-    const above = py - 34 > this.bossTip.height;
-    this.bossTip.setText(t('bossTip')).setOrigin(0.5, above ? 1 : 0).setVisible(true)
-      .setPosition(Math.max(half, Math.min(width - half, px)), above ? py - 30 * pulse : py + 30 * pulse);
+    this.placeOverArrow(this.bossTip.setText(t('bossTip')).setVisible(true), px, py, 30 * pulse);
+  }
+
+  /**
+   * Bulle ou texte d'une flèche du HUD (boss, équipier à terre, tutoriel) : au-dessus de la flèche (`x`, `y`) à `gap` px ; si elle ne tient
+   * pas dans l'écran au-dessus (flèche collée au bord haut), elle passe juste en dessous au lieu de la recouvrir. Gardée dans l'écran
+   * horizontalement. Renvoie le haut du texte (pour dessiner un fond).
+   */
+  private placeOverArrow(txt: Phaser.GameObjects.Text, x: number, y: number, gap: number, margin = 6): number {
+    const above = y - gap - txt.height >= margin;
+    const half = txt.width / 2 + margin;
+    const top = above ? y - gap - txt.height : y + gap;
+    txt.setOrigin(0.5, 0).setPosition(Math.max(half, Math.min(this.scale.width - half, x)), top);
+    return top;
   }
 
   /**
@@ -351,7 +361,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     a.clear();
     const me = g.localSquad;
     let shown = 0;
-    const label = (px: number, py: number): void => {
+    const label = (px: number, py: number, gap: number): void => {
       let txt = this.reviveLabels[shown];
       if (!txt) {
         txt = this.add
@@ -359,8 +369,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
           .setOrigin(0.5, 1);
         this.reviveLabels[shown] = txt;
       }
-      const half = txt.width / 2 + 6;
-      txt.setVisible(true).setPosition(Math.max(half, Math.min(this.scale.width - half, px)), Math.max(txt.height + 4, py));
+      this.placeOverArrow(txt.setVisible(true), px, py, gap);
       shown++;
     };
     const hideRest = (): void => this.reviveLabels.slice(shown).forEach((x) => x.setVisible(false));
@@ -393,7 +402,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       const c = Math.cos(ang);
       const s = Math.sin(ang);
       const pulse = 1 + beat * 0.14;
-      label(px, py - 30 * pulse);
+      label(px, py, 30 * pulse);
       a.fillStyle(0x0a2210, 0.75).fillCircle(px, py, 25 * pulse);
       a.lineStyle(3, 0x5dff84, 1).strokeCircle(px, py, 25 * pulse);
       a.fillStyle(0x5dff84, 1).fillTriangle(
@@ -422,7 +431,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const { width, height } = this.scale;
     const wv = g.cameras.main.worldView;
     const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
-    let label: { x: number; y: number; text: string } | null = null;
+    // bulle : flèche visée (`x`, `y`) et écart ; posée par `placeOverArrow` (au-dessus, ou dessous si la flèche est collée en haut)
+    let label: { x: number; y: number; gap: number; text: string } | null = null;
     for (const target of tut.targets()) {
       const sx = ((target.x - wv.x) / wv.width) * width;
       const sy = ((target.y - wv.y) / wv.height) * height;
@@ -430,7 +440,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       const inside = sx > m && sx < width - m && sy > m && sy < height - m;
       if (inside && target.kind === 'marker') {
         // le point vert est dessiné au sol (chevron qui rebondit au-dessus, voir WorldView) : « Move here » se pose au-dessus du chevron
-        if (target.label && !label) label = { x: sx, y: sy - (44 + 14 + 18 + 12) * (width / wv.width), text: t(target.label) };
+        if (target.label && !label) label = { x: sx, y: sy - (44 + 14 + 18) * (width / wv.width), gap: 12 * (width / wv.width), text: t(target.label) };
         continue;
       }
       if (inside && target.kind === 'incoming') continue; // le point vert est dessiné au sol ; les ennemis déjà à l'écran n'ont plus besoin de flèche
@@ -461,14 +471,16 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
         px - c * 4 - s * 11, py - s * 4 + c * 11,
         px - c * 4 + s * 11, py - s * 4 - c * 11,
       );
-      if (target.label && !label) label = { x: px, y: py - 36 * pulse, text: t(target.label) };
+      if (target.label && !label) label = { x: px, y: py, gap: 36 * pulse, text: t(target.label) };
     }
     // bulle de texte au-dessus de la flèche (gardée dans l'écran)
     this.tutorialLabel.setVisible(!!label);
     if (label) {
       this.tutorialLabel.setText(label.text);
-      const half = this.tutorialLabel.width / 2 + 8;
-      this.tutorialLabel.setPosition(Math.max(half, Math.min(width - half, label.x)), Math.max(this.tutorialLabel.height + 8, label.y));
+      const top = this.placeOverArrow(this.tutorialLabel, label.x, label.y, label.gap, 8);
+      // fond de la bulle à coins arrondis (le `backgroundColor` d'un texte Phaser est toujours carré), sous le texte
+      const { x, width: w, height: h } = this.tutorialLabel;
+      a.fillStyle(0x13233a, 0.8).fillRoundedRect(x - w / 2, top, w, h, Math.min(14, h / 2));
     }
   }
 

@@ -57,9 +57,9 @@ const RAW: Record<ObstacleId, RawObstacle> = {
     scale: 0.88,
     originX: 0.5,
     originY: 0.5,
-    hitbox: [{ x: 4, y: 2, r: 62.2 }],
+    hitbox: [{ x: 1, y: 0, r: 61 }],
     stains: [
-      { tex: 'tache_1', x: 2, y: -1, w: 334.4, sy: 0.85, flip: false },
+      { tex: 'tache_1', x: 6, y: -1, w: 334.4, sy: 0.85, flip: false },
       { tex: 'tache_2', x: 5.8, y: 0, w: 341.2, sy: 1, flip: false },
       { tex: 'tache_3', x: -6.8, y: -6.8, w: 318.8, sy: 0.89, flip: false },
       { tex: 'tache_4', x: 1, y: 5.8, w: 291.4, sy: 1, flip: false },

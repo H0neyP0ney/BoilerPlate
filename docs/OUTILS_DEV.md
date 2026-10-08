@@ -38,12 +38,14 @@ squad, invincibilité), aliens (faire apparaître un type × quantité, tout tue
 (vitesse du jeu 0 → 3, +30 s / +2 min de vagues). Les retraits ignorent l'invulnérabilité des recrues fraîches. Pas de
 raccourcis clavier (les anciens K / R / T / B ont été retirés).
 
-**⏩ Partie avancée (Scarab tué)** (section Progression) : saute juste après la mort du Scarab (mini-boss de 5:00) — terrain
-vidé, timeline des vagues reprise juste après son apparition (temps de partie + 40 s de combat), boss précédents comptés pour
-l'escalade (×1,331), niveau 20 avec un choix d'upgrade par niveau comme en jeu (vraie offre de 3 cartes, toutes les upgrades,
-prismatiques et renforts compris ; carte retenue selon les préférences mesurées dans tes parties enregistrées : `PICK_WEIGHTS`),
-squad pleine de Gunners seulement (taille max après upgrades + renforts ; classes spéciales retirées en attendant les pièces). Réglages : `JUMP` et
-`PICK_WEIGHTS` en tête de `dev/jumpAhead.ts`. Aussi par l'URL, **build déployé compris** : `?jump=scarab` (saute le tutoriel ; « Rejouer » refait le saut) ; code : `Sim.fastForward`, `Squad.fastForward`, `WaveRunner.skipTo`.
+**⏩ Aller plus loin dans la timeline** (section Progression) : 4 points de saut — **Après Gling Mère** (niveau 6), **Après Alpha Rhino**
+(niveau 11), **Après Scarab** (niveau 20, calé sur une partie enregistrée) et **Avant Giant Crab** (30 s avant le boss final, niveau 30). Terrain
+vidé, timeline des vagues reprise juste après l'apparition du boss (ou 30 s avant), boss précédents comptés pour l'escalade, un choix d'upgrade
+par niveau comme en jeu (vraie offre de 3 cartes, toutes les upgrades, prismatiques et renforts compris ; carte retenue selon les préférences
+mesurées dans tes parties enregistrées : `PICK_WEIGHTS`), squad pleine de Gunners seulement (taille max après upgrades + renforts ; classes
+spéciales retirées en attendant les pièces). Réglages : `JUMPS` (niveau, durée de combat) et `PICK_WEIGHTS` en tête de `dev/jumpAhead.ts`. Aussi
+par l'URL, **build déployé compris** : `?jump=gling`, `?jump=rhino`, `?jump=scarab`, `?jump=crab` (saute le tutoriel ; « Rejouer » refait le
+saut) ; code : `Sim.fastForward`, `Squad.fastForward`, `WaveRunner.skipTo`.
 
 **Coéquipiers IA (coop)** : l'hôte d'une partie coop (`?net=host`) a, dans ce panneau, une section « Coéquipiers IA » (seule
 partie disponible en ligne) : ajouter un bot (niveau Standard / Expert au choix), changer le niveau de chacun, le retirer,

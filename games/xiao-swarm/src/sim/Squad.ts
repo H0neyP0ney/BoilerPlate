@@ -1,7 +1,7 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
-import { OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
+import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -44,6 +44,10 @@ export class Squad {
   private readonly steerV = { x: 0, y: 0 };
   private readonly slotTarget = { x: 0, y: 0, radius: 0 };
   readonly center: Point = { x: 0, y: 0 };
+  /** Vitesse de course de la squad (px/s, lissée, d'après l'ancre) : les aliens trop loin sont replacés devant elle (`Horde.relocateStragglers`). */
+  readonly vel: Point = { x: 0, y: 0 };
+  /** Vitesse de virage de la squad (rad/s, lissée, > 0 dans le sens trigonométrique) : les aliens en contournement anticipent une course en rond. */
+  turn = 0;
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
@@ -168,12 +172,13 @@ export class Squad {
   rerollOffer(): boolean {
     if (!this.offer || this.rerolls <= 0 || this.sim.tutorial?.active) return false; // pas de relance pendant l'onboarding (offre imposée)
     this.rerolls--;
-    this.rollOffer(this.offer);
+    this.rollOffer(this.offer, true);
     return true;
   }
 
-  private rollOffer(avoid: readonly UpgradeId[] = []): void {
-    let eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size - this.maxSize < REINFORCE_MAX_OVERCAP));
+  /** `reroll` : relance du joueur (niveaux 10, 20, 30… compris : les prismatiques y sont retirées au sort, plus garanties). */
+  private rollOffer(avoid: readonly UpgradeId[] = [], reroll = false): void {
+    let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size - this.maxSize < REINFORCE_MAX_OVERCAP));
     const fresh = eligible.filter((id) => !avoid.includes(id));
     if (fresh.length >= OFFER_SIZE) eligible = fresh;
     const forced = this.sim.tutorial?.forcedOffer() ?? null; // onboarding : offre imposée, jamais prismatique
@@ -184,7 +189,9 @@ export class Squad {
       this.offerPrism = [];
         return;
     }
-    this.offerPrism = offer.map(() => (forced ? false : this.sim.rng.chance(PRISM_CHANCE)));
+    const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
+    const allPrism = !forced && !reroll && choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont prismatiques (pas après une relance)
+    this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(PRISM_CHANCE)));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 
@@ -224,7 +231,7 @@ export class Squad {
     let reinforcements = 0;
     for (let l = 1; l < level; l++) {
       // squad supposée pleine : seuls les Gunners des renforts déjà pris la font dépasser son max
-      const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || reinforcements < REINFORCE_MAX_OVERCAP));
+      const eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || reinforcements < REINFORCE_MAX_OVERCAP));
       if (eligible.length === 0) break;
       const offer = rng.sample(eligible, OFFER_SIZE);
       const id = rng.weighted(offer, weight) ?? rng.pick(offer);
@@ -408,7 +415,20 @@ export class Squad {
     const speed = this.moveSpeed;
 
     // 1. Ancre : réponse immédiate à l'input
+    const ax = this.anchor.x;
+    const ay = this.anchor.y;
     stepAnchor(this.sim.arena, this.anchor, input.mx, input.my, speed, dt);
+    // vitesse réelle de l'ancre (obstacles compris) ; un saut (squad replacée) ne compte pas
+    let vx = (this.anchor.x - ax) / dt;
+    let vy = (this.anchor.y - ay) / dt;
+    if (Math.hypot(vx, vy) > speed * 2) vx = vy = 0;
+    const h0 = Math.atan2(this.vel.y, this.vel.x);
+    const fast0 = Math.hypot(this.vel.x, this.vel.y) > CHASE.minSpeed;
+    this.vel.x = damp(this.vel.x, vx, 4, dt);
+    this.vel.y = damp(this.vel.y, vy, 4, dt);
+    let dh = Math.atan2(this.vel.y, this.vel.x) - h0;
+    dh -= Math.round(dh / (Math.PI * 2)) * Math.PI * 2;
+    this.turn = damp(this.turn, fast0 && Math.hypot(this.vel.x, this.vel.y) > CHASE.minSpeed ? dh / dt : 0, 2, dt);
 
     // 2. Laisse autour du coeur de la squad
     this.updateCenter();

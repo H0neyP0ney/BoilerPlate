@@ -20,7 +20,7 @@ try {
   const hub = new LoopbackHub();
   const hostT = hub.createTransport();
   const code = await hostT.host();
-  const host = new HostSession({ mode: MODES.coop, seed: 42, transport: hostT, roomCode: code });
+  const host = new HostSession({ mode: MODES.survival, seed: 42, transport: hostT, roomCode: code });
   const tick = async (client) => {
     host.advance(1000 / 30, () => {});
     client?.advance(1000 / 30, () => {});

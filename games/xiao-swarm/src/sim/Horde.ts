@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, FREEZE, GRAB_IMMUNE, MELEE_REACH, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
+import { CHASE, CROWD, DIFFICULTY, RELOCATE, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, FREEZE, GRAB_IMMUNE, MELEE_REACH, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -38,10 +38,11 @@ export class Horde {
   }
 
   /**
-   * Plafond d'aliens. Les costauds (≥ 60 PV : slime bleu, bête, crabe) ont `ELITE_RESERVE` places de plus : sans ça, les
-   * essaims de petits slimes remplissent le plafond en permanence et les gros n'apparaissent jamais.
+   * Plafond d'aliens à l'apparition (`ModeDef.maxAliens`). Les costauds (≥ 60 PV) ont `ELITE_RESERVE` places de plus : sans ça, les
+   * essaims de petits aliens remplissent le plafond en permanence et les gros n'apparaissent jamais. Un boss apparaît toujours.
    */
   canSpawn(type?: AlienId): boolean {
+    if (type && ALIENS[type].boss) return true; // carte pleine : un boss était sauté sans bruit (et la timeline repartait sans lui)
     const reserve = type && ALIENS[type].hp >= 60 ? ELITE_RESERVE : 0;
     return this.sim.aliens.length < this.maxAliens + reserve;
   }
@@ -108,6 +109,9 @@ export class Horde {
       target: null,
       goalX: c.x,
       goalY: c.y,
+      farT: 0,
+      flank: 0,
+      sinkT: 0,
       retarget: 0,
       attackCd: 0,
       slamWind: 0,
@@ -250,8 +254,23 @@ export class Horde {
    * Alien qui sort de son trou d'apparition (`ALIEN_SPAWN_HOLD` s après son arrivée, comme l'animation `EMERGE_*` de view/UnitViews.ts) :
    * immobile et INVULNÉRABLE, les soldats ne le visent pas. Pas pour le lurker (il creuse son propre trou) ni un ressuscité (il sort de sa flaque).
    */
+  /**
+   * Enfouissement (`BURIED`) : 'full' = totalement enterré (Scarab sous terre : intouchable, invisible), 'semi' = semi-enterré (lurker en
+   * embuscade : 50 % des dégâts), 'none' sinon, y compris pendant les animations (s'enterrer, se déterrer : 100 % des dégâts).
+   */
+  burial(a: AlienState): 'none' | 'semi' | 'full' {
+    if (a.def.burrow && a.lurkPhase === 2) return 'full';
+    if (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4) return 'semi';
+    return 'none';
+  }
+
+  /** Les soldats peuvent le viser et le toucher : ni dans son trou d'apparition, ni totalement enterré. */
+  targetable(a: AlienState): boolean {
+    return !this.isEmerging(a) && this.burial(a) !== 'full';
+  }
+
   isEmerging(a: AlienState): boolean {
-    return !a.def.lurk && !a.revived && a.age < ALIEN_SPAWN_HOLD;
+    return !a.def.lurk && !a.revived && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
   }
 
   update(dt: number): void {
@@ -266,6 +285,16 @@ export class Horde {
       if (def.shield && a.maxShield > 0) {
         a.shieldT += dt;
         if (a.shieldT >= def.shield.regenDelay && a.shield < a.maxShield) a.shield = Math.min(a.maxShield, a.shield + (a.maxShield / def.shield.regenTime) * dt);
+      }
+
+      if (def.projectile) {
+        this.updateOrb(a, dt); // orbe de glace : file tout droit, gèle le premier soldat touché
+        continue;
+      }
+      // s'enterre avant d'être déplacé (recyclage des traînards) : immobile, n'attaque plus
+      if (a.sinkT > 0) {
+        a.vx = a.vy = a.kx = a.ky = 0;
+        continue;
       }
 
       // Ciblage (pas à chaque tick)
@@ -288,6 +317,17 @@ export class Horde {
       gy /= gd;
 
       let speed = def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc;
+      if (def.burrow && a.lurkPhase === 4) {
+        // Scarab ressorti : fonce tout droit vers le point anticipé (direction verrouillée), sans s'arrêter au contact
+        gx = a.rushDx;
+        gy = a.rushDy;
+        gd = Infinity;
+      }
+      // mode contournement (traînard tiré au sort) : vers le point où la squad sera, sur son flanc (`gd` reste la vraie distance : portées inchangées)
+      if (a.flank !== 0 && this.chaseDir(a, goalX, goalY, gd, speed)) {
+        gx = this.steerV.x;
+        gy = this.steerV.y;
+      }
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
       const power = (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
       a.age += dt;
@@ -601,6 +641,152 @@ export class Horde {
 
       arena.constrain(a);
     }
+    this.relocateStragglers(dt);
+  }
+
+  /**
+   * Recyclage des traînards (`RELOCATE`, méthode Vampire Survivors) : l'alien trop loin depuis trop longtemps s'arrête et s'enterre
+   * (`sinkT`, `RELOCATE.sink` s), puis il est remplacé par un alien neuf (nouvel identifiant : il sort du sol comme une apparition de
+   * vague) placé hors écran devant la squad la plus proche, avec ses PV, son bouclier, son escalade et ses marques (pas d'XP, pas de
+   * recrue). À la même place dans la liste : l'ordre ne change pas.
+   */
+  private relocateStragglers(dt: number): void {
+    const { aliens, metrics } = this.sim;
+    for (let i = 0; i < aliens.length; i++) {
+      const a = aliens[i];
+      const sq = this.sim.nearestSquad(a.x, a.y);
+      if (!sq) return;
+      if (a.sinkT <= 0) {
+        // pas encore en train de s'enterrer : assez loin depuis assez longtemps ?
+        if (!a.alive || a.def.boss || a.def.projectile || a.captive || a.castT > 0 || a.lurkPhase > 0 || Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RELOCATE.far) {
+          a.farT = 0;
+          continue;
+        }
+        if ((a.farT += dt) < RELOCATE.after) continue;
+        if (this.sim.rng.chance(RELOCATE.flankChance)) {
+          // contournement : il garde sa place mais coupe la route de la squad, sur un flanc ; répit de `flankFor` s avant un nouveau tirage
+          if (a.flank === 0) a.flank = (this.sim.rng.chance(0.5) ? 1 : -1) * this.sim.rng.range(0.4, 1);
+          a.farT = -RELOCATE.flankFor;
+        } else a.sinkT = RELOCATE.sink; // il s'arrête et s'enterre
+        continue;
+      }
+      if (!a.alive) continue;
+      a.sinkT = Math.max(1e-3, a.sinkT - dt); // sous terre (reste > 0 : immobile) tant qu'il n'a pas trouvé où ressortir
+      if (a.sinkT > 1e-3) continue;
+      const p = this.aheadOf(sq, a.radius);
+      if (!p) continue; // pas de place libre : il reste sous terre, on réessaie au tick suivant
+      const spawned = metrics.spawnedHp;
+      const made = this.create(a.def, p.x, p.y, 1, a.revived);
+      metrics.spawnedHp = spawned; // un déplacement, pas des PV en plus (mesures d'équilibrage)
+      made.maxHp = a.maxHp;
+      made.hp = a.hp;
+      made.maxShield = a.maxShield;
+      made.shield = a.shield;
+      made.esc = a.esc;
+      made.noXp = a.noXp;
+      made.noRecruit = a.noRecruit;
+      made.revives = a.revives;
+      made.reviveLock = a.reviveLock;
+      aliens[i] = made;
+    }
+  }
+
+  /**
+   * Mode contournement (`CHASE`) : direction dans `steerV`, vers `t` (le soldat visé, sinon le centre de la squad la plus proche : les
+   * aliens hors de `SEEK_RADIUS` n'ont pas de cible). La course de la squad est prolongée (vitesse et virage actuels : ligne droite ou
+   * arc de cercle) ; l'alien vise le premier point de cette course qu'il peut atteindre à temps (sinon celui dont il est le moins en
+   * retard), décalé sur son flanc. Faux si la squad ne court pas (poursuite directe).
+   */
+  private chaseDir(a: AlienState, tx: number, ty: number, gd: number, speed: number): boolean {
+    const sq = a.target ? this.sim.squadOf(a.target.owner) : this.sim.nearestSquad(a.x, a.y);
+    if (!sq) return false;
+    const { vel } = sq;
+    const vs = Math.hypot(vel.x, vel.y);
+    if (vs < CHASE.minSpeed) return false;
+    const ux = vel.x / vs;
+    const uy = vel.y / vs;
+    const w = Math.max(-CHASE.maxTurn, Math.min(CHASE.maxTurn, sq.turn));
+    let bestX = tx;
+    let bestY = ty;
+    let bestGap = Infinity;
+    for (let s = CHASE.step; s <= CHASE.horizon + 1e-6; s += CHASE.step) {
+      // déplacement le long de la course : avance (sin) et dérive latérale (1 − cos) d'un arc de rayon vs / w
+      const fwd = Math.abs(w) < 1e-3 ? vs * s : (Math.sin(w * s) / w) * vs;
+      const side = Math.abs(w) < 1e-3 ? 0 : ((1 - Math.cos(w * s)) / w) * vs;
+      const px = tx + ux * fwd - uy * side;
+      const py = ty + uy * fwd + ux * side;
+      const gap = Math.hypot(px - a.x, py - a.y) - speed * s;
+      if (gap < bestGap) {
+        bestGap = gap;
+        bestX = px;
+        bestY = py;
+      }
+      if (gap <= 0) break; // atteignable à temps : premier point d'interception
+    }
+    const off = a.flank * CHASE.flank * Math.min(1, Math.max(0, (gd - CHASE.flankNear) / CHASE.flankFade));
+    const ax = bestX - uy * off - a.x;
+    const ay = bestY + ux * off - a.y;
+    const d = Math.hypot(ax, ay);
+    if (d < 1) return false;
+    this.steerV.x = ax / d;
+    this.steerV.y = ay / d;
+    return true;
+  }
+
+  /** Lance un alien-projectile (`def.projectile`, ex. orbe de glace) depuis (`x`, `y`) dans la direction (`dx`, `dy`) normalisée. */
+  launch(type: AlienId, x: number, y: number, dx: number, dy: number): void {
+    const def = ALIENS[type];
+    const spawned = this.sim.metrics.spawnedHp;
+    const o = this.create(def, x, y, 1, false);
+    this.sim.metrics.spawnedHp = spawned; // un projectile, pas une menace à équilibrer
+    o.hp = o.maxHp = def.hp; // PV exacts, sans multiplicateur de difficulté
+    o.noXp = o.noRecruit = true;
+    o.rushDx = dx;
+    o.rushDy = dy;
+    o.lurkT = def.projectile!.life;
+    o.vx = dx * def.speed;
+    o.vy = dy * def.speed;
+    this.sim.aliens.push(o);
+  }
+
+  /** Orbe de glace en vol : tout droit, au-dessus du décor ; au contact d'un soldat dégâts + gel puis il se brise, sinon il se brise en fin de course. */
+  private updateOrb(a: AlienState, dt: number): void {
+    const P = a.def.projectile!;
+    a.age += dt;
+    const sp = a.def.speed * this.sim.stasisAt(a.x, a.y);
+    a.vx = a.rushDx * sp;
+    a.vy = a.rushDy * sp;
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    const b = this.sim.arena.bounds;
+    if ((a.lurkT -= dt) <= 0 || a.x < b.minX || a.x > b.maxX || a.y < b.minY || a.y > b.maxY) {
+      a.alive = false;
+      this.sim.events.push({ t: 'freeze', x: a.x, y: a.y, r: P.ring * 0.6 }); // se brise en fin de course
+      return;
+    }
+    for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
+      if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
+      this.sim.damageSoldier(s, a.def.damage * a.esc);
+      this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
+      a.alive = false;
+      return;
+    }
+  }
+
+  /** Point hors écran devant une squad (sa direction de course ± `RELOCATE.cone`), libre de décor et loin de toutes les squads. */
+  private aheadOf(sq: Squad, radius: number): Point | null {
+    const { rng, arena } = this.sim;
+    const moving = Math.hypot(sq.vel.x, sq.vel.y) >= RELOCATE.minSpeed;
+    const heading = moving ? Math.atan2(sq.vel.y, sq.vel.x) : rng.range(0, Math.PI * 2);
+    const safe = RELOCATE.distance * 0.85;
+    for (let tries = 0; tries < 12; tries++) {
+      const ang = heading + (moving ? rng.range(-RELOCATE.cone, RELOCATE.cone) : rng.range(0, Math.PI * 2));
+      const d = RELOCATE.distance + rng.range(0, 150);
+      const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d };
+      if (!arena.isFree(p, radius + 20)) continue;
+      if (this.sim.aliveSquads.every((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) - o.radius >= safe)) return p;
+    }
+    return null;
   }
 
   /**
@@ -697,7 +883,7 @@ export class Horde {
         }
         if (a.lurkT <= 0) {
           a.lurkPhase = 2;
-          a.lurkT = L.wait;
+          a.lurkT = L.rewait; // a déjà tiré : si la squad est sortie de portée, il ressort vite (sinon il retire dès `cooldown` écoulé)
           a.attackCd = L.cooldown;
         }
         break;
@@ -741,7 +927,7 @@ export class Horde {
       case 2: {
         a.vx = a.vy = a.kx = a.ky = 0;
         a.lurkT -= dt;
-        if (a.lurkT > B.wait * 0.4) this.aimBurrow(a); // le trou suit la squad, puis se verrouille : le joueur peut s'écarter
+        if (a.lurkT > B.lock) this.aimBurrow(a); // le télégraphe suit la squad, puis se verrouille `lock` s avant la sortie : le temps de s'écarter
         if (a.lurkT <= 0) {
           a.x = a.leapX;
           a.y = a.leapY;
@@ -750,40 +936,111 @@ export class Horde {
           a.lurkPhase = 3;
           a.lurkT = B.rise;
           this.burrowImpact(a);
+          this.aimLunge(a);
         }
         a.leapT = Math.max(0.05, a.lurkT);
         return true;
       }
-      default: // 3 : ressort
-        a.vx = a.vy = 0;
+      case 3: {
+        // ressort en avançant déjà vers le point anticipé (direction verrouillée)
+        const sp = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + BOSS_ENRAGE.speed * a.enraged);
+        a.vx = a.rushDx * sp;
+        a.vy = a.rushDy * sp;
+        a.x += a.vx * dt;
+        a.y += a.vy * dt;
+        this.sim.arena.constrain(a);
         if ((a.lurkT -= dt) <= 0) {
-          a.lurkPhase = 0;
+          a.lurkPhase = 4;
+          a.lurkT = B.lunge;
           a.leapT = 0;
           a.leapCd = B.every;
+          if (a.def.stalactites) this.castStalactites(a); // une fois sorti : pluie de stalactites
         } else a.leapT = Math.max(0.05, a.lurkT);
         return true;
+      }
+      default: {
+        // 4 : fonce tout droit vers le point anticipé (déplacement normal, direction imposée dans `update`) jusqu'à le dépasser
+        a.leapT = 0;
+        a.lurkT -= dt;
+        const ahead = (a.leapX - a.x) * a.rushDx + (a.leapY - a.y) * a.rushDy;
+        if (ahead <= 0 || a.lurkT <= 0) a.lurkPhase = 0;
+        return false;
+      }
     }
   }
 
-  /** Point de sortie : derrière la squad (côté opposé au boss), ramené sur un endroit libre de la carte. */
-  private aimBurrow(a: AlienState): void {
+  /**
+   * Scarab qui ressort : point visé = où sera la squad dans `burrow.lead` s (centre + vitesse de course, `Squad.vel`), mémorisé dans
+   * `leapX` / `leapY` ; direction verrouillée dans `rushDx` / `rushDy` (il ne la change plus jusqu'à l'atteindre).
+   */
+  private aimLunge(a: AlienState): void {
     const B = a.def.burrow!;
+    const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    const px = sq ? sq.center.x + sq.vel.x * B.lead : a.x;
+    const py = sq ? sq.center.y + sq.vel.y * B.lead : a.y;
+    const d = Math.hypot(px - a.x, py - a.y);
+    if (d < 1) {
+      a.rushDx = 1;
+      a.rushDy = 0;
+      a.leapX = a.x; // déjà dessus : la ruée s'arrête aussitôt
+      a.leapY = a.y;
+      return;
+    }
+    a.rushDx = (px - a.x) / d;
+    a.rushDy = (py - a.y) / d;
+    a.leapX = px;
+    a.leapY = py;
+  }
+
+  /**
+   * Point de sortie : le centre de la squad, tel quel (pas d'anticipation : c'est au joueur de bouger). Sur un obstacle, le point libre le
+   * plus proche autour (anneaux de 60 et 120 px), sinon ramené dans la carte.
+   */
+  private aimBurrow(a: AlienState): void {
     const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
     if (!sq) return;
     const c = sq.center;
-    const base = Math.atan2(c.y - a.y, c.x - a.x); // direction du boss vers la squad : la sortie est au-delà
-    for (const k of [0, 0.5, -0.5, 1, -1, 1.6, -1.6]) {
-      const p = { x: c.x + Math.cos(base + k) * B.behind, y: c.y + Math.sin(base + k) * B.behind, radius: a.radius * 0.6 };
-      if (this.sim.arena.isFree(p, a.radius * 0.6)) {
-        a.leapX = p.x;
-        a.leapY = p.y;
-        return;
+    const r = a.radius * 0.6;
+    for (const d of [0, 60, 120]) {
+      for (let k = 0; k < (d === 0 ? 1 : 8); k++) {
+        const ang = (k / 8) * Math.PI * 2;
+        const p = { x: c.x + Math.cos(ang) * d, y: c.y + Math.sin(ang) * d };
+        if (this.sim.arena.isFree(p, r)) {
+          a.leapX = p.x;
+          a.leapY = p.y;
+          return;
+        }
       }
     }
-    const p = { x: c.x + Math.cos(base) * B.behind, y: c.y + Math.sin(base) * B.behind, radius: a.radius };
+    const p = { x: c.x, y: c.y, radius: a.radius };
     this.sim.arena.constrain(p);
     a.leapX = p.x;
     a.leapY = p.y;
+  }
+
+  /**
+   * Pluie de stalactites (`def.stalactites`) sur la squad visée : d'abord sur des soldats tirés au hasard (leur position du moment), puis au
+   * hasard autour de son centre ; les zones ne se chevauchent pas trop (essais), chaque impact est décalé du précédent de `stagger` s.
+   */
+  private castStalactites(a: AlienState): void {
+    const S = a.def.stalactites!;
+    const { rng } = this.sim;
+    const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    if (!sq) return;
+    const soldiers = sq.soldiers.filter((s) => s.alive);
+    const spots: Point[] = [];
+    const clear = (p: Point): boolean => spots.every((q) => Math.hypot(q.x - p.x, q.y - p.y) >= S.radius * 1.4);
+    for (let i = 0; i < S.onSoldiers && soldiers.length > 0; i++) {
+      const s = soldiers.splice(Math.floor(rng.next() * soldiers.length), 1)[0];
+      if (clear(s)) spots.push({ x: s.x, y: s.y });
+    }
+    for (let tries = 0; spots.length < S.count && tries < S.count * 8; tries++) {
+      const ang = rng.range(0, Math.PI * 2);
+      const d = Math.sqrt(rng.next()) * S.spread;
+      const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d * 0.8 };
+      if (clear(p)) spots.push(p);
+    }
+    spots.forEach((p, i) => this.sim.addStalactite(p.x, p.y, S.radius, S.delay + i * S.stagger, S.damage * a.esc, S.knockback));
   }
 
   /** Surgissement : onde de choc autour du trou (recul + dégâts aux soldats dans le rayon). */

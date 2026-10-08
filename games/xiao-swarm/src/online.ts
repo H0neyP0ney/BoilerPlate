@@ -43,7 +43,7 @@ export function readOnlineRequest(): OnlineRequest | null {
   return null;
 }
 
-export async function createOnlineSession(req: OnlineRequest, mode: ModeDef = MODES.coop): Promise<Session> {
+export async function createOnlineSession(req: OnlineRequest, mode: ModeDef = MODES.survival): Promise<Session> {
   if (req.kind === 'host') return host(mode);
   if (req.kind === 'join') return join(req.code);
   const transport = makeTransport();

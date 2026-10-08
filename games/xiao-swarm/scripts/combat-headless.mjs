@@ -14,7 +14,7 @@ try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
-  const { BOSS_ESCALATION } = await vite.ssrLoadModule('/src/config.ts');
+  const { BOSS_ESCALATION, RELOCATE } = await vite.ssrLoadModule('/src/config.ts');
 
   const fresh = (seed) => {
     const session = new LocalSession({ mode: MODES.survival, seed, bots: 0 });
@@ -45,7 +45,7 @@ try {
     check(hit >= 2, 'chargeur : la mêlée touche plusieurs soldats d’un coup', `${hit} soldats touchés`);
   }
 
-  // ---- cracheur : plus de flaque à l'impact, mais un nuage ralentissant sur la squad toutes les 6 s
+  // ---- cracheur : plus de flaque à l'impact ; nuage ralentissant retiré pour l'instant (08/10)
   {
     const { sim, step } = fresh(22);
     clearAliens(sim);
@@ -58,10 +58,8 @@ try {
     step(30 * 4); // il crache sans faire de nuage
     check(sim.puddles.length === 0, 'cracheur : ses boules ne laissent plus de flaque', `${sim.puddles.length} flaque(s)`);
     sp.cloudCd = 0;
-    step(3);
-    const cl = sim.puddles[0];
-    check(!!cl && Math.hypot(cl.x - sq.center.x, cl.y - sq.center.y) < 120 && cl.slow < 1, 'cracheur : nuage ralentissant posé sur la squad', cl ? `rayon ${cl.r}, ×${cl.slow}` : 'aucun');
-    check(sp.cloudCd > 5, 'cracheur : prochain nuage dans ~6 s', `${sp.cloudCd.toFixed(1)} s`);
+    step(30 * 7);
+    check(!ALIENS.spitter.cloud && sim.puddles.length === 0, 'cracheur : plus de nuage ralentissant (retiré pour l’instant)', `${sim.puddles.length} nuage(s)`);
   }
 
   // ---- chaman : 3 petits nuages de glace autour de la squad ; un soldat qui y entre est gelé
@@ -204,6 +202,8 @@ try {
     const r = ALIENS.shaman.revive;
     check(r.maxRevives === 3 && r.lockout === 30, 'chaman : 3 résurrections puis 30 s de repos (données)');
     for (const o of sq.soldiers) o.invulnerable = 1e9;
+    const relocateAfter = RELOCATE.after;
+    RELOCATE.after = Infinity; // le chaman est posé loin de la squad exprès : pas de recyclage des traînards pendant ce test
     sim.horde.spawnAt('shaman', sq.center.x + 3000, sq.center.y + 3000, 1, false);
     const sh = sim.aliens.find((a) => a.def.id === 'shaman');
     sh.hp = sh.maxHp = 1e12;
@@ -231,6 +231,283 @@ try {
     check(!castedWhileLocked, 'chaman : aucune incantation pendant le repos');
     check(lockEnd > lockStart && Math.abs(lockEnd - lockStart - 30) < 1, 'chaman : le repos dure 30 s', `${(lockEnd - lockStart).toFixed(1)} s`);
     check(casts > 3, 'chaman : il recommence à ressusciter après le repos', `${casts} incantations`);
+    RELOCATE.after = relocateAfter;
+  }
+
+  // ---- Scarab : sous terre, le télégraphe vise le centre de la squad (sans anticipation), se verrouille `lock` s avant la sortie ;
+  //      une squad qui en sort à temps n'est pas touchée
+  {
+    const { sim, step } = fresh(16);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const B = ALIENS.boss_scarab.burrow;
+    sim.horde.spawnAt('boss_scarab', sq.center.x + 500, sq.center.y, 1, false);
+    const sc = sim.aliens[0];
+    sc.age = 99;
+    sc.hp = sc.maxHp = 1e12;
+    sc.slamCd = 1e9; // pas de slam : on ne teste que la sortie de terre
+    sc.leapCd = 0;
+    let ticks = 0;
+    while (sc.lurkPhase !== 2 && ticks++ < 120) step();
+    step(3);
+    const aimErr = Math.hypot(sc.leapX - sq.center.x, sc.leapY - sq.center.y);
+    check(sc.lurkPhase === 2 && aimErr < 5, 'Scarab : sous terre, le télégraphe vise le centre de la squad (sans anticipation)', `écart ${aimErr.toFixed(1)} px`);
+    while (sc.lurkT > B.lock && ticks++ < 400) step();
+    const locked = { x: sc.leapX, y: sc.leapY };
+    const hp0 = sq.soldiers.reduce((n, s) => n + s.hp, 0);
+    // la squad fuit dès le verrouillage : 1,5 s à pleine vitesse, elle sort de la zone (rayon `radius`)
+    const input = new Map([['p1', { mx: -1, my: 0 }]]);
+    while (sc.lurkPhase === 2 && ticks++ < 400) {
+      sim.step(1 / 30, input);
+      sim.aliens.splice(1); // le Scarab seul
+    }
+    const drift = Math.hypot(sc.x - locked.x, sc.y - locked.y);
+    const hp1 = sq.soldiers.reduce((n, s) => n + s.hp, 0);
+    check(drift < 1 && Math.abs(B.lock - 1.5) < 0.01, 'Scarab : la sortie se verrouille 1,5 s avant et il ressort au point verrouillé', `${drift.toFixed(1)} px du point verrouillé`);
+    check(hp1 >= hp0 - 0.01, 'Scarab : une squad qui s’écarte pendant le verrouillage n’est pas touchée', `PV ${hp0.toFixed(0)} → ${hp1.toFixed(0)}`);
+    // en ressortant : il vise où sera la squad dans `lead` s (elle fuit vers la gauche) et fonce vers ce point, direction verrouillée
+    const lead = { x: sq.center.x + sq.vel.x * B.lead, y: sq.center.y + sq.vel.y * B.lead };
+    const aimOk = sc.lurkPhase === 3 && Math.hypot(sc.leapX - lead.x, sc.leapY - lead.y) < 40 && sq.vel.x < -100;
+    check(aimOk, 'Scarab : en ressortant, il vise la position anticipée de la squad', `point visé à ${Math.hypot(sc.leapX - lead.x, sc.leapY - lead.y).toFixed(0)} px de l’anticipation`);
+    const dir0 = { x: sc.rushDx, y: sc.rushDy };
+    const start = { x: sc.x, y: sc.y };
+    const up = new Map([['p1', { mx: 0, my: -1 }]]); // la squad change de direction : lui, non
+    let turned = false;
+    while (sc.lurkPhase !== 4 && ticks++ < 400) {
+      sim.step(1 / 30, up);
+      sim.aliens.splice(1);
+    }
+    const S = ALIENS.boss_scarab.stalactites;
+    const stalAtExit = sim.stalactites.length;
+    for (let i = 0; i < 20 && sc.lurkPhase === 4; i++) {
+      sim.step(1 / 30, up);
+      sim.aliens.splice(1);
+      if (Math.abs(sc.rushDx - dir0.x) > 1e-6 || Math.abs(sc.rushDy - dir0.y) > 1e-6) turned = true;
+    }
+    const mv = { x: sc.x - start.x, y: sc.y - start.y };
+    const along = (mv.x * dir0.x + mv.y * dir0.y) / (Math.hypot(mv.x, mv.y) || 1);
+    check(!turned && along > 0.95 && Math.hypot(mv.x, mv.y) > 50, 'Scarab : il fonce tout droit vers ce point sans changer de direction', `${Math.hypot(mv.x, mv.y).toFixed(0)} px parcourus, alignement ${along.toFixed(2)}`);
+    // une fois ressorti : pluie de stalactites sur la squad (zones annoncées, puis 80 dégâts à l'impact) ; plus de slam
+    check(!ALIENS.boss_scarab.slam && stalAtExit === S.count, 'Scarab : sorti de terre, il annonce une pluie de stalactites (plus de slam)', `${stalAtExit} zones`);
+    const target = sq.soldiers.find((s) => s.alive);
+    for (const s of sq.soldiers) s.invulnerable = 0;
+    target.hp = target.maxHp = 1000;
+    sim.stalactites.length = 1;
+    Object.assign(sim.stalactites[0], { x: target.x, y: target.y, t: 0.01 });
+    sim.step(1 / 30, new Map());
+    check(Math.abs(1000 - target.hp - S.damage * sc.esc) < 0.01 && sim.stalactites.length === 0, 'Scarab : une stalactite qui tombe sur un soldat lui retire 80 PV', `${(1000 - target.hp).toFixed(0)} dégâts`);
+  }
+
+  // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)
+  {
+    const { sim } = fresh(17);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('lurker', sq.center.x + 900, sq.center.y, 1, false);
+    sim.horde.spawnAt('boss_scarab', sq.center.x - 900, sq.center.y, 1, false);
+    const [lu, sc] = sim.aliens;
+    for (const a of sim.aliens) { a.age = 99; a.hp = a.maxHp = 1000; a.shield = a.maxShield = 0; }
+    const hit = (a, phase) => {
+      a.lurkPhase = phase;
+      const hp = a.hp;
+      sim.damage(a, 100, 'p1');
+      const dealt = hp - a.hp;
+      a.hp = 1000;
+      return dealt;
+    };
+    check(hit(lu, 1) === 100 && hit(lu, 5) === 100 && hit(sc, 1) === 100 && hit(sc, 3) === 100, 'enterré : 100 % des dégâts pendant les animations (s’enterrer, se déterrer)');
+    check(hit(lu, 2) === 50 && hit(lu, 3) === 50 && hit(lu, 4) === 50, 'enterré : lurker semi-enterré, 50 % des dégâts');
+    check(hit(sc, 2) === 0 && !sim.horde.targetable(sc) && sim.horde.targetable(lu), 'enterré : Scarab totalement enterré, intouchable et jamais visé');
+  }
+
+  // ---- aimant (power-up) : aspire globes d'XP, recrues et power-ups de TOUTE la carte
+  {
+    const { sim, step } = fresh(18);
+    clearAliens(sim);
+    sim.xp.clear();
+    sim.recruits.clear();
+    sim.powerups.items.length = 0;
+    const sq = sim.squadOf('p1');
+    for (const s of sq.soldiers) s.invulnerable = 1e9;
+    const far = { x: sq.center.x > sim.map.width / 2 ? 260 : sim.map.width - 260, y: sq.center.y > sim.map.height / 2 ? 260 : sim.map.height - 260 };
+    const xp0 = sq.xp + sq.level * 1e6;
+    sim.xp.orbs.push({ id: sim.ids.get(), x: far.x, y: far.y, px: far.x, py: far.y, value: 1, life: 30 });
+    sim.recruits.drop('trooper', far.x + 40, far.y, undefined, true);
+    sim.powerups.drop('stim', far.x - 40, far.y, true);
+    const dist = Math.hypot(far.x - sq.center.x, far.y - sq.center.y);
+    const on = sq.soldiers.find((s) => s.alive);
+    sim.powerups.drop('magnet', on.x, on.y, true);
+    const size0 = sq.soldiers.length;
+    step(30 * 6);
+    const gotXp = sq.xp + sq.level * 1e6 > xp0;
+    check(dist > 1500 && sim.xp.orbs.length === 0 && gotXp && sq.soldiers.length > size0 && sq.buffs.stim > 0, 'aimant : aspire globes, recrues et power-ups de toute la carte', `objets à ${dist.toFixed(0)} px ; restent ${sim.xp.orbs.length} globe(s), ${sim.recruits.items.length} recrue(s), ${sim.powerups.items.length} power-up(s)`);
+  }
+
+  // ---- upgrades : aux niveaux 10, 20, 30… les 3 propositions sont prismatiques
+  {
+    const { sim } = fresh(19);
+    const sq = sim.squadOf('p1');
+    const allPrismAt = [];
+    let mixedAt10 = false;
+    let offeredReinforce = false;
+    for (let guard = 0; guard < 200 && sq.level < 21; guard++) {
+      sq.gainXp(sq.xpNeeded - sq.xp + 0.01); // un niveau
+      while (sq.offer) {
+        if (sq.offer.includes('reinforce')) offeredReinforce = true;
+        const choosing = sq.level; // un seul niveau en attente à la fois ici
+        if (sq.offerPrism.length === 3 && sq.offerPrism.every(Boolean)) allPrismAt.push(choosing);
+        else if (choosing % 10 === 0) mixedAt10 = true;
+        sim.chooseUpgrade('p1', 0);
+      }
+    }
+    check(!offeredReinforce, 'upgrades : le renfort (désactivé) n’est jamais proposé');
+    check(allPrismAt.includes(10) && allPrismAt.includes(20) && !mixedAt10, 'upgrades : 3 propositions prismatiques aux niveaux 10 et 20', `tout prismatique aux niveaux ${allPrismAt.join(', ') || 'aucun'}`);
+    // relance au niveau 30 : les prismatiques sont retirées au sort (5 % chacune), plus garanties
+    while (sq.level < 29) {
+      sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
+      while (sq.offer) sim.chooseUpgrade('p1', 0);
+    }
+    sq.rerolls = 50;
+    sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
+    const before = sq.offerPrism.every(Boolean);
+    let allAfter = 0;
+    for (let i = 0; i < 20 && sq.offer; i++) {
+      sim.rerollUpgrade('p1');
+      if (sq.offerPrism.every(Boolean)) allAfter++;
+    }
+    check(sq.level === 30 && before && allAfter === 0, 'upgrades : une relance au niveau 30 retire les prismatiques au sort', `niveau ${sq.level}, ${allAfter} relance(s) sur 20 encore toutes prismatiques`);
+  }
+
+  // ---- objet au sol attrapé (attiré) : il ne disparaît plus et ne clignote plus
+  {
+    const { sim, step } = fresh(20);
+    clearAliens(sim);
+    sim.xp.clear();
+    sim.powerups.items.length = 0;
+    const { PICKUP, ORB_BLINK_TIME } = await vite.ssrLoadModule('/src/config.ts');
+    const sq = sim.squadOf('p1');
+    const s0 = sq.soldiers.find((s) => s.alive);
+    const orb = { id: sim.ids.get(), x: s0.x + 90, y: s0.y, px: s0.x + 90, py: s0.y, value: 1, life: 0.2 };
+    sim.xp.orbs.push(orb);
+    const pu = sim.powerups.drop('stim', s0.x - 90, s0.y);
+    pu.life = 0.2;
+    step(1);
+    const caughtOk = orb.caught && pu.caught && orb.life >= ORB_BLINK_TIME && pu.life >= 4;
+    // on les éloigne à 1500 px : ils ne disparaissent pas, suivent la squad qui les a attrapés et finissent ramassés
+    for (const o of [orb, pu]) { o.x = o.px = sq.center.x + 1500; o.y = o.py = sq.center.y; }
+    const xp0 = sq.xp + sq.level * 1e6;
+    step(30 * 3);
+    const picked = !sim.xp.orbs.includes(orb) && sq.xp + sq.level * 1e6 > xp0 && !sim.powerups.items.includes(pu) && sq.buffs.stim > 0;
+    check(caughtOk && picked, 'objet attiré : il ne disparaît plus, ne clignote plus et revient vers sa squad', `durée figée à ${PICKUP.caughtLife} s ; ramassés : ${picked}`);
+    // une recrue attrapée par une squad très rapide (vitesse × 3) la rattrape quand même (accélération jusqu'à PICKUP.maxSpeed)
+    sim.recruits.clear();
+    sq.stats.add('speed', { mul: 3 });
+    const size0 = sq.soldiers.length;
+    const lead = sq.soldiers.find((s) => s.alive);
+    sim.recruits.drop('trooper', lead.x + 90, lead.y, undefined, true);
+    const run = new Map([['p1', { mx: -1, my: 0 }]]);
+    let t = 0;
+    while (sq.soldiers.length === size0 && t++ < 90) sim.step(1 / 30, run);
+    check(sq.soldiers.length > size0, 'recrue attirée : une squad très rapide ne peut pas la distancer', `ramassée en ${(t / 30).toFixed(2)} s`);
+  }
+
+  // ---- slime de glace : orbe de glace = projectile destructible (500 PV, barre de vie), gèle le soldat touché
+  {
+    const { sim, step } = fresh(21);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    for (const s of sq.soldiers) s.invulnerable = 0;
+    const target = sq.soldiers.find((s) => s.alive);
+    sim.horde.spawnAt('iceballer', target.x + 300, target.y, 1, false);
+    const ib = sim.aliens[0];
+    ib.age = 99;
+    ib.hp = ib.maxHp = 1e9;
+    sim.combat.iceShot(ib, target);
+    const orb = sim.aliens.find((a) => a.def.id === 'ice_orb');
+    check(!!orb && orb.maxHp === 500 && orb.hp === 500 && sim.horde.targetable(orb) && orb.noXp && orb.noRecruit, 'slime de glace : il lance un orbe de glace de 500 PV, visable par la squad', orb ? `${orb.maxHp} PV` : 'aucun orbe');
+    // l'orbe touche un soldat : il le gèle et se brise
+    for (const s of sq.soldiers) s.frozen = 0;
+    let ticks = 0;
+    while (orb.alive && ticks++ < 60) {
+      orb.hp = 500; // on l'empêche d'être détruit par les tirs ici
+      sim.horde.update(1 / 30);
+    }
+    const frozen = sq.soldiers.filter((s) => s.frozen > 0).length;
+    check(!orb.alive && frozen >= 1, 'orbe de glace : au contact, il gèle un soldat puis se brise', `${frozen} soldat(s) gelé(s)`);
+    // un second orbe détruit par la squad (dégâts) : il meurt sans XP
+    sim.combat.iceShot(ib, target);
+    const orb2 = sim.aliens.find((a) => a.def.id === 'ice_orb' && a.alive);
+    sim.xp.clear();
+    sim.damage(orb2, 499, 'p1');
+    const alive499 = orb2.alive;
+    sim.damage(orb2, 1, 'p1');
+    check(alive499 && !orb2.alive && sim.xp.orbs.length === 0, 'orbe de glace : détruit par la squad après 500 dégâts, sans XP');
+  }
+
+  // ---- priorité de tir : libérer un allié (glaçon d'un allié gelé, bulle qui a avalé un allié) avant tout autre alien, même plus proche
+  {
+    const { sim } = fresh(22);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    while (sq.soldiers.length < 3) sq.recruit('trooper', { x: sq.center.x, y: sq.center.y });
+    const [shooter, iced, eaten] = sq.soldiers;
+    for (const s of sq.soldiers) { s.invulnerable = 1e9; s.frozen = 0; s.capturedBy = 0; }
+    shooter.x = 1500; shooter.y = 1500;
+    iced.x = 1500 + 150; iced.y = 1500; iced.frozen = 30; // gelé, à 150 px
+    eaten.x = 1500; eaten.y = 1500 + 220;
+    sim.horde.spawnAt('slime', 1500 - 40, 1500, 1, false); // alien tout près (40 px)
+    sim.horde.spawnAt('bubble', 1500, 1500 + 220, 1, false); // bulle qui tient un allié, à 220 px
+    const [slime, bubble] = sim.aliens;
+    for (const a of sim.aliens) { a.age = 99; a.hp = a.maxHp = 1e9; }
+    bubble.captive = eaten;
+    eaten.capturedBy = bubble.id;
+    const aim = () => {
+      shooter.retarget = 0;
+      shooter.cooldown = 1e9; // il vise sans tirer
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(0, sim.aliens.length, slime, bubble);
+      shooter.x = 1500; shooter.y = 1500;
+      return shooter.target;
+    };
+    const first = aim();
+    iced.frozen = 0; // glaçon brisé : reste la bulle
+    const second = aim();
+    check(first === iced && second === bubble, 'tir : un soldat libère d’abord ses alliés (glaçon, puis bulle), avant l’alien le plus proche', `1re cible ${first?.kind}${first === iced ? ' (glaçon)' : ''}, 2e ${second?.def?.id ?? second?.kind}`);
+  }
+
+  // ---- boss tué : « clear screen », tous les autres aliens meurent comme si le joueur les avait tués (XP, explosion des kamikazes…), un autre boss est épargné
+  {
+    const { sim } = fresh(15);
+    clearAliens(sim);
+    sim.xp.clear();
+    sim.recruits.clear();
+    const sq = sim.squadOf('p1');
+    const far = (dx, dy) => [sq.center.x + dx, sq.center.y + dy];
+    sim.horde.spawnAt('boss_rhino', ...far(600, 0));
+    sim.horde.spawnAt('boss_gling', ...far(-600, 0));
+    for (let i = 0; i < 12; i++) sim.horde.spawnAt('slime', ...far(300 + i * 20, 300));
+    sim.horde.spawnAt('bubble', ...far(0, -300));
+    sim.horde.spawnAt('kamikaze', ...far(0, 700));
+    sim.horde.spawnAt('slime', ...far(-300, 300));
+    for (const a of sim.aliens) a.noXp = a.noRecruit = false; // `spawnAt` les marque invoqués : ici, des aliens de vague ordinaires
+    const replayed = sim.aliens[sim.aliens.length - 1];
+    replayed.noXp = true; // envoyé par un rejeu de vague pendant le boss : ne donne toujours pas d'XP
+    const [boss, other] = sim.aliens;
+    const bubble = sim.aliens.find((a) => a.def.id === 'bubble');
+    const prisoner = sq.soldiers[0];
+    bubble.captive = prisoner;
+    prisoner.capturedBy = bubble.id;
+    for (const a of sim.aliens) a.age = 99; // sortis de leur trou d'apparition (sinon invulnérables)
+    sim.damage(boss, 1e9, 'p1');
+    const others = sim.aliens.filter((a) => a !== boss && a !== other);
+    check(!boss.alive && others.every((a) => !a.alive), 'boss tué : tous les autres aliens meurent avec lui', `${others.filter((a) => a.alive).length} survivant(s)`);
+    check(other.alive, 'boss tué : un autre boss encore en vie est épargné');
+    const xp = sim.xp.orbs.reduce((n, o) => n + o.value, 0);
+    const expected = 12 * ALIENS.slime.xp + ALIENS.bubble.xp + ALIENS.kamikaze.xp; // + celle du boss ; pas celle du slime d'un rejeu de vague
+    check(xp >= expected, 'boss tué : les aliens nettoyés donnent leur XP comme si le joueur les avait tués', `${xp} XP au sol (≥ ${expected} attendus)`);
+    check(sim.fuses.length >= 1, 'boss tué : un kamikaze nettoyé explose quand même', `${sim.fuses.length} explosion(s) en attente`);
+    check(prisoner.capturedBy === 0 && bubble.captive === null, 'boss tué : la bulle morte avec lui libère son prisonnier');
+    check(sim.powerups.items.some((p) => p.kind === 'magnet' && Math.hypot(p.x - boss.x, p.y - boss.y) < 1), 'boss tué : il lâche un power-up aimant');
   }
 } finally {
   await vite.close();

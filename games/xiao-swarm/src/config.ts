@@ -13,7 +13,7 @@ export const SQUAD = {
 
 /**
  * Difficulté globale (multiplicateurs appliqués par sim/) : PV des soldats, PV des aliens et des boss, nombre d'aliens par vague (et plafond
- * d'aliens simultanés, sinon le doublement serait bridé), vitesse des aliens. Les boss ne sont pas multipliés en nombre (mais leurs PV le sont, voir `bossHpMul`).
+ * d'aliens simultanés `ModeDef.maxAliens`, sinon le doublement serait bridé), vitesse des aliens. Les boss ne sont pas multipliés en nombre (mais leurs PV le sont, voir `bossHpMul`).
  */
 /**
  * Grab (langue) : l'unité tirée garde sa liberté de mouvement (aucun stun). Pendant `GRAB_OUT` s elle ne compte plus pour le
@@ -73,6 +73,43 @@ export const BOSS_ENRAGE = { every: 45, speed: 0.3, attack: 0.3, cooldownCut: 0.
  * cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance de la partie.
  */
 export const BOSS_ESCALATION = 0.1;
+/**
+ * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
+ * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
+ * TOTALEMENT ENTERRÉES (Scarab qui se déplace sous terre) : intouchables, invisibles, et les soldats ne les visent pas.
+ */
+export const BURIED = { semiDmg: 0.5, semiShow: 0.3 };
+/**
+ * Recyclage des traînards (méthode Vampire Survivors, `Horde.relocateStragglers`) : un alien resté plus de `after` s à plus de `far` px
+ * de toutes les squads est retiré et réapparaît hors écran DEVANT la squad la plus proche (à `distance` px, dans sa direction de course
+ * ± `cone` rad ; squad plus lente que `minSpeed` px/s : direction au hasard), avec ses PV. Fuir ne laisse plus une horde s'accumuler
+ * derrière soi : on finit par foncer dedans. Jamais un boss ni un alien occupé (bulle avec prisonnier, chaman qui incante, lurker enterré).
+ */
+export const RELOCATE = { far: 1000, after: 5, distance: 850, cone: 0.9, minSpeed: 50, sink: 0.6, flankChance: 0.25, flankFor: 10 };
+// `sink` : durée (s) pendant laquelle l'alien s'arrête et s'enterre (trou, il s'enfonce) avant d'être déplacé ; il ressort ensuite de son trou
+// d'apparition habituel (nouvel alien : animation d'apparition de vague).
+// `flankChance` : part des traînards qui, au lieu de s'enterrer, passent en MODE CONTOURNEMENT (`CHASE`) pour encercler la squad ; ils sont
+// épargnés par le recyclage pendant `flankFor` s, puis, s'ils sont toujours loin, retirent au sort.
+/**
+ * Mode contournement (`AlienState.flank` ≠ 0, tiré au sort parmi les traînards : `RELOCATE.flankChance`) : au lieu de foncer sur la position
+ * actuelle de sa cible, l'alien vise le premier point de la course PRÉVUE de la squad (vitesse et virage actuels, `Squad.vel` / `Squad.turn`)
+ * qu'il peut atteindre à temps, décalé sur son flanc : il coupe la route du joueur qui tourne en rond et l'encercle (`Horde.chaseDir`).
+ */
+export const CHASE = {
+  /** Horizon de prévision de la course de la squad (s). */
+  horizon: 6,
+  /** Pas de recherche du point d'interception (s). */
+  step: 0.25,
+  /** Virage pris en compte au plus (rad/s) : au-delà, la squad zigzague, la prévision n'a plus de sens. */
+  maxTurn: 1.2,
+  /** Décalage latéral maximal (px) par rapport à la course de la squad. */
+  flank: 280,
+  /** Le décalage s'efface en approchant : nul à `flankNear` px de la cible, entier à `flankNear + flankFade`. */
+  flankNear: 120,
+  flankFade: 650,
+  /** Squad plus lente (px/s) : poursuite directe. */
+  minSpeed: 50,
+};
 /** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés (3 → 3,6 le 07/10 : +20 %). */
 export const CAPTIVE_VULN = 3.6;
 /**
@@ -83,6 +120,8 @@ export const CAPTIVE_VULN = 3.6;
 export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9, reach: 0.6 };
 /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
 export const PRISM_CHANCE = 0.05;
+/** Tous les `PRISM_LEVEL_EVERY` niveaux (10, 20, 30…), les 3 upgrades proposées sont prismatiques ; une relance les retire au sort (`PRISM_CHANCE`). */
+export const PRISM_LEVEL_EVERY = 10;
 /** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
 export const UPGRADE_CHOICE_TIME = 5;
 /** Montée de niveau : délai (s) de jeu normal entre la montée (onde de choc, texte « LEVEL UP! ») et la pause qui ouvre l'écran des cartes. */
@@ -105,7 +144,10 @@ export const RECRUIT = { life: 18, hopTime: 0.55, hopDist: [110, 154] as [number
  * `magnet` de la squad (upgrade). `magnetRadius` (px) est le rayon d'attraction de base de TOUS les objets au sol, globes d'XP
  * compris (`Xp.ts`), lui aussi multiplié par `magnet`.
  */
-export const PICKUP = { magnetRadius: 110, pickRadius: 34, maxSpeed: 1400 };
+export const PICKUP = { magnetRadius: 110, pickRadius: 34, maxSpeed: 1400, caughtLife: 8, pullStart: 250, pullAccel: 2600 };
+// `pullStart` / `pullAccel` : un objet attrapé part à `pullStart` px/s vers son soldat et accélère de `pullAccel` px/s² jusqu'à `maxSpeed`
+// (× stat `magnet`) ; il suit la squad qui l'a attrapé sans limite de distance : une squad rapide ne peut plus le distancer (`Pickup.chase`).
+// `caughtLife` : durée de vie (s) d'un objet attrapé (attiré ou aspiré), au-dessus de tous les seuils de clignotement ; elle ne décompte plus (`catchItem`).
 /** Globes d'XP : durée de vie au sol (s) ; l'affichage s'en sert pour l'animation d'apparition (scale Back.Out sur les `XP_ORB_POP` premières secondes). */
 export const XP_ORB_LIFE = 45;
 export const XP_ORB_POP = 0.3;

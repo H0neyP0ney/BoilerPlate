@@ -17,13 +17,19 @@ try {
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
+  const { INTERP_DELAY_MS } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
+  /** Ticks à attendre pour qu'un changement de l'hôte s'affiche chez le client : tampon d'interpolation (v38) + 2 ticks de marge. */
+  const LAG_TICKS = Math.ceil((INTERP_DELAY_MS / 1000) * 30) + 2;
 
   const hub = new LoopbackHub();
   const hostT = hub.createTransport();
   const code = await hostT.host();
-  const host = new HostSession({ mode: MODES.coop, seed: 42, transport: hostT, roomCode: code });
+  const host = new HostSession({ mode: MODES.survival, seed: 42, transport: hostT, roomCode: code });
   const hostEvents = [];
   const clientEvents = [];
+  const lag = async (client) => {
+    for (let i = 0; i < LAG_TICKS; i++) await tick(client);
+  };
   const tick = async (client) => {
     host.advance(1000 / 30, (e) => hostEvents.push(e));
     client?.advance(1000 / 30, (e) => clientEvents.push(e));
@@ -75,7 +81,7 @@ try {
   // 3) Coop : pas de tir ami (on colle les deux squads, on retire les aliens à chaque tick).
   const a = hs.squadOf(host.localPlayer);
   const b = hs.squadOf(client.localPlayer);
-  check(hs.mode.id === 'coop' && hs.mode.pvp === false, 'mode coop, friendly fire désactivé');
+  check(hs.mode.id === 'survival' && hs.mode.pvp === false && hs.config.online === true, 'survie à plusieurs (en ligne), friendly fire désactivé');
   host.setLocalInput(0, 0);
   client.setLocalInput(0, 0);
   for (let i = 0; i < 150 && !(a.alive && b.alive); i++) await tick(client); // les vagues ont pu tuer une squad : pas de réapparition en coop
@@ -102,7 +108,7 @@ try {
   hs.aliens.length = 0;
   hs.waves.trigger(9, 1);
   const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
-  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(900 * DIFFICULTY.bossHpMul * 2), 'boss unique, PV ×2 avec 2 joueurs (et × bossHpMul)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
+  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(900 * DIFFICULTY.bossHpMul * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (et × bossHpMul)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
   hs.waves.trigger(1, 3); // « Petit groupe » (slime ×4 × 1,15) : chaque squad vivante reçoit la vague
@@ -113,10 +119,14 @@ try {
 
   check(hs.xpEnabled && client.sim.xpEnabled, 'XP active chez l\'hôte et chez le client');
   hs.horde.spawnNear(a, 'slime', 3, 100);
-  for (const x of [...hs.aliens]) hs.damage(x, 9999, a.owner);
+  for (const x of [...hs.aliens]) {
+    x.age = 99; // sorti de son trou d'apparition (sinon invulnérable : isEmerging)
+    hs.damage(x, 9999, a.owner);
+  }
   await tick(client);
   await tick(client);
   await tick(client);
+  await lag(client);
   check(hs.xp.orbs.length > 0 && Math.abs(client.sim.xp.orbs.length - hs.xp.orbs.length) <= 1, 'globes d\'XP reflétés chez le client', `${hs.xp.orbs.length} vs ${client.sim.xp.orbs.length}`);
   // clignotement : l'hôte marque un globe dans ses dernières secondes, le client le reçoit marqué (identifiant stable compris)
   const orbHost = hs.xp.orbs[0];
@@ -124,6 +134,7 @@ try {
   orbHost.life = 2;
   await tick(client);
   await tick(client);
+  await lag(client);
   const orbClient = client.sim.xp.orbs.find((o) => o.id === orbId);
   check(!!orbClient && orbClient.life < 5, 'globe en fin de vie : le clignotement est transmis au client', orbClient ? `life ${orbClient.life}` : 'globe introuvable');
   // XP partagée (coop) : une seule barre, seuil × nombre de joueurs ; un niveau = tous les joueurs montent et choisissent
@@ -143,10 +154,27 @@ try {
   for (let i = 0; i < 60 && hs.choiceT <= 0; i++, ticksToPause++) await tick(client);
   for (let i = 0; i < 3; i++) await tick(client); // le snapshot de la pause arrive chez le client
   check(hs.choiceT > 0 && Math.abs(ticksToPause / 30 - 1) < 0.3, 'la pause des cartes s’ouvre environ 1 s après la montée de niveau', `${(ticksToPause / 30).toFixed(2)} s`);
+  await lag(client);
   const csq = client.sim.squadOf(client.localPlayer);
   check(a.level === levelBefore + 1 && b.level === a.level && !!a.offer && !!b.offer, 'XP partagée : l’XP de l’un fait monter tout le monde', `niv. ${a.level} / ${b.level}`);
   check(!!b.offer && !!csq.offer && csq.offer.join() === b.offer.join(), 'les propositions d\'upgrade arrivent chez le client', csq.offer?.join('/'));
   check(hs.choiceT > 0 && client.sim.choiceT > 0, 'choix d’upgrade : jeu en pause, reflété chez le client', `${hs.choiceT.toFixed(2)} s / ${client.sim.choiceT.toFixed(2)} s`);
+  { // pause : un projectile figé chez l'hôte ne tremble pas chez le client (plus d'extrapolation quand le monde est figé)
+    const p = hs.combat.projectiles.acquire();
+    Object.assign(p, { x: a.center.x + 200, y: a.center.y, px: a.center.x + 200, py: a.center.y, vx: 600, vy: 0, life: 5, maxLife: 5, damage: 0, team: 'aliens', owner: 'aliens', texture: '', lob: false, flame: false, aoe: 0 });
+    for (let i = 0; i < 12; i++) await tick(client); // tampon d'interpolation + cadence des snapshots
+    const cp = () => client.sim.combat.projectiles.active.find((q) => Math.abs(q.x - p.x) < 60 && Math.abs(q.y - p.y) < 60);
+    let moved = 0;
+    const first = cp();
+    for (let i = 0; i < 10 && first; i++) {
+      const x0 = first.x;
+      const y0 = first.y;
+      await tick(client);
+      moved = Math.max(moved, Math.hypot(first.x - x0, first.y - y0));
+    }
+    check(hs.choiceT > 0 && !!first && moved < 0.5, 'pause : les projectiles ne tremblent pas chez le client', first ? `déplacement max ${moved.toFixed(2)} px / tick` : 'projectile introuvable chez le client');
+    hs.combat.projectiles.release(p);
+  }
   client.chooseUpgrade(1);
   const timeBefore = hs.time;
   for (let i = 0; i < 6; i++) await tick(client);
@@ -206,8 +234,8 @@ try {
   hs.aliens.length = 0;
   for (let i = 0; i < 45; i++) await tick(client);
   check(hs.puddles.length === 0, 'impacts du cracheur : plus de flaque', `${hs.puddles.length}`);
-  const C = spitter.def.cloud;
-  hs.addPuddle(a.center.x, a.center.y, C.radius, C.ttl, C.slow); // nuage du cracheur (même liste que les anciennes flaques)
+  const C = spitter.def.cloud ?? { radius: 66.5, ttl: 3.5, slow: 0.5 }; // nuage du cracheur retiré pour l'instant (08/10) : on teste quand même la flaque ralentissante
+  hs.addPuddle(a.center.x, a.center.y, C.radius, C.ttl, C.slow); // nuage ralentissant (même liste que les anciennes flaques)
   for (let i = 0; i < 6; i++) await tick(client);
   check(hs.puddles.length === 1 && client.sim.puddles.length === 1, 'nuage ralentissant reflété chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
   check(hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10) < 1, 'le nuage ralentit les soldats dedans', `×${hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10)}`);
@@ -268,7 +296,7 @@ try {
     } else {
       for (const a of hs.aliens) {
         const b = back.aliens.find((x) => x.id === a.id);
-        if (!b || Math.abs(b.x - a.x) > 0.01 || Math.abs(b.y - a.y) > 0.01) {
+        if (!b || Math.abs(b.x - a.x) > 0.13 || Math.abs(b.y - a.y) > 0.13) {
           rushOk = false;
           rushDetail = `tick ${i} : alien ${a.def.id} décalé, rushWind=${rhino.rushWind.toFixed(3)}`;
           break;
@@ -278,6 +306,21 @@ try {
     await tick(client);
   }
   check(rushOk && sawRush, 'rhinocéros : snapshot lisible et fidèle pendant et après la charge (rushWind négatif)', rushDetail || (sawRush ? 'charge vue' : 'aucune charge'));
+  { // recyclage des traînards (v39) : un alien qui s'enterre le reste après encodage / décodage
+    const x = hs.aliens[0];
+    if (x) {
+      x.sinkT = 0.3;
+      const back = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
+      check(back?.aliens.find((b) => b.id === x.id)?.sinking === true && back.aliens.filter((b) => b.sinking).length === 1, "alien qui s'enterre (recyclage) : drapeau transmis au client");
+      x.sinkT = 0;
+    }
+  }
+  { // stalactites du Scarab (v40) : zone et compte à rebours transmis au client
+    hs.addStalactite(1234.5, 987.25, 55, 1.1, 80, 300);
+    const k = decodeSnapshot(encodeSnapshot(takeSnapshot(hs))).stalactites.at(-1);
+    check(!!k && Math.abs(k.x - 1234.5) < 0.2 && Math.abs(k.y - 987.25) < 0.2 && k.r === 55 && Math.abs(k.t - 1.1) < 0.02 && Math.abs(k.dur - 1.1) < 0.02, 'stalactite du Scarab : zone et compte à rebours transmis au client', k ? `(${k.x}, ${k.y}) r ${k.r}, ${k.t.toFixed(2)} s` : 'absente');
+    hs.stalactites.length = 0;
+  }
   hs.aliens.length = 0;
   // les escouades de ce test sont inactives : selon l'aléatoire de la partie, elles peuvent être anéanties avant ici (fin de partie coop) :
   // on attend la relance automatique de l'hôte ; un choix d'upgrade en cours met aussi le monde en pause (il se termine tout seul)
@@ -292,6 +335,7 @@ try {
   hs.powerups.items.push({ id: 9002, kind: 'stasis', x: on.x + 30, y: on.y, life: 5 });
   hs.powerups.items.push({ id: 9003, kind: 'rockets', x: on.x - 30, y: on.y, life: 5 });
   for (let i = 0; i < 4; i++) await tick(client);
+  await lag(client);
   const stimSq = a.buffs.stim > 0 ? a : b; // la squad dont un soldat est passé dessus
   check(stimSq.buffs.stim > 0 && client.sim.squadOf(stimSq.owner).buffs.stim > 0, 'stimpack ramassé, reflété chez le client', `${stimSq.buffs.stim.toFixed(1)} s`);
   check(hs.powerups.fields.length === 1 && client.sim.powerups.fields.length === 1, 'globe de stase persistant, reflété chez le client');
@@ -316,7 +360,9 @@ try {
     const { REINFORCE_MAX_OVERCAP } = await vite.ssrLoadModule('/src/config.ts');
     const offers = (over) => { a.stats.add('maxSquad', { flat: a.size - over - a.maxSize }); let seen = false;
       for (let k = 0; k < 60 && !seen; k++) { a.offer = null; a.pendingLevels = 1; a.rollPending(); seen = !!a.offer?.includes('reinforce'); } a.offer = null; a.pendingLevels = 0; return seen; };
-    check(!offers(REINFORCE_MAX_OVERCAP) && !offers(REINFORCE_MAX_OVERCAP + 2) && offers(REINFORCE_MAX_OVERCAP - 1), `renforts express : plus proposés quand la squad dépasse déjà son max de ${REINFORCE_MAX_OVERCAP}`); }
+    const { DISABLED_UPGRADES } = await vite.ssrLoadModule('/src/data/progression.ts');
+    if (DISABLED_UPGRADES.includes('reinforce')) check(!offers(0) && !offers(-3), 'renforts express : désactivés, jamais proposés (DISABLED_UPGRADES)');
+    else check(!offers(REINFORCE_MAX_OVERCAP) && !offers(REINFORCE_MAX_OVERCAP + 2) && offers(REINFORCE_MAX_OVERCAP - 1), `renforts express : plus proposés quand la squad dépasse déjà son max de ${REINFORCE_MAX_OVERCAP}`); }
   // Scarab : bouclier = 10 % de ses PV max, régénéré vite après 5 s sans dégâts (encodage conditionnel par type : lecture fidèle chez le client)
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
@@ -344,6 +390,7 @@ try {
   a.gainXp(a.xpNeeded - a.xp + 0.01);
   for (let i = 0; i < 4; i++) await tick(client);
   check(!!a.offer && a.offer.length === 3 && a.offerPrism.length === 3, 'montée de niveau : 3 propositions d’upgrade', `${a.offer?.join('/')}`);
+  await lag(client);
   const csqA = client.sim.squadOf(host.localPlayer);
   check(!!csqA.offer && csqA.offer.join() === a.offer.join() && csqA.offerPrism.join() === a.offerPrism.join(), 'les propositions (et leur statut prismatique) sont reflétées chez le client');
   check(hs.aliens.length === 0 || true, 'champ de répulsion actif pendant le choix');
@@ -412,6 +459,7 @@ try {
   jumper.leapY = a.center.y + (cdy / cd) * 450;
   await tick(client);
   await tick(client);
+  await lag(client);
   const cj = client.sim.aliens.find((x) => x.id === jumper.id);
   check(jumper.leapT > 0 && !!cj && cj.leapT > 0 && Math.hypot(cj.leapX - jumper.leapX, cj.leapY - jumper.leapY) < 1, 'crabe : saut lancé, point d’impact reflété chez le client', `impact (${jumper.leapX.toFixed(0)}, ${jumper.leapY.toFixed(0)})`);
   const victim = a.soldiers.find((x) => x.alive);

@@ -1,17 +1,17 @@
 import { POWERUPS, STIM_TIME } from '../config';
 import type { Field, PowerUpKind, PowerUpState } from './entities';
-import { findAttractor, inPickRange, pulledAttractor, pullStrongly, pullToward } from './Pickup';
+import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
 const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
-/** Aimant (coup unique) : rayon (px) autour de la squad dans lequel l'XP est aspirée. */
-const MAGNET_RADIUS = 1000;
+/** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
+const MAGNET_RADIUS = Infinity;
 /** Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. */
 const HEAL_FIELD = { r: 167, ttl: 10, perSec: 0.24 }; // rayon +10 % (152 avant le 07/10)
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
-const STASIS_FIELD = { r: 450, ttl: 8, slow: 0.2 };
+const STASIS_FIELD = { r: 382.5, ttl: 8, slow: 0.2 }; // rayon −15 % (450 avant le 08/10)
 const ROCKETS = 30;
 
 /**
@@ -45,7 +45,7 @@ export class PowerUps {
     }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const p = this.items[i];
-      p.life -= dt;
+      if (!p.caught) p.life -= dt; // attrapé : il ne disparaît plus
       if (p.life <= 0) {
         this.items.splice(i, 1);
         continue;
@@ -55,9 +55,9 @@ export class PowerUps {
       if (p.pulled && !pulled) p.pulled = undefined;
       const a = pulled ?? findAttractor(this.sim, p.x, p.y);
       if (!a) continue;
+      catchItem(p, a.squad.owner); // attiré : il ne disparaît plus ni ne clignote, et suit cette squad
       if (!inPickRange(a)) {
-        if (pulled) pullStrongly(p, a, dt);
-        else pullToward(p, a, dt);
+        chase(p, a.soldier.x, a.soldier.y, a.dist, a.stat, dt); // accélère jusqu'à une vitesse max très rapide
         continue;
       }
       this.items.splice(i, 1);
@@ -127,7 +127,7 @@ export class PowerUps {
     for (const p of this.items) {
       if (Math.hypot(squad.center.x - p.x, squad.center.y - p.y) > radius) continue;
       p.pulled = squad.owner;
-      p.life = Math.max(p.life, 10); // il ne disparaît pas en route
+      catchItem(p); // il ne disparaît pas en route
     }
   }
 

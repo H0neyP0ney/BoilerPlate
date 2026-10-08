@@ -7,45 +7,37 @@ import { makeJungleMap, makeRoyaleMap, type MapDef } from './maps';
  * simulation ; seuls la carte, les points de départ, le PvP et la fin changent.
  */
 export interface ModeDef {
-  id: 'survival' | 'royale' | 'versus' | 'coop';
+  id: 'survival' | 'royale' | 'versus';
   map: (seed: number) => MapDef;
   /** Les soldats de squads différentes se tirent dessus. */
   pvp: boolean;
-  /** Un joueur mort laisse une zone de réanimation au sol (coop), au lieu de réapparaître tout seul. */
+  /** En ligne, un joueur mort laisse une zone de réanimation au sol, au lieu de réapparaître tout seul. */
   reviveZones?: boolean;
   /** Durée du run (s). Survival : victoire à la fin. */
   duration: number;
   /** Script de vagues (niveaux + timeline, voir data/waves.ts). */
   waves: WaveScript;
-  /** Plafond d'aliens = base + perPlayer × joueurs. */
+  /** Plafond d'aliens à l'apparition = (base + perPlayer × joueurs vivants) × `DIFFICULTY.alienCountMul` (voir `Horde.canSpawn`). */
   maxAliens: { base: number; perPlayer: number };
   spawnPoints(map: MapDef, players: number, rng: Rng): Point[];
 }
 
+/**
+ * Survie (08/10 : fusion de l'ancien mode solo et de l'ancienne coop) : la carte de jungle et la timeline complète, pas de tir ami ; victoire
+ * en tuant le boss final (~10:00). Jouable SEUL (hors ligne : pause, revive par pub, tutoriel) ou À PLUSIEURS en ligne (2-4 joueurs, humains
+ * et / ou coéquipiers IA : XP partagée, zones de réanimation, difficulté qui grandit avec les joueurs vivants, spectateur, relance) ; ce qui
+ * change en ligne dépend de `SimConfig.online`, pas du mode.
+ */
 export const SURVIVAL: ModeDef = {
   id: 'survival',
   map: (seed) => makeJungleMap(seed),
   pvp: false,
+  reviveZones: true, // seulement en ligne (`SimConfig.online`) : seul, la squad anéantie a le revive par pub
   duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
   waves: WAVE_SCRIPT,
-  maxAliens: { base: 0, perPlayer: 90 },
-  spawnPoints: (map) => [{ x: map.width / 2, y: map.height / 2 }],
-};
-
-/**
- * Coopération en ligne (2-4 joueurs) : la carte et les vagues du solo (boss compris), pas de tir ami, difficulté qui
- * grandit avec le nombre de joueurs vivants. Un joueur mort regarde ses équipiers ; quand tous sont morts (ou que le boss
- * final est tombé), la partie recommence.
- */
-export const COOP: ModeDef = {
-  id: 'coop',
-  map: (seed) => makeJungleMap(seed),
-  pvp: false,
-  reviveZones: true,
-  duration: Infinity,
-  waves: WAVE_SCRIPT,
-  maxAliens: { base: 0, perPlayer: 90 },
+  maxAliens: { base: 0, perPlayer: 100 }, // × 1,5 = 150 par joueur vivant (135 avant le 08/10)
   spawnPoints(map, players) {
+    // seul : au centre ; à plusieurs : en cercle autour du centre
     return Array.from({ length: players }, (_, i) => {
       const a = (i / Math.max(1, players)) * Math.PI * 2;
       const r = players > 1 ? 110 : 0;
@@ -132,4 +124,4 @@ export const VERSUS: ModeDef = {
   },
 };
 
-export const MODES = { survival: SURVIVAL, royale: ROYALE, versus: VERSUS, coop: COOP } as const;
+export const MODES = { survival: SURVIVAL, royale: ROYALE, versus: VERSUS } as const;

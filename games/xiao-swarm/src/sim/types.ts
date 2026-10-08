@@ -49,8 +49,6 @@ export type SimEvent =
   | { t: 'cleave'; x: number; y: number; r: number }
   | { t: 'bossEnrage'; id: number; alien: AlienId; level: number }
   | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final' }
-  | { t: 'fire'; id: number; x: number; y: number; r: number; ttl: number }
-  | { t: 'fireEnd'; id: number }
   | { t: 'capture'; alien: number; soldier: number }
   | { t: 'release'; soldier: number; x: number; y: number }
   | { t: 'corpse'; id: number; x: number; y: number; alien: AlienId; ttl: number }
@@ -58,6 +56,8 @@ export type SimEvent =
   | { t: 'rock'; id: number; x: number; y: number; r: number; ttl: number }
   | { t: 'rockEnd'; id: number }
   | { t: 'slam'; x: number; y: number; r: number }
+  /** Une stalactite du Scarab s'écrase (effet : éclats, petite secousse ; les dégâts sont déjà appliqués). */
+  | { t: 'stalactite'; x: number; y: number; r: number }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }
   | { t: 'upgradePicked'; owner: PlayerId; x: number; y: number; id: string; prism: boolean }
   | { t: 'powerup'; owner: PlayerId; kind: string; x: number; y: number }

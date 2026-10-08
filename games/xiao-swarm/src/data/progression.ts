@@ -75,6 +75,11 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
+/**
+ * Upgrades désactivées : jamais proposées (elles restent dans `UPGRADES` / `UPGRADE_IDS` : le format réseau n'a pas à changer).
+ * `reinforce` (renforts : +3 soldats tout de suite) retirée le 08/10 : elle ne permet pas de capitaliser, personne ne la prenait.
+ */
+export const DISABLED_UPGRADES: readonly UpgradeId[] = ['reinforce'];
 
 /** Nombre d'upgrades proposées à chaque niveau. */
 export const OFFER_SIZE = 3;

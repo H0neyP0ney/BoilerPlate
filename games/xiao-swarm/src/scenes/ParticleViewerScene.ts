@@ -175,15 +175,12 @@ const EFFECTS: EffectDef[] = [
     ],
   },
   {
-    id: 'spiral',
-    label: 'Spirale (montée de niveau)',
-    where: "Bras de lumière qui tournent en s'écartant ; aplatissement = celui des ondes de choc. Le rayon vient de l'événement.",
+    id: 'levelFlash',
+    label: 'Flash de montée de niveau',
+    where: 'Montée de niveau : chaque soldat de la squad devient tout blanc puis repasse à sa couleur en fondu. Aperçu : un Gunner.',
     specs: [
-      { key: 'durationMs', label: 'Durée (ms)', min: 200, max: 3000, step: 50 },
-      { key: 'arms', label: 'Bras', min: 1, max: 8, step: 1 },
-      { key: 'perArm', label: 'Points par bras', min: 4, max: 40, step: 1 },
-      { key: 'turns', label: 'Tours', min: 0, max: 4, step: 0.05 },
-      { key: 'size', label: 'Taille des points', min: 0.2, max: 3, step: 0.05 },
+      { key: 'holdMs', label: 'Blanc plein (ms)', min: 0, max: 800, step: 10 },
+      { key: 'fadeMs', label: 'Fondu (ms)', min: 50, max: 2500, step: 10 },
     ],
   },
   {
@@ -324,6 +321,14 @@ const EFFECTS: EffectDef[] = [
       { key: 'shardLifeMin', label: 'Éclats : durée min (ms)', min: 50, max: 1500, step: 10 },
       { key: 'shardLifeMax', label: 'Éclats : durée max (ms)', min: 50, max: 2000, step: 10 },
       { key: 'shardGravity', label: 'Éclats : gravité', min: 0, max: 1000, step: 10 },
+      { key: 'chunkCount', label: 'Blocs par coup', min: 0, max: 12, step: 1 },
+      { key: 'chunkScale', label: 'Blocs : taille', min: 0.2, max: 3, step: 0.05 },
+      { key: 'chunkSpread', label: 'Blocs : élan horizontal', min: 0, max: 400, step: 5 },
+      { key: 'chunkUpMin', label: 'Blocs : élan vers le haut min', min: 0, max: 600, step: 5 },
+      { key: 'chunkUpMax', label: 'Blocs : élan vers le haut max', min: 0, max: 800, step: 5 },
+      { key: 'chunkGravity', label: 'Blocs : gravité', min: 50, max: 3000, step: 25 },
+      { key: 'chunkFall', label: 'Blocs : sol sous l’impact (px)', min: 0, max: 60, step: 1 },
+      { key: 'chunkFadeMs', label: 'Blocs : effacement (ms)', min: 0, max: 1500, step: 10 },
       { key: 'minScale', label: 'Taille aux derniers PV', min: 0.1, max: 1, step: 0.05, hint: '1 = le glaçon ne rétrécit pas' },
       { key: 'crack1', label: 'Fissures 1 sous (part de PV)', min: 0, max: 1, step: 0.05 },
       { key: 'crack2', label: 'Fissures 2 sous (part de PV)', min: 0, max: 1, step: 0.05 },
@@ -456,6 +461,9 @@ export class ParticleViewerScene extends Phaser.Scene {
   /** Joue l'effet courant en (x, y) ; (0, 0) = centre de la scène. */
   private play(x = 0, y = 0): void {
     switch (this.effect.id) {
+      case 'levelFlash':
+        this.previewLevelFlash(x, y);
+        break;
       case 'burst':
         this.fx.burst(x, y - 20, this.tint, this.burstCount);
         break;
@@ -498,9 +506,6 @@ export class ParticleViewerScene extends Phaser.Scene {
         });
         break;
       }
-      case 'spiral':
-        this.fx.spiral(x, y, this.radius, this.ringColor);
-        break;
       case 'column':
         this.fx.column(x, y, this.tint);
         break;
@@ -560,6 +565,22 @@ export class ParticleViewerScene extends Phaser.Scene {
     }
   }
 
+  /** Aperçu du flash de montée de niveau : un Gunner qui devient tout blanc puis repasse à sa couleur en fondu (comme `SoldierView.levelFlash`). */
+  private previewLevelFlash(x: number, y: number): void {
+    const f = FX.levelFlash;
+    const body = sprites.add(this, 'soldier_trooper', x, y).setDepth(6).setScale(sprites.scaleOf('soldier_trooper') * 2);
+    sprites.place(body, 'soldier_trooper');
+    const white = this.add
+      .image(x, y, body.texture.key, body.frame.name)
+      .setOrigin(body.originX, body.originY)
+      .setScale(body.scaleX, body.scaleY)
+      .setDepth(6.1)
+      .setTint(0xffffff)
+      .setTintMode(Phaser.TintModes.FILL);
+    this.tweens.add({ targets: white, alpha: 0, delay: f.holdMs, duration: f.fadeMs, onComplete: () => white.destroy() });
+    this.time.delayedCall(f.holdMs + f.fadeMs + 600, () => body.destroy());
+  }
+
   /** Glaçon d'aperçu en (x, y) : `ICE_HP` PV, un coup toutes les 0,2 s ; mêmes aspects que dans le jeu (`iceLook`), éclats puis rupture. */
   private showIce(x: number, y: number): void {
     this.ice?.body.destroy();
@@ -576,7 +597,7 @@ export class ParticleViewerScene extends Phaser.Scene {
       ice.next = this.time.now + 200;
       ice.hp--;
       if (ice.hp <= 0) {
-        this.fx.iceShards(ice.x, ice.y - 8, FX.ice.shardCount * FX.ice.breakMul);
+        this.fx.iceShards(ice.x, ice.y - 8, FX.ice.breakMul);
         ice.body.destroy();
         ice.cracks.destroy();
         this.ice = undefined;
@@ -656,7 +677,7 @@ export class ParticleViewerScene extends Phaser.Scene {
         slider('Particules demandées (aperçu)', { min: 1, max: 60, step: 1, get: () => this.burstCount, set: (v) => (this.burstCount = v), hint: '10 touche, 14 mort de soldat, 16 recrutement, 40 boss' }).row,
       );
     }
-    if (['explosion', 'ring', 'spiral', 'cracks', 'dust', 'stasis', 'healZone'].includes(e.id)) {
+    if (['explosion', 'ring', 'cracks', 'dust', 'stasis', 'healZone'].includes(e.id)) {
       this.paramBox.append(
         slider('Rayon (aperçu)', { min: 30, max: 260, step: 5, get: () => this.radius, set: (v) => (this.radius = v), hint: '70 grenade, 95 kamikaze, 120 mort du Flammeur, 160 boss' }).row,
       );
@@ -671,7 +692,7 @@ export class ParticleViewerScene extends Phaser.Scene {
       });
       this.paramBox.append(kind.row);
     }
-    if (e.id === 'ring' || e.id === 'spiral') this.paramBox.append(colorInput('Couleur (aperçu)', () => this.ringColor, (v) => (this.ringColor = v)).row);
+    if (e.id === 'ring') this.paramBox.append(colorInput('Couleur (aperçu)', () => this.ringColor, (v) => (this.ringColor = v)).row);
     if (e.id === 'explosion') this.paramBox.append(checkbox("Secousse d'écran dans l'aperçu", this.shakePreview, (v) => (this.shakePreview = v)));
 
     if (!isParam(e.id)) {

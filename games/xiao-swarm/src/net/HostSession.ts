@@ -13,6 +13,7 @@ import {
   takeSnapshot,
   type ClientMessage,
   type HostMessage,
+  type Snapshot,
 } from './Protocol';
 import { TICK_RATE, type Session } from './Session';
 import type { Payload, Transport } from './Transport';
@@ -67,6 +68,10 @@ export class HostSession implements Session {
   readonly bots = new Map<PlayerId, CoopBot>();
   private botCount = 0;
   private outbound: SimEvent[] = [];
+  /** Effets de tir à joindre au prochain snapshot, en binaire (v38) au lieu d'événements JSON. */
+  private fxShots: Snapshot['shots'] = [];
+  private fxImpacts: Snapshot['impacts'] = [];
+  private fxHits: number[] = [];
   /** Tick d'anéantissement des squads en attente de réapparition. */
   private readonly deadSince = new Map<PlayerId, number>();
   /** Coop : ticks restants avant la relance de la partie (> 0 = écran de fin, simulation figée). */
@@ -77,7 +82,7 @@ export class HostSession implements Session {
     this.transport = opts.transport;
     this.roomCode = opts.roomCode;
     this.localPlayer = opts.transport.localId;
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true, online: true });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
 
@@ -87,9 +92,9 @@ export class HostSession implements Session {
     for (let i = 0; i < Math.min(opts.bots ?? 0, MAX_BOTS); i++) this.addBot(opts.botLevel);
   }
 
-  /** Ajoute un coéquipier IA (coop seulement, dans la limite de `MAX_BOTS` et des places libres). Renvoie son id, ou null. */
+  /** Ajoute un coéquipier IA (pas en PvP, dans la limite de `MAX_BOTS` et des places libres). Renvoie son id, ou null. */
   addBot(level: BotLevel = 'standard'): PlayerId | null {
-    if (this.sim.mode.id !== 'coop' || this.bots.size >= MAX_BOTS || this.playerCount >= MAX_PLAYERS) return null;
+    if (this.sim.mode.pvp || this.bots.size >= MAX_BOTS || this.playerCount >= MAX_PLAYERS) return null;
     const id = `bot${++this.botCount}`;
     this.bots.set(id, new CoopBot(id, this.sim.config.seed + 101 * this.botCount, level));
     this.sim.spawnLate(id, this.sim.rng.pick(START_SQUADS));
@@ -134,13 +139,17 @@ export class HostSession implements Session {
           const pick = bot.pickUpgrade(this.sim);
           if (pick >= 0) this.sim.chooseUpgrade(id, pick);
         }
-        if (this.sim.mode.id === 'coop') this.checkCoopEnd();
+        if (!this.sim.mode.pvp) this.checkCoopEnd(); // survie à plusieurs : fin quand tous sont morts ou que le boss final tombe
         else this.respawnDead();
       }
       const share = this.remotes.size > 0;
       this.sim.events.drain((e) => {
         onEvent(e);
-        if (share) this.outbound.push(e);
+        if (!share) return;
+        if (e.t === 'shot') this.fxShots.push({ id: e.id, x: e.x, y: e.y });
+        else if (e.t === 'impact') this.fxImpacts.push({ x: e.x, y: e.y, texture: e.texture });
+        else if (e.t === 'hit') this.fxHits.push(e.id);
+        else this.outbound.push(e);
       });
       if (share && this.frame % SNAPSHOT_EVERY === 0) this.broadcast();
     });
@@ -189,9 +198,17 @@ export class HostSession implements Session {
   // ---------- Réseau ----------
 
   private broadcast(): void {
-    this.transport.broadcast('unreliable', encodeSnapshot(takeSnapshot(this.sim, this.acks)));
+    const snap = takeSnapshot(this.sim, this.acks);
+    snap.seq = this.frame;
+    snap.shots = this.fxShots;
+    snap.impacts = this.fxImpacts;
+    snap.hits = this.fxHits;
+    this.transport.broadcast('unreliable', encodeSnapshot(snap));
+    this.fxShots = [];
+    this.fxImpacts = [];
+    this.fxHits = [];
     if (this.outbound.length > 0) {
-      const msg: HostMessage = { t: 'events', list: this.outbound };
+      const msg: HostMessage = { t: 'events', seq: this.frame, list: this.outbound };
       this.transport.broadcast('unreliable', JSON.stringify(msg));
       this.outbound = [];
     }

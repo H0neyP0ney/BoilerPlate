@@ -297,9 +297,68 @@ export class Fx {
     });
   }
 
-  /** Éclats de glace à l'impact sur un glaçon (`count` : `FX.ice.shardCount` par défaut, × `breakMul` à la rupture). */
-  iceShards(x: number, y: number, count = FX.ice.shardCount): void {
-    this.shards.explode(Math.max(1, Math.round(count)), x, y);
+  /** Impact sur un glaçon : éclats (`FX.ice.shardCount`) et petits blocs de glace en cloche (`chunkCount`), × `mul` (× `breakMul` à la rupture). */
+  iceShards(x: number, y: number, mul = 1): void {
+    const c = FX.ice;
+    if (c.shardCount > 0) this.shards.explode(Math.max(1, Math.round(c.shardCount * mul)), x, y);
+    this.iceChunks(x, y, Math.round(c.chunkCount * mul));
+  }
+
+  /** Traînée de l'orbe de glace : petits flocons (fx_ice_ball) laissés derrière lui, qui tournent, tombent un peu et s'effacent. */
+  private trailAcc = 0;
+  iceTrail(x: number, y: number, dt: number): void {
+    this.trailAcc += dt;
+    const R = Phaser.Math.FloatBetween;
+    for (; this.trailAcc >= 0.03; this.trailAcc -= 0.03) {
+      const img = this.scene.add
+        .image(x + R(-6, 6), y + R(-6, 6), 'fx_ice_ball')
+        .setDepth(DEPTH.fx - 0.1)
+        .setScale(R(0.12, 0.26))
+        .setRotation(R(0, Math.PI * 2))
+        .setAlpha(0.9);
+      this.scene.tweens.add({ targets: img, y: img.y + R(8, 22), rotation: img.rotation + R(-3, 3), alpha: 0, scale: img.scale * 0.4, duration: R(350, 600), ease: 'Sine.In', onComplete: () => img.destroy() });
+    }
+  }
+
+  /** Blocs de glace en vol (plafond : au-delà, les nouveaux ne sont pas créés). */
+  private chunksAlive = 0;
+
+  /** Petits blocs de glace : sautent en cloche autour du point d'impact en tournant, retombent au sol (`chunkFall` px plus bas) et s'effacent. */
+  private iceChunks(x: number, y: number, count: number): void {
+    const c = FX.ice;
+    const R = Phaser.Math.FloatBetween;
+    for (let i = 0; i < count && this.chunksAlive < 60; i++) {
+      this.chunksAlive++;
+      const img = this.scene.add
+        .image(x, y, 'fx_ice_chunk')
+        .setDepth(DEPTH.fx)
+        .setScale(c.chunkScale * R(0.7, 1.15))
+        .setRotation(R(0, Math.PI * 2));
+      const vx = R(-c.chunkSpread, c.chunkSpread);
+      const vy = -R(c.chunkUpMin, Math.max(c.chunkUpMin, c.chunkUpMax));
+      const g = Math.max(1, c.chunkGravity);
+      const drop = c.chunkFall + R(-6, 6); // sol : un peu sous le point d'impact
+      const land = (-vy + Math.sqrt(vy * vy + 2 * g * Math.max(0, drop))) / g; // instant où la parabole retombe au sol
+      const spin = R(-12, 12);
+      const r0 = img.rotation;
+      const st = { t: 0 };
+      this.scene.tweens.add({
+        targets: st,
+        t: land,
+        duration: land * 1000,
+        onUpdate: () => img.setPosition(x + vx * st.t, y + vy * st.t + 0.5 * g * st.t * st.t).setRotation(r0 + spin * st.t),
+        onComplete: () =>
+          this.scene.tweens.add({
+            targets: img,
+            alpha: 0,
+            duration: c.chunkFadeMs,
+            onComplete: () => {
+              img.destroy();
+              this.chunksAlive--;
+            },
+          }),
+      });
+    }
   }
 
   /** Une croix verte qui monte dans un globe de soin (point choisi par l'appelant) ; `a` : opacité du globe (il s'efface à la fin). */
@@ -338,37 +397,6 @@ export class Fx {
       onComplete: () => img.destroy(),
     });
     return img;
-  }
-
-  /**
-   * Particules en spirale : `arms` bras de lumière qui tournent en s'écartant du centre jusqu'à `radius` (px) en `durationMs`.
-   * Chaque particule part avec un léger retard le long de son bras (elles dessinent une spirale), rétrécit et s'estompe en
-   * arrivant. Même aplatissement que les anneaux (`FX.ring.squash`) pour rester posé sur le sol. Onde de montée de niveau.
-   */
-  spiral(x: number, y: number, radius: number, color: number, durationMs = FX.spiral.durationMs, arms = FX.spiral.arms, perArm = FX.spiral.perArm, turns = FX.spiral.turns): void {
-    const squash = FX.ring.squash;
-    for (let a = 0; a < arms; a++) {
-      for (let i = 0; i < perArm; i++) {
-        const base = (a / arms) * Math.PI * 2;
-        const img = this.scene.add.image(x, y, 'fx_glow').setTint(color).setDepth(DEPTH.fx + 1).setAlpha(0); // blend normal : en additif le bleu virait au blanc sur le sol clair
-        const state = { k: 0 };
-        const life = durationMs * 0.62;
-        this.scene.tweens.add({
-          targets: state,
-          k: 1,
-          delay: (i / perArm) * durationMs * 0.38,
-          duration: life,
-          ease: 'Cubic.Out',
-          onStart: () => img.setAlpha(1),
-          onUpdate: () => {
-            const r = radius * state.k;
-            const ang = base + state.k * turns * Math.PI * 2;
-            img.setPosition(x + Math.cos(ang) * r, y + Math.sin(ang) * r * squash).setScale(FX.spiral.size * (1 - state.k * 0.65)).setAlpha(1 - state.k * state.k);
-          },
-          onComplete: () => img.destroy(),
-        });
-      }
-    }
   }
 
   /** Colonne de lumière qui monte et s'estompe (nouvelle recrue dans la squad, mort d'un soldat…). */

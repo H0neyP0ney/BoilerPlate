@@ -9,7 +9,7 @@ import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
 import { BotOverlay } from '../dev/botOverlay';
 import { CheatPanel, type BotControl } from '../dev/cheatPanel';
-import { jumpAhead } from '../dev/jumpAhead';
+import { JUMPS, jumpAhead, type JumpId } from '../dev/jumpAhead';
 import { AlienTest, alienTestMode, type AlienTestRequest } from '../dev/alienTest';
 import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
@@ -63,7 +63,7 @@ export class GameScene extends Phaser.Scene {
   /** Après un choix d'upgrade, le joystick (souris / tactile) reste ignoré tant que le joueur n'a pas relâché puis re-cliqué : le clic sur la carte d'upgrade ne doit pas lancer le déplacement. Le clavier n'est pas concerné. */
   private moveLocked = false;
   private readonly camTarget = { x: 0, y: 0 };
-  /** Test d'un alien (dev, bouton « Tester » de sa vue détaillée) : 4 Gunners contre lui, sans vagues ni fin de partie. */
+  /** Test d'un alien (dev, bouton « Test » de sa vue détaillée) : 1 Trooper contre lui, sans vagues ni fin de partie. */
   private alienTest?: AlienTest;
   /** Analytics (docs/ANALYTICS.md) : étape du tutoriel en cours, prochain palier de temps et dernier niveau de vague déjà notés. */
   private tutoPhase = '';
@@ -97,7 +97,8 @@ export class GameScene extends Phaser.Scene {
       this.registry.remove('alienTest');
       const mode = test ? alienTestMode() : this.pickMode();
       const botsParam = Number(poki.getURLParam('bots'));
-      const jump = poki.getURLParam('jump') === 'scarab'; // ?jump=scarab : partie avancée (Scarab tué), build déployé compris
+      const jumpParam = poki.getURLParam('jump');
+      const jump = jumpParam && jumpParam in JUMPS ? (jumpParam as JumpId) : null; // ?jump=gling|rhino|scarab|crab : partie avancée, build déployé compris
       this.session = new LocalSession({
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
@@ -110,7 +111,7 @@ export class GameScene extends Phaser.Scene {
             this.scene.start(SCENES.viewer);
           })
         : undefined;
-      if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer)); // test : partie avancée dès le lancement
+      if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer, jump)); // test : partie avancée dès le lancement
     }
     // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
     this.freeRevive = !online && !!this.session.sim.tutorial;
@@ -503,9 +504,12 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(this.targetZoom());
   }
 
+  /**
+   * Mode de la partie hors ligne : la SURVIE (seul ; à plusieurs, c'est la coop en ligne). Versus et battle royale sont désactivés pour
+   * l'instant (08/10) : `?mode=royale` est ignoré ; leur code reste (`MODES`, scripts `sim:headless`) pour plus tard.
+   */
   private pickMode(): ModeDef {
-    const id = poki.getURLParam('mode');
-    return id === 'royale' ? MODES.royale : MODES.survival;
+    return MODES.survival;
   }
 
   // ---------- Debug (dev uniquement) ----------

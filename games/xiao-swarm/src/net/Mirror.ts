@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, ORB_BLINK_TIME, REVIVE_TIME, SQUAD } from '../config';
+import { CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
@@ -64,13 +64,22 @@ export class Mirror {
 
   readonly predictor = new AnchorPredictor();
 
+  /** Soldat reflété (par id) : `ClientSession` y lit la classe et la visée d'un tir reçu en binaire (`Snapshot.shots`). */
+  soldier(id: number): SoldierState | undefined {
+    return this.soldiers.get(id);
+  }
+
   constructor(
     readonly sim: Sim,
     private readonly localPlayer: PlayerId,
   ) {}
 
+  /** Monde figé chez l'hôte (pause de choix d'upgrade, écran de fin : son tick n'avance plus) : rien n'est extrapolé ni décompté. */
+  private frozen = false;
+
   apply(snap: Snapshot): void {
     const { sim } = this;
+    this.frozen = snap.choiceT > 0 || snap.tick === sim.tick;
     sim.tick = snap.tick;
     sim.waves.setTime(snap.time, snap.cursor);
     sim.choiceT = snap.choiceT;
@@ -156,6 +165,10 @@ export class Mirror {
     for (const w of snap.walls) sim.walls.push({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, rockR: w.r, ttl: w.ttl, t: w.t, dur: w.dur });
     sim.arena.rocks.length = 0;
     for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
+    sim.fires.length = 0; // affichage seulement (la brûlure est calculée chez l'hôte)
+    for (const f of snap.fires) sim.fires.push({ id: f.id, x: f.x, y: f.y, r: f.r, ttl: 1, dps: 0 });
+    sim.stalactites.length = 0; // télégraphes seulement (l'impact est calculé chez l'hôte)
+    for (const k of snap.stalactites) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
 
     // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits
     const seenProj = new Set<number>();
@@ -173,10 +186,13 @@ export class Mirror {
   }
 
   /** Un tick client : prédiction de la squad locale, extrapolation + lissage du reste, recalcul du centre des squads. */
-  step(dt: number, local?: LocalInput): void {
+  step(dtReal: number, local?: LocalInput): void {
     const { sim } = this;
+    // monde figé chez l'hôte : les objets ne font plus que rejoindre leur position reçue (sinon ils avancent à leur vitesse puis
+    // sont ramenés à chaque snapshot : tremblement des projectiles et des aliens pendant la pause)
+    const dt = this.frozen ? 0 : dtReal;
     const predicting = !!local;
-    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dt, sim.choiceT > 0);
+    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, sim.choiceT > 0);
     const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
       if (predicted && sq.owner === this.localPlayer) {
@@ -197,11 +213,13 @@ export class Mirror {
       if (a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt);
       if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
       if (a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
+      if (a.sinkT > 0) a.sinkT = Math.max(1e-3, a.sinkT - dt);
     }
     // éléments au sol à durée décroissante (la disparition réelle vient du snapshot : on s'arrête à 0, jamais en dessous)
     const tick = (o: { ttl: number }): void => {
       if (o.ttl > 0) o.ttl = Math.max(0, o.ttl - dt);
     };
+    for (const k of sim.stalactites) if (k.t > 0) k.t = Math.max(0, k.t - dt); // stalactite : décompte jusqu'à l'impact
     for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // télégraphe d'un mur : `t` décompte jusqu'à l'apparition des rochers
     for (const p of sim.puddles) tick(p);
     for (const k of sim.arena.rocks) tick(k);
@@ -330,6 +348,9 @@ export class Mirror {
         target: null,
         goalX: a.x,
         goalY: a.y,
+        farT: 0,
+        flank: 0,
+        sinkT: 0,
         retarget: 0,
         attackCd: 0,
         slamWind: 0,
@@ -393,6 +414,8 @@ export class Mirror {
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
     s.revived = a.zombie;
+    // s'enterre : le compte à rebours démarre à la première réception, puis il décompte localement (`step`), sans passer sous 0,001
+    s.sinkT = a.sinking ? (s.sinkT > 0 ? s.sinkT : RELOCATE.sink) : 0;
     s.enraged = a.enraged;
     s.lurkPhase = a.lurkPhase;
     s.lurkT = a.lurkT;

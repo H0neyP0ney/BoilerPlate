@@ -85,9 +85,9 @@ export class LevelUpScene extends Phaser.Scene {
     let suggestArrow: Phaser.GameObjects.Text | null = null;
     let suggestLabel: Phaser.GameObjects.Text | null = null;
     if (suggestIdx >= 0) {
-      // texte au-dessus de la flèche : « Prends l'upgrade Dégâts »
+      // texte au-dessus de la flèche : « Claim upgrade » (la flèche montre laquelle)
       suggestLabel = this.add
-        .text(0, 0, t('tutoTakeUpgrade', { name: t(`up_${data.suggest}` as 'up_damage') }), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
+        .text(0, 0, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
         .setOrigin(0.5, 1);
       suggestArrow = this.add
         .text(0, 0, '▼', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })

@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '../core/devTools';
 import Phaser from 'phaser';
 
 export interface SliderOptions {
@@ -36,7 +37,7 @@ export class DebugOverlay {
    * (par défaut : en haut à gauche).
    */
   static create(scene: Phaser.Scene, opts: { title?: string; onMenuToggle?: (open: boolean, menu: HTMLElement) => void } = {}): DebugOverlay | undefined {
-    return import.meta.env.DEV ? new DebugOverlay(scene, opts.title, opts.onMenuToggle) : undefined;
+    return DEV_TOOLS ? new DebugOverlay(scene, opts.title, opts.onMenuToggle) : undefined;
   }
 
   private constructor(

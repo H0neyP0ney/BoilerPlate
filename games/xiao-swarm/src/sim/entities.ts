@@ -46,8 +46,10 @@ export interface SoldierState extends Body {
   invulnerable: number;
   /** Id de la bulle qui le tient captif (0 = libre) : il ne bouge ni ne tire, et seule la bulle peut le blesser. */
   capturedBy: number;
-  /** Pris dans un glaçon (et non avalé par une bulle) : reste attaquable par les aliens. Simulation hôte seulement. */
-  frozen: boolean;
+  /** PV de gel restants (0 = libre ; voir `FREEZE`) : gelé, il ne bouge ni ne tire, reste attaquable par les aliens ; les tirs alliés le dégèlent. */
+  frozen: number;
+  /** Début du gel (s) : les coups alliés ne retirent pas encore de PV de gel. */
+  iceInvuln: number;
   /** Temps restant (s) d'étourdissement (slam du Scarab) : il ne bouge ni ne tire, mais reste attaquable. */
   stun: number;
   /**
@@ -72,6 +74,8 @@ export interface AlienState extends Body {
   /** Langue (grenouille) et crachat (cracheur) : délai avant le prochain. */
   tongueCd: number;
   sprayCd: number;
+  /** Nuage ralentissant (cracheur, `def.cloud`) ou flocons (chaman, `def.frost`) : délai avant le prochain. */
+  cloudCd: number;
   /** Charge télégraphiée : délai avant la prochaine, préparation (zone rouge), charge en cours, direction verrouillée. */
   rushCd: number;
   rushWind: number;
@@ -210,6 +214,8 @@ export interface Puddle {
   r: number;
   ttl: number;
   slow: number;
+  /** Nuage de glace (flocons du chaman) : gèle le premier soldat qui y entre (puis disparaît) au lieu de ralentir. */
+  frost?: boolean;
 }
 
 /** Zone laissée au sol par un joueur mort (coop) : un équipier qui y reste `REVIVE_TIME` s le ramène avec une escouade de base. */

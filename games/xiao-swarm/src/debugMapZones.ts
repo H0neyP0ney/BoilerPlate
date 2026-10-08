@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '@xiao/engine';
 import { DEFAULT_MAP_ZONES, MAP_ZONES, type ObstacleZone } from './data/mapZones';
 import { JUNGLE_SIZE } from './data/maps';
 import { saveToCode } from './dev/devSave';
@@ -34,7 +35,7 @@ function sanitize(raw: unknown): ObstacleZone[] | null {
 
 /** À appeler au démarrage, avant de créer la simulation : réapplique les zones mémorisées. */
 export function loadMapZoneOverrides(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Carte', DEFAULT_MAP_ZONES);
   try {
     const saved = sanitize(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'));

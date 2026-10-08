@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '@xiao/engine';
 import type { DebugOverlay } from '@xiao/engine';
 import { VISUAL, VISUAL_DEFAULTS, type VisualKey } from './config';
 import { saveToCode } from './dev/devSave';
@@ -24,7 +25,7 @@ function save(): void {
 
 /** À appeler avant de créer la vue : réapplique les réglages mémorisés. */
 export function loadSavedVisual(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Réglages visuels', VISUAL_DEFAULTS);
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<VisualKey, number>>;

@@ -12,8 +12,11 @@ export const FX_DEFAULTS = {
   impact: { count: 5, speedMin: 30, speedMax: 110, scaleStart: 0.5, scaleEnd: 0, lifeMin: 120, lifeMax: 260 },
   /** Éclatement du slime à sa mort : grosses gouttes qui retombent (gravité, px/s²) + fines gouttelettes (fx_dot). */
   gloop: { count: 14, speedMin: 50, speedMax: 220, scaleStart: 1.3, scaleEnd: 0.2, lifeMin: 350, lifeMax: 700, gravity: 260 },
-  /** Flaques au sol à la mort du slime (fx_puddle) : 1 à `countMax` flaques, taille et durée aléatoires, qui s'effacent en alpha et en taille. */
-  puddle: { countMin: 1, countMax: 3, scaleMin: 0.6, scaleMax: 1.3, spread: 22, alpha: 0.75, lifeMinMs: 2500, lifeMaxMs: 4500, endScale: 0.3 },
+  /**
+   * Flaques au sol à la mort d'un alien (fx_puddle) : 1 à `countMax` flaques, taille et durée aléatoires, qui s'effacent en alpha et en taille.
+   * Taille de base = largeur de l'ombre portée de l'alien × `shadowMul` (pour tous les aliens, flaque de cadavre comprise).
+   */
+  puddle: { countMin: 1, countMax: 3, scaleMin: 0.6, scaleMax: 1.3, spread: 22, alpha: 0.75, lifeMinMs: 2500, lifeMaxMs: 4500, endScale: 0.3, shadowMul: 1.6 },
   /** Flash de tir à la bouche du canon (fx_glow, additif) : Gunner. */
   muzzle: { scale: 0.5, durationMs: 90, color: 0xffd27a },
   /** Explosion : gerbe de flammes (fx_flame, additif) + onde de choc ; mort du Flammeur, grenade, boss. */
@@ -53,8 +56,8 @@ export const FX_DEFAULTS = {
   healZone: { everyMs: 140, scale: 1.4, rise: 46, durationMs: 1100, alpha: 0.9 },
   /** Glaçon (soldat gelé) : éclats à chaque coup (`shard*`, × `breakMul` quand il se brise), taille qui rétrécit jusqu'à `minScale` aux derniers PV, fissures qui s'ajoutent quand la part de PV restante passe sous `crack1` / `crack2` / `crack3`. */
   ice: { shardCount: 6, shardSpeedMin: 40, shardSpeedMax: 190, shardScale: 1.1, shardLifeMin: 350, shardLifeMax: 700, shardGravity: 380, breakMul: 3, minScale: 0.5, crack1: 0.7, crack2: 0.4, crack3: 0.15 },
-  /** Flocon posé au centre du globe de stase (dessiné à plat, comme les ondes au sol) : taille = `iconSize` × rayon du globe, plafonnée à `iconMax` px ; `spin` = tours par seconde. */
-  stasis: { iconSize: 0.28, iconMax: 130, iconAlpha: 0.9, spin: 0.08 },
+  /** Petits flocons qui montent dans le globe de stase (fx_ice_ball) : un toutes les ~`everyMs` ms, au hasard dans la zone ; taille `scaleMin`-`scaleMax`, montée `rise` (px) en `durationMs`, rotation `spin` (tours / s), opacité de départ `alpha`. */
+  stasis: { everyMs: 35, scaleMin: 0.15, scaleMax: 0.35, rise: 80, durationMs: 1500, alpha: 0.85, spin: 0.4 },
   /** Ondes de montée de niveau : nombre d'ondes blanches, écart entre deux, force de la déformation de l'écran (part de l'écran déplacée au maximum). */
   levelWave: { waves: 4, gapMs: 170, distort: 0.07 },
   /** Onde de choc au sol (fx_ring) : explosion, slam du crabe, recrutement, apparition de squad. */

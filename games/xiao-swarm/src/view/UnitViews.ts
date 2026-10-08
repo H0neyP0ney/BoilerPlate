@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
-import { DEPTH, RECRUIT } from '../config';
+import { DEPTH, FREEZE, RECRUIT } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
@@ -44,8 +44,12 @@ function muzzleOf(b: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, id: s
 }
 
 export class SoldierView {
-  /** Retenu par un glaçon (et non par une bulle) : teinte bleue. Posé par `WorldView` à chaque image. */
-  frozen = false;
+  /** Glaçon du soldat gelé (`SoldierState.frozen`) : créé au premier gel, fissures par étages, éclats à chaque coup (`onIceHit`). */
+  private ice?: Phaser.GameObjects.Sprite;
+  private iceCracks?: Phaser.GameObjects.Image;
+  private lastIce = 0;
+  /** Posé par la vue du monde (qui sait si c'est à l'écran) : éclats de glace à chaque coup allié sur la glace. */
+  onIceHit?: (x: number, y: number) => void;
   /** Position affichée (interpolée), utilisée par l'overlay et la caméra. */
   rx = 0;
   ry = 0;
@@ -157,14 +161,47 @@ export class SoldierView {
       this.flash -= dt;
       if (this.flash <= 0) this.rest = FLASH_REST;
       this.body.setTint(0xff6a6a).setTintMode(Phaser.TintModes.FILL);
+    } else if (s.frozen > 0) {
+      this.body.setTint(0x9fd4ff).setTintMode(Phaser.TintModes.MULTIPLY); // gelé : bleu, vu à travers la glace
     } else if (s.capturedBy) {
-      this.body.setTint(this.frozen ? 0x9fd4ff : 0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion (vert) ou gelé dans un glaçon (bleu)
+      this.body.setTint(0xa8f0b8).setTintMode(Phaser.TintModes.MULTIPLY); // en cours de digestion par une bulle : vert
     } else {
       this.body.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
     const blink = s.invulnerable > 0 && Math.sin(time * 30) > 0;
     this.body.setAlpha(blink ? 0.45 : 1);
     this.gun.setAlpha(blink ? 0.45 : 1);
+    this.syncIce(s.frozen);
+  }
+
+  /**
+   * Glaçon : devant le soldat (qu'on voit à travers) tant qu'il est gelé ; pas de barre, il rétrécit et se fissure à mesure que les
+   * tirs alliés retirent des PV de gel (`iceLook`), et crache des éclats à chaque coup.
+   */
+  private syncIce(frozen: number): void {
+    if (frozen <= 0) {
+      this.ice?.setVisible(false);
+      this.iceCracks?.setVisible(false);
+      this.lastIce = 0;
+      return;
+    }
+    this.ice ??= sprites.add(this.scene, 'alien_iceblock', this.rx, this.ry);
+    const look = iceLook(frozen / FREEZE.hp);
+    const k = sprites.scaleOf('alien_iceblock') * look.scale;
+    this.ice.setVisible(true).setPosition(this.rx, this.ry).setScale(k).setAlpha(0.82).setDepth(DEPTH.actors + this.ry + 1);
+    sprites.place(this.ice, 'alien_iceblock');
+    if (this.lastIce > 0 && frozen < this.lastIce) this.onIceHit?.(this.rx, this.ry - 8);
+    this.lastIce = frozen;
+    if (look.stage > 0) {
+      this.iceCracks ??= this.scene.add.image(0, 0, 'alien_iceblock_cracks_1');
+      this.iceCracks
+        .setTexture(`alien_iceblock_cracks_${look.stage}`)
+        .setVisible(true)
+        .setOrigin(this.ice.originX, this.ice.originY)
+        .setPosition(this.ice.x, this.ice.y)
+        .setScale(k)
+        .setDepth(this.ice.depth + 0.1);
+    } else this.iceCracks?.setVisible(false);
   }
 
   /** Bouche du canon en monde (planche : point de la frame en cours, comme dans la visionneuse), sinon null. */
@@ -179,10 +216,15 @@ export class SoldierView {
 
   destroy(): void {
     this.stunIcon?.destroy();
+    this.ice?.destroy();
+    this.iceCracks?.destroy();
     this.body.destroy();
     this.gun.destroy();
   }
 }
+
+/** Silhouettes fantômes de la charge (chargeur, rhinocéros) : intervalle (s), durée d'effacement (s), opacité de départ, teinte. */
+const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
 export class AlienView {
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
@@ -207,11 +249,11 @@ export class AlienView {
 
   /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
-  /** Glaçon : fissures par-dessus, PV vus à la frame précédente (un coup = une baisse), et rappel posé par la vue du monde pour les éclats. */
-  private iceCracks?: Phaser.GameObjects.Image;
-  private lastIceHp = -1;
-  onIceHit?: (x: number, y: number) => void;
   private flameLevel = 0;
+  /** Charge (chargeur, rhinocéros) : délai avant la prochaine silhouette fantôme laissée derrière lui. */
+  private ghostT = 0;
+  /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : l'ombre portée n'apparaît qu'une fois dehors. */
+  outOfGround = 1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -234,6 +276,21 @@ export class AlienView {
   /** Point d'origine des tirs / de la langue en monde (point de la frame jouée, placé dans la visionneuse), sinon null. */
   muzzlePoint(): { x: number; y: number } | null {
     return muzzleOf(this.body, this.id, 'walk');
+  }
+
+  /** Silhouette fantôme : copie de la frame affichée, teintée en bleu uni, qui s'efface sur place. */
+  private spawnGhost(): void {
+    const b = this.body;
+    const g = this.scene.add
+      .image(b.x, b.y, b.texture.key, b.frame.name)
+      .setOrigin(b.originX, b.originY)
+      .setScale(b.scaleX, b.scaleY)
+      .setFlipX(b.flipX)
+      .setTint(GHOST.color)
+      .setTintMode(Phaser.TintModes.FILL)
+      .setAlpha(GHOST.alpha)
+      .setDepth(b.depth - 0.5);
+    this.scene.tweens.add({ targets: g, alpha: 0, duration: GHOST.life * 1000, ease: 'Quad.easeIn', onComplete: () => g.destroy() });
   }
 
   /** Trou d'apparition sous l'alien (null : aucun) : `open` 0 → 1 pendant qu'il se creuse, `alpha` qui tombe à 0 quand l'alien en est sorti. */
@@ -280,36 +337,26 @@ export class AlienView {
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
+    // Charge : silhouettes fantômes bleutées derrière lui (une toutes les `GHOST.every` s, chacune s'efface en `GHOST.life` s : ~5 visibles)
+    if (a.def.rush && a.rushT > 0 && this.body.visible) {
+      if ((this.ghostT -= dt) <= 0) {
+        this.ghostT = GHOST.every;
+        this.spawnGhost();
+      }
+    } else this.ghostT = 0;
+    this.outOfGround = hidden ? 0 : this.spawnT; // trou d'apparition : dehors une fois sorti (pop terminé)
     if (a.def.lurk) {
       // lurker : s'enfonce dans son trou (phase 1), invisible enterré (2-4), ressort (5)
       const L = a.def.lurk;
       const vis = a.lurkPhase === 1 ? a.lurkT / L.digTime : a.lurkPhase >= 2 && a.lurkPhase <= 4 ? 0 : a.lurkPhase === 5 ? 1 - a.lurkT / L.rise : 1;
+      this.outOfGround = Math.min(this.outOfGround, vis);
       this.body
         .setVisible(vis > 0.03)
         .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
         .setScale(this.body.scaleX, this.body.scaleY * (0.45 + 0.55 * vis))
         .setY(this.body.y + (1 - vis) * a.radius * 0.7);
     }
-    if (a.def.iceBlock) {
-      // glaçon : devant le soldat gelé, qu'on voit à travers
-      this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(0.82);
-      // plus de barre de vie : le glaçon rétrécit et se fissure à mesure qu'il perd des PV, et crache des éclats à chaque coup (`onIceHit`)
-      const look = iceLook(a.hp / a.maxHp);
-      this.body.setScale(this.body.scaleX * look.scale, this.body.scaleY * look.scale);
-      if (this.lastIceHp >= 0 && a.hp < this.lastIceHp) this.onIceHit?.(this.rx, this.ry - a.radius * 0.3);
-      this.lastIceHp = a.hp;
-      if (look.stage > 0) {
-        this.iceCracks ??= this.scene.add.image(0, 0, 'alien_iceblock_cracks_1');
-        this.iceCracks
-          .setTexture(`alien_iceblock_cracks_${look.stage}`)
-          .setVisible(true)
-          .setOrigin(this.body.originX, this.body.originY)
-          .setPosition(this.body.x, this.body.y)
-          .setScale(this.body.scaleX, this.body.scaleY)
-          .setFlipX(this.body.flipX)
-          .setDepth(this.body.depth + 0.1);
-      } else this.iceCracks?.setVisible(false);
-    } else if (a.def.capture) {
+    if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
       if (a.captive) this.body.setScale(this.body.scaleX * (1 + Math.sin(time * 8) * 0.05), this.body.scaleY * (1 + Math.sin(time * 8 + 1) * 0.05));
@@ -321,6 +368,7 @@ export class AlienView {
       // Scarab : s'enfonce dans son trou (phase 1), invisible sous terre (2), ressort du trou d'arrivée (3)
       const B = a.def.burrow;
       const vis = a.lurkPhase === 1 ? a.lurkT / B.dig : a.lurkPhase === 2 ? 0 : a.lurkPhase === 3 ? 1 - a.lurkT / B.rise : 1;
+      this.outOfGround = Math.min(this.outOfGround, vis);
       this.body
         .setVisible(vis > 0.03)
         .setAlpha(Math.max(0, Math.min(1, vis * 1.4)))
@@ -363,7 +411,6 @@ export class AlienView {
 
   destroy(): void {
     this.body.destroy();
-    this.iceCracks?.destroy();
     this.zombieFx?.destroy();
   }
 }

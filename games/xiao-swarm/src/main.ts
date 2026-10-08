@@ -1,4 +1,4 @@
-import { bootPokiGame, poki, setTheme, storage } from '@xiao/engine';
+import { bootPokiGame, poki, setTheme, storage, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SAFE_SIZE } from './config';
 import { i18n } from './i18n';
 import { settings } from './settings';
@@ -21,7 +21,7 @@ import { UnitViewerScene } from './scenes/UnitViewerScene';
 void bootPokiGame({
   safeSize: SAFE_SIZE,
   backgroundColor: PALETTE.bgDark,
-  scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(import.meta.env.DEV ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene] : [])],
+  scenes: [BootScene, GameScene, HudScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(DEV_TOOLS ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
     i18n.init(settings.lang ?? (poki.getURLParam('lang') || 'en')); // anglais par défaut (pas la langue du navigateur)

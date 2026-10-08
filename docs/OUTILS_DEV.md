@@ -38,6 +38,13 @@ squad, invincibilité), aliens (faire apparaître un type × quantité, tout tue
 (vitesse du jeu 0 → 3, +30 s / +2 min de vagues). Les retraits ignorent l'invulnérabilité des recrues fraîches. Pas de
 raccourcis clavier (les anciens K / R / T / B ont été retirés).
 
+**⏩ Partie avancée (Scarab tué)** (section Progression) : saute juste après la mort du Scarab (mini-boss de 5:00) — terrain
+vidé, timeline des vagues reprise juste après son apparition (temps de partie + 40 s de combat), boss précédents comptés pour
+l'escalade (×1,331), niveau 20 avec un choix d'upgrade par niveau comme en jeu (vraie offre de 3 cartes, toutes les upgrades,
+prismatiques et renforts compris ; carte retenue selon les préférences mesurées dans tes parties enregistrées : `PICK_WEIGHTS`),
+squad pleine de Gunners seulement (taille max après upgrades + renforts ; classes spéciales retirées en attendant les pièces). Réglages : `JUMP` et
+`PICK_WEIGHTS` en tête de `dev/jumpAhead.ts`. Aussi par l'URL, **build déployé compris** : `?jump=scarab` (saute le tutoriel ; « Rejouer » refait le saut) ; code : `Sim.fastForward`, `Squad.fastForward`, `WaveRunner.skipTo`.
+
 **Coéquipiers IA (coop)** : l'hôte d'une partie coop (`?net=host`) a, dans ce panneau, une section « Coéquipiers IA » (seule
 partie disponible en ligne) : ajouter un bot (niveau Standard / Expert au choix), changer le niveau de chacun, le retirer,
 « Tout en Standard / Expert ». Au lancement : `?net=host&bot=2&botlevel=expert` (dev seulement, 3 bots max ; salle publique,
@@ -97,7 +104,8 @@ Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE
 - **Save** écrit `DEFAULT_MAP_ZONES` dans `data/mapZones.ts` ; **Reset** revient à cette sauvegarde ; le travail en cours est aussi mémorisé dans le navigateur (`xiao-debug-mapzones`).
 - Hors édition : la carte royale (`makeRoyaleMap`, 4800 px) n'utilise pas les zones.
 
-- **Second panneau « Stats »** (vue détaillée d'un soldat ou d'un alien, à droite du premier) : un slider par nombre de la définition (`hp`, `speed`, `damage`, `attackCooldown`… et les capacités : `lob · range`, `weapon · cooldown`…) pour l'équilibrage (`src/debugStats.ts`). Appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs), mémorisé dans le navigateur ; **Save** réécrit les nombres dans `data/aliens.ts` / `data/classes.ts` (commentaires conservés), **Reset** revient au code.
+- **Second panneau « Stats »** (vue détaillée d'un soldat ou d'un alien, à droite du premier) : un slider par nombre de la définition (`hp`, `speed`, `damage`, `attackCooldown`… et les capacités : `lob · range`, `weapon · cooldown`…) pour l'équilibrage (`src/debugStats.ts`). Appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs), mémorisé dans le navigateur ; **Save** réécrit dans `data/aliens.ts` / `data/classes.ts` (commentaires conservés) **toutes les unités modifiées**, pas seulement celle affichée (la copie mémorisée est commune à toutes les unités et supprimée dès que le code change), **Reset** revient au code.
+- **▶ Tester (4 Gunners contre 1)** (panneau Stats d'un alien) : lance le jeu en duel (`src/dev/alienTest.ts`) — aucune vague, 4 Gunners niveau 1 sans upgrade contre l'alien seul ; ni globes d'XP, ni recrues, ni power-ups, ni escalade. L'alien tué revient 1,5 s plus tard, la squad anéantie revient à 4 Gunners (pas de fin de partie). Panneau en haut : PV de l'alien, victoires / défaites, durée du dernier duel et soldats perdus ; **Recommencer**, **Quitter le test** (retour à la vue détaillée de l'alien). Les stats réglées dans le panneau s'appliquent au duel.
 
 ## Visionneuse d'upgrades (`?upgrades`, `src/scenes/UpgradeViewerScene.ts`, `src/debugUpgrades.ts`)
 

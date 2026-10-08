@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '@xiao/engine';
 import en from './locales/en.json';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
@@ -52,7 +53,7 @@ export function resetName(key: string): void {
 
 /** À appeler au démarrage (dev) : réapplique les noms mémorisés. */
 export function loadNameOverrides(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Noms', en);
   try {
     edits = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Names;

@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 34; // 34 : le power-up bouclier n'existe plus (liste des types de power-ups)
+export const PROTOCOL_VERSION = 36; // 36 : gel = état du soldat (PV de gel, drapeau 32) ; plus d'alien glaçon
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -61,6 +61,8 @@ export interface SoldierSnap {
   stunned: boolean;
   /** Id de la bulle qui le tient captif (0 = libre). */
   capturedBy: number;
+  /** PV de gel restants (0 = libre) : glaçon affiché sur le soldat. */
+  frozen: number;
 }
 
 export interface SquadSnap {
@@ -175,7 +177,7 @@ export interface Snapshot {
   /** Flaques de crachat (id, position, rayon, durée restante, facteur de vitesse) et cailloux posés (l'affichage se cale dessus). */
   powerups: { id: number; kind: PowerUpKind; x: number; y: number; life: number }[];
   fields: { id: number; kind: 'heal' | 'stasis'; x: number; y: number; r: number; ttl: number }[];
-  puddles: { id: number; x: number; y: number; r: number; ttl: number; slow: number }[];
+  puddles: { id: number; x: number; y: number; r: number; ttl: number; slow: number; frost?: boolean }[];
   rocks: { id: number; x: number; y: number; r: number; ttl: number }[];
   /** Murs annoncés (télégraphe jaune) : centre, direction, longueur, demi-largeur, temps restant et durée du télégraphe. */
   walls: { id: number; x: number; y: number; angle: number; length: number; r: number; ttl: number; t: number; dur: number }[];
@@ -231,6 +233,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
         invulnerable: s.invulnerable > 0,
         stunned: s.stun > 0,
         capturedBy: s.capturedBy,
+        frozen: s.frozen,
       })),
     })),
     aliens: sim.aliens.map((a) => ({
@@ -279,7 +282,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     orbs: sim.xp.orbs.map((o) => ({ id: o.id & 0xffff, x: o.x, y: o.y, value: o.value, blink: o.life < ORB_BLINK_TIME })),
     powerups: sim.powerups.items.map((p) => ({ id: p.id, kind: p.kind, x: p.x, y: p.y, life: p.life })),
     fields: sim.powerups.fields.map((f) => ({ id: f.id, kind: f.kind, x: f.x, y: f.y, r: f.r, ttl: f.ttl })),
-    puddles: sim.puddles.map((p) => ({ id: p.id, x: p.x, y: p.y, r: p.r, ttl: p.ttl, slow: p.slow })),
+    puddles: sim.puddles.map((p) => ({ id: p.id, x: p.x, y: p.y, r: p.r, ttl: p.ttl, slow: p.slow, frost: p.frost })),
     rocks: sim.arena.rocks.map((k) => ({ id: k.id, x: k.x, y: k.y, r: k.radius, ttl: k.ttl })),
     walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
@@ -423,8 +426,10 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
       w.u16(u.maxHp);
       w.u8(u.shield * 255); // part du bouclier max (0 → 255) ; `u8` borne et arrondit
       w.i16(u.aim * 10000);
-      w.u8((u.facing > 0 ? 1 : 0) | (u.target ? 2 : 0) | (u.invulnerable ? 4 : 0) | (u.capturedBy ? 8 : 0) | (u.stunned ? 16 : 0));
+      const ice = Math.min(255, Math.ceil(u.frozen)); // octet écrit (borné) : c'est lui qui décide du champ conditionnel
+      w.u8((u.facing > 0 ? 1 : 0) | (u.target ? 2 : 0) | (u.invulnerable ? 4 : 0) | (u.capturedBy ? 8 : 0) | (u.stunned ? 16 : 0) | (ice > 0 ? 32 : 0));
       if (u.capturedBy) w.u32(u.capturedBy);
+      if (ice > 0) w.u8(ice);
     }
   }
 
@@ -546,7 +551,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.f32(p.y);
     w.u16(Math.round(p.r));
     w.u8(Math.min(255, Math.round(p.ttl * 10)));
-    w.u8(Math.round(p.slow * 100));
+    w.u8(p.frost ? 255 : Math.min(100, Math.round(p.slow * 100))); // 255 = nuage de glace (flocons du chaman)
   }
   mark('puddles');
   w.u8(Math.min(255, s.rocks.length));
@@ -610,7 +615,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         const aim = r.i16() / 10000;
         const flags = r.u8();
         const capturedBy = flags & 8 ? r.u32() : 0;
-        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, shield, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), stunned: !!(flags & 16), capturedBy });
+        const frozen = flags & 32 ? r.u8() : 0;
+        sq.soldiers.push({ id, cls, x, y, vx, vy, hp, maxHp, shield, aim, facing: flags & 1 ? 1 : -1, target: !!(flags & 2), invulnerable: !!(flags & 4), stunned: !!(flags & 16), capturedBy, frozen });
       }
       snap.squads.push(sq);
     }
@@ -709,7 +715,11 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nFields; i++) snap.fields.push({ id: r.u32(), kind: r.u8() === 0 ? 'heal' : 'stasis', x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10 });
 
     const nPuddles = r.u8();
-    for (let i = 0; i < nPuddles; i++) snap.puddles.push({ id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10, slow: r.u8() / 100 });
+    for (let i = 0; i < nPuddles; i++) {
+      const p = { id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10 };
+      const slow = r.u8();
+      snap.puddles.push(slow === 255 ? { ...p, slow: 1, frost: true } : { ...p, slow: slow / 100 });
+    }
     const nRocks = r.u8();
     for (let i = 0; i < nRocks; i++) snap.rocks.push({ id: r.u32(), x: r.f32(), y: r.f32(), r: r.u16(), ttl: r.u8() / 10 });
     const nWalls = r.u8();

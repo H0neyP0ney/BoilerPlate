@@ -7,6 +7,7 @@ export { RunFlow, type RunState } from './flow/RunFlow';
 
 // Core
 export { log } from './core/log';
+export { DEV_TOOLS } from './core/devTools';
 export { storage } from './core/storage';
 export { device } from './core/device';
 export { createI18n, type I18n, type Vars } from './core/i18n';

@@ -80,12 +80,15 @@ export class Combat {
       const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
       const rangeMul = squad.stats.get('range');
       for (const s of squad.soldiers) {
-        if (s.capturedBy || s.stun > 0) continue; // avalé par une bulle ou étourdi : ne tire plus
+        if (s.capturedBy || s.frozen > 0 || s.stun > 0) continue; // avalé par une bulle, gelé ou étourdi : ne tire plus
         const weapon = s.def.weapon;
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;
         if (s.retarget <= 0 || (s.target && !s.target.alive)) {
-          let target: Unit | undefined = alienHash.nearest(s.x, s.y, weapon.range * rangeMul, (a) => a.alive, this.scratchA);
+          let target: Unit | undefined = alienHash.nearest(s.x, s.y, weapon.range * rangeMul, (a) => a.alive && !this.sim.horde.isEmerging(a), this.scratchA); // pas un alien encore dans son trou (invulnérable)
+          // un allié gelé à portée, plus proche que l'alien visé : on tire sur sa glace pour le libérer
+          const ice = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.frozen > 0 && o !== s && this.sim.allied(s.owner, o), this.scratchS);
+          if (ice && (!target || Math.hypot(ice.x - s.x, ice.y - s.y) < Math.hypot(target.x - s.x, target.y - s.y))) target = ice;
           if (!target && pvp) {
             target = soldierHash.nearest(s.x, s.y, weapon.range * rangeMul, (o) => o.alive && o.team !== s.team, this.scratchS);
           }
@@ -93,8 +96,8 @@ export class Combat {
           s.retarget = 0.15;
         }
         const t = s.target;
-        if (!t || !t.alive) {
-          s.target = null;
+        if (!t || !t.alive || (t.kind === 'soldier' && t.frozen <= 0 && this.sim.allied(s.owner, t))) {
+          s.target = null; // cible perdue (ou allié déjà dégelé)
           continue;
         }
         s.aim = Math.atan2(t.y - 10 - (s.y - 17), t.x - s.x);
@@ -203,7 +206,7 @@ export class Combat {
     if (squad) {
       let n = 0;
       for (const s of squad.soldiers) {
-        if (!s.alive || s.capturedBy) continue;
+        if (!s.alive || s.capturedBy || s.frozen > 0) continue;
         vx += s.vx;
         vy += s.vy;
         n++;
@@ -252,9 +255,11 @@ export class Combat {
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
       const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
-      p.puddle = sp.puddle.radius;
-      p.puddleTtl = sp.puddle.ttl;
-      p.puddleSlow = sp.puddle.slow;
+      if (sp.puddle) {
+        p.puddle = sp.puddle.radius;
+        p.puddleTtl = sp.puddle.ttl;
+        p.puddleSlow = sp.puddle.slow;
+      }
     }
   }
 
@@ -371,8 +376,9 @@ export class Combat {
           // dernier pas jusqu'au point d'impact, puis explosion (dégâts de zone aux ennemis de son camp adverse)
           p.x += p.vx * (dt + p.life);
           p.y += p.vy * (dt + p.life);
-          // crachat : pas de recul (la flaque ralentit à la place) ; les autres boules repoussent comme avant
-          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, p.puddle > 0 ? 0 : 300, p.puddle > 0 ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
+          // crachat (et toute boule à flaque) : pas de recul ; les autres boules repoussent comme avant
+          const spit = p.puddle > 0 || p.texture === 'fx_spit';
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
         }
@@ -393,7 +399,7 @@ export class Combat {
       const fromAlien = p.team === 'aliens';
       if (!fromAlien) {
         for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
-          if (!this.overlaps(p, a, hitR)) continue;
+          if (this.sim.horde.isEmerging(a) || !this.overlaps(p, a, hitR)) continue; // dans son trou : la balle passe au-dessus
           if (p.aoe > 0) {
             // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris)
             this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300);
@@ -401,6 +407,18 @@ export class Combat {
           }
           this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
           if (p.crit && !p.flame) this.sim.events.push({ t: 'crit', x: a.x, y: a.y - 10, dmg: p.damage }); // flammes : pas d'effet (un par tick de brûlure)
+          if (p.pierce-- <= 0) return true;
+        }
+      }
+      if (!fromAlien) {
+        // balle alliée sur un soldat gelé : elle brise un peu sa glace (`Sim.damage` → `chipIce`)
+        for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
+          if (s.frozen <= 0 || !this.sim.allied(p.owner, s) || !this.overlaps(p, s, hitR)) continue;
+          if (p.aoe > 0) {
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300); // roquette : elle explose (la glace compte 1 coup)
+            return true;
+          }
+          this.sim.damage(s, p.damage, p.owner);
           if (p.pierce-- <= 0) return true;
         }
       }

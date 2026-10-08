@@ -7,6 +7,7 @@ import type { SoldierState } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
 import type { PlayerId } from '../sim/types';
+import { jumpAhead } from './jumpAhead';
 import { button, checkbox, floatingPanel, heading, line, note, select, slider, type FloatingPanel } from './devUi';
 
 /** Coéquipiers IA du coop (fournis par la session hôte). */
@@ -276,6 +277,7 @@ export class CheatPanel {
         button('+10 XP', () => this.giveXp(sim, 10)),
         button('Niveau suivant', () => this.giveXp(sim, squad().xpNeeded - squad().xp)),
       ),
+      line(button('⏩ Partie avancée (Scarab tué)', () => this.say(jumpAhead(sim, me)))),
       heading('Vagues'),
       line(this.waveLevel.row, button('Envoyer', () => this.sendWave(sim))),
       heading('Temps'),

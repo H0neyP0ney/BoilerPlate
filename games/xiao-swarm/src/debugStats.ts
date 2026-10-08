@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '@xiao/engine';
 import { ALIENS } from './data/aliens';
 import { CLASSES } from './data/classes';
 import { saveToCode } from './dev/devSave';
@@ -31,10 +32,10 @@ for (const kind of ['alien', 'soldier'] as StatKind[]) for (const [id, d] of Obj
 
 let overrides: Overrides = {};
 
-/** Nombres finis de l'objet (récursif, profondeur limitée) ; `color` et `id` exclus. */
+/** Nombres finis de l'objet (récursif, profondeur limitée) ; `color`, `goo` et `id` exclus. */
 function collect(obj: Def, prefix: string, out: Stat[], depth = 0): void {
   for (const [k, v] of Object.entries(obj)) {
-    if (k === 'color' || k === 'id') continue;
+    if (k === 'color' || k === 'goo' || k === 'id') continue; // couleurs : pas de réglette
     if (typeof v === 'number' && Number.isFinite(v)) out.push({ path: prefix + k, value: v });
     else if (v && typeof v === 'object' && !Array.isArray(v) && depth < 2) collect(v as Def, `${prefix}${k}.`, out, depth + 1);
   }
@@ -105,7 +106,7 @@ export function resetStats(kind: StatKind, id: string): void {
 
 /** À appeler au démarrage (dev), avant de créer la simulation : réapplique les stats mémorisées. */
 export function loadStatOverrides(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Stats des unités', { ALIENS, CLASSES });
   try {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Overrides;
@@ -128,6 +129,27 @@ export function loadStatOverrides(): void {
 }
 
 /** Save : écrit les stats courantes de l'unité dans le code (elles deviennent les valeurs par défaut). */
+/**
+ * Save du panneau Stats : écrit dans le code TOUTES les unités modifiées (celles qui ont une copie mémorisée), plus l'unité affichée.
+ * Une seule copie mémorisée sert à toutes les unités : sans cela, une unité réglée mais pas sauvegardée serait perdue au démarrage
+ * suivant (la copie est supprimée dès que le code change, voir `dropStaleOverride`).
+ */
+export async function saveAllStatsToCode(kind: StatKind, id: string): Promise<string> {
+  const keys = new Set([...Object.keys(overrides), keyOf(kind, id)]);
+  const ok: string[] = [];
+  const errors: string[] = [];
+  for (const key of keys) {
+    const [k, unit] = key.split(':') as [StatKind, string];
+    if (!defs(k)?.[unit]) continue;
+    const msg = await saveStatsToCode(k, unit); // l'une après l'autre : plusieurs unités partagent le même fichier
+    if (!/^[✔✖]/.test(msg)) return msg; // Save indisponible (build déployé) : même message pour toutes
+    if (msg.startsWith('✔')) ok.push(unit);
+    else errors.push(`${unit} : ${msg}`);
+  }
+  const head = ok.length ? `✔ ${ok.length} unité(s) enregistrée(s) : ${ok.join(', ')}` : '';
+  return [head, ...errors].filter(Boolean).join('\n');
+}
+
 export async function saveStatsToCode(kind: StatKind, id: string): Promise<string> {
   const msg = await saveToCode('stats', { kind, id, values: Object.fromEntries(listStats(kind, id).map((s) => [s.path, s.value])) });
   if (msg.startsWith('✔')) {

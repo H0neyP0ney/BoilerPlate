@@ -165,6 +165,31 @@ export class Sim {
     this.events.push({ t: 'restart' });
   }
 
+  /**
+   * Dev (panneau Triche, hors ligne) : saute à une partie avancée sans rien jouer. Terrain vidé (aliens, tirs, globes, power-ups…),
+   * horloges des vagues à `time` / `cursor` sans aucun envoi, `bossKills` boss déjà tués (escalade). Les squads ne sont pas touchées
+   * (voir `Squad.fastForward`).
+   */
+  fastForward(time: number, cursor: number, bossKills: number): void {
+    this.aliens.length = 0;
+    this.corpses.length = 0;
+    this.fires.length = 0;
+    this.puddles.length = 0;
+    this.walls.length = 0;
+    this.shockwaves.length = 0;
+    this.arena.rocks.length = 0;
+    this.blasts.length = 0;
+    this.fuses.length = 0;
+    this.combat.clear();
+    this.recruits.clear();
+    this.powerups.clear();
+    this.xp.clear();
+    this.choiceT = 0;
+    this.choiceDelay = 0;
+    this.bossKills = bossKills;
+    this.waves.skipTo(cursor, time);
+  }
+
   get xpEnabled(): boolean {
     return this.config.xp === true;
   }
@@ -377,7 +402,7 @@ export class Sim {
     this.updateFires(dt);
     this.updateReviveZones(dt);
     this.updateWalls(dt);
-    for (let i = this.puddles.length - 1; i >= 0; i--) if ((this.puddles[i].ttl -= dt) <= 0) this.puddles.splice(i, 1);
+    this.updatePuddles(dt);
     this.powerups.update(dt);
     this.updateShockwaves(dt);
     for (let i = this.fuses.length - 1; i >= 0; i--) {
@@ -416,11 +441,11 @@ export class Sim {
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */
   damage(u: Unit, amount: number, attacker: PlayerId | null, dirX = 0, dirY = 0): void {
     if (u.kind === 'soldier') {
-      this.damageSoldier(u, amount, attacker);
+      if (u.frozen > 0 && attacker !== null && this.allied(attacker, u)) this.chipIce(u); // tir allié sur un soldat gelé : il brise la glace
+      else this.damageSoldier(u, amount, attacker);
       return;
     }
-    if (!u.alive) return;
-    if (u.def.iceBlock && attacker !== null) amount = 1; // glaçon : chaque coup d'un soldat lui retire 1 PV, quelle que soit sa puissance (le bris sans prisonnier passe avec `attacker` nul)
+    if (!u.alive || this.horde.isEmerging(u)) return; // encore dans son trou d'apparition : invulnérable
     if (u.def.lurk && u.lurkPhase >= 2 && u.lurkPhase <= 4) amount *= u.def.lurk.buriedDmg; // enterré : très protégé
     if (u.def.burrow && u.lurkPhase >= 1 && u.lurkPhase <= 2) amount *= u.def.burrow.buriedDmg; // Scarab sous terre
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
@@ -517,7 +542,7 @@ export class Sim {
       const p = w.reach > 0 ? Math.min(1, w.t / w.reach) : 1;
       const front = w.r * (1 - (1 - p) ** 3);
       for (const a of this.aliens) {
-        if (!a.alive || a.def.iceBlock) continue; // un glaçon reste en place : repoussé, il emporterait le soldat gelé qu'il contient (voir `Horde.updateIceBlock`)
+        if (!a.alive) continue;
         let h = w.hit.get(a.id);
         if (!h) {
           if (w.t - dt > w.reach) continue; // front arrivé au bout : un alien apparu après n'est pas repoussé
@@ -550,15 +575,34 @@ export class Sim {
   }
 
   /** Flaque de crachat : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s. */
-  addPuddle(x: number, y: number, r: number, ttl: number, slow: number): void {
-    this.puddles.push({ id: this.ids.get(), x, y, r, ttl, slow });
+  addPuddle(x: number, y: number, r: number, ttl: number, slow: number, frost = false): void {
+    this.puddles.push(frost ? { id: this.ids.get(), x, y, r, ttl, slow: 1, frost } : { id: this.ids.get(), x, y, r, ttl, slow });
     if (this.puddles.length > 40) this.puddles.shift();
+  }
+
+  /** Flaques et nuages : durée de vie ; un nuage de glace gèle le premier soldat qui y entre, puis disparaît. */
+  private updatePuddles(dt: number): void {
+    for (let i = this.puddles.length - 1; i >= 0; i--) {
+      const p = this.puddles[i];
+      let gone = (p.ttl -= dt) <= 0;
+      if (!gone && p.frost) {
+        for (const s of this.soldierHash.query(p.x, p.y, p.r + 30, this.scratchSoldiers)) {
+          if (!s.alive || s.capturedBy || s.frozen > 0 || s.invulnerable > 0 || Math.hypot(s.x - p.x, s.y - p.y) > p.r + s.radius * 0.5) continue;
+          this.horde.freezeSoldier(s);
+          this.events.push({ t: 'freeze', x: p.x, y: p.y, r: p.r });
+          gone = true;
+          break;
+        }
+      }
+      if (gone) this.puddles.splice(i, 1);
+    }
   }
 
   /** Facteur de vitesse d'un soldat à cet endroit (1 = libre ; les flaques ne se cumulent pas : la plus forte l'emporte). */
   slowAt(x: number, y: number, radius: number): number {
     let k = 1;
     for (const p of this.puddles) {
+      if (p.frost) continue; // nuage de glace : il gèle (updatePuddles), il ne ralentit pas
       const rr = p.r + radius * 0.5;
       if ((x - p.x) ** 2 + (y - p.y) ** 2 < rr * rr) k = Math.min(k, p.slow);
     }
@@ -661,13 +705,17 @@ export class Sim {
   /** `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). */
   damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
     if (!s.alive) return;
-    if (!force && (s.invulnerable > 0 || (s.capturedBy && !s.frozen))) return; // bulle : protégé ; glaçon : attaquable
+    if (!force && (s.invulnerable > 0 || s.capturedBy)) return; // avalé par une bulle : protégé (gelé : attaquable)
     this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
     s.hp -= this.absorb(s, amount);
     if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
     if (!force) this.events.push({ t: 'hit', id: s.id });
     if (s.hp > 0) return;
     s.alive = false;
+    if (s.frozen > 0) {
+      s.frozen = 0; // mort dans la glace : elle vole en éclats
+      this.events.push({ t: 'thaw', soldier: s.id, x: s.x, y: s.y });
+    }
     this.metrics.soldiersLost++;
     if (attacker && attacker !== s.owner) {
       const k = this.squadOf(attacker);
@@ -679,9 +727,9 @@ export class Sim {
 
   private killAlien(a: AlienState, killer: PlayerId | null): void {
     a.alive = false;
-    if (!a.def.iceBlock) this.metrics.kills++; // un glaçon détruit n'est pas un kill
+    this.metrics.kills++;
     const squad = killer ? this.squadOf(killer) : undefined;
-    if (squad && !a.def.iceBlock) squad.kills++;
+    if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.boss) {
       this.bossKills++; // escalade : les aliens suivants sont plus forts
@@ -693,7 +741,6 @@ export class Sim {
       const s = a.captive;
       a.captive = null;
       s.capturedBy = 0;
-      s.frozen = false;
       s.invulnerable = 1.2;
       s.ky += 120;
       this.events.push({ t: 'release', soldier: s.id, x: s.x, y: s.y });
@@ -717,11 +764,26 @@ export class Sim {
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 
-  /** Boucle de glace : gèle (glaçon) le seul soldat touché ; `ring` = rayon (px) de l'onde visuelle de l'impact. */
+  /** Boucle de glace : gèle le seul soldat touché ; `ring` = rayon (px) de l'onde visuelle de l'impact. */
   freezeHit(s: SoldierState, ring: number): void {
     this.events.push({ t: 'freeze', x: s.x, y: s.y, r: ring });
-    if (!s.alive || s.capturedBy || s.grabbed > 0 || s.invulnerable > 0) return;
+    if (!s.alive || s.capturedBy || s.frozen > 0 || s.grabbed > 0 || s.invulnerable > 0) return;
     this.horde.freezeSoldier(s);
+  }
+
+  /** Le joueur `owner` est allié du soldat `s` : coop / solo, tous les joueurs ; PvP, seulement le sien. Jamais les aliens. */
+  allied(owner: PlayerId, s: SoldierState): boolean {
+    return owner !== 'aliens' && (!this.mode.pvp || owner === s.owner);
+  }
+
+  /** Coup allié sur un soldat gelé : 1 PV de gel en moins, quelle que soit sa puissance (rien au tout début du gel) ; à 0, il est libéré. */
+  chipIce(s: SoldierState): void {
+    if (!s.alive || s.frozen <= 0 || s.iceInvuln > 0) return;
+    s.frozen = Math.max(0, s.frozen - 1);
+    if (s.frozen > 0) return;
+    s.iceInvuln = 0;
+    s.invulnerable = Math.max(s.invulnerable, 1.2); // brève protection à la sortie de la glace
+    this.events.push({ t: 'thaw', soldier: s.id, x: s.x, y: s.y });
   }
 
   /** Retire les morts en fin de tick (jamais pendant les itérations). */
@@ -737,6 +799,12 @@ export class Sim {
         continue;
       }
       for (const a of this.aliens) this.blastHit(a, b);
+      // soldats alliés gelés dans la zone : l'explosion brise un peu leur glace (1 PV de gel, comme un tir)
+      for (const sq of this.squads) {
+        for (const s of sq.soldiers) {
+          if (s.frozen > 0 && this.allied(b.owner, s) && Math.hypot(s.x - b.x, s.y - b.y) < b.r + s.radius) this.chipIce(s);
+        }
+      }
       if (this.mode.pvp) for (const sq of this.squads) if (sq.owner !== b.owner) for (const s of sq.soldiers) this.blastHit(s, b);
     }
 

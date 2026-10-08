@@ -35,37 +35,6 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
   return scene.add.container(0, 0, [g, icon]);
 }
 
-/**
- * Flocon à six branches posé à plat au sol (même aplatissement que les ondes de choc) : un trait blanc sur un halo bleu glacé et un contour bleu sombre, avec deux
- * paires de petites branches par bras, qui tourne lentement. `size` = longueur d'un bras (px), `a` = opacité globale.
- */
-function drawSnowflake(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, a: number, time: number): void {
-  const squash = FX.ring.squash;
-  const rot = time * FX.stasis.spin * Math.PI * 2;
-  const seg = (px: number, py: number, qx: number, qy: number): void => {
-    g.lineBetween(x + px, y + py * squash, x + qx, y + qy * squash);
-  };
-  const w = Math.max(3, size * 0.075);
-  for (const [width, color, alpha] of [[w * 3.6, 0x0a3a6a, 0.4], [w * 2.4, 0x6fd8ff, 0.55], [w, 0xffffff, 1]] as const) { // contour bleu sombre (lisible sur le sol clair), halo glacé, trait blanc
-    g.lineStyle(width, color, alpha * a * FX.stasis.iconAlpha);
-    for (let k = 0; k < 6; k++) {
-      const th = rot + (k * Math.PI) / 3;
-      const ux = Math.cos(th);
-      const uy = Math.sin(th);
-      seg(0, 0, ux * size, uy * size); // le bras
-      for (const [t, len] of [[0.5, 0.34], [0.78, 0.22]] as const) {
-        const bx = ux * size * t;
-        const by = uy * size * t;
-        for (const s of [-1, 1]) {
-          const bth = th + (s * Math.PI) / 3;
-          seg(bx, by, bx + Math.cos(bth) * size * len, by + Math.sin(bth) * size * len); // une branche de chaque côté
-        }
-      }
-    }
-  }
-  g.fillStyle(0xffffff, 0.9 * a * FX.stasis.iconAlpha).fillEllipse(x, y, size * 0.2, size * 0.2 * squash);
-}
-
 /** Globe persistant au sol (soin ou stase) de rayon `r`, d'opacité `a` ; partagé avec la visionneuse de bonus. */
 export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis', x: number, y: number, r: number, a: number, time: number): void {
   const beat = 0.5 + 0.5 * Math.sin(time * 4);
@@ -74,7 +43,7 @@ export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis
   g.lineStyle(3, col, (0.5 + 0.3 * beat) * a).strokeEllipse(x, y, r * 2, r * 1.4);
   if (kind === 'stasis') {
     g.lineStyle(2, 0xffffff, 0.3 * a).strokeEllipse(x, y, r * 2 * (0.4 + 0.5 * ((time * 0.8) % 1)), r * 1.4 * (0.4 + 0.5 * ((time * 0.8) % 1)));
-    drawSnowflake(g, x, y, Math.min(FX.stasis.iconMax, r * FX.stasis.iconSize), a, time); // grosse icône de flocon au centre
+    // les petits flocons qui montent sont des particules (`Fx.stasisFlake`, posées par PickupViews.syncFieldParticles)
   }
   else g.fillStyle(0xffffff, 0.2 * a).fillEllipse(x, y - 8 * beat, 26, 16);
 }
@@ -125,28 +94,34 @@ export class PickupViews {
   /** Appelé chaque frame (avant le dessin du sol) : crée / déplace / détruit les objets. */
   sync(time: number, alpha = 1): void {
     this.syncPowerups(time, alpha);
-    this.syncHealZones();
+    this.syncFieldParticles();
     this.syncCounts();
     this.syncSyringes(time);
   }
 
   // ---------- Globes de soin : croix vertes ----------
 
-  /** Prochain instant (ms de la scène) où chaque globe de soin lâche une croix. */
+  /** Prochain instant (ms de la scène) où chaque globe lâche une particule. */
   private readonly zoneNext = new Map<number, number>();
 
-  /** Des croix vertes naissent au hasard dans chaque globe de soin et montent en s'effaçant (FX.healZone). */
-  private syncHealZones(): void {
+  /**
+   * Particules des globes au sol, nées au hasard dans la zone, qui montent en s'effaçant : croix vertes du globe de soin (FX.healZone),
+   * petits flocons du globe de stase (FX.stasis).
+   */
+  private syncFieldParticles(): void {
     const now = this.scene.time.now;
     const live = new Set<number>();
     for (const f of this.sim.powerups.fields) {
-      if (f.kind !== 'heal') continue;
       live.add(f.id);
       if (now < (this.zoneNext.get(f.id) ?? 0)) continue;
-      this.zoneNext.set(f.id, now + FX.healZone.everyMs * (0.6 + Math.random() * 0.8));
+      const heal = f.kind === 'heal';
+      this.zoneNext.set(f.id, now + (heal ? FX.healZone.everyMs : FX.stasis.everyMs) * (0.6 + Math.random() * 0.8));
       const a = Math.random() * Math.PI * 2;
       const d = Math.sqrt(Math.random()) * f.r * 0.92; // dans l'ellipse du globe (demi-axes r et 0,7 r, comme `drawField`)
-      this.fx.healZoneCross(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.7, Math.min(1, f.ttl / 1.2));
+      const x = f.x + Math.cos(a) * d;
+      const y = f.y + Math.sin(a) * d * 0.7;
+      if (heal) this.fx.healZoneCross(x, y, Math.min(1, f.ttl / 1.2));
+      else this.fx.stasisFlake(x, y, Math.min(1, f.ttl / 1.2));
     }
     for (const id of this.zoneNext.keys()) if (!live.has(id)) this.zoneNext.delete(id);
   }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyAssets, loadAssets, log, poki, theme } from '@xiao/engine';
+import { applyAssets, loadAssets, log, poki, theme, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { ASSETS } from '../assets/manifest';
 import { makeAlienTextures } from '../art/aliens';
@@ -49,7 +49,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     const applied = applyAssets(this, ASSETS);
     if (applied.length) log.info('[assets] visuels remplacés :', applied.join(', '));
-    if (import.meta.env.DEV) {
+    if (DEV_TOOLS) {
       // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki.
       // Avant les textures : la recrue composée dépend des réglages d'effets (FX.recruit).
       loadFxOverrides();
@@ -65,9 +65,9 @@ export class BootScene extends Phaser.Scene {
     makeEnvironmentTextures(this);
     makeFxTextures(this);
     registerDefaultSprites();
-    if (import.meta.env.DEV) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
-    if (import.meta.env.DEV) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités
-    if (import.meta.env.DEV) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
+    if (DEV_TOOLS) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
+    if (DEV_TOOLS) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités
+    if (DEV_TOOLS) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
     makePlayerVariants(this); // soldats recolorés (un par emplacement de joueur), après les placements : ils en sont une copie
 
     poki.gameLoadingFinished();
@@ -77,14 +77,14 @@ export class BootScene extends Phaser.Scene {
   /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
   private async launch(): Promise<void> {
     // Dev : `?viewer` (unités), `?particles`, `?obstacles`, `?misc`, `?bonus` ou `?waves` ouvrent directement la visionneuse correspondante.
-    if (import.meta.env.DEV && poki.getURLParam('viewer') !== undefined) return void this.scene.start(SCENES.viewer);
-    if (import.meta.env.DEV && poki.getURLParam('obstacles') !== undefined) return void this.scene.start(SCENES.obstacles);
-    if (import.meta.env.DEV && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
-    if (import.meta.env.DEV && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
-    if (import.meta.env.DEV && poki.getURLParam('bonus') !== undefined) return void this.scene.start(SCENES.bonus);
-    if (import.meta.env.DEV && poki.getURLParam('upgrades') !== undefined) return void this.scene.start(SCENES.upgrades);
-    if (import.meta.env.DEV && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
-    if (import.meta.env.DEV && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
+    if (DEV_TOOLS && poki.getURLParam('viewer') !== undefined) return void this.scene.start(SCENES.viewer);
+    if (DEV_TOOLS && poki.getURLParam('obstacles') !== undefined) return void this.scene.start(SCENES.obstacles);
+    if (DEV_TOOLS && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
+    if (DEV_TOOLS && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
+    if (DEV_TOOLS && poki.getURLParam('bonus') !== undefined) return void this.scene.start(SCENES.bonus);
+    if (DEV_TOOLS && poki.getURLParam('upgrades') !== undefined) return void this.scene.start(SCENES.upgrades);
+    if (DEV_TOOLS && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
+    if (DEV_TOOLS && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
     const req = readOnlineRequest();
     if (req) {
       const { width, height } = this.scale;

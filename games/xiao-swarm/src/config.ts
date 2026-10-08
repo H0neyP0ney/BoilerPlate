@@ -45,8 +45,16 @@ export const GRAB_SLOW_TIME = 1.2;
 export const ZOMBIE_MUL = 3;
 /** Zombie : multiplicateur de dégâts (1 = pas de bonus : sa force vient de sa cadence d'attaque). */
 export const ZOMBIE_DMG_MUL = 1;
-/** Nombre d'exemplaires ressuscités par une incantation du chaman. */
-export const ZOMBIE_COPIES = 5;
+/** Mêlée des aliens : ils frappent un soldat quand l'écart entre leurs deux cercles (bords) est sous cette distance (px ; 4 avant le 07/10). */
+export const MELEE_REACH = 10;
+/**
+ * Gel d'un soldat (boucle du slime de glace, nuage de glace du chaman) : il est pris dans la glace avec `hp` PV de gel. Chaque coup
+ * d'un allié (balle, rayon, explosion, quelle que soit sa puissance) en retire 1 ; à 0 il est libéré. Les `invuln` premières secondes,
+ * les coups alliés ne comptent pas (on voit la glace se former). Le soldat gelé ne bouge ni ne tire, et reste attaquable par les aliens.
+ */
+export const FREEZE = { hp: 50, invuln: 0.5 };
+/** Nombre d'exemplaires ressuscités par une incantation du chaman (5 avant le 07/10). */
+export const ZOMBIE_COPIES = 2;
 /** Enragé (zombie) : multiplicateurs de vitesse de déplacement et de cadence d'attaque. */
 export const ENRAGED_SPEED = 1.35;
 export const ENRAGED_ATTACK = 3;
@@ -65,8 +73,8 @@ export const BOSS_ENRAGE = { every: 45, speed: 0.3, attack: 0.3, cooldownCut: 0.
  * cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance de la partie.
  */
 export const BOSS_ESCALATION = 0.1;
-/** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés. */
-export const CAPTIVE_VULN = 3;
+/** Une bulle qui digère un soldat est « super vulnérable » : dégâts reçus multipliés (3 → 3,6 le 07/10 : +20 %). */
+export const CAPTIVE_VULN = 3.6;
 /**
  * Montée de niveau : onde de choc qui repousse les aliens. `radius` : portée (px) ; `reach` : temps (s) que le front met à
  * l'atteindre (même courbe Cubic.Out que l'anneau affiché) ; chaque alien est repoussé quand le front le touche, à `speed` px/s

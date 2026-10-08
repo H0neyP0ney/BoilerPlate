@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'iceblock';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -17,6 +17,19 @@ export interface AlienDef {
   target: TargetPref;
   /** Flotte (ombre décollée, rebond plus ample). */
   floats?: boolean;
+  /** Mêlée en zone : chaque coup au contact (`damage`, toutes les `attackCooldown` s) touche tous les soldats à moins de `cleave` px de lui, pas un seul. */
+  cleave?: number;
+  /**
+   * Nuage ralentissant : toutes les `every` s, si la squad visée est à moins de `range` px, un nuage violet apparaît sur elle, un peu
+   * en avant de sa course (vitesse × `lead` s) : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s (rayon `radius`).
+   */
+  cloud?: { every: number; range: number; lead: number; radius: number; ttl: number; slow: number };
+  /**
+   * Flocons à distance : toutes les `every` s, si la squad visée est à moins de `range` px, `count` petits nuages de glace (rayon `radius`)
+   * apparaissent d'un coup tout autour d'elle, à `gap` px (min-max) de son bord réel (soldat le plus éloigné du centre). Un soldat qui entre dans un nuage est gelé dans un glaçon (comme le
+   * slime de glace) et le nuage disparaît ; sinon il dure `ttl` s.
+   */
+  frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
   /** Slam de zone : knockback + dégâts autour de lui. */
   slam?: { radius: number; damage: number; cooldown: number; knockback: number; /** Étourdit les soldats touchés (s) : ils ne bougent ni ne tirent. */ stun?: number };
   /** Tir en cloche (comme la grenade) : s'arrête à `range × 0.8` de sa cible (sauf `keepMoving`) et lance `count` (1 par défaut) boules qui explosent au sol (zone `aoe`). */
@@ -49,14 +62,12 @@ export interface AlienDef {
   swarm?: { every: number; duration: number; count: number; spawn: AlienId };
   /**
    * Slime de glace : tire en LIGNE DROITE une boucle de glace (vitesse `speed` px/s) vers la position de la squad au moment du tir, avec une anticipation partielle (`lead` × le déplacement de la squad pendant le trajet), à moins de
-   * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) : chacun est pris dans un glaçon
-   * (`iceBlock`, `blockHp` = 50 PV fixes, 1 PV perdu par coup d'un soldat) qui ne fond jamais : il faut le détruire. Le soldat gelé reste attaquable par les aliens.
+   * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) :
+   * il est pris dans la glace (`FREEZE` de config.ts : 50 PV de gel, 1 PV par coup d'un allié) qui ne fond jamais : ses alliés doivent la briser. Il reste attaquable par les aliens.
    */
-  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; blockHp: number; texture: string };
+  ice?: { range: number; cooldown: number; speed: number; zone: number; damage: number; lead: number; texture: string };
   /** Plafond d'aliens de cette espèce dans UNE vague (par squad), invités et mise à l'échelle comprises (slime de glace : 2). */
   maxPerWave?: number;
-  /** Glaçon : alien immobile et inoffensif qui retient un soldat gelé (`captive`) ; le détruire le libère. Pas de kill, ni XP, ni recrue. */
-  iceBlock?: boolean;
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
   tint?: number;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
@@ -106,16 +117,20 @@ export interface AlienDef {
     /** Part du déplacement de la cible anticipée (0 = vise où elle est, 1 = anticipation complète). */
     lead: number;
     damage: number;
-    /** Rayon de l'impact (px). Aucun recul : l'impact laisse une flaque qui ralentit. */
+    /** Rayon de l'impact (px). Aucun recul. */
     aoe: number;
-    puddle: { radius: number; ttl: number; slow: number };
+    /** Flaque ralentissante laissée à l'impact (absent : aucune). */
+    puddle?: { radius: number; ttl: number; slow: number };
     texture: string;
   };
   /** Échelle d'affichage (1 par défaut) ; le rayon de collision (`radius`) est à régler en conséquence. */
   scale?: number;
   /** Probabilité de base de lâcher une recrue. */
   recruitChance: number;
+  /** Couleur de l'alien : éclair de tir, boule lobée… et, sans `goo`, de ses restes à sa mort. */
   color: number;
+  /** Couleur de ses restes à sa mort (éclats, gelée, flaque au sol, flaque de cadavre) quand elle diffère de `color` (ex. shooter bleu à tir rouge). */
+  goo?: number;
   hpBarWidth: number;
 }
 
@@ -123,7 +138,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Petit cafard (id historique `gling`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
   gling: {
     id: 'gling',
-    hp: 12.6, // -10 %
+    hp: 15, // -10 %
     speed: 180, // +40 %
     radius: 11,
     mass: 0.6,
@@ -134,6 +149,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 1,
     recruitChance: 0.02,
     color: 0xa982e8, // violet du cafard (éclaboussure à la mort)
+    goo: 0xa231ce, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 22,
   },
   /** Slime de base (vert). */
@@ -150,12 +166,13 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 2,
     recruitChance: 0.05,
     color: 0x8fd14f,
+    goo: 0x52b51d, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
   },
   /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
   shooter: {
     id: 'shooter',
-    hp: 90,
+    hp: 70,
     speed: 55,
     radius: 24,
     mass: 3,
@@ -166,13 +183,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     revivable: true,
     xp: 6,
     recruitChance: 0.1,
-    color: 0x9b1c3c, // rouge bordeaux (boule lobée, éclats et flaque de mort)
+    color: 0x9b1c3c, // rouge bordeaux (boule lobée, éclair de tir)
+    goo: 0x1f41a9, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 40,
   },
   /** Kamikaze : fonce sur les soldats ; le tuer déclenche une explosion retardée (il faut le tuer de loin). */
   kamikaze: {
     id: 'kamikaze',
-    hp: 26,
+    hp: 25,
     speed: 105,
     radius: 15,
     mass: 1,
@@ -182,7 +200,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 2200 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp : ~147 px (×2 ; 1100 ≈ 73 px, 560 d'origine ≈ 37 px)
     xp: 3,
     recruitChance: 0.03,
-    color: 0xe8333a, // rouge de l'araignée (éclaboussure à la mort)
+    color: 0xe8333a,
+    goo: 0xf0a020, // jaune orangé comme son corps (éclats et flaque de mort)
     hpBarWidth: 28,
   },
   /** Grenouille : reste à distance, tire la langue sur un soldat et le tire vers elle. */
@@ -199,38 +218,43 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 4,
     recruitChance: 0.04,
     color: 0x3fd0a0,
+    goo: 0xc20d55, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
   },
   /** Rhinocéros : lent à quatre pattes, mais charge toutes les 5 s dans une zone signalée en rouge. */
   charger: {
     id: 'charger',
-    hp: 390, // ×3
-    speed: 40,
+    hp: 300, // ×3
+    speed: 70, // +30 % (40, 07/10)
     radius: 24,
     mass: 5,
-    damage: 5,
+    damage: 20,
     attackCooldown: 0.5,
     target: 'nearest',
-    rush: { cooldown: 5, windup: 0.675, length: 416, width: 80, speed: 720, damage: 35, knockback: 1600 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
+    cleave: 70, // mêlée en zone (07/10)
+    rush: { cooldown: 5, windup: 0.4725, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700 }, // préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     xp: 10,
     recruitChance: 0.15,
     color: 0xb03a3a,
+    goo: 0xeec830, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 44,
   },
   /** Cracheur : crache quelques boules violettes en cloche qui laissent une flaque ralentissante. */
   spitter: {
     id: 'spitter',
-    hp: 34,
-    speed: 62,
+    hp: 100,
+    speed: 90,
     radius: 17,
     mass: 1.2,
     damage: 2,
     attackCooldown: 0.45,
     target: 'nearest',
-    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, puddle: { radius: 46, ttl: 6, slow: 0.45 }, texture: 'fx_spit' },
+    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, texture: 'fx_spit' }, // boules vertes, plus de flaque (07/10)
+    cloud: { every: 6, range: 560, lead: 0.6, radius: 95, ttl: 3.5, slow: 0.5 }, // nuage violet ralentissant posé sur la squad (07/10)
     xp: 4,
     recruitChance: 0.04,
     color: 0xb060e0,
+    goo: 0xab1b7b, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
   },
   /** Chaman : slime magique qui reste en retrait et ressuscite les slimes morts depuis leur flaque (une fois chacun). */
@@ -243,16 +267,18 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 1.5,
     attackCooldown: 0.5,
     target: 'nearest',
-    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30 }, // le ressuscité est un ZOMBIE (5 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
+    frost: { every: 9, range: 560, count: 3, gap: [90, 160], radius: 30, ttl: 10 }, // flocons à distance (07/10) : à 90-160 px du bord réel de la squad
+    revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30 }, // le ressuscité est un ZOMBIE (2 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
     xp: 8,
     recruitChance: 0.1,
     color: 0xffd84a,
+    goo: 0x8318a2, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 34,
   },
   /** Bâtisseur de murs : de très loin, fait surgir (après un télégraphe jaune) des murs allongés autour de la squad pour gêner sa fuite. */
   wall: {
     id: 'wall',
-    hp: 50,
+    hp: 150,
     speed: 60,
     radius: 17,
     mass: 1.3,
@@ -263,12 +289,13 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 4,
     recruitChance: 0.04,
     color: 0x9a8066,
+    goo: 0xd7a051, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
   },
   /** Lurker : s'enterre sur le trajet anticipé de la squad et la frappe d'une ligne de pics (comme les lurkers de StarCraft). */
   lurker: {
     id: 'lurker',
-    hp: 360, // ×3
+    hp: 350, // ×3
     speed: 120,
     radius: 18,
     mass: 2,
@@ -279,12 +306,13 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 8,
     recruitChance: 0.08,
     color: 0x7a5a9a,
+    goo: 0xd42d5a, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 36,
   },
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
     id: 'bubble',
-    hp: 2160, // ×3
+    hp: 2000, // ×3
     speed: 210,
     radius: 22,
     mass: 3,
@@ -293,10 +321,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    capture: { dps: 50 }, // digestion 2× plus rapide (était 25)
+    maxPerWave: 1, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris
+    capture: { dps: 30 }, // digestion : 25 → 50 → 40 (−20 %, 07/10)
     xp: 12,
     recruitChance: 0,
     color: 0x8fe0ff,
+    goo: 0x35b4d8, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 46,
   },
   /** Slime de feu : laisse derrière lui une traînée de flammes qui brûle les soldats qui marchent dedans. */
@@ -313,6 +343,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 4,
     recruitChance: 0.03,
     color: 0xff5a1a,
+    goo: 0xcb3d15, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
   },
   /** Mini-boss (2:00) : énorme rhinocéros, charge tous les 4,5 s dans un couloir large signalé en rouge. */
@@ -326,17 +357,18 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 3.6, windup: 0.63, length: 430, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
+    rush: { cooldown: 3.6, windup: 0.5, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
     boss: { kind: 'mini' },
     xp: 150,
     recruitChance: 1,
     color: 0xb03a3a,
+    goo: 0x22b6ed, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 100,
   },
   /** Mini-boss (5:00) : Scarab, slam de zone dévastateur. */
   boss_scarab: {
     id: 'boss_scarab',
-    hp: 3200,
+    hp: 1500,
     speed: 150, // ×3
     radius: 68,
     mass: 50,
@@ -351,12 +383,13 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     xp: 400,
     recruitChance: 1,
     color: 0xc01c40,
+    goo: 0xbe5527, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 140,
   },
   /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 3 s pour faire apparaître 30 glings en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
-    hp: 650, // +30 % (500)
+    hp: 600, // +30 % (500)
     speed: 85,
     radius: 38,
     mass: 14,
@@ -382,33 +415,18 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.5,
     target: 'nearest',
     maxPerWave: 2,
-    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, blockHp: 50, texture: 'fx_ice_ball' },
+    ice: { range: 420, cooldown: 4.5, speed: 403, zone: 44, damage: 6, lead: 0.5, texture: 'fx_ice_ball' },
     revivable: true,
     xp: 5,
     recruitChance: 0.07,
     color: 0x7fd8ff,
+    goo: 0x2e93b4, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 30,
-  },
-  /** Glaçon : retient un soldat gelé. 50 PV (`ice.blockHp`) : chaque coup d'un soldat en retire 1 (`Sim.damage`), quelle que soit sa puissance ; pas de barre de vie, il se fissure et rétrécit (`view/IceBlockFx.ts`). */
-  iceblock: {
-    id: 'iceblock',
-    hp: 50,
-    speed: 0,
-    radius: 26,
-    mass: 1000,
-    damage: 0,
-    attackCooldown: 99,
-    target: 'nearest',
-    iceBlock: true,
-    xp: 0,
-    recruitChance: 0,
-    color: 0x9fe3ff,
-    hpBarWidth: 44,
   },
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */
   boss_crab: {
     id: 'boss_crab',
-    hp: 900, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
+    hp: 3000, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
     speed: 48,
     radius: 150, // 3× plus gros (affichage et collision)
     scale: 3,

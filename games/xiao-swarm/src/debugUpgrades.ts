@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from '@xiao/engine';
 import { UPGRADES, type UpgradeId } from './data/progression';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
@@ -59,7 +60,7 @@ export function resetUpgrade(id: UpgradeId): void {
 
 /** À appeler au démarrage (dev), avant de créer la simulation. */
 export function loadUpgradeOverrides(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Upgrades', UPGRADES);
   try {
     overrides = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as typeof overrides;

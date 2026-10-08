@@ -277,7 +277,8 @@ export class Mirror {
         aim: u.aim,
         invulnerable: 0,
         capturedBy: 0,
-        frozen: false,
+        frozen: 0,
+        iceInvuln: 0,
         stun: 0,
         grabbed: 0,
       };
@@ -294,7 +295,9 @@ export class Mirror {
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
     s.stun = u.stunned ? 1 : 0;
-    s.invulnerable = u.invulnerable ? 1 : 0;    s.capturedBy = u.capturedBy;
+    s.invulnerable = u.invulnerable ? 1 : 0;
+    s.capturedBy = u.capturedBy;
+    s.frozen = u.frozen;
     this.setGoal(s, u.x, u.y);
     return s;
   }
@@ -334,6 +337,7 @@ export class Mirror {
         lobCd: 0,
         tongueCd: 0,
         sprayCd: 0,
+        cloudCd: 0,
         rushCd: 0,
         rushWind: 0,
         rushT: 0,

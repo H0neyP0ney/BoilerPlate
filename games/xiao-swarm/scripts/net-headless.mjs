@@ -174,7 +174,7 @@ try {
     for (let guard = 0; guard < 20 && hs.squads.some((sq) => sq.offer); guard++) for (const sq of hs.squads) if (sq.offer) hs.chooseUpgrade(sq.owner, 0);
   };
 
-  // 3d) Cracheur : boules en cloche, pas de recul, flaque ralentissante reflétée chez le client ; cailloux suivis par snapshot.
+  // 3d) Cracheur : boules en cloche, pas de recul, plus de flaque à l'impact ; son nuage ralentissant (flaque) est reflété chez le client ; cailloux suivis par snapshot.
   hs.aliens.length = 0;
   hs.horde.spawnAt('spitter', a.center.x + 200, a.center.y);
   const spitter = hs.aliens[0];
@@ -189,10 +189,41 @@ try {
   await tick(client);
   const projSame = [...client.sim.combat.projectiles.active].filter((p) => projBefore.get(p.id) === p).length;
   check(projBefore.size >= 3 && projSame >= Math.min(2, projBefore.size), 'projectiles : mêmes objets (lissés) d’un snapshot à l’autre chez le client', `${projSame} conservés sur ${projBefore.size}`);
+  // télégraphe des tirs en cloche chez le client (WorldView le dessine d'après lob, team, aoe, life et la vitesse)
+  const clientLobs = client.sim.combat.projectiles.active.filter((p) => p.lob);
+  check(
+    clientLobs.length >= 1 && clientLobs.every((p) => p.team === 'aliens' && p.aoe > 0 && p.life > 0 && p.life <= p.maxLife + 0.05),
+    'client : tirs en cloche avec camp, rayon et temps de vol restant (télégraphe affichable)',
+    clientLobs.map((p) => `aoe ${p.aoe}, ${p.life.toFixed(2)}/${p.maxLife.toFixed(2)} s`).join(' · '),
+  );
+  const hostLob = lobs[0];
+  const twin = clientLobs.find((p) => p.id === (hostLob.id & 0xffff));
+  if (twin) {
+    const hx = hostLob.x + hostLob.vx * hostLob.life, hy = hostLob.y + hostLob.vy * hostLob.life;
+    const cx = twin.x + twin.vx * twin.life, cy = twin.y + twin.vy * twin.life;
+    check(Math.hypot(hx - cx, hy - cy) < 40, 'client : point d’impact du télégraphe proche de celui de l’hôte', `${Math.round(Math.hypot(hx - cx, hy - cy))} px d’écart`);
+  }
   hs.aliens.length = 0;
   for (let i = 0; i < 45; i++) await tick(client);
-  check(hs.puddles.length === 3 && client.sim.puddles.length === 3, 'impacts : flaques ralentissantes, reflétées chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
-  check(hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10) < 1, 'une flaque ralentit les soldats dedans', `×${hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10)}`);
+  check(hs.puddles.length === 0, 'impacts du cracheur : plus de flaque', `${hs.puddles.length}`);
+  const C = spitter.def.cloud;
+  hs.addPuddle(a.center.x, a.center.y, C.radius, C.ttl, C.slow); // nuage du cracheur (même liste que les anciennes flaques)
+  for (let i = 0; i < 6; i++) await tick(client);
+  check(hs.puddles.length === 1 && client.sim.puddles.length === 1, 'nuage ralentissant reflété chez le client', `${hs.puddles.length} / ${client.sim.puddles.length}`);
+  check(hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10) < 1, 'le nuage ralentit les soldats dedans', `×${hs.slowAt(hs.puddles[0].x, hs.puddles[0].y, 10)}`);
+  // gel : état du soldat (PV de gel) reflété chez le client ; en coop, les soldats de l'AUTRE joueur peuvent aussi briser la glace
+  {
+    const ice = a.soldiers.find((x) => x.alive);
+    hs.horde.freezeSoldier(ice);
+    for (let i = 0; i < 6; i++) await tick(client);
+    const mirror = client.sim.squadOf(a.owner).soldiers.find((x) => x.id === ice.id);
+    check(mirror && mirror.frozen === 50, 'gel : PV de gel reflétés chez le client', `${mirror?.frozen}`);
+    ice.iceInvuln = 0;
+    const hp = ice.hp;
+    hs.damage(ice, 40, b.owner);
+    check(ice.frozen === 49 && ice.hp === hp, 'gel (coop) : un tir de l’autre joueur brise la glace sans blesser', `${ice.frozen} gel, ${ice.hp} PV`);
+    ice.frozen = 0;
+  }
   void kx0;
   hs.addRock(a.center.x, a.center.y + 300, 24, 10);
   for (let i = 0; i < 6; i++) await tick(client);
@@ -264,7 +295,8 @@ try {
   const stimSq = a.buffs.stim > 0 ? a : b; // la squad dont un soldat est passé dessus
   check(stimSq.buffs.stim > 0 && client.sim.squadOf(stimSq.owner).buffs.stim > 0, 'stimpack ramassé, reflété chez le client', `${stimSq.buffs.stim.toFixed(1)} s`);
   check(hs.powerups.fields.length === 1 && client.sim.powerups.fields.length === 1, 'globe de stase persistant, reflété chez le client');
-  check(hs.combat.projectiles.active.length >= 1 && hs.combat.projectiles.active.length < 15, 'rafale : les roquettes partent l’une après l’autre (pas d’un coup)', `${hs.combat.projectiles.active.length} en l’air`);
+  const rockets = hs.combat.projectiles.active.filter((p) => p.texture === 'fx_rocket').length; // les balles des soldats encore en vol ne comptent pas
+  check(rockets >= 1 && rockets < 15, 'rafale : les roquettes partent l’une après l’autre (pas d’un coup)', `${rockets} roquette(s) en l’air`);
   hs.aliens.length = 0;
   hs.horde.spawnAt('slime', hs.powerups.fields[0].x, hs.powerups.fields[0].y, 1, false);
   check(hs.stasisAt(hs.aliens[0].x, hs.aliens[0].y) < 0.5, 'stase : aliens très ralentis dans le globe');
@@ -289,6 +321,7 @@ try {
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
   const scarab = hs.aliens[0];
+  scarab.age = 1; // sorti de son trou d'apparition (invulnérable avant)
   check(Math.abs(scarab.maxShield - scarab.maxHp * 0.05) < 1e-6 && scarab.shield === scarab.maxShield, 'scarab : bouclier = 5 % de ses PV max', `${Math.round(scarab.maxShield)} / ${Math.round(scarab.maxHp)}`);
   hs.damage(scarab, 100, host.localPlayer);
   check(scarab.hp === scarab.maxHp && Math.abs(scarab.shield - (scarab.maxShield - 100)) < 1e-6, 'scarab : le bouclier encaisse avant les PV');

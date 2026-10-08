@@ -5,8 +5,9 @@ import { ACTIVE_ALIENS, ALIENS, type AlienId } from '../data/aliens';
 import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
 import { PALETTE, SCENES, SHADOW_ALPHA, VIEW_BG } from '../config';
 import { button, header, line, note, slider } from '../dev/devUi';
+import type { AlienTestRequest } from '../dev/alienTest';
 import { ScaleRef } from '../dev/scaleRef';
-import { getDefaultStat, getStat, listStats, resetStats, saveStatsToCode, setStat } from '../debugStats';
+import { getDefaultStat, getStat, listStats, resetStats, saveAllStatsToCode, setStat } from '../debugStats';
 import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
 
 /**
@@ -122,6 +123,10 @@ export class UnitViewerScene extends Phaser.Scene {
     this.buildPanel();
     this.buildEditorMarkers();
     this.rebuild();
+    // retour d'un test d'alien (bouton « Tester ») : on rouvre la vue détaillée de cet alien
+    const back = this.registry.get('viewerSelect') as string | undefined;
+    this.registry.remove('viewerSelect');
+    if (back) this.select_(back);
 
     const kb = this.input.keyboard!;
     // mode « placer le canon » : le clic gauche (maintenu ou non) pose la bouche du canon sur la frame affichée
@@ -293,9 +298,12 @@ ${id}` : id;
   private play(e: Entry): void {
     const s = e.sprite;
     s.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
-    const asked = sprites.get(e.id).anims?.[this.anim];
+    // Un alien qui a une marche ne joue jamais son idle en jeu (UnitViews : toujours `walk`) et seule sa marche a un ancrage réglé :
+    // « idle » demandé (vue d'ensemble au premier affichage) → sa marche, sinon l'ombre paraît décalée.
+    const wanted = this.anim === 'idle' && e.kind === 'alien' && sprites.hasAnim(e.id, 'walk') ? 'walk' : this.anim;
+    const asked = sprites.get(e.id).anims?.[wanted];
     // Anim demandée, sinon idle (ou marche) de la planche, sinon procédural (aucune anim de planche).
-    const name = asked ? this.anim : (['idle', 'walk'].find((n) => sprites.hasAnim(e.id, n)));
+    const name = asked ? wanted : (['idle', 'walk'].find((n) => sprites.hasAnim(e.id, n)));
     if (name && sprites.play(s, e.id, name)) {
       e.key = sprites.get(e.id).anims![name];
       e.playing = name;
@@ -920,9 +928,19 @@ ${id}` : id;
     });
     p.append(
       header(`Stats — ${getName(nameKey(t.kind, t.unit), 'en') || id}`, () => this.select_(ALL)),
+      ...(kind === 'alien'
+        ? [
+            line(
+              button('▶ Tester (4 Gunners contre 1)', () => {
+                this.registry.set('alienTest', { alien: id as AlienId, back: this.selected } satisfies AlienTestRequest);
+                this.scene.start(SCENES.game);
+              }),
+            ),
+          ]
+        : []),
       note("Équilibrage : appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs). Save écrit dans data/aliens.ts / data/classes.ts."),
       line(
-        button('Save', () => void saveStatsToCode(kind, id).then((m) => (info.textContent = m))),
+        button('Save (toutes les unités modifiées)', () => void saveAllStatsToCode(kind, id).then((m) => (info.textContent = m))),
         button('Reset', () => {
           resetStats(kind, id);
           for (const sy of syncs) sy();

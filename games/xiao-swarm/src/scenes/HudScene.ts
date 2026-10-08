@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { device, music, sfx, theme } from '@xiao/engine';
+import { device, music, sfx, theme, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
 import { keyLabel } from '../hotkeys';
@@ -116,7 +116,7 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setVisible(false);
     // Dev uniquement : le menu Réglages, les panneaux et les visionneuses n'existent pas dans le build Poki.
-    if (import.meta.env.DEV) {
+    if (DEV_TOOLS) {
       this.debugBtn = this.makeDebugButton();
       this.panelBtns = [
         makeSquareButton(this, iconCrowd, () => this.game_.toggleCrowdPanel()),
@@ -178,7 +178,7 @@ export class HudScene extends Phaser.Scene {
     this.musicBtn = this.makeMusicButton();
     this.hint = this.makeHint();
     // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
-    if (import.meta.env.DEV && staleDropped.length > 0) {
+    if (DEV_TOOLS && staleDropped.length > 0) {
       const note = this.add
         .text(this.scale.width / 2, hudTop() + 96, `Réglages mémorisés périmés supprimés (le code a changé) :
 ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffe14a', stroke: '#13233a', strokeThickness: 5, align: 'center' })

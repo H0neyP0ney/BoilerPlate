@@ -89,14 +89,14 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     7: [
       { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'wall', count: 4 }, { type: 'slime', count: 6 }] },
       { name: 'Embuscade', groups: [{ type: 'lurker', count: 3 }, { type: 'slime', count: 8 }, { type: 'gling', count: 6 }] },
-      { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 4 }, { type: 'gling', count: 11 }] },
+      { name: 'Bulle', groups: [{ type: 'bubble', count: 1 }, { type: 'spitter', count: 4 }, { type: 'gling', count: 11 }] },
       { name: 'Barrage', groups: [{ type: 'wall', count: 6 }, { type: 'toad', count: 4 }, { type: 'burner', count: 4 }] },
     ],
     8: [
-      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
+      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 1 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
       { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 5 }, { type: 'toad', count: 3 }, { type: 'kamikaze', count: 4 }] },
       { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'kamikaze', count: 7 }] },
-      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'burner', count: 7 }, { type: 'bubble', count: 2 }] },
+      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'burner', count: 7 }, { type: 'bubble', count: 1 }] },
     ],
     9: [
       { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 6 }] },
@@ -279,9 +279,12 @@ export const WAVE_SCRIPT: WaveScript = JSON.parse(JSON.stringify(DEFAULT_WAVE_SC
 
 /**
  * Réglage de la pression par tranche de la timeline : le nombre d'aliens de chaque vague envoyée entre `from` et `to` (s, position dans la
- * timeline) est multiplié par `mul` (les boss ne sont pas touchés). 120-300 s = de l'Alpha Rhino au Scarab : −20 %.
+ * timeline) est multiplié par `mul` (les boss ne sont pas touchés). 120-300 s = de l'Alpha Rhino au Scarab : −20 % ; au-delà de 6:00 : −20 % (07/10).
  */
-export const WAVE_PRESSURE: { from: number; to: number; mul: number }[] = [{ from: 120, to: 300, mul: 0.8 }];
+export const WAVE_PRESSURE: { from: number; to: number; mul: number }[] = [
+  { from: 120, to: 300, mul: 0.8 },
+  { from: 360, to: Infinity, mul: 0.8 },
+];
 
 /** Multiplicateur de pression à l'instant `time` de la timeline (1 si aucune tranche ne s'applique). */
 export function pressureAt(time: number): number {

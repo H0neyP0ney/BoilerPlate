@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage } from '@xiao/engine';
+import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS } from '@xiao/engine';
 import { FREE_GAMES, INTERSTITIALS_ENABLED, SCENES } from '../config';
 import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
 import type { SoldierClassId } from '../data/classes';
@@ -9,6 +9,8 @@ import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
 import { BotOverlay } from '../dev/botOverlay';
 import { CheatPanel, type BotControl } from '../dev/cheatPanel';
+import { jumpAhead } from '../dev/jumpAhead';
+import { AlienTest, alienTestMode, type AlienTestRequest } from '../dev/alienTest';
 import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
@@ -61,6 +63,8 @@ export class GameScene extends Phaser.Scene {
   /** Après un choix d'upgrade, le joystick (souris / tactile) reste ignoré tant que le joueur n'a pas relâché puis re-cliqué : le clic sur la carte d'upgrade ne doit pas lancer le déplacement. Le clavier n'est pas concerné. */
   private moveLocked = false;
   private readonly camTarget = { x: 0, y: 0 };
+  /** Test d'un alien (dev, bouton « Tester » de sa vue détaillée) : 4 Gunners contre lui, sans vagues ni fin de partie. */
+  private alienTest?: AlienTest;
   /** Analytics (docs/ANALYTICS.md) : étape du tutoriel en cours, prochain palier de temps et dernier niveau de vague déjà notés. */
   private tutoPhase = '';
   private nextTimeMilestone = 0;
@@ -79,7 +83,7 @@ export class GameScene extends Phaser.Scene {
     this.shownOffer = '';
     this.tutoPhase = '';
     this.scene.stop(SCENES.levelUp); // une fenêtre d'upgrade restée ouverte d'une partie précédente
-    if (import.meta.env.DEV) {
+    if (DEV_TOOLS) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
       loadSavedCrowd();
       loadSavedVisual();
@@ -89,14 +93,24 @@ export class GameScene extends Phaser.Scene {
     if (online) {
       this.session = online;
     } else {
-      const mode = this.pickMode();
+      const test = DEV_TOOLS ? (this.registry.get('alienTest') as AlienTestRequest | undefined) : undefined;
+      this.registry.remove('alienTest');
+      const mode = test ? alienTestMode() : this.pickMode();
       const botsParam = Number(poki.getURLParam('bots'));
+      const jump = poki.getURLParam('jump') === 'scarab'; // ?jump=scarab : partie avancée (Scarab tué), build déployé compris
       this.session = new LocalSession({
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
-        tutorial: mode.id === 'survival' && !settings.tutorialDone, // onboarding scripté à la première partie solo
+        tutorial: mode.id === 'survival' && !settings.tutorialDone && !jump && !test, // onboarding scripté à la première partie solo
       });
+      this.alienTest = test
+        ? new AlienTest(this, this.session.sim, this.session.localPlayer, test, (back) => {
+            this.registry.set('viewerSelect', back);
+            this.scene.start(SCENES.viewer);
+          })
+        : undefined;
+      if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer)); // test : partie avancée dès le lancement
     }
     // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
     this.freeRevive = !online && !!this.session.sim.tutorial;
@@ -145,7 +159,7 @@ export class GameScene extends Phaser.Scene {
       else dir.set(0, 0);
     }
     this.session.setLocalInput(dir.x, dir.y);
-    if (this.flow.state === 'ready' && this.move.active && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
+    if (this.flow.state === 'ready' && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
 
     // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
     // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.
@@ -162,6 +176,7 @@ export class GameScene extends Phaser.Scene {
     const running = this.flow.isPlaying || this.session.online;
     if (running) {
       this.session.advance(delta * this.timeScale, this.onEvent);
+      this.alienTest?.update(dt * this.timeScale);
       this.checkEnd();
       this.trackProgress();
     }
@@ -305,7 +320,7 @@ export class GameScene extends Phaser.Scene {
     const sim = this.session.sim;
     if (this.session.connection === 'lost') return this.endRun(false, true);
     // En ligne, une squad anéantie réapparaît toute seule (voir HostSession) : jamais d'écran de fin.
-    if (this.session.online) return;
+    if (this.session.online || this.alienTest) return; // test d'un alien : la squad anéantie revient (dev/alienTest.ts)
     if (!this.localSquad.alive) return this.endRun(false);
     if (this.mode.id === 'survival' && sim.finalBossDead) return this.endRun(true); // victoire : le boss final est tombé
     if (this.mode.id === 'royale' && sim.squads.length > 1 && sim.aliveSquads.length === 1) return this.endRun(true);
@@ -543,7 +558,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupDebug(): void {
-    if (!import.meta.env.DEV) return; // menu Réglages, panneaux Foule / Triche : dev uniquement
+    if (!DEV_TOOLS) return; // menu Réglages, panneaux Foule / Triche : dev uniquement
     this.debug = DebugOverlay.create(this, { title: 'Réglages', onMenuToggle: (open, menu) => setDocked(menu, open) });
     if (!this.debug) return;
     const sim = this.session.sim;

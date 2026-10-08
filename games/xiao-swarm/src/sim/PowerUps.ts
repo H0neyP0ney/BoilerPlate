@@ -9,7 +9,7 @@ const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets'];
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel l'XP est aspirée. */
 const MAGNET_RADIUS = 1000;
 /** Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. */
-const HEAL_FIELD = { r: 152, ttl: 10, perSec: 0.24 };
+const HEAL_FIELD = { r: 167, ttl: 10, perSec: 0.24 }; // rayon +10 % (152 avant le 07/10)
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
 const STASIS_FIELD = { r: 450, ttl: 8, slow: 0.2 };
 const ROCKETS = 30;

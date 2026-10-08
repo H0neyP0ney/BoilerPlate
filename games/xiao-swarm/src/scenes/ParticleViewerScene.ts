@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
 import { sprites } from '@xiao/engine';
-import { DEPTH, SCENES, UPGRADE_REPEL, VISUAL, VIEW_BG } from '../config';
+import { DEPTH, FREEZE, SCENES, UPGRADE_REPEL, VISUAL, VIEW_BG } from '../config';
 import { fxSnippet, resetFx, saveFxToCode, setFx } from '../debugFx';
 import { button, checkbox, colorInput, header, heading, line, note, panel, select, slider } from '../dev/devUi';
 import { FX, type FxName } from '../fxParams';
 import { createEnragedFlames } from '../view/EnragedFx';
-import { ALIENS } from '../data/aliens';
 import { iceLook } from '../view/IceBlockFx';
 import { Fx } from '../view/Fx';
 import { drawField } from '../view/PickupViews';
@@ -149,6 +148,7 @@ const EFFECTS: EffectDef[] = [
       { key: 'lifeMinMs', label: 'Durée min (ms)', min: 200, max: 10000, step: 100 },
       { key: 'lifeMaxMs', label: 'Durée max (ms)', min: 200, max: 12000, step: 100 },
       { key: 'endScale', label: 'Taille finale (part)', min: 0, max: 1, step: 0.05 },
+      { key: 'shadowMul', label: "Taille (× largeur de l'ombre de l'alien)", min: 0.2, max: 4, step: 0.05 },
     ],
   },
   {
@@ -332,13 +332,16 @@ const EFFECTS: EffectDef[] = [
   },
   {
     id: 'stasis',
-    label: 'Globe de stase (flocon)',
-    where: "Power-up stase : zone bleue au sol qui ralentit les aliens, avec un grand flocon à plat au centre. Aperçu : une zone de 5 s ; le rayon vient du jeu (450 px, ici le slider « Rayon »).",
+    label: 'Globe de stase (flocons)',
+    where: "Power-up stase : zone bleue au sol qui ralentit les aliens, avec plein de petits flocons qui montent en s'effaçant. Aperçu : une zone de 5 s ; le rayon vient du jeu (450 px, ici le slider « Rayon »).",
     specs: [
-      { key: 'iconSize', label: 'Flocon : taille (× rayon du globe)', min: 0.05, max: 0.6, step: 0.01 },
-      { key: 'iconMax', label: 'Flocon : taille max (px)', min: 20, max: 250, step: 5 },
-      { key: 'iconAlpha', label: 'Flocon : opacité', min: 0, max: 1, step: 0.05 },
-      { key: 'spin', label: 'Flocon : rotation (tours / s)', min: -1, max: 1, step: 0.01 },
+      { key: 'everyMs', label: 'Un flocon toutes les (ms)', min: 5, max: 300, step: 5 },
+      { key: 'scaleMin', label: 'Taille min', min: 0.05, max: 1, step: 0.01 },
+      { key: 'scaleMax', label: 'Taille max', min: 0.05, max: 1.5, step: 0.01 },
+      { key: 'rise', label: 'Montée (px)', min: 0, max: 250, step: 5 },
+      { key: 'durationMs', label: 'Durée (ms)', min: 200, max: 4000, step: 50 },
+      { key: 'alpha', label: 'Opacité de départ', min: 0, max: 1, step: 0.05 },
+      { key: 'spin', label: 'Rotation (tours / s)', min: 0, max: 3, step: 0.05 },
     ],
   },
   {
@@ -386,8 +389,8 @@ const EFFECTS: EffectDef[] = [
 const isParam = (id: EffectDef['id']): id is FxName => id in FX;
 
 const ZOOMS = [1, 1.5, 2, 3];
-/** PV d'un glaçon (données du jeu) : l'aperçu en encaisse autant, un coup à la fois. */
-const ICE_HP = ALIENS.iceballer.ice!.blockHp;
+/** PV de gel (données du jeu) : l'aperçu en encaisse autant, un coup à la fois. */
+const ICE_HP = FREEZE.hp;
 
 export class ParticleViewerScene extends Phaser.Scene {
   private fx!: Fx;
@@ -614,6 +617,13 @@ export class ParticleViewerScene extends Phaser.Scene {
           const a = Math.random() * Math.PI * 2;
           const d = Math.sqrt(Math.random()) * this.radius * 0.92;
           this.fx.healZoneCross(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.7, fade);
+        }
+        if (f.kind === 'stasis' && this.time.now >= f.nextCross) {
+          // même tirage que dans le jeu (PickupViews.syncFieldParticles)
+          f.nextCross = this.time.now + FX.stasis.everyMs * (0.6 + Math.random() * 0.8);
+          const a = Math.random() * Math.PI * 2;
+          const d = Math.sqrt(Math.random()) * this.radius * 0.92;
+          this.fx.stasisFlake(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d * 0.7, fade);
         }
       }
     }

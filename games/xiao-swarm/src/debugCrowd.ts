@@ -1,4 +1,4 @@
-import { log } from '@xiao/engine';
+import { log, DEV_TOOLS } from '@xiao/engine';
 import { CROWD, CROWD_DEFAULTS, type CrowdKey } from './config';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
@@ -57,7 +57,7 @@ function apply(values: Partial<Record<CrowdKey, number>>): void {
 
 /** À appeler avant de créer la simulation : réapplique les réglages courants mémorisés. */
 export function loadSavedCrowd(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Foule', CROWD_DEFAULTS);
   try {
     apply(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<CrowdKey, number>>);

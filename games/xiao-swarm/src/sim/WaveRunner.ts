@@ -72,6 +72,17 @@ export class WaveRunner {
     this._cursor = cursor;
   }
 
+  /** Dev (partie avancée) : horloges à `time` / `cursor` sans rien envoyer ; la timeline reprend après `cursor`. */
+  skipTo(cursor: number, time = cursor): void {
+    this.reset();
+    this._time = time;
+    this._cursor = cursor;
+    (this.script.timeline ?? []).forEach((e, i) => {
+      this.next[i] = entryTimes(e).find((t) => t > cursor) ?? Infinity;
+      if (e.config !== undefined && e.at <= cursor && e.at > (this.bossAt ?? -1)) this.bossAt = e.at;
+    });
+  }
+
   reset(): void {
     this._time = 0;
     this._cursor = 0;

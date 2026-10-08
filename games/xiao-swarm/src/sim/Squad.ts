@@ -201,6 +201,44 @@ export class Squad {
     return true;
   }
 
+  /**
+   * Dev (panneau Triche) : progression d'une partie avancée. La squad est vidée (sans morts : à refaire avec `Sim.respawnSquad`), les
+   * upgrades remises à zéro puis un choix par niveau franchi jusqu'à `level`, comme en jeu : vraie offre de 3 cartes (mêmes règles
+   * d'éligibilité, prismatique possible) et carte retenue selon `weight` (préférences du joueur ; absent = au hasard). Les renforts
+   * comptent comme pris mais leurs Gunners sont renvoyés (à ajouter à la squad refaite). XP du niveau à zéro, aucun choix en attente.
+   */
+  fastForward(level: number, weight: (id: UpgradeId) => number = () => 1): number {
+    this.soldiers.length = 0;
+    this.detached.clear();
+    this.crowd.length = 0;
+    this.newcomers.length = 0;
+    this.peakComposition = [];
+    this.peakSize = 0;
+    this.dirty = true;
+    this.stats.reset();
+    for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
+    this.offer = null;
+    this.offerPrism = [];
+    this.pendingLevels = 0;
+    const { rng } = this.sim;
+    let reinforcements = 0;
+    for (let l = 1; l < level; l++) {
+      // squad supposée pleine : seuls les Gunners des renforts déjà pris la font dépasser son max
+      const eligible = UPGRADE_IDS.filter((id) => (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || reinforcements < REINFORCE_MAX_OVERCAP));
+      if (eligible.length === 0) break;
+      const offer = rng.sample(eligible, OFFER_SIZE);
+      const id = rng.weighted(offer, weight) ?? rng.pick(offer);
+      const prism = rng.chance(PRISM_CHANCE);
+      if (id === 'reinforce') {
+        this.picked[id] = (this.picked[id] ?? 0) + 1;
+        reinforcements += UPGRADES.reinforce.value * (prism ? 2 : 1);
+      } else this.applyUpgrade(id, prism);
+    }
+    this.level = level;
+    this.xp = 0;
+    return reinforcements;
+  }
+
   /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */
   refreshMaxHp(): void {
     for (const s of this.soldiers) {
@@ -295,7 +333,8 @@ export class Squad {
       aim: 0,
       invulnerable: 0,
       capturedBy: 0,
-      frozen: false,
+      frozen: 0,
+      iceInvuln: 0,
       stun: 0,
       grabbed: 0,
     };
@@ -334,7 +373,7 @@ export class Squad {
 
   /** Hors formation : avalé par une bulle, fraîchement tiré par une langue, ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots). */
   private isOut(s: SoldierState): boolean {
-    return s.capturedBy !== 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+    return s.capturedBy !== 0 || s.frozen > 0 || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
   }
 
   /** Met à jour les soldats isolés : sortie au-delà de `radius + DETACH_EXTRA`, retour sous `radius + REJOIN_EXTRA` (hystérésis, d'après le centre du tick précédent). */
@@ -389,11 +428,17 @@ export class Squad {
     const maxSpeed = speed * CROWD.maxSpeedMul;
     for (const s of this.soldiers) {
       // prisonnier d'une bulle : elle le porte ; si la bulle a disparu, il est libre
+      // gelé : immobile sur place (aucun recul), hors formation, jusqu'à ce que les tirs alliés aient brisé la glace
+      if (s.frozen > 0) {
+        if (s.invulnerable > 0) s.invulnerable -= dt;
+        if (s.iceInvuln > 0) s.iceInvuln -= dt;
+        s.vx = s.vy = s.kx = s.ky = 0;
+        continue;
+      }
       if (s.capturedBy) {
-        if (s.invulnerable > 0) s.invulnerable -= dt; // décompté aussi dans une bulle / un glaçon (la charge du rhinocéros en donne un à un soldat gelé)
+        if (s.invulnerable > 0) s.invulnerable -= dt; // décompté aussi dans une bulle
         if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
         s.capturedBy = 0;
-        s.frozen = false;
       }
       if (s.stun > 0) {
         // étourdi : immobile (seul le recul agit), ne rejoint pas son slot
@@ -443,7 +488,7 @@ export class Squad {
       const a = this.soldiers[i];
       for (let j = i + 1; j < total; j++) {
         const b = this.soldiers[j];
-        if (a.capturedBy || b.capturedBy) continue;
+        if (a.capturedBy || b.capturedBy || a.frozen > 0 || b.frozen > 0) continue;
         const ddx = b.x - a.x;
         const ddy = b.y - a.y;
         const min = (a.radius + b.radius) * 1.05;

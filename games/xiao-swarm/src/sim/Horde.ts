@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, GRAB_IMMUNE, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
+import { CROWD, DIFFICULTY, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, FREEZE, GRAB_IMMUNE, MELEE_REACH, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -115,6 +115,7 @@ export class Horde {
       lobCd: 1 + rng.next() * 1.5,
       tongueCd: 1.5 + rng.next() * 2,
       sprayCd: 1 + rng.next() * 1.5,
+      cloudCd: def.cloud ? def.cloud.every * rng.range(0.4, 0.8) : def.frost ? def.frost.every * rng.range(0.3, 0.6) : 0,
       rushCd: 1.5 + rng.next() * 2,
       rushWind: 0,
       rushT: 0,
@@ -209,35 +210,14 @@ export class Horde {
   }
 
   /**
-   * Gèle le soldat `s` : un glaçon (alien `iceblock`, `ice.blockHp` PV) apparaît sur lui et le retient (`capturedBy`) :
-   * il ne bouge plus, ne tire plus, ne subit plus de dégâts et sort du contrôle de foule (comme un soldat avalé par une bulle).
+   * Gèle le soldat `s` (`FREEZE.hp` PV de gel) : il ne bouge plus, ne tire plus et sort du contrôle de foule, mais reste attaquable par
+   * les aliens ; les tirs alliés le dégèlent (`Sim.chipIce`). Pas d'alien « glaçon » : c'est un état du soldat, dessiné sur sa vue.
    */
   freezeSoldier(s: SoldierState): void {
-    const def = ALIENS.iceblock;
-    const block = this.create(def, s.x, s.y, 1, false);
-    block.maxHp = block.hp = ALIENS.iceballer.ice!.blockHp; // PV fixes : 1 PV perdu par coup (`Sim.damage`)
-    block.captive = s;
-    s.capturedBy = block.id;
-    s.frozen = true; // contrairement à une bulle, les aliens peuvent frapper le soldat gelé
+    s.frozen = FREEZE.hp;
+    s.iceInvuln = FREEZE.invuln; // le temps de voir la glace se former : elle n'est pas brisée dans la même rafale
     s.vx = s.vy = s.kx = s.ky = 0;
-    this.sim.aliens.push(block); // directement : le plafond d'aliens ne s'applique pas
-    this.sim.events.push({ t: 'capture', alien: block.id, soldier: s.id });
-  }
-
-  /** Glaçon : colle le soldat gelé à sa place ; ne fond jamais, se brise seulement si le soldat meurt (les aliens peuvent l'attaquer dedans). */
-  private updateIceBlock(a: AlienState): void {
-    a.px = a.x;
-    a.py = a.y;
-    a.vx = a.vy = a.kx = a.ky = 0;
-    const s = a.captive;
-    if (!s || !s.alive || s.capturedBy !== a.id) {
-      a.captive = null;
-      this.sim.damage(a, a.hp + a.shield + 1, null); // plus de prisonnier : le glaçon se brise
-      return;
-    }
-    s.x = a.x;
-    s.y = a.y;
-    s.vx = s.vy = s.kx = s.ky = 0;
+    s.target = null;
   }
 
   /** Annonce l'arrivée d'un boss (bandeau + flèche dans le HUD). */
@@ -266,6 +246,14 @@ export class Horde {
     return (a.enraged ? 1 / Math.max(0.1, 1 - BOSS_ENRAGE.cooldownCut * a.enraged) : 1) * a.esc;
   }
 
+  /**
+   * Alien qui sort de son trou d'apparition (`ALIEN_SPAWN_HOLD` s après son arrivée, comme l'animation `EMERGE_*` de view/UnitViews.ts) :
+   * immobile et INVULNÉRABLE, les soldats ne le visent pas. Pas pour le lurker (il creuse son propre trou) ni un ressuscité (il sort de sa flaque).
+   */
+  isEmerging(a: AlienState): boolean {
+    return !a.def.lurk && !a.revived && a.age < ALIEN_SPAWN_HOLD;
+  }
+
   update(dt: number): void {
     const { alienHash, soldierHash, arena, rng } = this.sim;
     if (this.sim.aliveSquads.length === 0) return;
@@ -273,10 +261,6 @@ export class Horde {
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
       const def = a.def;
-      if (def.iceBlock) {
-        this.updateIceBlock(a);
-        continue;
-      }
 
       // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
       if (def.shield && a.maxShield > 0) {
@@ -485,6 +469,38 @@ export class Horde {
           a.sprayCd = def.spray.cooldown * rng.range(0.85, 1.2);
         }
       }
+      // Nuage ralentissant posé sur la squad visée, un peu en avant de sa course
+      if (def.cloud) {
+        a.cloudCd -= dt * rate;
+        if (a.cloudCd <= 0 && a.target) {
+          const C = def.cloud;
+          const at = this.sim.squadOf(a.target.owner)?.center ?? a.target;
+          if (Math.hypot(at.x - a.x, at.y - a.y) < C.range) {
+            this.sim.addPuddle(at.x + a.target.vx * C.lead, at.y + a.target.vy * C.lead, C.radius, C.ttl, C.slow);
+            a.cloudCd = C.every;
+          } else a.cloudCd = 0.5; // trop loin : il retente bientôt
+        }
+      }
+      // Flocons à distance : petits nuages de glace autour de la squad visée (y entrer = gelé)
+      if (def.frost) {
+        a.cloudCd -= dt * rate;
+        const sq = a.cloudCd <= 0 && a.target ? this.sim.squadOf(a.target.owner) : undefined;
+        if (sq) {
+          const F = def.frost;
+          if (Math.hypot(sq.center.x - a.x, sq.center.y - a.y) < F.range) {
+            // bord réel de la squad : le soldat le plus éloigné de son centre (la formation s'étale plus que son rayon théorique)
+            let edge = sq.radius;
+            for (const s of sq.soldiers) if (s.alive && !s.capturedBy && !s.frozen) edge = Math.max(edge, Math.hypot(s.x - sq.center.x, s.y - sq.center.y) + s.radius);
+            const start = rng.range(0, Math.PI * 2);
+            for (let i = 0; i < F.count; i++) {
+              const ang = start + (i / F.count) * Math.PI * 2 + rng.range(-0.3, 0.3); // 3 nuages d'un coup, répartis tout autour
+              const d = edge + F.radius + rng.range(F.gap[0], F.gap[1]);
+              this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true);
+            }
+            a.cloudCd = F.every * rng.range(0.9, 1.15);
+          } else a.cloudCd = 0.5;
+        }
+      }
 
       // Tireur en cloche : lance dès que la cible est à portée et se tient à distance au lieu de foncer dessus
       if (def.lob) {
@@ -512,9 +528,9 @@ export class Horde {
       }
       // les tireurs (cloche, langue, spray) se tiennent à distance au lieu de foncer sur leur cible
       const hold = def.revive ? 380 : ((def.lob && !def.lob.keepMoving ? def.lob.range : undefined) ?? def.spray?.range ?? def.tongue?.range ?? def.wall?.range ?? def.ice?.range);
-      const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + 4 : 0);
+      const contact = contactOverride ?? (hold && a.target ? hold * 0.8 : a.target ? a.radius + a.target.radius + MELEE_REACH : 0);
       const go = (gd > contact && a.rushWind <= 0) || a.rushT > 0;
-      const emerging = swarming || (!def.lurk && !a.revived && a.age < ALIEN_SPAWN_HOLD); // sort du sol : immobile le temps de l'animation d'apparition
+      const emerging = swarming || this.isEmerging(a); // sort du sol : immobile le temps de l'animation d'apparition
       const desiredX = emerging ? 0 : drag ? drag.x : go ? gx * speed : 0;
       const desiredY = emerging ? 0 : drag ? drag.y : go ? gy * speed : 0;
 
@@ -522,7 +538,7 @@ export class Horde {
       let sx = 0;
       let sy = 0;
       for (const o of alienHash.query(a.x, a.y, a.radius + 50, this.scratch)) {
-        if (o === a || o.def.iceBlock) continue; // les glaçons ne repoussent pas les aliens : ils peuvent frapper le soldat gelé
+        if (o === a) continue;
         const dx = a.x - o.x;
         const dy = a.y - o.y;
         const min = a.radius + o.radius;
@@ -550,15 +566,15 @@ export class Horde {
       // Collisions avec les soldats (poussée pondérée par la masse) + attaque
       a.attackCd -= dt * rate;
       for (const s of soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
-        if (!s.alive || (s.capturedBy && !s.frozen)) continue; // un soldat gelé reste attaquable
+        if (!s.alive || s.capturedBy) continue; // avalé par une bulle : intouchable (un soldat gelé, lui, reste attaquable)
         const dx = s.x - a.x;
         const dy = s.y - a.y;
         const min = a.radius + s.radius;
         const d2 = dx * dx + dy * dy;
-        if (d2 >= (min + 4) * (min + 4)) continue;
+        if (d2 >= (min + MELEE_REACH) * (min + MELEE_REACH)) continue; // portée de mêlée (et de capture d'une bulle)
         if (def.capture) {
           // au contact : avale le soldat (un seul à la fois) ; sans prisonnier elle ne fait rien d'autre
-          if (!a.captive && !s.capturedBy && s.invulnerable <= 0 && s.grabbed <= 0) {
+          if (!a.captive && !s.capturedBy && !s.frozen && s.invulnerable <= 0 && s.grabbed <= 0) {
             a.captive = s;
             s.capturedBy = a.id;
             this.sim.events.push({ t: 'capture', alien: a.id, soldier: s.id });
@@ -574,7 +590,10 @@ export class Horde {
           s.x += dx * overlap * (a.mass / total);
           s.y += dy * overlap * (a.mass / total);
         }
-        if (a.attackCd <= 0) {
+        if (a.attackCd <= 0 && def.cleave) {
+          this.cleave(a, def.damage * power);
+          a.attackCd = def.attackCooldown;
+        } else if (a.attackCd <= 0) {
           this.sim.damageSoldier(s, def.oneShot ? s.hp + s.shield + 1 : def.damage * power); // le boss rhinocéros tue un soldat d'un coup
           a.attackCd = def.attackCooldown;
         }
@@ -637,7 +656,7 @@ export class Horde {
         let bestD = L.trigger;
         if (a.attackCd <= 0) {
           for (const s of soldierHash.query(a.x, a.y, L.trigger, this.scratchS)) {
-            if (!s.alive || (s.capturedBy && !s.frozen)) continue; // un soldat gelé reste attaquable
+            if (!s.alive || s.capturedBy) continue; // un soldat gelé reste attaquable
             const d = Math.hypot(s.x - a.x, s.y - a.y);
             if (d < bestD) {
               bestD = d;
@@ -864,7 +883,7 @@ export class Horde {
 
   /** Langue : tire le soldat vers l'alien d'une fraction de la distance (le recul est amorti par `CROWD.knockDamp`, donc déplacement = impulsion / amortissement). */
   private tongue(a: AlienState, s: SoldierState): boolean {
-    if (s.capturedBy || s.grabbed > 0) return false;
+    if (s.capturedBy || s.frozen > 0 || s.grabbed > 0) return false;
     const t = a.def.tongue!;
     const dx = a.x - s.x;
     const dy = a.y - s.y;
@@ -876,6 +895,16 @@ export class Horde {
     this.sim.damageSoldier(s, t.damage * a.esc);
     this.sim.events.push({ t: 'tongue', alien: a.id, target: s.id, dur: 0.5 });
     return true;
+  }
+
+  /** Mêlée en zone (`def.cleave`) : `dmg` à tous les soldats à portée, en un seul coup. */
+  private cleave(a: AlienState, dmg: number): void {
+    const r = a.def.cleave!;
+    this.sim.events.push({ t: 'cleave', x: a.x, y: a.y, r });
+    for (const s of this.sim.soldierHash.query(a.x, a.y, r + 30, this.scratchS)) {
+      if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > r + s.radius) continue;
+      this.sim.damageSoldier(s, dmg);
+    }
   }
 
   private slam(a: AlienState): void {
@@ -907,11 +936,12 @@ export class Horde {
     a.target = null;
     if (pref === 'center') return;
     let bestScore = Infinity;
-    // bulles : jamais un soldat déjà avalé, et chacune préfère un soldat que les autres bulles ne visent pas
+    // soldat avalé par une bulle : intouchable, aucun alien ne le vise (un soldat gelé reste visé, sauf par les bulles) ;
+    // chaque bulle préfère un soldat que les autres bulles ne visent pas
     const claimed = a.def.capture ? this.sim.aliens.filter((o) => o !== a && o.alive && o.def.capture && o.target).map((o) => o.target!) : [];
     for (const s of this.sim.soldierHash.query(a.x, a.y, SEEK_RADIUS, this.scratchS)) {
       if (!s.alive || (nearestSquad && s.owner !== nearestSquad.owner)) continue;
-      if (a.def.capture && s.capturedBy) continue;
+      if (s.capturedBy || (a.def.capture && s.frozen > 0)) continue;
       const d = Math.hypot(s.x - a.x, s.y - a.y);
       if (d > SEEK_RADIUS) continue;
       let score = d;

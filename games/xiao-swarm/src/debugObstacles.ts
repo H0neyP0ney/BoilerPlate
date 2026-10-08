@@ -1,4 +1,4 @@
-import { sprites } from '@xiao/engine';
+import { sprites, DEV_TOOLS } from '@xiao/engine';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
 import { OBSTACLES, STAIN_IDS, type HitCircle, type ObstacleId, type StainDef } from './data/obstacles';
@@ -44,7 +44,7 @@ function apply(id: ObstacleId, t: Tuning): void {
 
 /** À appeler au démarrage, avant l'enregistrement des sprites et la création de la partie. */
 export function loadObstacleOverrides(): void {
-  if (!import.meta.env.DEV) return;
+  if (!DEV_TOOLS) return;
   dropStaleOverride(STORAGE_KEY, 'Obstacles', OBSTACLES);
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<ObstacleId, Partial<Tuning>>>;

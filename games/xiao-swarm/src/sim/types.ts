@@ -43,6 +43,10 @@ export type SimEvent =
   | { t: 'restart' }
   | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }
   | { t: 'freeze'; x: number; y: number; r: number }
+  /** Un soldat sort de la glace (dégelé par ses alliés, ou mort dedans) : éclats. */
+  | { t: 'thaw'; soldier: number; x: number; y: number }
+  /** Mêlée en zone d'un alien (`def.cleave`, chargeur) : anneau rouge discret. */
+  | { t: 'cleave'; x: number; y: number; r: number }
   | { t: 'bossEnrage'; id: number; alien: AlienId; level: number }
   | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final' }
   | { t: 'fire'; id: number; x: number; y: number; r: number; ttl: number }

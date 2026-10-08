@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
 import { DEPTH, ORB_BLINK_TIME, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_LIFE, XP_ORB_POP } from '../config';
 import { TICK_RATE } from '../net/Session';
-import { ALIENS } from '../data/aliens';
+import { ALIENS, type AlienId } from '../data/aliens';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
@@ -28,14 +28,30 @@ export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0
 
 /** Hauteur maximale (px) de l'arc d'une grenade en cloche (effet d'affichage uniquement). */
 export const LOB_HEIGHT = 55;
-/** Couleurs des télégraphes rouges des attaques d'aliens (charge, saut, lob, mèche, pics, surgissement) : rouge sombre, un peu plus vif qu'avant (0xff2a2a / 0xff4a3a à l'origine, puis 0xaa2a1a / 0xb8402a). */
-const TELEGRAPH_FILL = 0xc8281c;
-const TELEGRAPH_LINE = 0xd23c26;
+/** Couleurs des télégraphes rouges des attaques d'aliens (charge, saut, lob, mèche, pics, surgissement) : rouge sombre (0xff2a2a / 0xff4a3a à l'origine, puis 0xaa2a1a / 0xb8402a, puis 0xc8281c / 0xd23c26, un peu trop clair). */
+const TELEGRAPH_FILL = 0xa01c12;
+const TELEGRAPH_LINE = 0xa82c1c;
 /** Explosion de la boule du shooter (bordeaux) : couleur de l'éclaboussure, des flaques et de l'onde, et reflet clair des gouttes. */
 const SHOOTER_BLAST = 0xa82846;
 const SHOOTER_BLAST_LIGHT = 0xf4b9c8;
 /** Durée (s) avant l'impact pendant laquelle la zone d'une boule ennemie est signalée en rouge. */
-const TELEGRAPH_S = 0.8;
+const TELEGRAPH_S = 1; // 0,8 avant le 07/10
+/** Largeur (px) de la flaque `fx_puddle` (art/fx.ts) à l'échelle 1 : sert à caler les flaques de mort sur l'ombre portée. */
+const PUDDLE_TEX_W = 50;
+
+/** Largeur (px) de l'ombre portée d'un alien (rayon, réduite s'il flotte, × réglage d'ombre de son visuel) ; ses flaques de mort ont la même. */
+function shadowWidth(id: AlienId): number {
+  const def = ALIENS[id];
+  return def.radius * (def.floats ? 0.7 : 1) * (sprites.get(`alien_${id}`).shadow ?? 1) * 2.1;
+}
+
+/** Échelle de la flaque de mort (et de cadavre) d'un alien : largeur de son ombre portée × `FX.puddle.shadowMul` (le même pour tous). */
+function puddleSize(id: AlienId): number {
+  return (shadowWidth(id) / PUDDLE_TEX_W) * FX.puddle.shadowMul;
+}
+
+/** Durée (s) du « pop » d'apparition d'un nuage ralentissant du cracheur. */
+const CLOUD_POP = 0.3;
 /** Distance (px) de vol sur laquelle une balle rejoint sa trajectoire depuis la bouche du canon dessinée. */
 const MUZZLE_BLEND_PX = 40;
 /** Taille des globes d'XP en jeu, en multiple de la taille d'origine (1,3 = +30 %). */
@@ -94,6 +110,8 @@ export class WorldView {
   /** Globes d'XP : pool d'images réutilisées dans l'ordre (comme les projectiles). */
   private readonly orbImgs: Phaser.GameObjects.Image[] = [];
   /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
+  /** Instant (s) où chaque nuage ralentissant est apparu à l'écran (animation de « pop »). */
+  private readonly cloudBorn = new Map<number, number>();
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
@@ -184,16 +202,16 @@ export class WorldView {
         break;
       case 'alienDied': {
         const def = ALIENS[e.alien];
-        this.fx.burst(e.x, e.y - def.radius * 0.6, def.color, e.alien === 'boss_crab' ? 40 : 10);
-        if (def.iceBlock && nearCam(e.x, e.y)) this.fx.iceShards(e.x, e.y - def.radius * 0.3, FX.ice.shardCount * FX.ice.breakMul); // le glaçon se brise
+        const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
+        this.fx.burst(e.x, e.y - def.radius * 0.6, goo, e.alien === 'boss_crab' ? 40 : 10);
         // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
         if (e.alien === 'slime' || e.alien === 'shooter') {
           const size = e.alien === 'shooter' ? 1.6 : 1;
-          const light = e.alien === 'shooter' ? 0xffc9d4 : 0xc8ffb0;
-          this.fx.gloop(e.x, e.y - def.radius * 0.6, def.color, light, size);
+          const light = e.alien === 'shooter' ? 0x9fb8ff : 0xc8ffb0;
+          this.fx.gloop(e.x, e.y - def.radius * 0.6, goo, light, size);
         }
-        // flaque au sol de la couleur de l'alien, pour tous (taille proportionnelle à son socle : slime = 1)
-        if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, def.color, Math.max(0.6, Math.min(3.5, def.radius / ALIENS.slime.radius)));
+        // flaque au sol de la couleur de ses restes, pour tous : largeur de son ombre portée × `FX.puddle.shadowMul`
+        if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, goo, puddleSize(e.alien));
         // gros alien (charger, lurker, bulle, mini-boss) : légère secousse rapide ; le crabe final a déjà celle de son explosion
         if (e.alien !== 'boss_crab' && def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.bigKillMs, FX.shake.bigKillAmount);
         if (e.alien === 'boss_crab') {
@@ -262,12 +280,12 @@ export class WorldView {
         break;
       }
       case 'corpse': {
-        const color = ALIENS[e.alien].color;
+        const color = ALIENS[e.alien].goo ?? ALIENS[e.alien].color;
         const img = this.scene.add
           .image(e.x, e.y, 'fx_puddle')
           .setTint(color)
           .setDepth(DEPTH.groundFx - 0.3)
-          .setScale(1.105 * (ALIENS[e.alien].radius / 16), 0.715 * (ALIENS[e.alien].radius / 16)) // flaque +30 %
+          .setScale(puddleSize(e.alien), puddleSize(e.alien) * 0.65) // largeur de son ombre portée × `FX.puddle.shadowMul`
           .setFlipX(Math.random() < 0.5)
           .setAlpha(0.8);
         this.corpseImgs.set(e.id, img);
@@ -312,6 +330,11 @@ export class WorldView {
         this.fx.ring(e.x, e.y, e.r * 1.6, 0xbfeaff);
         this.fx.burst(e.x, e.y - 14, 0x9fe0ff, 24);
         break;
+      case 'thaw':
+        // un soldat sort de la glace (dégelé, ou mort dedans) : elle vole en éclats
+        if (this.onScreen(e.x, e.y, 120)) this.fx.iceShards(e.x, e.y - 8, FX.ice.shardCount * FX.ice.breakMul);
+        this.fx.ring(e.x, e.y, 60, 0xbfeaff);
+        break;
       case 'release':
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
@@ -328,9 +351,9 @@ export class WorldView {
       }
       case 'explosion':
         if (e.style === 'spit') {
-          // crachat du cracheur : éclaboussure violette (la flaque ralentissante est dessinée par drawOverlay)
-          this.fx.gloop(e.x, e.y, 0xb060e0, 0xf2dcff, e.r / 50);
-          this.fx.ring(e.x, e.y, e.r, 0xb060e0);
+          // crachat du cracheur : éclaboussure verte (son nuage ralentissant, violet, est dessiné par drawOverlay)
+          this.fx.gloop(e.x, e.y, 0x62d04a, 0xe6ffd0, e.r / 50);
+          this.fx.ring(e.x, e.y, e.r, 0x62d04a);
           break;
         }
         if (e.style === 'acid') {
@@ -350,6 +373,10 @@ export class WorldView {
         // pas de secousse pour les petites explosions (grenades, roquettes), sinon l'écran tremble en permanence ; 95 = le kamikaze y est
         this.fx.explosion(e.x, e.y, e.r, e.r >= 95 && nearCam(e.x, e.y));
         if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`
+        break;
+      case 'cleave':
+        // mêlée en zone (chargeur) : anneau discret, sans secousse (il y en a beaucoup)
+        if (nearCam(e.x, e.y)) this.fx.ring(e.x, e.y, e.r, 0xff6a6a, 160);
         break;
       case 'slam':
         this.fx.ring(e.x, e.y, e.r, 0xff6a6a);
@@ -517,7 +544,6 @@ export class WorldView {
           }
         }
         v.seen = true;
-        v.frozen = s.capturedBy !== 0 && !!this.sim.aliens.find((x) => x.id === s.capturedBy)?.def.iceBlock;
         v.sync(alpha, dt, time);
         if (v.healTick(dt)) this.fx.heal(v.rx, v.ry - 30);
       }
@@ -531,9 +557,6 @@ export class WorldView {
         v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil); // départ de partie / arrivée d'un client : pas de trou
         v.onPop = (x, y, r) => {
           if (this.onScreen(x, y, 120)) this.fx.dust(x, y, r); // poussière seulement si c'est à l'écran
-        };
-        v.onIceHit = (x, y) => {
-          if (this.onScreen(x, y, 120)) this.fx.iceShards(x, y); // éclats de glace à chaque coup sur un glaçon
         };
         this.aliens.set(a.id, v);
       }
@@ -862,13 +885,13 @@ export class WorldView {
       g.fillStyle(0x1a0f0a, 0.95 * h.alpha).fillEllipse(h.x, h.y + 5, r * 1.8, r * 0.95);
       g.fillStyle(0x000000, 0.7 * h.alpha).fillEllipse(h.x, h.y + 7, r * 1.1, r * 0.55);
     }
-    g.fillStyle(0x2a1d2e, SHADOW_ALPHA);
     for (const v of this.aliens.values()) {
-      if (v.state.def.lurk && v.state.lurkPhase >= 2 && v.state.lurkPhase <= 4) continue; // enterré : pas d'ombre
-      if (v.state.def.burrow && v.state.lurkPhase === 2) continue; // Scarab sous terre
-      const k = sprites.get(`alien_${v.state.def.id}`).shadow ?? 1;
-      const r = v.state.radius * (v.state.def.floats ? 0.7 : 1) * k;
-      g.fillEllipse(v.rx, v.ry, r * 2.1, r * 0.9);
+      // ombre portée (largeur : `shadowWidth`, sur laquelle les flaques sont calées) ;
+      // pas d'ombre tant que l'alien est sous terre ou pas encore sorti de son trou (apparition, lurker, Scarab) : elle n'apparaît qu'une fois l'alien dehors
+      const out = v.outOfGround;
+      if (out < 0.98) continue;
+      const w = shadowWidth(v.state.def.id);
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx, v.ry, w, w * (0.9 / 2.1));
     }
     for (const sq of this.sim.squads) {
       if (!sq.isHealing) continue;
@@ -885,13 +908,49 @@ export class WorldView {
     for (const z of this.sim.reviveZones) {
       drawReviveZone(g, z.x, z.y, z.r, z.progress / REVIVE_TIME, time);
     }
-    // Flaques de crachat : violettes, elles ralentissent les soldats dedans ; s'effacent dans la dernière seconde
+    // Nuages ralentissants (cracheur) : violets ; nuages de glace (chaman) : bleus, ils gèlent. Tous ils « poppent » (léger rebond d'échelle) puis s'effacent dans la dernière seconde
+    const seen = new Set<number>();
     for (const p of this.sim.puddles) {
-      const a = Math.min(1, p.ttl);
-      g.fillStyle(0x6a2aa8, 0.42 * a).fillEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
-      g.fillStyle(0xb060e0, 0.3 * a).fillEllipse(p.x, p.y, p.r * 1.5, p.r * 0.95);
-      g.lineStyle(2, 0xd9a0ff, 0.55 * a).strokeEllipse(p.x, p.y, p.r * 2, p.r * 1.3);
+      seen.add(p.id);
+      let born = this.cloudBorn.get(p.id);
+      if (born === undefined) this.cloudBorn.set(p.id, (born = time));
+      if (!this.onScreen(p.x, p.y, p.r * 1.5)) continue;
+      const age = time - born; // `time` en secondes
+      const pop = age >= CLOUD_POP ? 1 : Phaser.Math.Easing.Back.Out(age / CLOUD_POP);
+      const a = Math.min(1, p.ttl, age / 0.12);
+      const r = p.r * pop;
+      if (p.frost) {
+        // nuage de glace (flocons du chaman) : bleu glacé, bouffées blanches et flocons qui tournent ; y entrer = gelé
+        g.fillStyle(0x3a8ad8, 0.3 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);
+        for (let i = 0; i < 5; i++) {
+          const ang = (i / 5) * Math.PI * 2 + p.id;
+          g.fillStyle(i % 2 ? 0xbfe8ff : 0x8fd0ff, 0.42 * a).fillCircle(p.x + Math.cos(ang) * r * 0.55, p.y + Math.sin(ang) * r * 0.36 - r * 0.1, r * (0.42 + 0.05 * Math.sin(time * 3.3 + i)));
+        }
+        const spin = time * 1.1 + p.id;
+        g.lineStyle(2, 0xffffff, 0.85 * a);
+        for (let k = 0; k < 3; k++) {
+          const fx = p.x + Math.cos(spin + k * 2.1) * r * 0.45;
+          const fy = p.y + Math.sin(spin + k * 2.1) * r * 0.28 - r * 0.15;
+          const s = r * 0.22;
+          for (let j = 0; j < 3; j++) {
+            const t = spin * 1.5 + (j * Math.PI) / 3;
+            g.lineBetween(fx - Math.cos(t) * s, fy - Math.sin(t) * s, fx + Math.cos(t) * s, fy + Math.sin(t) * s);
+          }
+        }
+        g.lineStyle(2, 0xe6f7ff, 0.7 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
+        continue;
+      }
+      g.fillStyle(0x6a2aa8, 0.32 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);
+      // bouffées autour du centre (placement fixe par nuage, légère respiration)
+      for (let i = 0; i < 7; i++) {
+        const ang = (i / 7) * Math.PI * 2 + p.id;
+        const br = r * (0.36 + 0.06 * Math.sin(time * 2.6 + i * 1.7));
+        g.fillStyle(i % 2 ? 0x9a4ad0 : 0xb060e0, 0.3 * a).fillCircle(p.x + Math.cos(ang) * r * 0.62, p.y + Math.sin(ang) * r * 0.4 - r * 0.08, br);
+      }
+      g.fillStyle(0xd9a0ff, 0.22 * a).fillEllipse(p.x, p.y - r * 0.12, r * 1.1, r * 0.6);
+      g.lineStyle(2, 0xd9a0ff, 0.5 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
     }
+    for (const id of this.cloudBorn.keys()) if (!seen.has(id)) this.cloudBorn.delete(id);
     // Lurker : trou dans le sol tant qu'il est enterré (il se creuse puis se rebouche), et ligne rouge avant les pics
     for (const v of this.aliens.values()) {
       const a = v.state;
@@ -953,8 +1012,8 @@ export class WorldView {
       g.fillStyle(0xffd23a, 0.15 + 0.25 * k).fillPoints(quad((hl + hw * 0.6) * k, hw * k), true);
       g.lineStyle(3, 0xffe066, 0.5 + 0.4 * k).strokePoints(quad(hl + hw * 0.6, hw), true);
     }
-    // Télégraphe : zone d'impact des boules ennemies, en rouge, pendant la dernière partie du vol (uniquement là où la
-    // simulation tourne : le client réseau ne connaît ni la durée ni le rayon).
+    // Télégraphe : zone d'impact des boules ennemies, en rouge, pendant la dernière partie du vol. Aussi chez le client réseau :
+    // le snapshot transmet rayon, durée de vol et temps écoulé (`Mirror.upsertProjectile`, décompte local ; vérifié par `sim:net`).
     for (const p of this.sim.combat.projectiles.active) {
       if (!p.lob || p.team !== 'aliens' || p.aoe <= 0 || p.life >= TELEGRAPH_S) continue;
       const k = 1 - p.life / TELEGRAPH_S; // 0 → 1 jusqu'à l'impact
@@ -1045,12 +1104,12 @@ export class WorldView {
     const bossSeen = new Set<number>();
     for (const v of this.aliens.values()) {
       const a = v.state;
-      if (a.def.lurk && a.lurkPhase >= 2 && a.lurkPhase <= 4) continue;
+      // lurker enterré : il reste touchable, sa barre reste donc affichée (au-dessus de son trou : le corps écrasé la fait descendre)
       if (a.def.burrow && a.lurkPhase === 2) continue; // Scarab sous terre : pas de barre de vie
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss;
-      if (hurt && !a.def.iceBlock) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt); // un glaçon n'a pas de barre : il se fissure et rétrécit (AlienView)
+      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
       if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
       if (boss) {

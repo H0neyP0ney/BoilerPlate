@@ -263,14 +263,14 @@ export function makeFxTextures(scene: Phaser.Scene): void {
   };
   canvasTexture(scene, 'fx_rock', 48, 48, (ctx) => rock(ctx, 48));
   canvasTexture(scene, 'fx_rock_small', 20, 20, (ctx) => rock(ctx, 20));
-  // Petite boule de crachat (cracheur) : violet lumineux.
+  // Petite boule de crachat (cracheur) : vert lumineux (violet avant le 07/10 : le violet est réservé à son nuage ralentissant).
   canvasTexture(scene, 'fx_spit', 14, 14, (ctx) => {
     const g = ctx.createRadialGradient(5, 5, 1, 7, 7, 7);
-    g.addColorStop(0, '#f2dcff');
-    g.addColorStop(0.5, '#b060e0');
-    g.addColorStop(1, '#6a2aa8');
+    g.addColorStop(0, '#e6ffd0');
+    g.addColorStop(0.5, '#62d04a');
+    g.addColorStop(1, '#2a8a2a');
     ctx.fillStyle = g;
-    ctx.strokeStyle = '#2a1050';
+    ctx.strokeStyle = '#0f3a12';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(7, 7, 5.5, 0, Math.PI * 2);

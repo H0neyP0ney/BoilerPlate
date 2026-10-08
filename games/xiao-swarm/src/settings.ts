@@ -1,4 +1,4 @@
-import { clamp, storage, type MoveKeyCodes } from '@xiao/engine';
+import { clamp, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
 import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
 import { i18n, LANGS, type Lang } from './i18n';
 
@@ -75,7 +75,7 @@ export const settings = {
   /** Volume des bruitages (tirs…), en crans de 0 à `MUSIC_STEPS` (menu Options). */
   sfxVolume: clamp(Math.round(storage.get('settings.sfxVolume', SFX_DEFAULT)), 0, MUSIC_STEPS),
   /** Mode debug (menu Options, dev seulement) : affiche les boutons des outils de dev en haut à gauche du HUD. Activé par défaut en dev. */
-  debugMode: storage.get<boolean>('settings.debugMode', import.meta.env.DEV) === true,
+  debugMode: storage.get<boolean>('settings.debugMode', DEV_TOOLS) === true,
 
   /** Coupures (boutons du HUD) : le volume réglé dans Options est conservé et revient au rétablissement. */
   musicMuted: storage.get<boolean>('settings.musicMuted', false) === true,

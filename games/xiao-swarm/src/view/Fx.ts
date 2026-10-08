@@ -194,7 +194,7 @@ export class Fx {
     for (let i = 0; i < n; i++) {
       const scale = Phaser.Math.FloatBetween(p.scaleMin, p.scaleMax) * size;
       const img = this.scene.add
-        .image(x + Phaser.Math.FloatBetween(-p.spread, p.spread), y + Phaser.Math.FloatBetween(-p.spread, p.spread) * 0.5, 'fx_puddle')
+        .image(x + Phaser.Math.FloatBetween(-p.spread, p.spread) * size, y + Phaser.Math.FloatBetween(-p.spread, p.spread) * 0.5 * size, 'fx_puddle') // éparpillement proportionnel à la taille
         .setTint(color)
         .setDepth(DEPTH.groundFx - 0.4)
         .setFlipX(Math.random() < 0.5)
@@ -308,6 +308,21 @@ export class Fx {
     const img = this.scene.add.image(x, y, 'fx_plus').setDepth(DEPTH.fx).setScale(h.scale * 0.5).setAlpha(h.alpha * a);
     this.scene.tweens.add({ targets: img, scale: h.scale, duration: Math.min(220, h.durationMs * 0.25), ease: 'Back.Out' });
     this.scene.tweens.add({ targets: img, y: y - h.rise, alpha: 0, delay: h.durationMs * 0.25, duration: h.durationMs * 0.75, ease: 'Sine.In', onComplete: () => img.destroy() });
+  }
+
+  /** Petit flocon du globe de stase (FX.stasis) : apparaît en fondu, monte en tournant et s'efface. `a` : opacité globale (fin du globe). */
+  stasisFlake(x: number, y: number, a = 1): void {
+    const s = FX.stasis;
+    const img = this.scene.add
+      .image(x, y, 'fx_ice_ball')
+      .setDepth(DEPTH.fx)
+      .setScale(Phaser.Math.FloatBetween(s.scaleMin, s.scaleMax))
+      .setRotation(Math.random() * Math.PI * 2)
+      .setAlpha(0);
+    const turn = (Math.random() < 0.5 ? -1 : 1) * s.spin * Math.PI * 2 * (s.durationMs / 1000);
+    this.scene.tweens.add({ targets: img, alpha: s.alpha * a, duration: Math.min(200, s.durationMs * 0.2) });
+    this.scene.tweens.add({ targets: img, y: y - s.rise, rotation: img.rotation + turn, duration: s.durationMs, ease: 'Sine.Out' });
+    this.scene.tweens.add({ targets: img, alpha: 0, delay: s.durationMs * 0.35, duration: s.durationMs * 0.65, ease: 'Sine.In', onComplete: () => img.destroy() });
   }
 
   ring(x: number, y: number, radius: number, color: number, durationMs = FX.ring.durationMs): Phaser.GameObjects.Image {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Button, device, music, sfx, StepSlider, theme } from '@xiao/engine';
+import { Button, device, music, sfx, StepSlider, theme, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { i18n, LANGS, LANG_NAMES, t, type Lang } from '../i18n';
 import { MUSIC_STEPS, settings, SFX } from '../settings';
@@ -75,7 +75,7 @@ export class OptionsScene extends Phaser.Scene {
 
     // Mode debug : uniquement en dev (les outils de dev n'existent pas dans le build Poki).
     let debugBtn: Button | undefined;
-    if (import.meta.env.DEV) {
+    if (DEV_TOOLS) {
       const debugLabel = () => `${t('debugMode')} : ${settings.debugMode ? t('on') : t('off')}`;
       debugBtn = new Button(this, 0, 0, {
         label: debugLabel(),

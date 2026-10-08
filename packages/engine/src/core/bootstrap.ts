@@ -1,3 +1,4 @@
+import { DEV_TOOLS } from './devTools';
 import Phaser from 'phaser';
 import { poki } from '../poki/poki';
 
@@ -56,7 +57,7 @@ export async function bootPokiGame(opts: BootOptions): Promise<Phaser.Game> {
 
   poki.attachGame(game);
   // Dev : accès console / outils de test (`__game.scene.getScene('Game')`).
-  if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game;
+  if (DEV_TOOLS) (window as unknown as { __game: Phaser.Game }).__game = game;
   window.focus();
   return game;
 }

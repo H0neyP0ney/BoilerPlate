@@ -298,7 +298,7 @@ export class CoopBot {
     }
     for (const p of sim.puddles) {
       const r = p.r + pr * 0.6 + 12;
-      if (Math.hypot(px - p.x, py - p.y) < r) danger += 0.6;
+      if (Math.hypot(px - p.x, py - p.y) < r) danger += p.frost ? 2.5 : 0.6; // nuage de glace : gelé si on y entre
     }
 
     if (!staying && !this.freeAt(sim, px, py, sq.anchor.radius + 6)) danger += 2; // décor : cette direction est bouchée

@@ -1,4 +1,4 @@
-import { poki } from '@xiao/engine';
+import { poki, DEV_TOOLS } from '@xiao/engine';
 import { BOT_LEVEL_IDS, MAX_BOTS, type BotLevel } from './data/bots';
 import { MODES, type ModeDef } from './data/modes';
 import { ClientSession } from './net/ClientSession';
@@ -54,7 +54,7 @@ export async function createOnlineSession(req: OnlineRequest, mode: ModeDef = MO
 
 /** Coéquipiers IA demandés par l'URL (?bot=N, ?botlevel=standard|expert) : seulement en dev, absents du build Poki. */
 function readBots(): { bots: number; botLevel: BotLevel } {
-  if (!import.meta.env.DEV) return { bots: 0, botLevel: 'standard' };
+  if (!DEV_TOOLS) return { bots: 0, botLevel: 'standard' };
   const n = Number(poki.getURLParam('bot'));
   const level = poki.getURLParam('botlevel');
   return {

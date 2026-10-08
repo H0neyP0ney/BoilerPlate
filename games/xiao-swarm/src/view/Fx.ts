@@ -306,6 +306,22 @@ export class Fx {
 
   /** Traînée de l'orbe de glace : petits flocons (fx_ice_ball) laissés derrière lui, qui tournent, tombent un peu et s'effacent. */
   private trailAcc = 0;
+  /** Traînée d'étincelles d'un orbe de feu en vol : petites flammes orange qui montent et s'éteignent derrière lui. */
+  fireTrail(x: number, y: number, dt: number): void {
+    this.trailAcc += dt;
+    const R = Phaser.Math.FloatBetween;
+    for (; this.trailAcc >= 0.03; this.trailAcc -= 0.03) {
+      const img = this.scene.add
+        .image(x + R(-6, 6), y + R(-6, 6), 'fx_flame')
+        .setDepth(DEPTH.fx - 0.1)
+        .setScale(R(0.12, 0.26))
+        .setRotation(R(0, Math.PI * 2))
+        .setAlpha(0.9)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({ targets: img, y: img.y - R(8, 22), rotation: img.rotation + R(-2, 2), alpha: 0, scale: img.scale * 0.3, duration: R(300, 520), ease: 'Sine.In', onComplete: () => img.destroy() });
+    }
+  }
+
   iceTrail(x: number, y: number, dt: number): void {
     this.trailAcc += dt;
     const R = Phaser.Math.FloatBetween;
@@ -412,6 +428,18 @@ export class Fx {
       { img, dy: 6 },
       { img: glow, dy: 0 },
     ];
+  }
+
+  /** Gain d'un soldat (recrue qui rejoint la squad) : éclats de sa classe, double onde, flash blanc et « +1 » vert qui s'élève (la colonne bleue est posée par `WorldView.syncUnits`). */
+  gain(x: number, y: number, color: number): void {
+    const g = FX.gain;
+    this.burst(x, y - 20, color, g.burstCount);
+    this.burst(x, y - 24, 0xffffff, g.flashCount);
+    this.ring(x, y, g.ringBig, color);
+    this.ring(x, y, g.ringSmall, 0xffffff);
+    const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0x9dffb0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(g.flashScale);
+    this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: g.flashMs, onComplete: () => flash.destroy() });
+    this.text(x, y - 50, '+1', '#5dff84', g.textSize, '#13331c', 7);
   }
 
   /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */

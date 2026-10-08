@@ -5,7 +5,9 @@ import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
+import { ensureGlobeTexture, ensureStarTexture, POWERUP_GLOBE } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
+import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
@@ -13,8 +15,6 @@ const CAPSULE_LIFT = 52;
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
 const CAPSULE_SCALE = 0.9;
 
-/** Jaune de la zone qui pulse sous les recrues (les power-ups gardent la couleur de leur bonus : `POWERUP_INFO`). */
-export const RECRUIT_COLOR = 0xffe14a;
 
 export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> = {
   stim: { icon: '💉', color: 0xffd84a },
@@ -24,15 +24,29 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   rockets: { icon: '🚀', color: 0xff7a3a },
 };
 
-/** Pastille d'un power-up (disque coloré + emoji), centrée sur (0, 0) ; partagée avec la visionneuse d'unités. */
+// couleurs et hauteur communes à tous les globes au sol : voir `GlobeGlitter.ts`
+export { GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK };
+
+/**
+ * Power-up : globe vert (pièces du bonus recrue décalées en vert, `FX.powerUp`) avec l'icône du bonus au centre, centré sur (0, 0) ; partagé avec la
+ * visionneuse de bonus. Sans les pièces d'art, repli sur un disque vert dessiné.
+ */
 export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.GameObjects.Container {
   const info = POWERUP_INFO[kind];
-  const g = scene.add.graphics();
-  g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 22);
-  g.fillStyle(info.color, 0.3).fillCircle(0, 0, 22);
-  g.lineStyle(3, info.color, 1).strokeCircle(0, 0, 22);
-  const icon = scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: '26px' }).setOrigin(0.5);
-  return scene.add.container(0, 0, [g, icon]);
+  const f = FX.powerUp;
+  const scale = FX.recruit.displayScale; // même taille que les recrues et les globes d'upgrade
+  const parts: Phaser.GameObjects.GameObject[] = [];
+  if (ensureGlobeTexture(scene, POWERUP_GLOBE, f.hue)) {
+    parts.push(scene.add.image(0, 0, POWERUP_GLOBE).setScale(scale));
+  } else {
+    const g = scene.add.graphics();
+    g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 160 * scale * 0.5);
+    g.fillStyle(POWERUP_GREEN, 0.4).fillCircle(0, 0, 160 * scale * 0.5);
+    g.lineStyle(4, POWERUP_GREEN, 1).strokeCircle(0, 0, 160 * scale * 0.5);
+    parts.push(g);
+  }
+  parts.push(scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: `${Math.round(80 * scale)}px` }).setOrigin(0.5));
+  return scene.add.container(0, 0, parts);
 }
 
 /** Globe persistant au sol (soin ou stase) de rayon `r`, d'opacité `a` ; partagé avec la visionneuse de bonus. */
@@ -49,8 +63,8 @@ export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis
 }
 
 /**
- * Zone qui pulse posée au sol sous un objet à ramasser (power-up : sa couleur ; recrue : `RECRUIT_COLOR`) : disque translucide + anneau. `a` : opacité
- * globale (clignote en fin de vie).
+ * Rond posé au sol sous un globe à ramasser (recrue : `RECRUIT_COLOR` jaune, power-up : `POWERUP_GREEN`, globe d'upgrade : `UPGRADE_PINK`) : disque, anneau
+ * et anneau qui pulse, celui de la recrue pour tous. `a` : opacité globale (clignote en fin de vie).
  */
 export function drawPickupSpot(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, time: number, id: number, a = 1): void {
   const beat = 0.5 + 0.5 * Math.sin(time * 5 + id);
@@ -76,6 +90,8 @@ export class PickupViews {
   /** Flammes d'enragé de chaque soldat sous stimpack (même effet que les aliens ressuscités). */
   private readonly rageFx = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
   private readonly powerups = new Map<number, Phaser.GameObjects.Container>();
+  /** Étoiles et paillettes vertes qui montent autour de chaque power-up (même effet que les recrues et les globes d'upgrade). */
+  private readonly powerupGlitter = new Map<number, GlobeGlitter>();
   /** Position de simulation du tick courant et du précédent, par power-up : la simulation ne le déplace qu'à 30 Hz (aspiration), l'affichage l'interpole. */
   private readonly powerupPos = new Map<number, { px: number; py: number; x: number; y: number }>();
   /** Position affichée (interpolée) de chaque power-up, pour le cercle au sol. */
@@ -150,13 +166,23 @@ export class PickupViews {
       const y = lerp(pos.py, pos.y, alpha);
       this.powerupShown.set(p.id, { x, y });
       const blink = p.life < 3.5 && Math.sin(time * 18) > 0;
-      box.setPosition(x, y - 14 + Math.sin(time * 4 + p.id) * 4).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
+      const cy = y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(time * 4 + p.id) * 4;
+      box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
+      let glitter = this.powerupGlitter.get(p.id);
+      if (!glitter) {
+        const tex = ensureStarTexture(this.scene, FX.powerUp.hue); // l'étoile de la recrue, en vert
+        const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
+        if (made) this.powerupGlitter.set(p.id, (glitter = made));
+      }
+      glitter?.setPosition(x, cy, DEPTH.fx + 3, blink ? 0.3 : 1);
     }
     for (const [id, box] of this.powerups) {
       if (live.has(id)) continue;
       this.powerups.delete(id);
       this.powerupPos.delete(id);
       this.powerupShown.delete(id);
+      this.powerupGlitter.get(id)?.destroy();
+      this.powerupGlitter.delete(id);
       this.scene.tweens.add({ targets: box, alpha: 0, scale: 1.6, duration: 240, onComplete: () => box.destroy() });
     }
   }
@@ -249,7 +275,7 @@ export class PickupViews {
     }
     for (const p of this.sim.powerups.items) {
       const at = this.powerupShown.get(p.id) ?? p;
-      drawPickupSpot(g, at.x, at.y, POWERUP_INFO[p.kind].color, time, p.id);
+      drawPickupSpot(g, at.x, at.y, POWERUP_GREEN, time, p.id, p.life < 3.5 && Math.sin(time * 18) > 0 ? 0.3 : 1); // rond vert au sol (clignote avec le power-up en fin de vie)
     }
     // bonus actifs
     for (const sq of this.sim.squads) {
@@ -259,6 +285,8 @@ export class PickupViews {
 
   destroy(): void {
     for (const b of this.powerups.values()) b.destroy();
+    for (const g of this.powerupGlitter.values()) g.destroy();
+    this.powerupGlitter.clear();
     for (const c of this.counts.values()) c.box.destroy();
     for (const fx of this.rageFx.values()) fx.destroy();
     this.rageFx.clear();

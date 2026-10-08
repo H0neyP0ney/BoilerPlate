@@ -207,7 +207,7 @@ export class ClientSession implements Session {
 
   /** Applique un snapshot au reflet et rejoue ses effets de tir (binaires depuis v38) en événements pour l'affichage. */
   private applySnapshot(snap: Snapshot): void {
-    this.mirror.apply(snap);
+    this.mirror.apply(snap, this.buffer[0]); // le suivant (déjà sorti du tampon pour `snap`) : interpolation des aliens
     this.appliedSeq = snap.seq;
     const fx: SimEvent[] = [];
     for (const f of snap.shots) {

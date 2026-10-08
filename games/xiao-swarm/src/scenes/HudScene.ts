@@ -12,7 +12,7 @@ import { HUD_ART, makeHudButton } from '../view/HudButtons';
 import { TimelineHud } from '../view/TimelineHud';
 import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
-import { iconCheat, iconCrowd, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
+import { iconCheat, iconCrowd, iconDifficulty, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
 /** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
@@ -20,6 +20,8 @@ const BOSS_ARROW_COLOR = 0xff3a3a;
 
 /** Délai (ms) entre deux touches W A S D de l'aide de déplacement. */
 const KEY_STEP = 300;
+/** Tracé de la main du tutoriel « glisse » : un 8 couché de demi-largeur `width` et de demi-hauteur `height` (px). */
+const HAND_EIGHT = { width: 70, height: 18 };
 
 /**
  * HUD minimal en scène parallèle (non affecté par le zoom caméra) : bouton pause,
@@ -121,6 +123,7 @@ export class HudScene extends Phaser.Scene {
       this.panelBtns = [
         makeSquareButton(this, iconCrowd, () => this.game_.toggleCrowdPanel()),
         makeSquareButton(this, iconCheat, () => this.game_.toggleCheatPanel()),
+        makeSquareButton(this, iconDifficulty, () => this.game_.toggleDifficultyPanel()),
       ];
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene), VIEW_BORDER));
     }
@@ -609,7 +612,17 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     if (device.isTouch) {
       const hand = this.add.image(-60, 0, 'hand').setScale(0.8);
       c.add(hand);
-      this.tweens.add({ targets: hand, x: 60, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      // la main dessine un 8 couché (∞, lemniscate de Gerono : x = a·sin t, y = b·sin 2t) : le geste du joystick, dans toutes les directions
+      this.tweens.addCounter({
+        from: 0,
+        to: Math.PI * 2,
+        duration: 2800,
+        repeat: -1,
+        onUpdate: (tw) => {
+          const t = tw.getValue() ?? 0;
+          hand.setPosition(HAND_EIGHT.width * Math.sin(t), HAND_EIGHT.height * Math.sin(2 * t));
+        },
+      });
     } else {
       // clavier : vraies touches W / A S D dessinées (une touche s'enfonce à tour de rôle)
       label.setY(96);

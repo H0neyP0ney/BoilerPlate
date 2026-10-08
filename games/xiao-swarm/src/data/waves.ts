@@ -30,6 +30,16 @@ export interface TimelineEntry {
   every?: number;
   /** ... jusqu'à `until` (s, inclus). Sans `until`, un seul envoi. */
   until?: number;
+  /**
+   * Effectif × `mul` pour chaque envoi de cette entrée : nombre de chaque groupe hors boss × `mul`, arrondi, au moins 1 (absent = 1). Affiché et
+   * modifiable dans le Gestionnaire de vagues. Rejouée pendant un combat de boss, une vague prend en plus × `DIFFICULTY.bossReplayMul`.
+   */
+  mul?: number;
+}
+
+/** Nombre d'aliens d'un groupe pour un envoi à l'effectif × `mul` (les boss ne sont jamais multipliés). */
+export function scaledCount(count: number, boss: boolean, mul: number): number {
+  return boss || mul === 1 ? count : Math.max(1, Math.round(count * mul));
 }
 
 export interface WaveScript {
@@ -74,7 +84,8 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
       { name: 'Grenouilles', groups: [{ type: 'toad', count: 3 }, { type: 'kamikaze', count: 3 }] },
       { name: 'Langue + essaim', groups: [{ type: 'toad', count: 2 }, { type: 'gling', count: 8 }] },
-      { name: 'Cracheurs', groups: [{ type: 'spitter', count: 2 }, { type: 'slime', count: 4 }] }, // le spitter dès 1:15 (08/10)
+      { name: 'Cracheurs', groups: [{ type: 'spitter', count: 2 }, { type: 'slime', count: 4 }] }, // le spitter arrive avec le niveau 4, joué pour la première fois à 1:15 (après la Gling Mère)
+      { name: 'Cracheurs et essaim', groups: [{ type: 'spitter', count: 2 }, { type: 'gling', count: 8 }] }, // 2e vague de cracheurs, de difficulté proche des autres du niveau
     ],
     5: [
       { name: 'Un gros', groups: [{ type: 'shooter', count: 2 }, { type: 'slime', count: 7 }] },
@@ -104,6 +115,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Mini-boss : Scarab', groups: [{ type: 'boss_scarab', count: 1 }, { type: 'shooter', count: 3 }, { type: 'slime', count: 6 }] },
       { name: 'BOSS FINAL : Giant Crab', groups: [{ type: 'boss_crab', count: 1 }, { type: 'shaman', count: 1 }, { type: 'bubble', count: 1 }, { type: 'charger', count: 1 }] },
       { name: 'Mini-boss : Gling Mère', groups: [{ type: 'boss_gling', count: 1 }, { type: 'gling', count: 6 }] },
+      { name: 'Mini-boss : Rhinos jumeaux (feu et glace)', groups: [{ type: 'boss_rhino_fire', count: 1 }, { type: 'boss_rhino_ice', count: 1 }, { type: 'slime', count: 6 }] },
     ],
   },
   timeline: [
@@ -120,14 +132,14 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 61, level: 2, every: 3, until: 70 }, // après chaque boss (clear screen, carte vide) : vagues serrées tout de suite (08/10)
     { at: 64.5, level: 2 },
     { at: 71, level: 2 },
-    { at: 75, level: 4, config: 4 }, // spitters entre la Gling Mère et l'Alpha Rhino (08/10)
+    { at: 75, level: 4 },
     { at: 76, level: 2 },
     { at: 84, level: 2, every: 2, until: 88 },
     { at: 89.5, level: 3 },
     { at: 91, level: 2 },
     { at: 92.5, level: 3 },
     { at: 94.5, level: 2 },
-    { at: 95, level: 4, config: 4 },
+    { at: 95, level: 4 },
     { at: 96, level: 3 },
     { at: 97.5, level: 2 },
     { at: 99, level: 3 },
@@ -146,10 +158,12 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 119, level: 3 },
     { at: 120, level: 9, config: 1 },
     { at: 121, level: 3, every: 2.5, until: 136 },
-    { at: 123, level: 4, every: 5, until: 148 },
+    { at: 123, level: 4, every: 5, until: 138 },
     { at: 127, level: 2, every: 8, until: 159 },
-    { at: 128, level: 3, every: 4, until: 156 }, // après le Rhinocéros : kamikazes en continu (la zone creuse de 127 à 159 s)
-    { at: 134, level: 4, every: 6, until: 158 },
+    { at: 128, level: 3, every: 4, until: 144 }, // après le Rhinocéros : kamikazes en continu (la zone creuse de 127 à 159 s)
+    { at: 152, level: 3, every: 4, until: 156 },
+    { at: 134, level: 4, every: 6, until: 140 },
+    { at: 152, level: 4, every: 6, until: 158 },
     { at: 161.5, level: 2 },
     { at: 162.5, level: 3, every: 2, until: 166.5 },
     { at: 163.5, level: 2 },
@@ -157,26 +171,25 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 167, level: 2, every: 3, until: 176 },
     { at: 168.5, level: 4 },
     { at: 169.5, level: 3, every: 3, until: 175.5 },
-    { at: 171, level: 4, every: 3, until: 177 },
-    { at: 177.5, level: 3, every: 2, until: 185.5 },
-    { at: 178, level: 5, every: 2, until: 186 },
-    { at: 179, level: 4, every: 2, until: 185 },
+    { at: 171, level: 4, every: 3, until: 174 },
+    { at: 177.5, level: 3 },
+    { at: 181.5, level: 3, every: 2, until: 185.5 },
+    { at: 180, level: 5, every: 2, until: 186 },
+    { at: 181, level: 4, every: 2, until: 185 },
     { at: 188, level: 4, every: 3, until: 212 }, // trou de 186 à 213 s : grenouilles, shooters et kamikazes
-    { at: 192, level: 5, every: 6, until: 212 },
+    { at: 210, level: 5 },
     { at: 194, level: 3, every: 8, until: 210 },
     { at: 200, level: 3, every: 4, until: 212 },
     { at: 213.5, level: 3, every: 2, until: 225.5 },
     { at: 216.5, level: 5, every: 2, until: 224.5 },
     { at: 217, level: 4, every: 2, until: 225 },
-    { at: 227, level: 4, every: 2.5, until: 245 }, // 226-246 s : encore creux avant la montée vers le Scarab
-    { at: 230, level: 5, every: 5, until: 245 },
+    { at: 227, level: 4, every: 2.5, until: 244.5 }, // 226-246 s : encore creux avant la montée vers le Scarab
+    { at: 240, level: 5, every: 5, until: 245 },
     { at: 233.5, level: 3 },
-    { at: 238, level: 6 },
     { at: 241.5, level: 3 },
     { at: 244, level: 6 },
     { at: 246, level: 3, every: 2, until: 250 },
     { at: 251, level: 4 },
-    { at: 252, level: 6 },
     { at: 255.5, level: 4 },
     { at: 257, level: 5 },
     { at: 259, level: 4 },
@@ -184,7 +197,6 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 262, level: 4 },
     { at: 264, level: 4 },
     { at: 265.5, level: 5 },
-    { at: 267, level: 4 },
     { at: 268.5, level: 5 },
     { at: 270.5, level: 4 },
     { at: 272, level: 5 },
@@ -201,47 +213,47 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 291.5, level: 6 },
     { at: 292.5, level: 4 },
     { at: 294.5, level: 4 },
-    { at: 295, level: 6 },
     { at: 297, level: 4 },
-    { at: 298, level: 6 },
-    { at: 299, level: 4, every: 8, until: 323 },
+    { at: 299, level: 4 },
+    { at: 307, level: 4, every: 8, until: 323 },
     { at: 300, level: 9, config: 2 },
     { at: 301, level: 5, every: 2, until: 321 },
     { at: 303, level: 6, every: 5, until: 328 },
     { at: 328, level: 7 },
     { at: 335.5, level: 5, every: 2, until: 343.5 },
     { at: 346, level: 5, every: 2, until: 350 },
-    { at: 352.5, level: 5, every: 2, until: 360.5 },
-    { at: 368.5, level: 5, every: 8, until: 392.5 },
+    { at: 352.5, level: 5, every: 2, until: 358.5 },
+    { at: 360.5, level: 5 },
+    { at: 368.5, level: 5, every: 8, until: 376.5 },
+    { at: 392.5, level: 5 },
     { at: 395, level: 5, every: 2, until: 399 },
     { at: 400.5, level: 6 },
     { at: 402, level: 5 },
     { at: 403, level: 8 },
     { at: 409, level: 6, every: 2, until: 419 },
     { at: 414.5, level: 7 },
-    { at: 416.5, level: 7 },
     { at: 418, level: 8 },
     { at: 420, level: 7 },
     { at: 428, level: 6 },
     { at: 436, level: 6 },
-    { at: 440.5, level: 6, every: 2, until: 460.5 },
+    { at: 440.5, level: 6, every: 2, until: 444.5 },
+    { at: 450, level: 9, config: 5 }, // Rhinos jumeaux (feu et glace), 7:30
+    { at: 450.5, level: 6, every: 2, until: 460.5 },
     { at: 462, level: 7, every: 2.5, until: 472 },
     { at: 463, level: 6 },
     { at: 466, level: 6 },
     { at: 468.5, level: 6 },
     { at: 470.5, level: 6 },
-    { at: 471, level: 8 },
     { at: 473, level: 6 },
     { at: 474, level: 7 },
     { at: 482, level: 6 },
     { at: 490, level: 6 },
     { at: 497, level: 6, every: 2, until: 503 },
-    { at: 498, level: 7, every: 2, until: 504 },
+    { at: 498, level: 7, every: 2, until: 502 },
     { at: 512, level: 6, every: 8, until: 528 },
     { at: 530, level: 6, every: 2, until: 534 },
     { at: 535.5, level: 7 },
     { at: 537.5, level: 6 },
-    { at: 539.5, level: 6 },
     { at: 541, level: 7 },
     { at: 542.5, level: 6 },
     { at: 544.5, level: 6 },
@@ -252,10 +264,9 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 552.5, level: 6, every: 3.5, until: 559.5 },
     { at: 562.5, level: 6 },
     { at: 564, level: 7 },
-    { at: 565.5, level: 6 },
     { at: 567, level: 7 },
-    { at: 568, level: 6, every: 3, until: 574 },
-    { at: 569.5, level: 7, every: 3, until: 575.5 },
+    { at: 571, level: 6, every: 3, until: 574 },
+    { at: 572.5, level: 7, every: 3, until: 575.5 },
     { at: 576.5, level: 6 },
     { at: 578, level: 7 },
     { at: 579.5, level: 6 },
@@ -271,12 +282,10 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 593.5, level: 6 },
     { at: 594.5, level: 7 },
     { at: 595.5, level: 6 },
-    { at: 596.5, level: 7 },
     { at: 598, level: 6 },
-    { at: 599, level: 7 },
-    { at: 600, level: 8, every: 10, until: 36000 },
+    { at: 600, level: 8, every: 11.25, until: 36000 },
     { at: 600, level: 9, config: 3 },
-    { at: 605, level: 7, every: 7, until: 36000 },
+    { at: 605, level: 7, every: 8, until: 36000 },
   ],
   model: { dpsStart: 125, growthPerMin: 1.5, efficiency: 0.5, bossWeight: 0.25 },
   target: [{ t: 0, hp: 0 }, { t: 20, hp: 1512 }, { t: 42, hp: 3699 }, { t: 60, hp: 2021 }, { t: 80, hp: 0 }, { t: 100, hp: 856 }, { t: 120, hp: 3562 }, { t: 140, hp: 148 }, { t: 160, hp: 0 }, { t: 177, hp: 2926 }, { t: 185.5, hp: 11174 }, { t: 191.5, hp: 4789 }, { t: 203, hp: 2394 }, { t: 216, hp: 1009 }, { t: 223, hp: 10375 }, { t: 230, hp: 2926 }, { t: 240, hp: 0 }, { t: 263, hp: 798 }, { t: 283, hp: 1330 }, { t: 300, hp: 9886 }, { t: 320, hp: 3818 }, { t: 340, hp: 3021 }, { t: 360, hp: 555 }, { t: 380, hp: 0 }, { t: 400, hp: 701 }, { t: 414, hp: 2394 }, { t: 420, hp: 13036 }, { t: 426, hp: 2128 }, { t: 440, hp: 1816 }, { t: 460, hp: 867 }, { t: 469, hp: 6385 }, { t: 473.5, hp: 16760 }, { t: 482.5, hp: 5055 }, { t: 496.5, hp: 1596 }, { t: 504, hp: 9577 }, { t: 512, hp: 1596 }, { t: 520, hp: 0 }, { t: 540, hp: 1699 }, { t: 560, hp: 4724 }, { t: 580, hp: 12568 }, { t: 600, hp: 26466 }],
@@ -286,32 +295,10 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
 export const WAVE_SCRIPT: WaveScript = JSON.parse(JSON.stringify(DEFAULT_WAVE_SCRIPT)) as WaveScript;
 
 /**
- * Réglage de la pression par tranche de la timeline : le nombre d'aliens de chaque vague envoyée entre `from` et `to` (s, position dans la
- * timeline) est multiplié par `mul` (les boss ne sont pas touchés). 120-300 s = de l'Alpha Rhino au Scarab : −20 % ; au-delà de 6:00 : −20 % (07/10).
- */
-export const WAVE_PRESSURE: { from: number; to: number; mul: number }[] = [
-  { from: 120, to: 300, mul: 0.8 },
-  { from: 360, to: Infinity, mul: 0.8 },
-];
-
-/** Multiplicateur de pression à l'instant `time` de la timeline (1 si aucune tranche ne s'applique). */
-export function pressureAt(time: number): number {
-  let mul = 1;
-  for (const p of WAVE_PRESSURE) if (time >= p.from && time < p.to) mul *= p.mul;
-  return mul;
-}
-
-/**
- * Plafond d'aliens : au-dessus de `pauseAbove` aliens vivants, le gestionnaire de vagues se met en pause (plus aucun envoi, timeline figée)
- * jusqu'à ce qu'il en reste `resumeAt` ou moins.
- */
-export const WAVE_CAP = { pauseAbove: 150, resumeAt: 100 };
-
-/**
- * Combat de boss : la timeline est suspendue tant qu'un boss est vivant ; on renvoie à la place, en boucle, les `count` derniers envois qui ont
+ * Combat de boss : la timeline est suspendue tant qu'un boss est vivant ; on renvoie à la place, en boucle, les `DIFFICULTY.bossReplayCount` derniers envois qui ont
  * précédé son apparition (écarts plafonnés à `maxGap` s, `wrapGap` s de repos entre deux tours). Ces aliens ne laissent aucun globe d'XP.
  */
-export const BOSS_REPLAY = { count: 5, maxGap: 4, wrapGap: 3 };
+export const BOSS_REPLAY = { maxGap: 4, wrapGap: 3 };
 
 /** Instants (s) où une entrée de la timeline envoie son niveau. */
 export function entryTimes(e: TimelineEntry): number[] {

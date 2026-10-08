@@ -1,11 +1,12 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, BOSS_ESCALATION, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_SQUAD_RATIO, REVIVE_TIME, UPGRADE_CHOICE_TIME, EXTRA_PLAYER_ALIENS, ZOMBIE_COPIES } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
+import { Chests, UpgradeOrbs } from './Chests';
 import { Combat } from './Combat';
 import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
@@ -87,6 +88,9 @@ export class Sim {
   readonly horde: Horde;
   readonly combat: Combat;
   readonly recruits: Recruits;
+  /** Coffres des boss tués et globes d'upgrade qui en sortent (réservés à leur joueur). */
+  readonly chests: Chests;
+  readonly upgradeOrbs: UpgradeOrbs;
   readonly powerups: PowerUps;
   readonly xp: Xp;
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
@@ -109,6 +113,8 @@ export class Sim {
     this.horde = new Horde(this);
     this.combat = new Combat(this);
     this.recruits = new Recruits(this);
+    this.chests = new Chests(this);
+    this.upgradeOrbs = new UpgradeOrbs(this);
     this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
@@ -117,18 +123,18 @@ export class Sim {
     this.waves = new WaveRunner(
       config.mode.waves,
       (type, count) => {
-        // Difficulté dynamique : chaque joueur vivant en plus ajoute `EXTRA_PLAYER_ALIENS` (75 %) d'ennemis (2 joueurs = ×1,75, 1 seul vivant =
+        // Difficulté dynamique : chaque joueur vivant en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75, 1 seul vivant =
         // retour à ×1). Un boss, lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de
         // squads avant le 08/10).
         // Plafond d'aliens à l'apparition appliqué par type dans Horde.spawnNear (`ModeDef.maxAliens`, réserve pour les costauds) ; au-delà de
-        // `WAVE_CAP.pauseAbove` aliens vivants, la timeline se met en pause.
+        // `DIFFICULTY.wavePauseAbove` aliens vivants, la timeline se met en pause.
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
-        const playersMul = 1 + EXTRA_PLAYER_ALIENS * (squads.length - 1);
+        const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (squads.length - 1);
         if (ALIENS[type].boss) {
           this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, playersMul);
         } else {
-          // chaque joueur en plus ajoute `EXTRA_PLAYER_ALIENS` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
+          // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
           for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * DIFFICULTY.alienCountMul * share)), SPAWN_DISTANCE);
@@ -161,6 +167,8 @@ export class Sim {
     this.fuses.length = 0;
     this.combat.clear();
     this.recruits.clear();
+    this.chests.clear();
+    this.upgradeOrbs.clear();
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
@@ -194,6 +202,8 @@ export class Sim {
     this.fuses.length = 0;
     this.combat.clear();
     this.recruits.clear();
+    this.chests.clear();
+    this.upgradeOrbs.clear();
     this.powerups.clear();
     this.xp.clear();
     this.choiceT = 0;
@@ -409,6 +419,8 @@ export class Sim {
     this.horde.update(dt);
     this.combat.update(dt);
     this.recruits.update(dt);
+    this.chests.update(dt);
+    this.upgradeOrbs.update(dt);
     if (this.xpEnabled) this.xp.update(dt);
     this.updateCorpsesAndRocks(dt);
     this.updateFires(dt);
@@ -446,9 +458,9 @@ export class Sim {
     return amount - taken;
   }
 
-  /** Multiplicateur appliqué à tout alien qui apparaît maintenant : ×(1 + `BOSS_ESCALATION`) par boss ou mini-boss déjà tué. */
+  /** Multiplicateur appliqué à tout alien qui apparaît maintenant : ×(1 + `DIFFICULTY.bossEscalation`) par boss ou mini-boss déjà tué. */
   get escalation(): number {
-    return (1 + BOSS_ESCALATION) ** this.bossKills;
+    return (1 + DIFFICULTY.bossEscalation) ** this.bossKills;
   }
 
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */
@@ -485,7 +497,7 @@ export class Sim {
   /** Ressuscite le slime de la flaque `c` avec `hpFrac` de ses PV (il ne pourra pas l'être une seconde fois). */
   reviveCorpse(c: Corpse, hpFrac: number): void {
     this.endCorpse(c, true);
-    for (let i = 0; i < ZOMBIE_COPIES; i++) {
+    for (let i = 0; i < Math.round(DIFFICULTY.zombieCopies); i++) {
       const ang = this.rng.range(0, Math.PI * 2);
       const r = i === 0 ? 0 : this.rng.range(18, 45);
       this.horde.spawnAt(c.type, c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r, hpFrac, true);
@@ -707,7 +719,7 @@ export class Sim {
       if (z.progress < REVIVE_TIME) continue;
       this.reviveZones.splice(i, 1);
       // escouade de base, ramenée (ou complétée en gunners) à 60 % de la taille max atteinte par ce joueur
-      const target = Math.max(1, Math.min(sq.maxSize, Math.round(sq.peakSize * REVIVE_SQUAD_RATIO)));
+      const target = Math.max(1, Math.min(sq.maxSize, Math.round(sq.peakSize * DIFFICULTY.coopReviveRatio)));
       const base = this.rng.pick(START_SQUADS);
       const comp = base.slice(0, target);
       while (comp.length < target) comp.push('trooper');
@@ -737,10 +749,14 @@ export class Sim {
     this.blasts.push({ x, y, r, dmg, team, owner, knock, style });
   }
 
-  /** `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). */
-  damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
+  /**
+   * `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). Sans `attacker` (coup
+   * d'alien), × `DIFFICULTY.alienDamageMul` sauf si `scaled` = false (un coup = un mort : boss en mêlée, écrasement du saut).
+   */
+  damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false, scaled = true): void {
     if (!s.alive) return;
     if (!force && (s.invulnerable > 0 || s.capturedBy)) return; // avalé par une bulle : protégé (gelé : attaquable)
+    if (attacker === null && scaled) amount *= DIFFICULTY.alienDamageMul; // coup d'alien (`scaled` = false : un coup = un mort, intact)
     this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
     s.hp -= this.absorb(s, amount);
     if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
@@ -767,11 +783,15 @@ export class Sim {
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.boss) {
-      this.bossKills++; // escalade : les aliens suivants sont plus forts
-      this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
+      // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul compte (escalade, bandeau) et laisse le coffre
+      const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
-      this.wipeAliens(a, killer);
-      this.powerups.drop('magnet', a.x, a.y, true); // aimant garanti (il reste jusqu'à ce qu'on le ramasse) : récupérer tout le butin du clear screen
+      this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss encore en vie est épargné
+      if (last) {
+        this.bossKills++; // escalade : les aliens suivants sont plus forts
+        this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
+        if (a.def.boss.kind !== 'final') this.chests.drop(a.x, a.y); // coffre sur le cadavre (le boss final, lui, gagne la partie)
+      }
     }
     this.releaseCaptive(a);
     if (a.def.revivable && !a.revived) {

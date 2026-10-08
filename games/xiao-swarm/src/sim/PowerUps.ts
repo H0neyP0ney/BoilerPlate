@@ -1,4 +1,4 @@
-import { POWERUPS, STIM_TIME } from '../config';
+import { DIFFICULTY, POWERUP_LIFE } from '../config';
 import type { Field, PowerUpKind, PowerUpState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -22,13 +22,13 @@ const ROCKETS = 30;
 export class PowerUps {
   readonly items: PowerUpState[] = [];
   readonly fields: Field[] = [];
-  private timer: number = POWERUPS.first;
+  private timer: number = DIFFICULTY.powerupFirst;
 
   constructor(private readonly sim: Sim) {}
 
   /** Pose un power-up à un endroit précis (tutoriel : `forced` = il ne disparaît pas tant qu'il n'est pas ramassé). */
   drop(kind: PowerUpKind, x: number, y: number, forced = false): PowerUpState {
-    const p: PowerUpState = { id: this.sim.ids.get(), kind, x, y, life: forced ? 1e6 : POWERUPS.life };
+    const p: PowerUpState = { id: this.sim.ids.get(), kind, x, y, life: forced ? 1e6 : POWERUP_LIFE };
     this.items.push(p);
     return p;
   }
@@ -39,7 +39,7 @@ export class PowerUps {
       // pendant le tutoriel, aucun power-up au hasard : seuls ceux du script apparaissent
       this.timer -= dt;
       if (this.timer <= 0) {
-        this.timer = rng.range(POWERUPS.every[0], POWERUPS.every[1]);
+        this.timer = rng.range(DIFFICULTY.powerupEveryMin, Math.max(DIFFICULTY.powerupEveryMin, DIFFICULTY.powerupEveryMax));
         this.spawn();
       }
     }
@@ -82,7 +82,7 @@ export class PowerUps {
 
   /** Apparition près d'une squad vivante au hasard, à distance de marche, sur un point libre. */
   private spawn(): void {
-    if (this.items.length >= POWERUPS.max) return;
+    if (this.items.length >= Math.round(DIFFICULTY.powerupMax)) return;
     const { rng, arena } = this.sim;
     const squads = this.sim.aliveSquads;
     if (squads.length === 0) return;
@@ -94,7 +94,7 @@ export class PowerUps {
       if (!arena.isFree(p, 30)) continue;
       const b = arena.bounds;
       if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60) continue;
-      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUPS.life });
+      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE });
       return;
     }
   }
@@ -103,11 +103,12 @@ export class PowerUps {
     this.sim.events.push({ t: 'powerup', owner: squad.owner, kind: p.kind, x: p.x, y: p.y });
     switch (p.kind) {
       case 'stim':
-        squad.buffs.stim = STIM_TIME;
+        squad.buffs.stim = DIFFICULTY.stimTime;
         break;
       case 'magnet':
         this.sim.xp.magnetize(squad, MAGNET_RADIUS); // coup unique : aspire tout l'XP, les recrues et les autres power-ups alentour, ne reste pas actif
         this.sim.recruits.magnetize(squad, MAGNET_RADIUS);
+        this.sim.upgradeOrbs.magnetize(squad, MAGNET_RADIUS);
         this.magnetize(squad, MAGNET_RADIUS);
         break;
       case 'heal':
@@ -143,6 +144,6 @@ export class PowerUps {
   clear(): void {
     this.items.length = 0;
     this.fields.length = 0;
-    this.timer = POWERUPS.first;
+    this.timer = DIFFICULTY.powerupFirst;
   }
 }

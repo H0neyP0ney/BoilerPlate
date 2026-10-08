@@ -25,6 +25,11 @@ export class Stats<K extends string> {
     return (this.base[key] + this.flat[key]) * (1 + this.pct[key]);
   }
 
+  /** Change la valeur de base d'une stat (réglage en direct) ; les modificateurs déjà ajoutés restent. */
+  setBase(key: K, value: number): void {
+    this.base[key] = value;
+  }
+
   add(key: K, mod: Modifier): void {
     this.flat[key] += mod.flat ?? 0;
     this.pct[key] += mod.pct ?? 0;

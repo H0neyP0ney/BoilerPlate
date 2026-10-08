@@ -7,12 +7,14 @@ import { TUTORIAL } from '../data/tutorial';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
+import { loadSavedDifficulty } from '../debugDifficulty';
 import { BotOverlay } from '../dev/botOverlay';
 import { CheatPanel, type BotControl } from '../dev/cheatPanel';
 import { JUMPS, jumpAhead, type JumpId } from '../dev/jumpAhead';
 import { AlienTest, alienTestMode, type AlienTestRequest } from '../dev/alienTest';
 import { setDocked } from '../dev/dock';
 import { CrowdPanel } from '../dev/crowdPanel';
+import { DifficultyPanel } from '../dev/difficultyPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
 import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
@@ -43,6 +45,7 @@ export class GameScene extends Phaser.Scene {
   private move!: MoveInput;
   private debug?: DebugOverlay;
   private crowdPanel?: CrowdPanel;
+  private difficultyPanel?: DifficultyPanel;
   private cheatPanel?: CheatPanel;
   private botOverlay?: BotOverlay;
   /** Vitesse de la simulation (panneau Triche, dev) : 1 = normale, 0 = figée. */
@@ -86,6 +89,7 @@ export class GameScene extends Phaser.Scene {
     if (DEV_TOOLS) {
       // réglages de dev mémorisés (absents du build Poki : le code est éliminé)
       loadSavedCrowd();
+      loadSavedDifficulty();
       loadSavedVisual();
     }
     const online = this.registry.get('session') as Session | undefined;
@@ -98,7 +102,7 @@ export class GameScene extends Phaser.Scene {
       const mode = test ? alienTestMode() : this.pickMode();
       const botsParam = Number(poki.getURLParam('bots'));
       const jumpParam = poki.getURLParam('jump');
-      const jump = jumpParam && jumpParam in JUMPS ? (jumpParam as JumpId) : null; // ?jump=gling|rhino|scarab|crab : partie avancée, build déployé compris
+      const jump = jumpParam && jumpParam in JUMPS ? (jumpParam as JumpId) : null; // ?jump=gling|rhino|scarab|twins|crab : partie avancée, build déployé compris
       this.session = new LocalSession({
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
@@ -536,6 +540,10 @@ export class GameScene extends Phaser.Scene {
     this.crowdPanel?.toggle();
   }
 
+  toggleDifficultyPanel(): void {
+    this.difficultyPanel?.toggle();
+  }
+
   toggleCheatPanel(): void {
     this.cheatPanel?.toggle();
   }
@@ -580,14 +588,10 @@ export class GameScene extends Phaser.Scene {
         this.applyZoomNow();
       },
     });
-    const dbg = this.debug;
-    const onOff = (label: string, hint: string, get: () => boolean, set: (v: boolean) => void): void =>
-      dbg.slider(label, { min: 0, max: 1, step: 1, hint, get: () => (get() ? 1 : 0), set: (v) => set(v >= 0.5) });
-    onOff('Déformation écran (0/1)', "1 = onde de choc qui déforme l'écran à la montée de niveau (filtre plein écran). Sans menu : ?shock=0 / ?shock=1 dans l'URL.", () => settings.shockwave, (v) => settings.setShockwave(v));
-    onOff('Fond étoilé (0/1)', "0 = fond noir uni, bien plus léger sur mobile. Sans menu (téléphone) : ?space=0 / ?space=1 dans l'URL.", () => settings.starfield, (v) => settings.setStarfield(v));
     addVisualMenu(this.debug);
     // Panneaux dédiés (boutons du HUD) : mouvement de foule, et triche / tests (hors ligne seulement).
     this.crowdPanel = new CrowdPanel(this);
+    this.difficultyPanel = new DifficultyPanel(this);
     this.cheatPanel = new CheatPanel(this, {
       sim,
       me,

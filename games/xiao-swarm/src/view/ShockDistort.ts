@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { FX } from '../fxParams';
-import { settings } from '../settings';
 
 /** Clés des textures (globales au jeu) : anneau de déformation pré-calculé, carte de déformation redessinée à chaque image. */
 const RING_KEY = 'fx_shock_ring';
@@ -49,7 +48,7 @@ export class ShockDistort {
 
   /** Lance `count` ondes successives (une toutes les `gapMs`) depuis un point du monde. */
   start(x: number, y: number, radius: number, durMs: number, count: number, gapMs: number, squash = 1, follow?: () => { x: number; y: number } | null): void {
-    if (!this.ok || !settings.shockwave) return;
+    if (!this.ok) return;
     const now = this.scene.time.now;
     for (let i = 0; i < count; i++) this.pulses.push({ x, y, start: now + i * gapMs, dur: durMs, radius, squash, follow });
   }

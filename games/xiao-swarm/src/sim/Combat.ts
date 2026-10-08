@@ -1,5 +1,5 @@
 import { Pool } from '@xiao/engine/sim';
-import { CRIT_MAX, CRIT_MUL, STIM_FIRE, ZOMBIE_DMG_MUL } from '../config';
+import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
 import { ALIENS } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
@@ -195,7 +195,7 @@ export class Combat {
       const lead = lob.lead ? rng.range(lob.lead[0], lob.lead[1]) : 1; // part de l'anticipation (au hasard : pas toujours pile devant)
       const lx = target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter);
-      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
+      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
     }
   }
 
@@ -246,7 +246,7 @@ export class Combat {
       const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
       if (sp.puddle) {
         p.puddle = sp.puddle.radius;
         p.puddleTtl = sp.puddle.ttl;
@@ -304,13 +304,13 @@ export class Combat {
       if (recent.length > Math.min(8, Math.max(0, targets.length - 1))) recent.shift();
     }
     const ang = rng.range(0, Math.PI * 2);
-    const r = rng.range(80, 300);
+    const r = DIFFICULTY.rocketIdleRange * rng.range(0.85, 1.15); // sans cible : elle continue loin dans une direction au hasard
     const mx = src.x;
     const my = src.y - 17;
     // roquette en ligne droite : vise où sera la cible à l'arrivée ; explose au premier alien touché ou au point visé
     const reach = t ? Math.hypot(t.x - mx, t.y - my) / ROCKET_SPEED : 0;
-    const lx = (t ? t.x + t.vx * reach : squad.center.x + Math.cos(ang) * r) + rng.range(-12, 12);
-    const ly = (t ? t.y + t.vy * reach : squad.center.y + Math.sin(ang) * r) + rng.range(-12, 12);
+    const lx = (t ? t.x + t.vx * reach : mx + Math.cos(ang) * r) + rng.range(-12, 12);
+    const ly = (t ? t.y + t.vy * reach : my + Math.sin(ang) * r) + rng.range(-12, 12);
     const flight = Math.max(0.08, Math.hypot(lx - mx, ly - my) / ROCKET_SPEED);
     const p = this.projectiles.acquire();
     p.x = p.px = mx;

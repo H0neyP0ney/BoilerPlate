@@ -67,7 +67,7 @@ export class LevelUpScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setVisible(offer.length === 0);
     offer.forEach((id, i) => {
-      const count = (game.localSquad.picked[id] ?? 0) + 1;
+      const count = game.localSquad.picked[id] ?? 0; // prises déjà faites (pas celle qu'on s'apprête à prendre)
       const card = this.makeCard(id, i, count, data.prism[i] === true);
       // apparition : chaque carte « pop » (outBack), l'une après l'autre
       card.setScale(0);

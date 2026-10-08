@@ -329,6 +329,8 @@ function handle(target: string, data: any): Result {
   switch (target) {
     case 'crowd':
       return saveNumbers('config.ts', /export const CROWD_DEFAULTS = \{/, data, 'Mouvement de foule');
+    case 'difficulty':
+      return saveNumbers('config.ts', /export const DIFFICULTY_DEFAULTS = \{/, data, 'Difficulté globale');
     case 'visual':
       return saveNumbers('config.ts', /export const VISUAL_DEFAULTS = \{/, data, 'Réglages visuels');
     case 'fx':

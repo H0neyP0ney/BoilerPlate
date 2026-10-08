@@ -424,7 +424,8 @@ export class WaveEditorScene extends Phaser.Scene {
             `background:${levelColor(e.level)};border-radius:2px 2px 0 0;opacity:${this.hot < 0 || this.hot === i ? 1 : 0.3};` +
             (this.hot === i ? 'outline:1px solid #fff;z-index:1;' : ''),
         );
-        bar.title = `${clock(t)} (${Math.round(t)} s) : niveau ${e.level}`;
+        bar.title = `${clock(t)} (${Math.round(t)} s) : niveau ${e.level}${e.mul !== undefined && e.mul !== 1 ? ` · effectif ×${e.mul}` : ''}`;
+        if (e.mul !== undefined && e.mul !== 1) bar.style.height = `${(e.level / 9) * 100 * e.mul}px`; // barre raccourcie : effectif réduit visible d'un coup d'œil
         bar.addEventListener('click', (ev) => ev.stopPropagation());
         area.append(bar);
       }
@@ -447,8 +448,8 @@ export class WaveEditorScene extends Phaser.Scene {
   }
 
   private renderTable(): void {
-    const cols = 'display:grid;grid-template-columns:70px 90px 110px 100px 90px 70px 28px;gap:6px;align-items:center';
-    const headRow = el('div', `${cols};font-size:11px;color:#aab`, ...['Début (s)', 'Niveau', 'Répéter toutes les (s)', "Jusqu'à (s)", 'Configuration', 'Envois', ''].map((t) => el('span', '', t)));
+    const cols = 'display:grid;grid-template-columns:70px 90px 110px 100px 90px 80px 70px 28px;gap:6px;align-items:center';
+    const headRow = el('div', `${cols};font-size:11px;color:#aab`, ...['Début (s)', 'Niveau', 'Répéter toutes les (s)', "Jusqu'à (s)", 'Configuration', 'Effectif ×', 'Envois', ''].map((t) => el('span', '', t)));
     const rows = WAVE_SCRIPT.timeline.map((e, i) => this.entryRow(e, i, cols));
     const add = btn('+ Ajouter un envoi', () => {
       WAVE_SCRIPT.timeline.push({ at: Math.max(0, ...WAVE_SCRIPT.timeline.map((e) => e.at)) + 10, level: this.level });
@@ -528,7 +529,14 @@ export class WaveEditorScene extends Phaser.Scene {
       refresh();
       config.blur();
     });
-    row.append(at, level, every, until, config, count, del);
+    const mul = numInput(e.mul ?? 1, { min: 0.1, step: 0.05, width: 70 }, (v) => {
+      if (v === undefined || Math.abs(v - 1) < 1e-9) delete e.mul;
+      else e.mul = Math.max(0.1, v);
+      refresh();
+    });
+    mul.title = "Effectif de chaque envoi : nombre d'aliens de chaque groupe hors boss × cette valeur (arrondi, au moins 1). Sur un boss : vaut aussi pour les vagues rejouées pendant son combat";
+    if (e.mul !== undefined && e.mul !== 1) mul.style.color = '#ffd166';
+    row.append(at, level, every, until, config, mul, count, del);
     return row;
   }
 

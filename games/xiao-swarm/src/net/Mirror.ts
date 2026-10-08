@@ -1,9 +1,9 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
+import { CROWD, DIFFICULTY, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
-import type { AlienState, PowerUpState, Projectile, RecruitState, SoldierState, Unit, XpOrb } from '../sim/entities';
+import type { AlienState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
@@ -55,6 +55,8 @@ export class Mirror {
   private readonly soldiers = new Map<number, SoldierState>();
   private readonly aliens = new Map<number, AlienState>();
   private readonly recruits = new Map<number, RecruitState>();
+  /** Globes d'upgrade des coffres (par id) : lissés comme les recrues, chute en cloche comprise. */
+  private readonly upgradeOrbs = new Map<number, UpgradeOrbState>();
   private readonly powerups = new Map<number, PowerUpState>();
   /** Globes d'XP persistants (par id) : lissés vers leur position hôte comme les recrues, au lieu de sauter à chaque snapshot. */
   private readonly orbs = new Map<number, XpOrb>();
@@ -77,8 +79,22 @@ export class Mirror {
   /** Monde figé chez l'hôte (pause de choix d'upgrade, écran de fin : son tick n'avance plus) : rien n'est extrapolé ni décompté. */
   private frozen = false;
 
-  apply(snap: Snapshot): void {
+  /** Aliens du snapshot SUIVANT déjà reçu (tampon d'interpolation) et écart de temps (s) : leur vitesse = vers où ils vont. */
+  private nextAliens?: Map<number, AlienSnap>;
+  private nextDt = 0;
+  private curSeq = 0;
+  /** Dernière position reçue de chaque alien (repli quand le snapshot suivant n'est pas encore là). */
+  private readonly lastAlienPos = new Map<number, { x: number; y: number; seq: number }>();
+
+  /**
+   * `next` : snapshot suivant, déjà dans le tampon du client. Les aliens n'envoient plus leur vitesse (v43) : elle est déduite de leur
+   * position dans `next` (vraie interpolation entre deux snapshots), sinon de leur position précédente (extrapolation).
+   */
+  apply(snap: Snapshot, next?: Snapshot): void {
     const { sim } = this;
+    this.curSeq = snap.seq;
+    this.nextDt = next ? (next.seq - snap.seq) / TICK_RATE : 0;
+    this.nextAliens = next && this.nextDt > 0 ? new Map(next.aliens.map((a) => [a.id, a])) : undefined;
     this.frozen = snap.choiceT > 0 || snap.tick === sim.tick;
     sim.tick = snap.tick;
     sim.waves.setTime(snap.time, snap.cursor);
@@ -126,6 +142,7 @@ export class Mirror {
       sim.aliens.push(this.upsertAlien(a));
     }
     prune(this.aliens, seenAliens);
+    for (const id of this.lastAlienPos.keys()) if (!seenAliens.has(id)) this.lastAlienPos.delete(id);
     // bulles : le prisonnier est le soldat dont `capturedBy` est l'id de la bulle
     for (const a of sim.aliens) a.captive = null;
     for (const s of this.soldiers.values()) if (s.capturedBy) { const b = this.aliens.get(s.capturedBy); if (b) b.captive = s; }
@@ -145,6 +162,16 @@ export class Mirror {
       sim.xp.orbs.push(this.upsertOrb(o));
     }
     prune(this.orbs, seenOrbs);
+
+    sim.chests.items.length = 0; // progression en part de `chestTime` : celle de l'hôte peut différer du réglage local
+    for (const c of snap.chests) sim.chests.items.push({ id: c.id, x: c.x, y: c.y, progress: c.progress * DIFFICULTY.chestTime });
+    const seenUpOrbs = new Set<number>();
+    sim.upgradeOrbs.items.length = 0;
+    for (const o of snap.upgradeOrbs) {
+      seenUpOrbs.add(o.id);
+      sim.upgradeOrbs.items.push(this.upsertUpgradeOrb(o));
+    }
+    prune(this.upgradeOrbs, seenUpOrbs);
 
     sim.reviveZones.length = 0;
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
@@ -235,6 +262,13 @@ export class Mirror {
       r.life -= dt;
       const g = this.goals.get(r);
       if (g) this.approach(r, this.advance(g, dt)); // le but avance à la vitesse déduite des snapshots (recrue aspirée, saut d'apparition)
+    }
+    for (const o of sim.upgradeOrbs.items) {
+      o.px = o.x;
+      o.py = o.y;
+      if (o.hop) o.hop.t = Math.max(0.001, o.hop.t - dt); // chute : le compteur décroît entre deux snapshots (arc fluide)
+      const g = this.goals.get(o);
+      if (g) this.approach(o, this.advance(g, dt)); // chute depuis le coffre, puis envol vers sa squad : glisse au lieu de sauter
     }
     for (const o of sim.xp.orbs) {
       o.px = o.x;
@@ -395,8 +429,27 @@ export class Mirror {
       };
       this.aliens.set(a.id, s);
     }
-    s.vx = a.vx;
-    s.vy = a.vy;
+    // vitesse : vers la position du snapshot suivant (interpolation), sinon depuis la précédente ; un saut (recyclage, sortie de terre) = 0
+    const n = this.nextAliens?.get(a.id);
+    const p = this.lastAlienPos.get(a.id);
+    let vx = 0;
+    let vy = 0;
+    if (n) {
+      vx = (n.x - a.x) / this.nextDt;
+      vy = (n.y - a.y) / this.nextDt;
+    } else if (p && this.curSeq > p.seq) {
+      const dt = (this.curSeq - p.seq) / TICK_RATE;
+      vx = (a.x - p.x) / dt;
+      vy = (a.y - p.y) / dt;
+    }
+    if (Math.hypot(vx, vy) > MAX_GROUND_SPEED) vx = vy = 0;
+    if (p) {
+      p.x = a.x;
+      p.y = a.y;
+      p.seq = this.curSeq;
+    } else this.lastAlienPos.set(a.id, { x: a.x, y: a.y, seq: this.curSeq });
+    s.vx = vx;
+    s.vy = vy;
     s.hp = a.hp;
     s.maxHp = a.maxHp;
     s.maxShield = s.def.shield ? a.maxHp * s.def.shield.pct : 0;
@@ -444,6 +497,18 @@ export class Mirror {
     }
     s.life = r.life;
     this.retarget(s, r.x, r.y);
+    return s;
+  }
+
+  private upsertUpgradeOrb(o: { id: number; owner: string; upgrade: number; x: number; y: number; fall: number }): UpgradeOrbState {
+    let s = this.upgradeOrbs.get(o.id);
+    if (!s) {
+      s = { id: o.id, owner: o.owner, upgrade: UPGRADE_IDS[o.upgrade] ?? UPGRADE_IDS[0], x: o.x, y: o.y, px: o.x, py: o.y, life: 1e9, age: 9 };
+      this.upgradeOrbs.set(o.id, s);
+    }
+    s.owner = o.owner;
+    s.hop = o.fall > 0 ? { vx: 0, vy: 0, t: o.fall } : undefined;
+    this.retarget(s, o.x, o.y);
     return s;
   }
 

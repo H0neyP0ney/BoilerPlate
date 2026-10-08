@@ -1,7 +1,7 @@
 # Multijoueur (coop par défaut, 2–4 joueurs, P2P)
 
 Un joueur **héberge** (il fait tourner la simulation), les autres **rejoignent** et n'affichent que ce que l'hôte leur envoie.
-**Survie à plusieurs** (mode `survival`, le même qu'en solo depuis le 08/10 ; `SimConfig.online` active ce qui est propre au jeu en ligne ; `pvp: false`, pas de tir ami) : tout le monde affronte les mêmes vagues (boss compris). Difficulté dynamique : chaque joueur vivant en plus ajoute 75 % d'ennemis (`EXTRA_PLAYER_ALIENS` : 2 joueurs = ×1,75, 3 = ×2,5, 4 = ×3,25), répartis entre les squads vivantes, et un boss unique a ses PV multipliés par le même facteur (×1,75 à 2 joueurs ; ×le nombre de squads avant le 08/10). Un joueur mort regarde un équipier ; quand tous sont morts (défaite) ou que le boss final est tombé (victoire), écran de fin puis l'hôte relance la partie (`Sim.restart`). XP et level up fonctionnent en ligne sans pause : le client envoie son choix d'upgrade à l'hôte (message `upgrade`). Le mode `versus` (PvP) reste disponible dans `MODES`.
+**Survie à plusieurs** (mode `survival`, le même qu'en solo depuis le 08/10 ; `SimConfig.online` active ce qui est propre au jeu en ligne ; `pvp: false`, pas de tir ami) : tout le monde affronte les mêmes vagues (boss compris). Difficulté dynamique : chaque joueur vivant en plus ajoute 75 % d'ennemis (`DIFFICULTY.extraPlayerAliens` : 2 joueurs = ×1,75, 3 = ×2,5, 4 = ×3,25), répartis entre les squads vivantes, et un boss unique a ses PV multipliés par le même facteur (×1,75 à 2 joueurs ; ×le nombre de squads avant le 08/10). Un joueur mort regarde un équipier ; quand tous sont morts (défaite) ou que le boss final est tombé (victoire), écran de fin puis l'hôte relance la partie (`Sim.restart`). XP et level up fonctionnent en ligne sans pause : le client envoie son choix d'upgrade à l'hôte (message `upgrade`). Le mode `versus` (PvP) reste disponible dans `MODES`.
 Les aliens s'en prennent à la squad la plus proche, quel que soit son joueur. On peut rejoindre en cours de partie ;
 une squad anéantie **réapparaît toute seule** après 2,5 s (l'hôte s'en charge) : escouade de départ, endroit aléatoire
 de la carte à distance des autres squads, brève invulnérabilité. Pas d'écran de fin en ligne.
@@ -99,15 +99,16 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
 ## Pistes d'amélioration (par ordre de rentabilité)
 1. **Valider en conditions réelles** : throttling 100-200 ms + un peu de perte. Régler `BLEND` / `SNAP` si la squad « tire » en arrière à chaque snapshot ;
    ajouter un peu d'inertie aux soldats prédits si l'arrêt paraît trop sec.
-2. ~~**Interpolation des entités distantes**~~ : *fait en v38* (tampon de 100 ms, voir § Optimisations v37-v38). Reste possible : interpoler
-   vraiment entre deux snapshots (position du suivant connue) au lieu d'extrapoler à la vitesse reçue.
+2. ~~**Interpolation des entités distantes**~~ : *fait en v38* (tampon de 100 ms, voir § Optimisations v37-v38). *Fait en v43 pour les aliens* :
+   vraie interpolation entre deux snapshots (`Mirror.apply(snap, next)` : vitesse = vers la position du snapshot suivant déjà dans le tampon,
+   sinon depuis la précédente ; un saut > 2000 px/s = 0). Reste : soldats des autres squads, projectiles, objets au sol (vitesse reçue).
 3. **Événements fiables** : ils partent aujourd'hui en `unreliable` (un événement perdu = un effet manqué, jamais un état faux). Option : canal
    `reliable` pour les rares événements structurants (`gameEnd`, `restart`, `levelUp`), ou rediffusion des N derniers événements avec numéro de séquence.
 4. **Test réseau plus dur** : ajouter perte et gigue à `LoopbackHub` (aujourd'hui latence fixe seulement) pour régler la prédiction de façon reproductible.
 5. **Compensation de latence du ressenti** : un client voit les aliens ~150 ms en retard alors que l'hôte tranche les dégâts. À surveiller en playtest,
    surtout pour les télégraphes de charge (rhino) et de saut (crabe). Pas de remède simple (rewind côté hôte = complexe).
 6. **Bande passante** : snapshots par delta (n'envoyer que ce qui change), filtrage par zone visible (« interest management »), inputs en binaire
-   (≈ 1,3 Ko/s par client en JSON aujourd'hui). *Fait en v38* : positions en i16, effets de tir en binaire (≈ −25 à −30 % de débit). Utile si on dépasse 4 joueurs ou si les vagues grossissent
+   (≈ 1,3 Ko/s par client en JSON aujourd'hui). *Fait en v38* : positions en i16, effets de tir en binaire (≈ −25 à −30 % de débit). *v45* : rhinos jumeaux et orbe de feu (nouveaux ids d'aliens : la liste `ALIEN_IDS` change). *v44* : coffres de boss (`chests` : id, position, progression d'ouverture) et globes d'upgrade (`upgradeOrbs` : id, propriétaire, upgrade, position, temps de chute), listes après les stalactites ; progression transmise en part de `chestTime` (celui de l'hôte peut différer du réglage local). *Fait en v43* : alien de 21 à 14 octets (id sur 24 bits, plus de vitesse, PV max en u16 sauf boss : drapeau 32 → f32) : −33 % sur les aliens, ≈ −26 % sur le snapshot (3,7 → 2,7 Ko avec ~150 aliens à 2 joueurs). Pistes suivantes : delta par rapport au dernier snapshot confirmé, interest management. Utile si on dépasse 4 joueurs ou si les vagues grossissent
    (limite de taille des messages d'un datachannel WebRTC : à vérifier avec ~600 aliens, soit ≈ 15 Ko).
 7. **Horloge partagée** : ne pas dépendre du simple tick pour les télégraphes ; envoyer l'heure hôte et la dérive client pour caler les animations.
 8. **L'hôte** : il garde l'avantage de latence, et s'il part la partie s'arrête (« Connexion perdue »). Migration d'hôte = lourd ; la vraie réponse est

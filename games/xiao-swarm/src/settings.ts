@@ -47,27 +47,9 @@ export const SFX = {
   blast: { key: 'sfx_blast', url: ['assets/audio/blast.ogg', 'assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
 };
 
-/** Réglage booléen mémorisé ; `?clé=0` / `?clé=1` dans l'URL le force (utile sur téléphone, sans menu Réglages). */
-function flag(key: string, urlParam: string, defaultOn = true): boolean {
-  const q = new URLSearchParams(location.search).get(urlParam);
-  if (q === '0' || q === '1') storage.set(`settings.${key}`, q === '1');
-  return storage.get<boolean>(`settings.${key}`, defaultOn) !== false;
-}
-
-/** Onboarding déjà terminé ? `?tuto=1` le rejoue (remet à faux), `?tuto=0` le saute (le marque comme terminé). */
-function tutorialDoneFlag(): boolean {
-  const q = new URLSearchParams(location.search).get('tuto');
-  if (q === '0' || q === '1') storage.set('settings.tutorialDone', q === '0');
-  return storage.get<boolean>('settings.tutorialDone', false) === true;
-}
-
 export const settings = {
   /** L'onboarding scripté (voir `sim/Tutorial.ts`) a déjà été terminé : les parties suivantes commencent directement par les vagues normales. */
-  tutorialDone: tutorialDoneFlag(),
-  /** Déformation de l'écran (shader) à la montée de niveau (`?shock=0` pour la couper : filtre plein écran, coûteux sur un petit GPU). */
-  shockwave: flag('shockwave', 'shock'),
-  /** Fond d'espace (nébuleuses + étoiles). Désactivé par défaut (coûteux en perf) : fond noir uni ; `?space=1` ou le menu Réglages l'active. */
-  starfield: flag('starfield', 'space', false),
+  tutorialDone: storage.get<boolean>('settings.tutorialDone', false) === true,
   /** Multiplicateur du zoom total de la caméra (1 = zoom d'origine). */
   zoom: clamp(storage.get('settings.zoom', 1), ZOOM_MIN, ZOOM_MAX),
   /** Volume de la musique, en crans de 0 à `MUSIC_STEPS` (menu Options). Par défaut 5 (50 %). */
@@ -153,19 +135,9 @@ export const settings = {
     storage.set('settings.zoom', this.zoom);
   },
 
-  setShockwave(on: boolean): void {
-    this.shockwave = on;
-    storage.set('settings.shockwave', on);
-  },
-
   setTutorialDone(done: boolean): void {
     this.tutorialDone = done;
     storage.set('settings.tutorialDone', done);
-  },
-
-  setStarfield(on: boolean): void {
-    this.starfield = on;
-    storage.set('settings.starfield', on);
   },
 
   /** Touches choisies par le joueur (menu Options > Hotkeys) : déplacement, choix d'upgrade, relance. Voir `hotkeys.ts`. */

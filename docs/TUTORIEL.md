@@ -13,7 +13,7 @@ Le HUD est allégé pendant tout l'onboarding : ni compte à rebours « Next bos
 
 Pendant l'onboarding : pas de power-up au hasard, pas de vagues normales, et **la squad ne peut pas mourir** (ses PV ne descendent pas sous 1 ; le soin de la fin la remet d'aplomb).
 
-**Cadeau caché de fin** (`TUTORIAL_REWARD`) : à la fin d'un tutoriel complet, la squad reçoit en secret dégâts ×1, cadence ×1, vitesse ×3, recrue ×3, portée ×2 et PV max ×2 (nombre de prises de l'upgrade correspondante). Les stats changent, mais rien n'apparaît dans les upgrades prises ni à l'écran. Pour toutes les parties (tutoriel compris), la base de la squad est de plus à **dégâts ×1,10 et cadence ×1,15** (`SQUAD_BASE`).
+**Cadeau caché de fin** (`TUTORIAL_REWARD`) : à la fin d'un tutoriel complet, la squad reçoit en secret dégâts ×1, cadence ×1, vitesse ×3, recrue ×3, portée ×2 et PV max ×2 (nombre de prises de l'upgrade correspondante). Les stats changent, mais rien n'apparaît dans les upgrades prises ni à l'écran. Pour toutes les parties (tutoriel compris), la base de la squad est de plus à **dégâts ×1,10 et cadence ×1,15** (`DIFFICULTY.squad*`).
 
 ## Où régler
 
@@ -26,7 +26,7 @@ Pendant l'onboarding : pas de power-up au hasard, pas de vagues normales, et **l
 
 - Automatique à la **première partie solo** (`settings.tutorialDone` faux), jamais en ligne ni en royale / versus.
 - À la fin, `settings.tutorialDone` passe à vrai (mémorisé dans le navigateur) ; chaque étape envoie `poki.measure('onboarding', étape, 'complete')`.
-- **Rejouer** : bouton « Replay tutorial » du menu Options, ou `?tuto=1` dans l'URL. **Sauter** : `?tuto=0`.
+- **Rejouer** : bouton « Replay tutorial » du menu Options (plus de paramètre d'URL).
 
 ## Test
 

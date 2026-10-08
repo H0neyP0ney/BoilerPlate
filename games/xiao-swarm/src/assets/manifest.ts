@@ -230,6 +230,48 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
+  // Rhinocéros jumeaux (mini-boss de 7:30) : la planche du Rhinocéros Alpha recolorée par node tools/hue-shift.mjs (corps seulement : teintes 160-270°) —
+  // feu : +165° (rouge orangé), glace : -12°, désaturé et éclairci (bleu pâle). Mêmes ancrages, échelle et ombre que l'Alpha.
+  {
+    type: 'sheet',
+    url: 'aliens/boss_rhino_fire.png',
+    frameWidth: 128,
+    frameHeight: 83,
+    sprites: {
+      alien_boss_rhino_fire: {
+        originX: 0.505,
+        originY: 0.962,
+        scale: 1.54,
+        shadow: 1.7,
+        anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 12 },
+        },
+      },
+    },
+  },
+  {
+    type: 'sheet',
+    url: 'aliens/boss_rhino_ice.png',
+    frameWidth: 128,
+    frameHeight: 83,
+    sprites: {
+      alien_boss_rhino_ice: {
+        originX: 0.505,
+        originY: 0.962,
+        scale: 1.54,
+        shadow: 1.7,
+        anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 8), fps: 8 },
+          walk: { frames: range(0, 8), fps: 12 },
+        },
+      },
+    },
+  },
   // Charognard jaune cornu (`charger`, charge télégraphiée).
   // art-src/charger_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/charger.pack.json — 9 cases de 126×97, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {

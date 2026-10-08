@@ -89,7 +89,17 @@ export class Recruits {
       const pulled = r.pulled ? pulledAttractor(this.sim, r.x, r.y, r.pulled, accept) : undefined; // aspirée par le power-up aimant : vole vers la squad
       if (r.pulled && !pulled) r.pulled = undefined; // plus personne à qui elle sert : recrue normale
       const a = pulled ?? findAttractor(this.sim, r.x, r.y, accept);
-      if (!a) continue;
+      if (!a) {
+        // plus personne à qui elle sert (squad pleine et intacte : les recrues arrivées avant elle ont comblé les places ou soigné tout le monde) :
+        // elle se pose là où elle est et redevient une recrue normale, avec toute sa durée de vie (sinon `caught` la figeait en l'air pour toujours)
+        if (r.caught) {
+          r.caught = false;
+          r.pulled = undefined;
+          r.pullV = undefined;
+          r.life = RECRUIT.life;
+        }
+        continue;
+      }
       catchItem(r, a.squad.owner); // attirée : elle ne disparaît plus ni ne clignote, et suit cette squad
       const s = a.soldier;
       if (inPickRange(a)) {

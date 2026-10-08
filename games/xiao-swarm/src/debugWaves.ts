@@ -143,7 +143,8 @@ export function waveSnippet(): string {
   for (const e of WAVE_SCRIPT.timeline) {
     const rep = e.every && e.every > 0 && e.until !== undefined ? `, every: ${e.every}, until: ${e.until}` : '';
     const cfg = e.config ? `, config: ${e.config}` : '';
-    lines.push(`    { at: ${e.at}, level: ${e.level}${rep}${cfg} },`);
+    const mul = e.mul !== undefined && e.mul !== 1 ? `, mul: ${e.mul}` : '';
+    lines.push(`    { at: ${e.at}, level: ${e.level}${rep}${cfg}${mul} },`);
   }
   const m = WAVE_SCRIPT.model ?? DEFAULT_WAVE_MODEL;
   lines.push('  ],', `  model: { dpsStart: ${m.dpsStart}, growthPerMin: ${m.growthPerMin}, efficiency: ${m.efficiency}, bossWeight: ${m.bossWeight} },`);

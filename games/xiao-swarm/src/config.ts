@@ -12,10 +12,6 @@ export const SQUAD = {
 } as const;
 
 /**
- * Difficulté globale (multiplicateurs appliqués par sim/) : PV des soldats, PV des aliens et des boss, nombre d'aliens par vague (et plafond
- * d'aliens simultanés `ModeDef.maxAliens`, sinon le doublement serait bridé), vitesse des aliens. Les boss ne sont pas multipliés en nombre (mais leurs PV le sont, voir `bossHpMul`).
- */
-/**
  * Grab (langue) : l'unité tirée garde sa liberté de mouvement (aucun stun). Pendant `GRAB_OUT` s elle ne compte plus pour le
  * mouvement de foule (centre, slots, laisse) ; elle reste immunisée contre tout autre grab pendant `GRAB_IMMUNE` s.
  */
@@ -24,12 +20,8 @@ export const GRAB_OUT = 0.7;
 /** Zone de réanimation (coop) : rayon (px) et temps (s) qu'un équipier doit y passer pour ramener un joueur mort. */
 export const REVIVE_RADIUS = 80;
 export const REVIVE_TIME = 2;
-/** Taille de l'escouade d'un joueur réanimé, en part de celle de l'équipier qui l'a ramené. */
-export const REVIVE_SQUAD_RATIO = 0.6;
 /** Invincibilité (s, les soldats clignotent) d'un joueur qui vient d'être réanimé par un équipier. */
 export const REVIVE_INVULN = 3;
-/** Revive (solo) : part de l'effectif maximal atteint dans la partie avec laquelle la squad réapparaît (minimum 1 soldat). */
-export const REVIVE_SQUAD_FRACTION = 0.6;
 export const GRAB_IMMUNE = 2;
 /**
  * Soldat isolé (tiré par une langue, emmené par une bulle, repoussé…) : au-delà de `radius + DETACH_EXTRA` px de la squad il sort du mouvement
@@ -41,10 +33,6 @@ export const REJOIN_EXTRA = 70;
 export const GRAB_SLOW = 0.55;
 export const GRAB_SLOW_TIME = 1.2;
 
-/** Zombie (alien ressuscité par un chaman) : multiplicateur de PV par rapport à la version de base. */
-export const ZOMBIE_MUL = 3;
-/** Zombie : multiplicateur de dégâts (1 = pas de bonus : sa force vient de sa cadence d'attaque). */
-export const ZOMBIE_DMG_MUL = 1;
 /** Mêlée des aliens : ils frappent un soldat quand l'écart entre leurs deux cercles (bords) est sous cette distance (px ; 4 avant le 07/10). */
 export const MELEE_REACH = 10;
 /**
@@ -53,26 +41,8 @@ export const MELEE_REACH = 10;
  * les coups alliés ne comptent pas (on voit la glace se former). Le soldat gelé ne bouge ni ne tire, et reste attaquable par les aliens.
  */
 export const FREEZE = { hp: 50, invuln: 0.5 };
-/** Nombre d'exemplaires ressuscités par une incantation du chaman (5 avant le 07/10). */
-export const ZOMBIE_COPIES = 2;
-/** Enragé (zombie) : multiplicateurs de vitesse de déplacement et de cadence d'attaque. */
-export const ENRAGED_SPEED = 1.35;
-export const ENRAGED_ATTACK = 3;
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;
-/** Stats de base de toute squad (partie normale comme tutoriel) avant toute upgrade : dégâts +20 %, cadence +15 %, PV +30 %, vitesse +8 %, recrues +30 %. */
-export const SQUAD_BASE = { damage: 1.2, fireRate: 1.15, hp: 1.3, speed: 1.08, recruit: 1.3 } as const;
-/**
- * Boss enragé : un niveau d'enragement toutes les `every` s après son apparition, SANS FIN (30 s, 1:00, 1:30, 2:00…) ; chaque niveau ajoute
- * +30 % de vitesse de déplacement et d'attaque et −30 % de cooldown des capacités spéciales (cumulés ; le gain de cooldown plafonne à ×10).
- * Les flammes d'enragé sont plus denses à partir du niveau 2.
- */
-export const BOSS_ENRAGE = { every: 45, speed: 0.3, attack: 0.3, cooldownCut: 0.3 } as const; // 45 s (était 60)
-/**
- * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts de cette part (+10 % de PV, de vitesse, de dégâts et de
- * cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance de la partie.
- */
-export const BOSS_ESCALATION = 0.1;
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -118,9 +88,7 @@ export const CAPTIVE_VULN = 3.6;
  * (au centre, moins au bord) pendant `duration` s. Déplacement direct : les aliens lourds sont repoussés comme les légers.
  */
 export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9, reach: 0.6 };
-/** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
-export const PRISM_CHANCE = 0.05;
-/** Tous les `PRISM_LEVEL_EVERY` niveaux (10, 20, 30…), les 3 upgrades proposées sont prismatiques ; une relance les retire au sort (`PRISM_CHANCE`). */
+/** Tous les `PRISM_LEVEL_EVERY` niveaux (10, 20, 30…), les 3 upgrades proposées sont prismatiques ; une relance les retire au sort (`DIFFICULTY.prismChance`). */
 export const PRISM_LEVEL_EVERY = 10;
 /** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
 export const UPGRADE_CHOICE_TIME = 5;
@@ -128,8 +96,6 @@ export const UPGRADE_CHOICE_TIME = 5;
 export const LEVEL_UP_DELAY = 0.75;
 /** Renforts express : plus proposés quand la squad dépasse déjà sa taille max d'au moins ce nombre de soldats (15/12 → plus de carte). */
 export const REINFORCE_MAX_OVERCAP = 3;
-/** Relances des propositions d'upgrade par partie et par joueur (le temps du choix en ligne ne repart pas). */
-export const REROLLS_PER_RUN = 2;
 /** Les `FREE_GAMES` premières parties jouées sont sans pub interstitielle : elle précède chaque partie à partir de la suivante (la 4e). Compteur des parties lancées, mémorisé d'une session à l'autre (`gamesPlayed`). */
 export const FREE_GAMES = 3;
 /** Interrupteur des interstitielles entre deux parties : FAUX pour le moment (seule la pub récompensée du revive est active). Remettre à `true` pour appliquer la règle `FREE_GAMES`. */
@@ -157,25 +123,101 @@ export const CRIT_MUL = 2;
 
 /** Chance de critique maximale (%) : plafond appliqué même avec les upgrades prismatiques (double bonus). */
 export const CRIT_MAX = 30;
-/** Power-ups : délai entre deux apparitions (s), durée de vie au sol (s), nombre max simultané. */
-/** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %). */
-/** Stimpack : durée (s) ; facteurs de vitesse de déplacement et de cadence ci-dessous. Aussi activé par les renforts express. */
-export const STIM_TIME = 6.5;
+/** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %) ; durée : `DIFFICULTY.stimTime`. */
 export const STIM_SPEED = 1.25;
 export const STIM_FIRE = 1.5;
-export const POWERUPS = { every: [11.7, 18.3], life: 12, max: 3, first: 20 } as const;
+/** Power-ups : durée de vie au sol (s) ; fréquence, premier et nombre max : `DIFFICULTY.powerup*`. */
+export const POWERUP_LIFE = 12;
 
-/** Coop : chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague (0,75 = +75 %). */
-export const EXTRA_PLAYER_ALIENS = 0.75;
-
-export const DIFFICULTY = {
-  soldierHpMul: 0.7,
+/**
+ * Difficulté : TOUS les réglages d'équilibrage globaux (les stats propres à chaque unité sont dans `data/aliens.ts` / `data/classes.ts`, panneau
+ * Stats ; le contenu des vagues dans `data/waves.ts`, Gestionnaire de vagues). VALEURS MODIFIABLES : le panneau Difficulté (bouton tête de mort
+ * du HUD en dev) les change en direct ; `DIFFICULTY_DEFAULTS` est la référence (Save l'y écrit). Les PV sont fixés à l'apparition (les unités
+ * déjà là ne changent pas). Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
+ */
+export const DIFFICULTY_DEFAULTS = {
+  // ---- aliens
+  /** PV des aliens (hors boss). */
   alienHpMul: 1.5,
+  /** Dégâts infligés aux soldats par les aliens (mêlée, projectiles, capacités, flaques, stalactites…) ; les coups « un coup = un mort » restent mortels. */
+  alienDamageMul: 1,
+  /** Vitesse de déplacement des aliens (boss compris). */
+  alienSpeedMul: 1.25,
+  /** Nombre d'aliens des vagues et plafond d'aliens à l'apparition. */
+  alienCountMul: 1.5,
+  // ---- boss
   /** PV des boss (mini et final) : +1000 % = ×11. */
   bossHpMul: 11,
-  alienCountMul: 1.5,
-  alienSpeedMul: 1.25,
-} as const;
+  /**
+   * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts de cette part (0,1 = +10 % de PV, de vitesse,
+   * de dégâts et de cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
+   */
+  bossEscalation: 0.1,
+  /**
+   * Coffre laissé par chaque boss tué (sauf le final) : un soldat doit rester à moins de `chestRadius` px pendant `chestTime` s pour l'ouvrir ;
+   * il libère alors `chestOrbs` globes d'upgrade aléatoire PAR JOUEUR vivant (réservés à leur joueur, entier).
+   */
+  chestTime: 2, // 3 avant le 08/10
+  chestRadius: 100,
+  chestOrbs: 2,
+  /** Un globe d'upgrade est imprenable (ni attiré ni ramassé) pendant ce temps (s) après sa sortie du coffre : on le voit retomber avant de pouvoir le prendre. */
+  chestOrbGrace: 1,
+  /** Boss enragé : un niveau d'enragement toutes les `bossEnrageEvery` s après son apparition, SANS FIN (flammes plus denses dès le niveau 2). */
+  bossEnrageEvery: 45,
+  /** Par niveau d'enragement (cumulés) : + vitesse de déplacement, + cadence d'attaque, − cooldown des capacités (gain plafonné à ×10). */
+  bossEnrageSpeed: 0.3,
+  bossEnrageAttack: 0.3,
+  bossEnrageCooldownCut: 0.3,
+  // ---- zombies (aliens ressuscités par un chaman)
+  /** Exemplaires ressuscités par incantation (entier). */
+  zombieCopies: 2,
+  /** PV, dégâts, vitesse de déplacement et cadence d'attaque d'un zombie par rapport à la version de base. */
+  zombieHpMul: 3,
+  zombieDmgMul: 1,
+  zombieSpeedMul: 1.35,
+  zombieAttackMul: 3,
+  // ---- squad (stats de base de toute squad avant upgrade, tutoriel compris)
+  /** PV max des soldats (ancien 0,7 × 1,3 de base de squad, fusionnés le 08/10). */
+  soldierHpMul: 0.91,
+  squadDamage: 1.2,
+  squadFireRate: 1.15,
+  squadSpeed: 1.08,
+  /** Chance de recrue (stat `recruit`). */
+  squadRecruit: 1.3,
+  // ---- multijoueur
+  /** Chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague et des PV des boss (0,75 = +75 %). */
+  extraPlayerAliens: 0.75,
+  /** Plafond d'aliens à l'apparition par joueur vivant (× `alienCountMul`, survie). */
+  maxAliensPerPlayer: 100,
+  // ---- vagues (`WaveRunner`)
+  /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
+  wavePauseAbove: 150,
+  waveResumeAt: 100,
+  /** Pendant un combat de boss : nombre de derniers envois d'avant le boss rejoués en boucle (entier ; aliens sans XP). */
+  bossReplayCount: 5,
+  /** Effectif des vagues rejouées pendant un combat de boss (× celui de leur colonne « Effectif × » dans la timeline ; 0,8 = −20 %). */
+  bossReplayMul: 0.8,
+  // ---- aides au joueur
+  /** Power-ups : premier à `powerupFirst` s, puis un toutes les `powerupEveryMin`-`powerupEveryMax` s, `powerupMax` au sol au plus (entier). */
+  powerupFirst: 20,
+  powerupEveryMin: 11.7,
+  powerupEveryMax: 18.3,
+  powerupMax: 3,
+  /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
+  rocketIdleRange: 1000,
+  /** Durée du stimpack (s). */
+  stimTime: 6.5,
+  /** Revive (solo) : part de l'effectif maximal de la partie avec laquelle la squad réapparaît (minimum 1 soldat). */
+  reviveSquadFraction: 0.6,
+  /** Coop : taille de l'escouade d'un joueur réanimé, en part de l'effectif maximal de l'équipier qui l'a ramené. */
+  coopReviveRatio: 0.6,
+  /** Relances des propositions d'upgrade par partie et par joueur (entier). */
+  rerolls: 2,
+  /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
+  prismChance: 0.05,
+};
+export type DifficultyKey = keyof typeof DIFFICULTY_DEFAULTS;
+export const DIFFICULTY: Record<DifficultyKey, number> = { ...DIFFICULTY_DEFAULTS };
 
 /**
  * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau Foule

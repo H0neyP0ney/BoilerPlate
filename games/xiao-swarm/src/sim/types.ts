@@ -58,6 +58,8 @@ export type SimEvent =
   | { t: 'slam'; x: number; y: number; r: number }
   /** Une stalactite du Scarab s'écrase (effet : éclats, petite secousse ; les dégâts sont déjà appliqués). */
   | { t: 'stalactite'; x: number; y: number; r: number }
+  /** Un coffre de boss vient de s'ouvrir (éclat doré, secousse) : les globes d'upgrade en sortent. */
+  | { t: 'chestOpened'; x: number; y: number }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }
   | { t: 'upgradePicked'; owner: PlayerId; x: number; y: number; id: string; prism: boolean }
   | { t: 'powerup'; owner: PlayerId; kind: string; x: number; y: number }

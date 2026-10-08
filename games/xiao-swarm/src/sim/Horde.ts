@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DIFFICULTY, RELOCATE, ENRAGED_ATTACK, ENRAGED_SPEED, ALIEN_SPAWN_HOLD, BOSS_ENRAGE, FREEZE, GRAB_IMMUNE, MELEE_REACH, ZOMBIE_DMG_MUL, ZOMBIE_MUL } from '../config';
+import { CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
 import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -82,7 +82,7 @@ export class Horde {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
     const esc = this.sim.escalation; // +10 % par boss déjà tué
-    const maxHp = def.hp * this.sim.alienHpMul * (def.boss ? DIFFICULTY.bossHpMul : DIFFICULTY.alienHpMul) * hpMul * (revived ? ZOMBIE_MUL : 1) * esc;
+    const maxHp = def.hp * this.sim.alienHpMul * (def.boss ? DIFFICULTY.bossHpMul : DIFFICULTY.alienHpMul) * hpMul * (revived ? DIFFICULTY.zombieHpMul : 1) * esc;
     const maxShield = def.shield ? maxHp * def.shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
     return {
@@ -247,7 +247,7 @@ export class Horde {
 
   /** Vitesse d'écoulement des cooldowns spéciaux d'un boss enragé (−30 % par niveau, plancher à −90 %). */
   private cdRate(a: AlienState): number {
-    return (a.enraged ? 1 / Math.max(0.1, 1 - BOSS_ENRAGE.cooldownCut * a.enraged) : 1) * a.esc;
+    return (a.enraged ? 1 / Math.max(0.1, 1 - DIFFICULTY.bossEnrageCooldownCut * a.enraged) : 1) * a.esc;
   }
 
   /**
@@ -329,18 +329,18 @@ export class Horde {
         gy = this.steerV.y;
       }
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
-      const power = (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
+      const power = (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
       a.age += dt;
       if (def.boss) {
-        const level = Math.floor(a.age / BOSS_ENRAGE.every); // un boss qui traîne s'enrage toutes les `every` s, sans fin
+        const level = Math.floor(a.age / DIFFICULTY.bossEnrageEvery); // un boss qui traîne s'enrage toutes les `every` s, sans fin
         if (level > a.enraged) {
           a.enraged = level;
           this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level });
         }
       }
-      if (a.revived) speed *= ENRAGED_SPEED; // enragé : plus rapide, attaque plus vite
-      else if (a.enraged) speed *= 1 + BOSS_ENRAGE.speed * a.enraged;
-      const rate = (a.revived ? ENRAGED_ATTACK : 1 + BOSS_ENRAGE.attack * a.enraged) * a.esc; // cadence d'attaque (cooldowns écoulés plus vite)
+      if (a.revived) speed *= DIFFICULTY.zombieSpeedMul; // enragé : plus rapide, attaque plus vite
+      else if (a.enraged) speed *= 1 + DIFFICULTY.bossEnrageSpeed * a.enraged;
+      const rate = (a.revived ? DIFFICULTY.zombieAttackMul : 1 + DIFFICULTY.bossEnrageAttack * a.enraged) * a.esc; // cadence d'attaque (cooldowns écoulés plus vite)
       const cdRate = this.cdRate(a); // capacités spéciales (slam, saut, charge) : cooldown réduit
       let contactOverride: number | undefined;
       /** Bulle qui emporte son prisonnier à l'écart de la squad (vitesse imposée, remplace le déplacement normal). */
@@ -477,6 +477,7 @@ export class Horde {
           if (a.rushWind <= 0) {
             a.rushT = r.length / r.speed;
             a.rushHits.clear();
+            a.trailCd = 0; // la traînée commence dès le départ de la charge
           }
         } else if (a.rushT > 0) {
           a.rushT -= dt;
@@ -484,6 +485,14 @@ export class Horde {
           gy = a.rushDy;
           speed = r.speed;
           this.rushHit(a);
+          if (r.trail) {
+            a.trailCd -= dt;
+            if (a.trailCd <= 0) {
+              this.rushTrail(a, r.trail);
+              a.trailCd = r.trail.every;
+            }
+          }
+          if (a.rushT <= 0 && r.burst) this.rushBurst(a, r.burst); // fin de la charge : orbes dans toutes les directions
         } else if (a.rushCd <= 0 && a.target && gd < r.length + 80) {
           a.rushWind = r.windup;
           a.rushCd = r.cooldown;
@@ -634,7 +643,8 @@ export class Horde {
           this.cleave(a, def.damage * power);
           a.attackCd = def.attackCooldown;
         } else if (a.attackCd <= 0) {
-          this.sim.damageSoldier(s, def.oneShot ? s.hp + s.shield + 1 : def.damage * power); // le boss rhinocéros tue un soldat d'un coup
+          if (def.oneShot) this.sim.damageSoldier(s, s.hp + s.shield + 1, null, false, false); // un coup = un mort, quelle que soit la difficulté
+          else this.sim.damageSoldier(s, def.damage * power);
           a.attackCd = def.attackCooldown;
         }
       }
@@ -759,15 +769,29 @@ export class Horde {
     a.x += a.vx * dt;
     a.y += a.vy * dt;
     const b = this.sim.arena.bounds;
+    const fire = P.kind === 'fire';
+    const T = a.def.trail;
+    if (T) {
+      a.trailCd -= dt; // orbe de feu : traînée de flammes au sol, comme le slime de feu
+      if (a.trailCd <= 0) {
+        this.sim.addFire(a.x, a.y + 6, T.radius, T.ttl, T.dps * a.esc);
+        a.trailCd = T.every;
+      }
+    }
     if ((a.lurkT -= dt) <= 0 || a.x < b.minX || a.x > b.maxX || a.y < b.minY || a.y > b.maxY) {
       a.alive = false;
-      this.sim.events.push({ t: 'freeze', x: a.x, y: a.y, r: P.ring * 0.6 }); // se brise en fin de course
+      if (fire) this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
+      else this.sim.events.push({ t: 'freeze', x: a.x, y: a.y, r: P.ring * 0.6 }); // se brise en fin de course
       return;
     }
     for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
       this.sim.damageSoldier(s, a.def.damage * a.esc);
-      this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
+      if (fire) {
+        // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
+        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, T.ttl, T.dps * a.esc);
+        this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
+      } else this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
       a.alive = false;
       return;
     }
@@ -872,7 +896,7 @@ export class Horde {
         const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
         const cos = Math.cos(a.spikeAng);
         const sin = Math.sin(a.spikeAng);
-        const power = (a.revived ? ZOMBIE_DMG_MUL : 1) * a.esc;
+        const power = (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc;
         for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
           if (!s.alive) continue;
           const dx = s.x - a.x;
@@ -906,7 +930,11 @@ export class Horde {
     switch (a.lurkPhase) {
       case 0: {
         a.leapT = 0;
+        const cd = a.leapCd;
         a.leapCd -= dt * this.cdRate(a);
+        // il marche vers la squad : petite pluie de stalactites à mi-chemin du compte à rebours
+        const W = a.def.stalactites?.walk;
+        if (W && cd > B.every / 2 && a.leapCd <= B.every / 2) this.castStalactites(a, W.count, W.onSoldiers);
         const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (a.leapCd <= 0 && sq && sq.alive) {
           a.lurkPhase = 1;
@@ -926,8 +954,26 @@ export class Horde {
         return true;
       case 2: {
         a.vx = a.vy = a.kx = a.ky = 0;
+        const before = a.lurkT;
         a.lurkT -= dt;
-        if (a.lurkT > B.lock) this.aimBurrow(a); // le télégraphe suit la squad, puis se verrouille `lock` s avant la sortie : le temps de s'écarter
+        // le télégraphe suit la squad ; `lock` s avant la sortie, sa direction se fige : il continue d'avancer sur cet axe au rythme de la
+        // squad (part de sa vitesse le long de l'axe), donc filer tout droit ne suffit pas, il faut s'écarter sur le côté
+        if (a.lurkT > B.lock) this.aimBurrow(a);
+        else {
+          const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+          if (before > B.lock) {
+            const n = sq ? Math.hypot(sq.vel.x, sq.vel.y) : 0;
+            a.rushDx = n > 1 ? sq!.vel.x / n : 0; // direction figée (squad immobile : le télégraphe ne bouge plus)
+            a.rushDy = n > 1 ? sq!.vel.y / n : 0;
+          }
+          if (sq) {
+            const along = (sq.vel.x * a.rushDx + sq.vel.y * a.rushDy) * dt;
+            const p = { x: a.leapX + a.rushDx * along, y: a.leapY + a.rushDy * along, radius: a.radius * 0.6 };
+            this.sim.arena.constrain(p);
+            a.leapX = p.x;
+            a.leapY = p.y;
+          }
+        }
         if (a.lurkT <= 0) {
           a.x = a.leapX;
           a.y = a.leapY;
@@ -943,7 +989,7 @@ export class Horde {
       }
       case 3: {
         // ressort en avançant déjà vers le point anticipé (direction verrouillée)
-        const sp = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + BOSS_ENRAGE.speed * a.enraged);
+        const sp = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + DIFFICULTY.bossEnrageSpeed * a.enraged);
         a.vx = a.rushDx * sp;
         a.vy = a.rushDy * sp;
         a.x += a.vx * dt;
@@ -1020,9 +1066,9 @@ export class Horde {
 
   /**
    * Pluie de stalactites (`def.stalactites`) sur la squad visée : d'abord sur des soldats tirés au hasard (leur position du moment), puis au
-   * hasard autour de son centre ; les zones ne se chevauchent pas trop (essais), chaque impact est décalé du précédent de `stagger` s.
+   * hasard autour de son centre (`count` / `onSoldiers` : la pluie de sortie par défaut, `walk` en marchant) ; les zones ne se chevauchent pas trop (essais), chaque impact est décalé du précédent de `stagger` s.
    */
-  private castStalactites(a: AlienState): void {
+  private castStalactites(a: AlienState, count = a.def.stalactites!.count, onSoldiers = a.def.stalactites!.onSoldiers): void {
     const S = a.def.stalactites!;
     const { rng } = this.sim;
     const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
@@ -1030,11 +1076,11 @@ export class Horde {
     const soldiers = sq.soldiers.filter((s) => s.alive);
     const spots: Point[] = [];
     const clear = (p: Point): boolean => spots.every((q) => Math.hypot(q.x - p.x, q.y - p.y) >= S.radius * 1.4);
-    for (let i = 0; i < S.onSoldiers && soldiers.length > 0; i++) {
+    for (let i = 0; i < onSoldiers && soldiers.length > 0; i++) {
       const s = soldiers.splice(Math.floor(rng.next() * soldiers.length), 1)[0];
       if (clear(s)) spots.push({ x: s.x, y: s.y });
     }
-    for (let tries = 0; spots.length < S.count && tries < S.count * 8; tries++) {
+    for (let tries = 0; spots.length < count && tries < count * 8; tries++) {
       const ang = rng.range(0, Math.PI * 2);
       const d = Math.sqrt(rng.next()) * S.spread;
       const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d * 0.8 };
@@ -1117,8 +1163,26 @@ export class Horde {
     this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: L.radius });
     for (const s of this.sim.soldierHash.query(a.x, a.y, L.radius + 30, this.scratchS)) {
       if (!s.alive || Math.hypot(s.x - a.x, s.y - a.y) > L.radius + s.radius) continue;
-      this.sim.damageSoldier(s, s.hp + s.maxHp); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
+      this.sim.damageSoldier(s, s.hp + s.maxHp, null, false, false); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
     }
+  }
+
+  /** Rhinocéros jumeaux : flamme (`fire`) ou nuage de gel (`frost`) laissé au sol pendant la charge. */
+  private rushTrail(a: AlienState, T: NonNullable<NonNullable<AlienState['def']['rush']>['trail']>): void {
+    if (T.kind === 'fire') this.sim.addFire(a.x, a.y + 4, T.radius, T.ttl, T.dps * a.esc);
+    else this.sim.addPuddle(a.x, a.y + 4, T.radius, T.ttl, 1, true);
+  }
+
+  /** Rhinocéros jumeaux : à la fin de la charge, `count` orbes partent dans autant de directions régulières (le premier dans le sens de la charge). */
+  private rushBurst(a: AlienState, B: NonNullable<NonNullable<AlienState['def']['rush']>['burst']>): void {
+    const base = Math.atan2(a.rushDy, a.rushDx);
+    for (let i = 0; i < B.count; i++) {
+      const ang = base + (i / B.count) * Math.PI * 2;
+      const dx = Math.cos(ang);
+      const dy = Math.sin(ang);
+      this.launch(B.orb, a.x + dx * (a.radius + 10), a.y + dy * (a.radius + 10), dx, dy);
+    }
+    this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: 130 }); // onde de départ des orbes (anneau et secousse)
   }
 
   /** Soldats sur le passage du charger : gros dégâts + recul dans le sens de la charge (une seule fois chacun par charge : `rushHits`). */

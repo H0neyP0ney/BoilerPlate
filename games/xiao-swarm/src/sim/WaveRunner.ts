@@ -1,6 +1,7 @@
 import type { Rng } from '@xiao/engine/sim';
 import { ALIENS, type AlienId } from '../data/aliens';
-import { BOSS_REPLAY, entryTimes, pressureAt, WAVE_CAP, type WaveConfig, type WaveScript } from '../data/waves';
+import { DIFFICULTY } from '../config';
+import { BOSS_REPLAY, entryTimes, scaledCount, type WaveConfig, type WaveScript } from '../data/waves';
 
 /** Ce que le gestionnaire de vagues a besoin de savoir de la simulation (absent : la timeline avance toujours). */
 export interface WaveRunnerHooks {
@@ -16,10 +17,10 @@ export interface WaveRunnerHooks {
  *
  * Deux horloges : `time` (durée de la partie, affichée au joueur) et `cursor` (position dans la timeline des vagues). Le curseur est
  * FIGÉ (le gestionnaire de vagues est « en pause ») dans deux cas :
- *  - **combat de boss** : tant qu'un boss est vivant, la timeline ne bouge plus ; à la place on renvoie en boucle les `BOSS_REPLAY.count`
+ *  - **combat de boss** : tant qu'un boss est vivant, la timeline ne bouge plus ; à la place on renvoie en boucle les `DIFFICULTY.bossReplayCount`
  *    derniers envois qui ont précédé l'arrivée du boss (`replaying` est vrai pendant ces envois : la simulation n'y fait tomber aucun
  *    globe d'XP, pour qu'on ne puisse pas farmer en laissant le boss en vie) ;
- *  - **trop d'aliens** : au-dessus de `WAVE_CAP.pauseAbove` aliens vivants plus rien n'est envoyé, jusqu'à retomber à `WAVE_CAP.resumeAt`.
+ *  - **trop d'aliens** : au-dessus de `DIFFICULTY.wavePauseAbove` aliens vivants plus rien n'est envoyé, jusqu'à retomber à `DIFFICULTY.waveResumeAt`.
  */
 export class WaveRunner {
   private next: number[] = [];
@@ -32,7 +33,7 @@ export class WaveRunner {
   /** Instant (timeline) de la dernière apparition de boss. */
   private bossAt: number | null = null;
   private fighting = false;
-  private replay: { offset: number; level: number }[] = [];
+  private replay: { offset: number; level: number; mul: number }[] = [];
   private replayLen = 0;
   private replayT = 0;
   private replayIdx = 0;
@@ -97,7 +98,7 @@ export class WaveRunner {
     const hooks = this.hooks;
     if (hooks) {
       const n = hooks.aliveCount();
-      if (this.capped ? n <= WAVE_CAP.resumeAt : n > WAVE_CAP.pauseAbove) this.capped = !this.capped;
+      if (this.capped ? n <= DIFFICULTY.waveResumeAt : n > DIFFICULTY.wavePauseAbove) this.capped = !this.capped;
     }
     if (this.capped) return; // trop d'aliens : plus rien n'est envoyé (ni timeline, ni rejeu)
     if (hooks?.bossAlive()) {
@@ -111,7 +112,7 @@ export class WaveRunner {
       const e = timeline[i];
       while (this.next[i] <= this._cursor) {
         if (e.config !== undefined) this.bossAt = e.at; // entrée à configuration forcée = apparition d'un boss
-        this.trigger(e.level, e.config);
+        this.trigger(e.level, e.config, e.mul ?? 1);
         const every = e.every ?? 0;
         const following = this.next[i] + every;
         this.next[i] = every >= 0.5 && e.until !== undefined && following <= e.until + 1e-6 ? following : Infinity;
@@ -132,7 +133,7 @@ export class WaveRunner {
     while (this.replayIdx < this.replay.length && this.replayT >= this.replay[this.replayIdx].offset) {
       const r = this.replay[this.replayIdx++];
       this._replaying = true;
-      this.trigger(r.level); // une configuration au hasard du niveau
+      this.trigger(r.level, undefined, r.mul * DIFFICULTY.bossReplayMul); // une configuration au hasard du niveau ; effectif : celui de la vague × facteur de rejeu (panneau Difficulté)
       this._replaying = false;
     }
     if (this.replayIdx >= this.replay.length && this.replayT >= this.replayLen) {
@@ -147,25 +148,25 @@ export class WaveRunner {
     this.replay = [];
   }
 
-  /** Les `BOSS_REPLAY.count` derniers envois (hors boss) avant l'instant `at`, avec leurs écarts plafonnés. */
+  /** Les `DIFFICULTY.bossReplayCount` derniers envois (hors boss) avant l'instant `at`, avec leurs écarts plafonnés. */
   private buildReplay(at: number): void {
-    const sends: { t: number; level: number }[] = [];
+    const sends: { t: number; level: number; mul: number }[] = [];
     for (const e of this.script.timeline ?? []) {
       if (e.config !== undefined) continue; // jamais un boss
-      for (const t of entryTimes(e)) if (t < at - 1e-6) sends.push({ t, level: e.level });
+      for (const t of entryTimes(e)) if (t < at - 1e-6) sends.push({ t, level: e.level, mul: e.mul ?? 1 });
     }
     sends.sort((a, b) => a.t - b.t);
-    const last = sends.slice(-BOSS_REPLAY.count);
+    const last = sends.slice(-Math.max(1, Math.round(DIFFICULTY.bossReplayCount)));
     let offset = 0;
     this.replay = last.map((s, i) => {
       if (i > 0) offset += Math.min(BOSS_REPLAY.maxGap, s.t - last[i - 1].t);
-      return { offset, level: s.level };
+      return { offset, level: s.level, mul: s.mul };
     });
     this.replayLen = offset + BOSS_REPLAY.wrapGap;
   }
 
-  /** Envoie un niveau de vague maintenant (timeline, ou bouton du panneau Triche) : une configuration au hasard. */
-  trigger(level: number, configIndex?: number): WaveConfig | null {
+  /** Envoie un niveau de vague maintenant (timeline, ou bouton du panneau Triche) : une configuration au hasard ; effectif × `mul` (hors boss). */
+  trigger(level: number, configIndex?: number, mul = 1): WaveConfig | null {
     const all = this.script.levels?.[level] ?? [];
     if (all.length === 0) return null;
     const forced = configIndex !== undefined ? all[configIndex - 1] : undefined;
@@ -187,11 +188,7 @@ export class WaveRunner {
       const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
       if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
-    const mul = pressureAt(this._cursor); // ex. −20 % entre le Rhinocéros et le Scarab (data/waves.ts : WAVE_PRESSURE)
-    for (const g of groups) {
-      const n = ALIENS[g.type].boss || mul === 1 ? Math.round(g.count) : Math.max(1, Math.round(g.count * mul));
-      if (g.count > 0) this.spawn(g.type, n);
-    }
+    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul));
     return { ...config, groups };
   }
 }

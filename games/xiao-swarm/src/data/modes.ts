@@ -1,4 +1,5 @@
 import type { Point, Rng } from '@xiao/engine/sim';
+import { DIFFICULTY } from '../config';
 import { WAVE_SCRIPT, WAVE_SCRIPT_END, type WaveScript, type TimelineEntry } from './waves';
 import { makeJungleMap, makeRoyaleMap, type MapDef } from './maps';
 
@@ -35,7 +36,9 @@ export const SURVIVAL: ModeDef = {
   reviveZones: true, // seulement en ligne (`SimConfig.online`) : seul, la squad anéantie a le revive par pub
   duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
   waves: WAVE_SCRIPT,
-  maxAliens: { base: 0, perPlayer: 100 }, // × 1,5 = 150 par joueur vivant (135 avant le 08/10)
+  get maxAliens() {
+    return { base: 0, perPlayer: DIFFICULTY.maxAliensPerPlayer }; // × alienCountMul (1,5) = 150 par joueur vivant ; réglable (panneau Difficulté)
+  },
   spawnPoints(map, players) {
     // seul : au centre ; à plusieurs : en cercle autour du centre
     return Array.from({ length: players }, (_, i) => {

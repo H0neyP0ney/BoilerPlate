@@ -12,6 +12,7 @@ export const JUMPS = {
   gling: { boss: 'boss_gling', label: 'Après Gling Mère', level: 6, after: true, fight: 15 },
   rhino: { boss: 'boss_rhino', label: 'Après Alpha Rhino', level: 11, after: true, fight: 20 },
   scarab: { boss: 'boss_scarab', label: 'Après Scarab', level: 20, after: true, fight: 40 },
+  twins: { boss: 'boss_rhino_fire', label: 'Avant Rhinos jumeaux', level: 25, after: false, fight: 20 },
   crab: { boss: 'boss_crab', label: 'Avant Giant Crab', level: 30, after: false, fight: 30 },
 } as const satisfies Record<string, { boss: AlienId; label: string; level: number; after: boolean; fight: number }>;
 export type JumpId = keyof typeof JUMPS;
@@ -27,14 +28,14 @@ const PICK_WEIGHTS: Record<UpgradeId, number> = { damage: 17.9, crit: 12, hp: 11
  * du boss (ou `fight` s avant), temps de partie ajusté, boss précédents comptés pour l'escalade, niveau du point de saut avec une upgrade par
  * niveau choisie comme un joueur (vraie offre de 3, `PICK_WEIGHTS`), renforts compris, squad pleine (taille max après upgrades) de Gunners
  * seulement (les classes spéciales reviendront avec le système de pièces).
- * Boutons du panneau Triche (dev) et `?jump=gling|rhino|scarab|crab` (build déployé compris). Renvoie le compte rendu à afficher.
+ * Boutons du panneau Triche (dev) et `?jump=gling|rhino|scarab|twins|crab` (build déployé compris). Renvoie le compte rendu à afficher.
  */
 export function jumpAhead(sim: Sim, me: PlayerId, id: JumpId = 'scarab'): string {
   if (sim.tutorial?.active) return 'Indisponible pendant le tutoriel';
   const script = sim.config.mode.waves;
   const bosses = (script.timeline ?? [])
     .filter((e) => e.config !== undefined)
-    .map((e) => ({ at: e.at, type: script.levels?.[e.level]?.[e.config! - 1]?.groups[0]?.type }))
+    .map((e) => ({ at: e.at, type: script.levels?.[e.level]?.[e.config! - 1]?.groups[0]?.type })) // les rhinos jumeaux comptent pour UN boss (escalade à la mort du dernier)
     .filter((b) => b.type && ALIENS[b.type].boss)
     .sort((a, b) => a.at - b.at);
   const J = JUMPS[id];

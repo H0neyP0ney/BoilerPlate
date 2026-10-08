@@ -1,4 +1,4 @@
-import { ORB_BLINK_TIME, REVIVE_TIME } from '../config';
+import { DIFFICULTY, ORB_BLINK_TIME, REVIVE_TIME } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DAMAGE_TIERS } from '../data/damageTiers';
@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 42; // 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 45; // 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -193,6 +193,10 @@ export interface Snapshot {
   fires: { id: number; x: number; y: number; r: number }[];
   /** Stalactites annoncées par le Scarab (v40) : zone, temps restant avant l'impact et durée du télégraphe (s). */
   stalactites: { id: number; x: number; y: number; r: number; t: number; dur: number }[];
+  /** Coffres laissés par les boss tués (v44) : position et progression d'ouverture (0 → 1). */
+  chests: { id: number; x: number; y: number; progress: number }[];
+  /** Globes d'upgrade des coffres (v44), chacun réservé à `owner`, `upgrade` = index dans `UPGRADE_IDS` (son icône) ; `fall` = temps de chute restant en cloche (s, 0 = posé au sol). */
+  upgradeOrbs: { id: number; owner: PlayerId; upgrade: number; x: number; y: number; fall: number }[];
   /**
    * Effets de tir depuis le snapshot précédent, en binaire au lieu d'événements JSON (v38 : c'était l'essentiel du débit des événements) :
    * tirs de soldats (id du tireur, position du tir ; la classe et la visée se lisent sur le soldat), impacts de balle (texture du tir) et
@@ -314,6 +318,8 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
     fires: sim.fires.map((f) => ({ id: f.id, x: f.x, y: f.y, r: f.r })),
     stalactites: sim.stalactites.map((k) => ({ id: k.id & 0xffff, x: k.x, y: k.y, r: k.r, t: k.t, dur: k.dur })),
+    chests: sim.chests.items.map((c) => ({ id: c.id, x: c.x, y: c.y, progress: Math.min(1, c.progress / Math.max(0.1, DIFFICULTY.chestTime)) })),
+    upgradeOrbs: sim.upgradeOrbs.items.map((o) => ({ id: o.id, owner: o.owner, upgrade: Math.max(0, UPGRADE_IDS.indexOf(o.upgrade)), x: o.x, y: o.y, fall: o.hop?.t ?? 0 })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
   };
 }
@@ -341,6 +347,11 @@ class Writer {
     this.need(2);
     this.view.setUint16(this.o, Math.max(0, Math.min(65535, Math.round(v))), true);
     this.o += 2;
+  }
+  /** Entier sur 24 bits (ids d'entité : < 16,7 millions dans une partie). */
+  u24(v: number): void {
+    this.u8(v & 0xff);
+    this.u16((v >>> 8) & 0xffff);
   }
   i16(v: number): void {
     this.need(2);
@@ -389,6 +400,9 @@ class Reader {
     const v = this.view.getUint16(this.o, true);
     this.o += 2;
     return v;
+  }
+  u24(): number {
+    return this.u8() | (this.u16() << 8);
   }
   i16(): number {
     const v = this.view.getInt16(this.o, true);
@@ -473,16 +487,17 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
   mark('squads');
   w.u16(s.aliens.length);
   for (const a of s.aliens) {
-    w.u32(a.id);
+    // v43 : id sur 24 bits, pas de vitesse (le client la déduit de deux snapshots : `Mirror.upsertAlien`), PV max en u16 (drapeau 32 : f32, boss)
+    const bigHp = a.maxHp > 65535;
+    w.u24(a.id);
     w.u8(ALIEN_IDS.indexOf(a.type));
     w.pos(a.x);
     w.pos(a.y);
-    w.i16(a.vx);
-    w.i16(a.vy);
-    w.f32(a.maxHp); // les boss dépassent 65535 PV : PV max en f32, PV courants en part du max
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2) | (a.sinking ? 16 : 0) | (bigHp ? 32 : 0));
+    if (bigHp) w.f32(a.maxHp);
+    else w.u16(a.maxHp);
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
     w.u8(Math.min(255, Math.round(a.slamWind * 200)));
-    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2) | (a.sinking ? 16 : 0));
     const def = ALIENS[a.type];
     if (def.rush) {
       w.u8(Math.min(255, Math.round(a.rushWind * 200)));
@@ -631,6 +646,23 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(Math.round(k.dur * 50));
   }
   mark('stalactites');
+  w.u8(Math.min(255, s.chests.length));
+  for (const c of s.chests.slice(0, 255)) {
+    w.u32(c.id);
+    w.pos(c.x);
+    w.pos(c.y);
+    w.u8(Math.round(Math.min(1, c.progress) * 255));
+  }
+  w.u8(Math.min(255, s.upgradeOrbs.length));
+  for (const o of s.upgradeOrbs.slice(0, 255)) {
+    w.u32(o.id);
+    w.str(o.owner);
+    w.u8(o.upgrade);
+    w.pos(o.x);
+    w.pos(o.y);
+    w.u8(Math.min(255, Math.round(o.fall * 100)));
+  }
+  mark('loot');
   w.u16(s.shots.length);
   for (const f of s.shots) {
     w.u32(f.id);
@@ -655,7 +687,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
     const seq = r.u32();
-    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [] };
+    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [], chests: [], upgradeOrbs: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
@@ -694,16 +726,16 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nAliens = r.u16();
     for (let i = 0; i < nAliens; i++) {
-      const id = r.u32();
+      const id = r.u24();
       const type = ALIEN_IDS[r.u8()];
       const x = r.pos();
       const y = r.pos();
-      const vx = r.i16();
-      const vy = r.i16();
-      const maxHp = r.f32();
+      const vx = 0; // déduite chez le client (`Mirror.upsertAlien`)
+      const vy = 0;
+      const aflags = r.u8();
+      const maxHp = aflags & 32 ? r.f32() : r.u16();
       const hp = (r.u16() / 65535) * maxHp;
       const slamWind = r.u8() / 200;
-      const aflags = r.u8();
       const def = ALIENS[type];
       let rushWind = 0;
       let rushDx = 0;
@@ -799,6 +831,10 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nFires; i++) snap.fires.push({ id: r.u16(), x: r.u16(), y: r.u16(), r: r.u8() });
     const nStal = r.u8();
     for (let i = 0; i < nStal; i++) snap.stalactites.push({ id: r.u16(), x: r.pos(), y: r.pos(), r: r.u8(), t: r.u8() / 50, dur: r.u8() / 50 });
+    const nChests = r.u8();
+    for (let i = 0; i < nChests; i++) snap.chests.push({ id: r.u32(), x: r.pos(), y: r.pos(), progress: r.u8() / 255 });
+    const nUpOrbs = r.u8();
+    for (let i = 0; i < nUpOrbs; i++) snap.upgradeOrbs.push({ id: r.u32(), owner: r.str(), upgrade: r.u8(), x: r.pos(), y: r.pos(), fall: r.u8() / 100 });
     const nShots = r.u16();
     for (let i = 0; i < nShots; i++) snap.shots.push({ id: r.u32(), x: r.pos(), y: r.pos() });
     const nImpacts = r.u16();

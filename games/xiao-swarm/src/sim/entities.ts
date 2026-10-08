@@ -1,5 +1,6 @@
 import type { AlienDef, AlienId } from '../data/aliens';
 import type { SoldierClassDef, SoldierClassId } from '../data/classes';
+import type { UpgradeId } from '../data/progression';
 import type { PlayerId, Team } from './types';
 
 /**
@@ -114,7 +115,7 @@ export interface AlienState extends Body {
   swarmCd: number;
   swarmT: number;
   swarmAcc: number;
-  /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, +1 toutes les `BOSS_ENRAGE.every` s sans fin ; voir `BOSS_ENRAGE`). */
+  /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, +1 toutes les `DIFFICULTY.bossEnrageEvery` s sans fin). */
   enraged: number;
   /** Temps écoulé depuis l'apparition (s), pour l'enragement des boss. */
   age: number;
@@ -284,6 +285,36 @@ export interface XpOrb {
   /** Attrapé (attiré par un soldat ou aspiré par l'aimant) : ne disparaît plus et ne clignote plus (`Pickup.catchItem`). */
   caught?: boolean;
   /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
+  pullV?: number;
+}
+
+/** Coffre laissé par un boss tué : `progress` (s) monte tant qu'un soldat est à côté, il s'ouvre à `DIFFICULTY.chestTime`. */
+export interface ChestState {
+  id: number;
+  x: number;
+  y: number;
+  progress: number;
+}
+
+/** Globe d'upgrade sorti d'un coffre : réservé à `owner`, ne disparaît jamais, donne une upgrade au hasard à son ramassage. */
+export interface UpgradeOrbState {
+  id: number;
+  owner: string;
+  /** Upgrade qu'il donne, tirée au hasard à sa chute : son icône est celle de la carte d'upgrade (si elle est déjà au maximum au ramassage, une autre est tirée). */
+  upgrade: UpgradeId;
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  /** Jamais décompté (le type est celui des objets attirables, `Pickup.catchItem`). */
+  life: number;
+  /** Temps écoulé depuis sa sortie du coffre (s) : imprenable pendant `DIFFICULTY.chestOrbGrace`. */
+  age: number;
+  /** Chute en cloche depuis le coffre (`t` = temps restant, s) : en l'air, ni aimant ni ramassage. Aussi dans le snapshot (arc de la chute). */
+  hop?: { vx: number; vy: number; t: number };
+  /** Aspiré / attrapé : suit sa squad sans limite de distance et accélère (`Pickup.chase`). */
+  pulled?: string;
+  caught?: boolean;
   pullV?: number;
 }
 

@@ -6,6 +6,21 @@
  * Durées en ms, vitesses en px/s, échelles relatives à la texture (fx_dot 12 px, fx_flame 40 px, fx_ring 128 px).
  */
 export const FX_DEFAULTS = {
+  /**
+   * Télégraphes des attaques d'aliens (`view/telegraph.ts`) : couleur de chaque type (remplissage + contour) et opacité totale `full` atteinte
+   * au moment de l'impact (zone entière + zone intérieure qui grandit).
+   */
+  telegraph: {
+    full: 0.75,
+    rushColor: 0x9a1919,
+    leapColor: 0x9a1919,
+    lobColor: 0x9a1919,
+    fuseColor: 0x9a1919,
+    lurkColor: 0x9a1919,
+    burrowColor: 0x9a1919,
+    stalactiteColor: 0x9a1919,
+    wallColor: 0xffd23a,
+  },
   /** Éclaboussure colorée : touche, mort d'un alien ou d'un soldat, recrutement (texture fx_dot). */
   burst: { countMul: 1, speedMin: 60, speedMax: 240, scaleStart: 0.9, scaleEnd: 0, lifeMin: 250, lifeMax: 500 },
   /** Impact d'une balle qui disparaît : quelques petites particules (fx_dot), teinte donnée par l'appelant (bleu pour le Gunner). */
@@ -49,7 +64,13 @@ export const FX_DEFAULTS = {
   /** Colonne de lumière (fx_column) qui monte et s'estompe, avec halo : nouvelle recrue dans la squad (taille et durée par défaut). */
   column: { height: 130, durationMs: 800, glowScale: 1.2, glowEnd: 2.4 },
   /** Perte d'un soldat (composé) : éclats, gouttes, flaque, double onde, flash blanc, colonne rouge et croix. */
-  death: { burstCount: 44, flashCount: 20, gloopSize: 1.8, puddleSize: 1.2, ringBig: 130, ringSmall: 75, flashScale: 3.4, flashMs: 260, columnHeight: 170, columnMs: 700, crossSize: 34 },
+  death: { burstCount: 64, flashCount: 30, gloopSize: 2.2, puddleSize: 1.3, ringBig: 190, ringSmall: 105, flashScale: 4.2, flashMs: 340, columnHeight: 260, columnMs: 900, crossSize: 54 }, // plus visible (08/10 : 44 / 20 / 1,8 / 130 / 75 / 3,4 / 260 / 170 / 700 / 34)
+  /** Power-up au sol : globe vert (pièces du bonus recrue décalées de `hue` ° : 75 = vert) ; même taille que tous les globes (`recruit.displayScale`), rond vert au sol. */
+  powerUp: { hue: 75 },
+  /** Globe d'upgrade d'un coffre de boss : `hue` = décalage de teinte (°) du globe doré d'origine : 285 = rose (0 = doré) ; `light` = éclaircissement vers le blanc (0 à 1) du globe, de ses étoiles et du rond au sol : rose plus clair. Tout le reste (taille, rond, étoiles, paillettes) est commun à tous les globes : `recruit`. */
+  upgradeOrb: { hue: 285, light: 0.3 },
+  /** Gain d'un soldat (recrue qui rejoint la squad, composé) : éclats de la classe, double onde, flash, « +1 » ; la colonne bleue d'arrivée suit le soldat. */
+  gain: { burstCount: 40, flashCount: 22, ringBig: 150, ringSmall: 85, flashScale: 3, flashMs: 320, columnHeight: 230, columnMs: 900, textSize: 40 },
   /** Pluie de particules arc-en-ciel des cartes d'upgrade prismatiques (fx_star, additif). */
   prism: { every: 16, speedYMin: 8, speedYMax: 38, speedX: 12, scaleStart: 0.4, lifeMin: 600, lifeMax: 1100 },
   /** Croix vertes qui montent dans les globes de soin (fx_plus) : une toutes les ~`everyMs` ms par globe, au hasard dans la zone ; `scale` = taille, `rise` = montée (px). */
@@ -75,7 +96,8 @@ export const FX_DEFAULTS = {
   text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 600, rise: 30 },
   /**
    * Recrue « bonus +1 » composée (art/recruits.ts) : position (en part de la taille du globe, depuis son centre), taille
-   * (part de la taille du globe) et opacité de chaque pièce ; taille affichée ; étoiles qui scintillent autour (recruit/star).
+   * (part de la taille du globe) et opacité de chaque pièce ; étoiles qui scintillent autour (`view/GlobeGlitter.ts`, COMMUNES aux trois sortes de globes, à la couleur du globe). `displayScale` = taille affichée COMMUNE à tous les
+   * globes au sol (recrue, power-up, globe d'upgrade) ; les étoiles et le rond au sol sont ceux de la recrue pour tous, seule la couleur change (jaune, vert, rose).
    */
   recruit: {
     displayScale: 0.34,

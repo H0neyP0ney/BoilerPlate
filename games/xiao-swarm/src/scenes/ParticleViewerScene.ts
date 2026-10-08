@@ -7,9 +7,12 @@ import { FX, type FxName } from '../fxParams';
 import { createEnragedFlames } from '../view/EnragedFx';
 import { iceLook } from '../view/IceBlockFx';
 import { Fx } from '../view/Fx';
-import { drawField } from '../view/PickupViews';
+import { drawField, drawPickupSpot, GLOBE_LIFT, UPGRADE_PINK } from '../view/PickupViews';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
 import { ShockDistort } from '../view/ShockDistort';
+import { clearGlobeTextures } from '../art/upgradeOrbs';
+import { UpgradeOrbView } from '../view/LootViews';
+import { drawTeleEllipse, teleColor, teleInner, teleOuter, TELEGRAPH_KINDS, type TelegraphKind } from '../view/telegraph';
 import { RecruitView } from '../view/UnitViews';
 import { makeRecruitTextures } from '../art/recruits';
 import { CLASSES } from '../data/classes';
@@ -38,6 +41,15 @@ interface EffectDef {
 }
 
 const EFFECTS: EffectDef[] = [
+  {
+    id: 'telegraph',
+    label: 'Télégraphes des attaques d’aliens',
+    where: 'Zones annoncées avant une attaque (charge, saut, boules en cloche, kamikaze, pics du lurker, Scarab, stalactites, murs). Aperçu : les 8 types, remplis en boucle.',
+    specs: [
+      { key: 'full', label: "Opacité à l'impact", min: 0.2, max: 1, step: 0.05, hint: 'Opacité totale atteinte au moment de l’impact (zone entière + zone intérieure qui grandit), pour tous les types' },
+      ...TELEGRAPH_KINDS.map((t) => ({ key: `${t.kind}Color`, label: t.label, min: 0, max: 0, step: 1, color: true })),
+    ],
+  },
   {
     id: 'burst',
     label: 'Éclaboussure (touche, mort, recrutement)',
@@ -213,6 +225,31 @@ const EFFECTS: EffectDef[] = [
     ],
   },
   {
+    id: 'upgradeOrb',
+    label: "Globe d'upgrade (coffre de boss)",
+    where: "Même modèle que la recrue et le power-up, en rose : globe, anneau, icône de l'upgrade, mêmes étoiles, rond rose au sol. Taille et étoiles se règlent dans l'entrée « Recrue gunner » (communs aux trois globes). L'aperçu dure 4 s.",
+    specs: [
+      { key: 'hue', label: 'Teinte du globe (°)', min: 0, max: 360, step: 5, hint: '0 = doré (pièces du bonus recrue), 285 = rose' },
+      { key: 'light', label: 'Éclaircissement (0 à 1)', min: 0, max: 0.8, step: 0.05, hint: 'Rose plus clair : mélange avec du blanc (globe, étoiles ; le rond au sol est un rose clair fixe)' },
+    ],
+  },
+  {
+    id: 'gain',
+    label: "Gain d'un soldat",
+    where: "Recrue qui rejoint la squad : éclats de sa classe, double onde, flash, « +1 » vert ; la colonne bleue d'arrivée (hauteur et durée ci-dessous) suit le soldat en jeu.",
+    specs: [
+      { key: 'burstCount', label: 'Éclats colorés', min: 0, max: 100, step: 1 },
+      { key: 'flashCount', label: 'Éclats blancs', min: 0, max: 60, step: 1 },
+      { key: 'ringBig', label: 'Onde colorée : rayon', min: 20, max: 300, step: 5 },
+      { key: 'ringSmall', label: 'Onde blanche : rayon', min: 20, max: 300, step: 5 },
+      { key: 'flashScale', label: 'Flash : taille', min: 0.5, max: 8, step: 0.1 },
+      { key: 'flashMs', label: 'Flash : durée (ms)', min: 50, max: 1000, step: 10 },
+      { key: 'columnHeight', label: 'Colonne d’arrivée : hauteur', min: 40, max: 400, step: 5 },
+      { key: 'columnMs', label: 'Colonne d’arrivée : durée (ms)', min: 200, max: 2000, step: 50 },
+      { key: 'textSize', label: '« +1 » : taille', min: 10, max: 80, step: 1 },
+    ],
+  },
+  {
     id: 'cracks',
     label: 'Fissures noires au sol',
     where: "Sous les grosses explosions (kamikaze, Flamer, boss) : fissures noires et trace de brûlure noir / gris qui restent un moment puis s'effacent. Le rayon vient de l'événement ; le rayon min décide quelles explosions fissurent le sol.",
@@ -368,7 +405,7 @@ const EFFECTS: EffectDef[] = [
     label: 'Recrue gunner (bonus +1)',
     where: "Recrue à ramasser : globe, anneau, tête et « +1 » assemblés en une image (art/recruits.ts), plus les étoiles qui scintillent autour. Position = part de la taille du globe, depuis son centre.",
     specs: [
-      { key: 'displayScale', label: 'Taille affichée', min: 0.1, max: 1, step: 0.01, hint: "0,34 ≈ 55 px de globe à l'écran (zoom 1)" },
+      { key: 'displayScale', label: 'Taille de TOUS les globes au sol', min: 0.1, max: 1.2, step: 0.01, hint: "Recrue, power-up et globe d'upgrade ont la même taille : 0,34 ≈ 55 px de globe à l'écran (zoom 1), taille d'origine de la recrue" },
       { key: 'globeScale', label: 'Globe : taille', min: 0.3, max: 1.3, step: 0.01 },
       { key: 'globeAlpha', label: 'Globe : opacité', min: 0, max: 1, step: 0.05 },
       { key: 'ringScale', label: 'Anneau : taille', min: 0.3, max: 1.3, step: 0.01 },
@@ -382,7 +419,7 @@ const EFFECTS: EffectDef[] = [
       { key: 'starEvery', label: 'Étoiles : une toutes les (ms)', min: 30, max: 1000, step: 10 },
       { key: 'starLifeMin', label: 'Étoiles : durée min (ms)', min: 100, max: 2000, step: 10 },
       { key: 'starLifeMax', label: 'Étoiles : durée max (ms)', min: 100, max: 3000, step: 10 },
-      { key: 'starRadius', label: 'Étoiles : rayon de la zone (px)', min: 0, max: 80, step: 1 },
+      { key: 'starRadius', label: 'Étoiles : rayon de la zone (px)', min: 0, max: 120, step: 1 },
       { key: 'starScale', label: 'Étoiles : taille', min: 0.05, max: 1, step: 0.01 },
       { key: 'starRise', label: 'Étoiles : montée (px/s)', min: 0, max: 80, step: 1 },
       { key: 'starY', label: 'Étoiles : position Y (px)', min: -60, max: 60, step: 1, hint: 'Décalage vertical de la zone des étoiles par rapport au centre du globe (négatif = plus haut)' },
@@ -424,6 +461,8 @@ export class ParticleViewerScene extends Phaser.Scene {
   /** Aperçu du glaçon : image, fissures, PV restants (sur 20) et prochain coup. */
   private ice?: { body: Phaser.GameObjects.Image; cracks: Phaser.GameObjects.Image; x: number; y: number; hp: number; next: number };
   private fieldG?: Phaser.GameObjects.Graphics;
+  /** Aperçu des télégraphes : dessin refait à chaque image, libellés sous chaque type. */
+  private tele?: { g: Phaser.GameObjects.Graphics; labels: Phaser.GameObjects.Text[] };
   /** Aperçu de la recrue gunner composée (effet « recruit »). */
   private recruit?: RecruitView;
   private recruitAt = { x: 0, y: 0 };
@@ -511,6 +550,33 @@ export class ParticleViewerScene extends Phaser.Scene {
         break;
       case 'death':
         this.fx.death(x, y, this.tint);
+        break;
+      case 'upgradeOrb': {
+        // aperçu : un globe (upgrade « dégâts ») posé là, avec son rond rose au sol, pendant 4 s ; textures refaites (teinte modifiée)
+        clearGlobeTextures(this);
+        const orb = new UpgradeOrbView(this, { id: 0, owner: 'p1', upgrade: 'damage', x, y, px: x, py: y, life: 1e9, age: 9 });
+        const ground = this.add.graphics().setDepth(DEPTH.ground + 4);
+        const end = this.time.now + 4000;
+        const timer = this.time.addEvent({
+          delay: 16,
+          loop: true,
+          callback: () => {
+            const t = this.time.now / 1000;
+            ground.clear();
+            drawPickupSpot(ground, x, y, UPGRADE_PINK, t, 0);
+            orb.sync(x, y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(t * 5) * 4, y, t);
+            if (this.time.now > end) {
+              timer.remove();
+              orb.kill();
+              ground.destroy();
+            }
+          },
+        });
+        break;
+      }
+      case 'gain':
+        this.fx.gain(x, y, this.tint);
+        this.fx.column(x, y, 0x4aa8ff, FX.gain.columnHeight, FX.gain.columnMs);
         break;
       case 'cracks':
         this.fx.cracks(x, y, this.radius);
@@ -650,6 +716,37 @@ export class ParticleViewerScene extends Phaser.Scene {
     }
     this.updateIce();
     this.recruit?.sync(1, time / 1000);
+    if (this.tele) this.drawTelegraphs(time);
+  }
+
+  /** Centre de l'aperçu du télégraphe n° `i` (grille de 4 × 2 autour du centre de la scène). */
+  private static teleSlot(i: number): [number, number] {
+    return [((i % 4) - 1.5) * 200, (Math.floor(i / 4) - 0.5) * 190];
+  }
+
+  /** Aperçu des télégraphes : chaque type se remplit en 1,4 s puis reste plein 0,3 s, en boucle (mêmes couches que dans le jeu). */
+  private drawTelegraphs(time: number): void {
+    const g = this.tele!.g;
+    g.clear();
+    const k = Math.min(1, (time % 1700) / 1400);
+    const poly = (kind: TelegraphKind, x: number, y: number, len: number, w: number, fromBack: boolean): void => {
+      // rectangle couché : depuis la gauche (charge, pics : la zone intérieure s'allonge) ou centré (murs : elle grandit en tout sens)
+      const rect = (l: number, wd: number): Phaser.Math.Vector2[] => {
+        const x0 = fromBack ? x - len / 2 : x - l / 2;
+        return [[x0, y - wd / 2], [x0 + l, y - wd / 2], [x0 + l, y + wd / 2], [x0, y + wd / 2]].map(([px, py]) => new Phaser.Math.Vector2(px, py));
+      };
+      const c = teleColor(kind);
+      g.fillStyle(c, teleOuter(k)).fillPoints(rect(len, w), true);
+      g.fillStyle(c, teleInner(k)).fillPoints(rect(len * k, fromBack ? w : w * k), true);
+      g.lineStyle(3, c, 0.5 + 0.4 * k).strokePoints(rect(len, w), true);
+    };
+    TELEGRAPH_KINDS.forEach((t, i) => {
+      const [x, y] = ParticleViewerScene.teleSlot(i);
+      if (t.kind === 'rush') poly('rush', x, y, 170, 50, true);
+      else if (t.kind === 'lurk') poly('lurk', x, y, 170, 34, true);
+      else if (t.kind === 'wall') poly('wall', x, y, 160, 26, false);
+      else drawTeleEllipse(g, t.kind, x, y, t.kind === 'stalactite' ? 40 : 60, k, 0, t.kind === 'leap' || t.kind === 'burrow' ? 4 : 3);
+    });
   }
 
   private setLoop(on: boolean): void {
@@ -661,6 +758,18 @@ export class ParticleViewerScene extends Phaser.Scene {
 
   private selectEffect(e: EffectDef): void {
     this.effect = e;
+    this.tele?.g.destroy();
+    this.tele?.labels.forEach((t) => t.destroy());
+    this.tele = undefined;
+    if (e.id === 'telegraph') {
+      this.tele = {
+        g: this.add.graphics().setDepth(DEPTH.ground + 4),
+        labels: TELEGRAPH_KINDS.map((t, i) =>
+          this.add.text(...ParticleViewerScene.teleSlot(i), t.label, { fontSize: '13px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5, 0).setDepth(7),
+        ),
+      };
+      this.tele.labels.forEach((t) => (t.y += 64));
+    }
     if (e.id !== 'recruit') {
       this.recruit?.destroy();
       this.recruit = undefined;
@@ -670,7 +779,7 @@ export class ParticleViewerScene extends Phaser.Scene {
     this.paramBox.append(note(e.where));
 
     // réglages d'aperçu propres à l'effet (non enregistrés : ce sont ceux de l'événement en jeu)
-    if (['impact', 'gloop', 'puddle', 'column', 'death'].includes(e.id)) this.paramBox.append(colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row);
+    if (['impact', 'gloop', 'puddle', 'column', 'death', 'gain', 'upgradeOrb'].includes(e.id)) this.paramBox.append(colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row);
     if (e.id === 'burst') {
       this.paramBox.append(
         colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row,

@@ -32,7 +32,7 @@ export class UpgradeViewerScene extends Phaser.Scene {
   private cards: Card[] = [];
   private selected: UpgradeId | null = null;
   /** Aperçu : prises faites (celle qu'on s'apprête à prendre comprise) et carte prismatique (bonus ×2, fond holographique). */
-  private previewCount = 1;
+  private previewCount = 0;
   private previewPrism = false;
   private panel?: HTMLDivElement;
   private statsPanel?: HTMLDivElement;
@@ -179,7 +179,7 @@ export class UpgradeViewerScene extends Phaser.Scene {
       header("Visionneuse d'upgrades", () => this.scene.start(SCENES.game)),
       note('Toutes les cartes de choix à la montée de niveau. Clique sur une carte pour régler ses stats (bonus, prises max).'),
       slider('Prises (aperçu)', {
-        min: 1,
+        min: 0,
         max: 10,
         step: 1,
         get: () => this.previewCount,
@@ -187,7 +187,7 @@ export class UpgradeViewerScene extends Phaser.Scene {
           this.previewCount = Math.round(v);
           this.refreshAll();
         },
-        hint: 'Nombre de slots pleins sur les cartes (la prise qu’on s’apprête à faire comprise)',
+        hint: 'Nombre de slots pleins sur les cartes : les prises déjà faites (pas celle qu’on s’apprête à faire)',
       }).row,
       checkbox('Carte prismatique (bonus ×2)', this.previewPrism, (v) => {
         this.previewPrism = v;

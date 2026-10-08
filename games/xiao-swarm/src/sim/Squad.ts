@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_CHANCE, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, REROLLS_PER_RUN, SQUAD, SQUAD_BASE, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -38,7 +38,7 @@ export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'ma
  */
 export class Squad {
   readonly soldiers: SoldierState[] = [];
-  /** Composition de la squad quand elle a été à son effectif maximal de la partie (base du revive : `REVIVE_SQUAD_FRACTION`). */
+  /** Composition de la squad quand elle a été à son effectif maximal de la partie (base du revive : `DIFFICULTY.reviveSquadFraction`). */
   peakComposition: SoldierClassId[] = [];
   readonly anchor = { x: 0, y: 0, radius: 18 };
   private readonly steerV = { x: 0, y: 0 };
@@ -51,7 +51,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: SQUAD_BASE.damage, fireRate: SQUAD_BASE.fireRate, hp: SQUAD_BASE.hp, speed: SQUAD_BASE.speed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: SQUAD_BASE.recruit, xpGain: 1, range: 1, crit: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: DIFFICULTY.squadDamage, fireRate: DIFFICULTY.squadFireRate, hp: 1, speed: DIFFICULTY.squadSpeed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: DIFFICULTY.squadRecruit, xpGain: 1, range: 1, crit: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -60,7 +60,7 @@ export class Squad {
   /** Pour chaque upgrade proposée : prismatique (bonus doublé) ? */
   offerPrism: boolean[] = [];
   /** Relances restantes de la partie. */
-  rerolls = REROLLS_PER_RUN;
+  rerolls = Math.round(DIFFICULTY.rerolls);
   /** Plus grande taille atteinte par la squad depuis le début de la partie (la réanimation en rend 60 %). */
   peakSize = 0;
   /** Bonus temporaires (s restantes) des power-ups : stimpack (vitesse et cadence ×2),  */
@@ -115,7 +115,7 @@ export class Squad {
     this.level = 1;
     this.offer = null;
     this.offerPrism = [];
-    this.rerolls = REROLLS_PER_RUN;
+    this.rerolls = Math.round(DIFFICULTY.rerolls);
     this.peakSize = 0;
     this.buffs.stim = 0;
     this.pendingLevels = 0;
@@ -191,7 +191,7 @@ export class Squad {
     }
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
     const allPrism = !forced && !reroll && choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont prismatiques (pas après une relance)
-    this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(PRISM_CHANCE)));
+    this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 
@@ -235,7 +235,7 @@ export class Squad {
       if (eligible.length === 0) break;
       const offer = rng.sample(eligible, OFFER_SIZE);
       const id = rng.weighted(offer, weight) ?? rng.pick(offer);
-      const prism = rng.chance(PRISM_CHANCE);
+      const prism = rng.chance(DIFFICULTY.prismChance);
       if (id === 'reinforce') {
         this.picked[id] = (this.picked[id] ?? 0) + 1;
         reinforcements += UPGRADES.reinforce.value * (prism ? 2 : 1);
@@ -253,6 +253,49 @@ export class Squad {
       s.hp += max - s.maxHp;
       s.maxHp = max;
     }
+  }
+
+  /**
+   * Donne l'upgrade `id` directement (globe d'upgrade d'un coffre de boss) : jamais prismatique, même application qu'un choix de montée
+   * de niveau, sans pause ni proposition. Déjà au maximum : une autre est tirée. Renvoie l'upgrade donnée, ou null si tout est au maximum.
+   */
+  grantUpgrade(id: UpgradeId, x: number, y: number): UpgradeId | null {
+    if (!this.canTake(id)) {
+      const other = this.pickRandomUpgrade();
+      if (!other) return null;
+      id = other;
+    }
+    this.applyUpgrade(id, false); // jamais prismatique
+    this.sim.events.push({ t: 'upgradePicked', owner: this.owner, x, y, id, prism: false }); // même texte flottant et même onde qu'un choix de niveau
+    this.refreshOffer(); // une proposition déjà tirée (montée de niveau juste avant) ne doit plus contenir une upgrade devenue maximale
+    return id;
+  }
+
+  /**
+   * Remplace dans les propositions ouvertes (`offer`) les upgrades devenues impossibles à prendre (au maximum de prises) par d'autres, tirées au hasard
+   * hors de la proposition. Nécessaire car l'offre est tirée au moment de la montée de niveau, avant l'ouverture de l'écran de choix : entre les deux,
+   * un globe d'upgrade ramassé peut avoir porté une upgrade proposée à son maximum (sinon la carte restait choisissable : 6 prises sur 5).
+   */
+  private refreshOffer(): void {
+    if (!this.offer || this.sim.tutorial?.active) return;
+    const spare = UPGRADE_IDS.filter((id) => this.canTake(id) && !this.offer!.includes(id));
+    this.offer = this.offer.map((id) => {
+      if (this.canTake(id) || spare.length === 0) return id;
+      return spare.splice(Math.floor(this.sim.rng.next() * spare.length), 1)[0];
+    });
+  }
+
+  /** Upgrade encore prenable (pas désactivée, pas au maximum de prises). */
+  private canTake(id: UpgradeId): boolean {
+    return !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks;
+  }
+
+  /** Upgrade prenable tirée au hasard, de préférence hors `avoid` (null si tout est au maximum). */
+  pickRandomUpgrade(avoid: readonly UpgradeId[] = []): UpgradeId | null {
+    const eligible = UPGRADE_IDS.filter((id) => this.canTake(id));
+    if (eligible.length === 0) return null;
+    const fresh = eligible.filter((id) => !avoid.includes(id));
+    return this.sim.rng.pick(fresh.length > 0 ? fresh : eligible);
   }
 
   /** `prism` : upgrade prismatique, bonus habituel doublé. */
@@ -398,6 +441,11 @@ export class Squad {
   }
 
   update(dt: number, input: PlayerInput): void {
+    // stats de base réglables en direct (panneau Difficulté)
+    this.stats.setBase('damage', DIFFICULTY.squadDamage);
+    this.stats.setBase('fireRate', DIFFICULTY.squadFireRate);
+    this.stats.setBase('speed', DIFFICULTY.squadSpeed);
+    this.stats.setBase('recruit', DIFFICULTY.squadRecruit);
     if (this.buffs.stim > 0) this.buffs.stim -= dt;
     const total = this.soldiers.length;
     if (total === 0) return;

@@ -34,7 +34,7 @@ export const CARD_TEXT_RES = 3;
 
 /**
  * Carte de choix d'upgrade, sans interaction (la fenêtre de montée de niveau y ajoute sa zone cliquable `hit`, voir `LevelUpScene`) : fond, icône,
- * nom, description, slots et « Claim ». `count` = prises faites, celle qu'on s'apprête à prendre comprise ; `prism` : bonus doublé, fond holographique.
+ * nom, description, slots et « Claim ». `count` = prises DÉJÀ faites (pas celle qu'on s'apprête à prendre ; un prismatique compte pour une prise, d'où un `count` qui peut dépasser le maximum) ; `prism` : bonus doublé, fond holographique.
  * `resizeUpgradeCard` la met à la taille voulue. Partagée par la fenêtre de choix et la visionneuse d'upgrades : un seul dessin.
  */
 export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: number, prism: boolean): Phaser.GameObjects.Container {
@@ -56,8 +56,8 @@ export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: numb
 }
 
 /**
- * Progression de l'upgrade en slots (images vide / plein) : une ligne par 5 prises maximum, chaque ligne centrée ; les prises faites
- * (y compris celle qu'on s'apprête à prendre) sont pleines, les autres vides. Aucun slot pour une upgrade sans limite (Renfort). Positions en pixels de
+ * Progression de l'upgrade en slots (images vide / plein) : une ligne par 5 prises maximum, chaque ligne centrée ; les prises déjà faites
+ * sont pleines, les autres vides (celle qu'on s'apprête à prendre n'est pas comptée). Aucun slot pour une upgrade sans limite (Renfort). Positions en pixels de
  * planche relatifs au centre de la carte (`CARD.slots`) : le conteneur est mis à l'échelle dans `resizeUpgradeCard`.
  */
 function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: number): Phaser.GameObjects.Container {

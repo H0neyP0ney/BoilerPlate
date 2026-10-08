@@ -12,7 +12,9 @@ const check = (ok, label, detail = '') => {
 
 try {
   const { WaveRunner } = await vite.ssrLoadModule('/src/sim/WaveRunner.ts');
-  const { DEFAULT_WAVE_SCRIPT, WAVE_CAP, BOSS_REPLAY } = await vite.ssrLoadModule('/src/data/waves.ts');
+  const { DEFAULT_WAVE_SCRIPT } = await vite.ssrLoadModule('/src/data/waves.ts');
+  const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
+  const WAVE_CAP = { pauseAbove: DIFFICULTY.wavePauseAbove, resumeAt: DIFFICULTY.waveResumeAt };
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { Rng } = await vite.ssrLoadModule('@xiao/engine/sim');
   const DT = 1 / 30;
@@ -65,6 +67,25 @@ try {
     check(runner.cursor > cursorBefore + 4.5 && !runner.replaying, 'boss tué : la timeline reprend', `${cursorBefore.toFixed(1)} → ${runner.cursor.toFixed(1)} s`);
   }
 
+  // 2 bis) vagues rejouées pendant un boss : effectif × DIFFICULTY.bossReplayMul (même graine, facteur 1 puis réglage du code)
+  {
+    const replayTotal = (mul) => {
+      const saved = DIFFICULTY.bossReplayMul;
+      DIFFICULTY.bossReplayMul = mul;
+      const { runner, log, state } = make();
+      runUntilBoss(runner, log);
+      state.boss = true;
+      const before = log.length;
+      run(runner, 40);
+      DIFFICULTY.bossReplayMul = saved;
+      return log.slice(before).reduce((n, e) => n + e.count, 0);
+    };
+    const full = replayTotal(1);
+    const reduced = replayTotal(DIFFICULTY.bossReplayMul);
+    const ratio = reduced / full;
+    check(DIFFICULTY.bossReplayMul === 0.8 && ratio < 0.95 && ratio > 0.7, 'rejeu pendant un boss : effectif × 0,8 (panneau Difficulté ; arrondi, au moins 1 par groupe)', `${full} → ${reduced} aliens en 40 s (×${ratio.toFixed(2)})`);
+  }
+
   // 3) trop d'aliens : plus aucun envoi, curseur figé, reprise sous le seuil bas (hystérésis)
   {
     const { runner, log, state } = make();
@@ -95,7 +116,7 @@ try {
     check(log.length === sent, 'boss vivant et trop d\'aliens : le rejeu s\'arrête aussi', `${log.length - sent} envois`);
   }
 
-  check(BOSS_REPLAY.count === 5, 'le rejeu porte sur les 5 dernières vagues avant le boss');
+  check(DIFFICULTY.bossReplayCount === 5, 'le rejeu porte sur les 5 dernières vagues avant le boss');
 } finally {
   await vite.close();
 }

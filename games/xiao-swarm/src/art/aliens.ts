@@ -158,6 +158,31 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
   });
   canvasTexture(scene, 'alien_iceballer', 48, 48, (ctx) => slime(ctx, '#e4f8ff', '#3fb0ee'));
   // Orbe de glace (projectile destructible du slime de glace) : sphère bleu glacier, reflet, éclats de givre, contour foncé.
+  // Orbe de feu (projectile destructible des rhinos jumeaux) : boule orange incandescente, cœur jaune, langues de flamme, contour brun.
+  canvasTexture(scene, 'alien_fire_orb', 40, 40, (ctx) => {
+    const g = ctx.createRadialGradient(17, 16, 2, 20, 20, 17);
+    g.addColorStop(0, '#fff6b0');
+    g.addColorStop(0.4, '#ffb02e');
+    g.addColorStop(1, '#e4421a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(20, 20, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffd24a'; // petites langues de flamme sur le dessus
+    for (let k = 0; k < 5; k++) {
+      const t = -Math.PI / 2 + (k - 2) * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(20 + Math.cos(t - 0.18) * 13, 20 + Math.sin(t - 0.18) * 13);
+      ctx.lineTo(20 + Math.cos(t) * 20, 20 + Math.sin(t) * 20);
+      ctx.lineTo(20 + Math.cos(t + 0.18) * 13, 20 + Math.sin(t + 0.18) * 13);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#5c1d0c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(20, 20, 16, 0, Math.PI * 2);
+    ctx.stroke();
+  });
   canvasTexture(scene, 'alien_ice_orb', 40, 40, (ctx) => {
     const g = ctx.createRadialGradient(15, 14, 2, 20, 20, 17);
     g.addColorStop(0, '#ffffff');

@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -21,9 +21,10 @@ export interface AlienDef {
    * Alien-projectile (orbe de glace du slime de glace) : lancé en ligne droite à `speed` px/s pendant `life` s au plus, il vole au-dessus du
    * décor. Au contact d'un soldat : `damage` et gel (onde de rayon `ring`), puis il se brise ; il se brise aussi au bout de sa course. PV
    * `hp` exacts (sans multiplicateur de difficulté) : la squad peut le détruire en lui tirant dessus (barre de vie toujours affichée). Ni XP,
-   * ni recrue, ni trou d'apparition, jamais recyclé.
+   * ni recrue, ni trou d'apparition, jamais recyclé. `kind` 'fire' (orbe de feu des rhinos jumeaux) : pas de gel, il laisse une traînée de flammes au sol
+   * (`trail`, comme le slime de feu) et brûle (`damage` + flamme) le soldat touché.
    */
-  projectile?: { life: number; ring: number };
+  projectile?: { life: number; ring: number; kind?: 'ice' | 'fire' };
   /** Mêlée en zone : chaque coup au contact (`damage`, toutes les `attackCooldown` s) touche tous les soldats à moins de `cleave` px de lui, pas un seul. */
   cleave?: number;
   /**
@@ -71,9 +72,10 @@ export interface AlienDef {
    * Pluie de stalactites (Scarab) : une fois ressorti de terre (`burrow`), il fait tomber `count` stalactites sur de petites zones autour de la
    * squad visée : `onSoldiers` sur des soldats (leur position au lancer), les autres au hasard à moins de `spread` px de son centre. Chaque
    * zone est annoncée `delay` s (télégraphe rouge, les suivantes décalées de `stagger` s), puis la stalactite tombe : dégâts `damage` et
-   * recul `knockback` dans un rayon `radius`.
+   * recul `knockback` dans un rayon `radius`. `walk` : petite pluie en plus quand il marche vers la squad entre deux plongées (une par marche,
+   * à mi-chemin du compte à rebours `burrow.every`) : `count` stalactites dont `onSoldiers` sur des soldats, mêmes zones / dégâts.
    */
-  stalactites?: { count: number; onSoldiers: number; spread: number; radius: number; delay: number; stagger: number; damage: number; knockback: number };
+  stalactites?: { count: number; onSoldiers: number; spread: number; radius: number; delay: number; stagger: number; damage: number; knockback: number; walk?: { count: number; onSoldiers: number } };
   /**
    * Essaim (boss Gling) : toutes les `every` s de marche, il s'arrête `duration` s et fait apparaître `count` aliens `spawn` en continu
    * (régulièrement répartis sur la durée), autour de lui.
@@ -116,7 +118,19 @@ export interface AlienDef {
   /** Langue : attrape un soldat à portée et le tire d'une fraction `pull` de la distance qui les sépare (jamais jusqu'à lui). */
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
-  rush?: { cooldown: number; windup: number; length: number; width: number; speed: number; damage: number; knockback: number };
+  rush?: {
+    cooldown: number;
+    windup: number;
+    length: number;
+    width: number;
+    speed: number;
+    damage: number;
+    knockback: number;
+    /** Pendant la charge, laisse au sol toutes les `every` s une flaque de flammes (`fire`, brûle `dps` PV/s) ou un nuage de gel (`frost` : gèle le premier soldat qui y entre), de rayon `radius`, qui dure `ttl` s. */
+    trail?: { kind: 'fire' | 'frost'; every: number; radius: number; ttl: number; dps: number };
+    /** À la fin de la charge, lance `count` alien-projectiles `orb` régulièrement répartis dans toutes les directions (le premier dans le sens de la charge). */
+    burst?: { orb: AlienId; count: number };
+  };
   /**
    * Saut écrasant : toutes les `every` s, vise l'endroit où la squad ciblée SERA à l'impact (centre + vitesse × durée), à `maxDist` px
    * au plus. Préparation `windup` (télégraphe rouge au sol), vol `flight`, écrasement (tout soldat sous la zone de rayon `radius`
@@ -384,6 +398,46 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0x22b6ed, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 100,
   },
+  /**
+   * Mini-boss jumeaux (7:30), calqués sur le Rhinocéros Alpha : le rhinocéros de FEU laisse une traînée de flammes pendant sa charge puis lance 8 orbes de
+   * feu dans toutes les directions ; celui de GLACE laisse des nuages de gel puis 8 orbes de glace. Ils arrivent ensemble (`data/waves.ts`, niveau 9, config 5).
+   */
+  boss_rhino_fire: {
+    id: 'boss_rhino_fire',
+    hp: 1100, // chacun : 2 × 1100 × bossHpMul = entre le Scarab (5:00) et le Giant Crab (10:00)
+    speed: 71.5,
+    radius: 38,
+    mass: 14,
+    damage: 7,
+    attackCooldown: 1,
+    target: 'nearest',
+    oneShot: true,
+    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 31.2 }, burst: { orb: 'fire_orb', count: 8 } },
+    boss: { kind: 'mini' },
+    xp: 300,
+    recruitChance: 1,
+    color: 0xff5a1a,
+    goo: 0xe0521a, // couleur principale de son sprite (éclats et flaque de mort)
+    hpBarWidth: 100,
+  },
+  boss_rhino_ice: {
+    id: 'boss_rhino_ice',
+    hp: 1100,
+    speed: 71.5,
+    radius: 38,
+    mass: 14,
+    damage: 7,
+    attackCooldown: 1,
+    target: 'nearest',
+    oneShot: true,
+    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
+    boss: { kind: 'mini' },
+    xp: 300,
+    recruitChance: 1,
+    color: 0x7fd8ff,
+    goo: 0x7fe3f0,
+    hpBarWidth: 100,
+  },
   /** Mini-boss (5:00) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
@@ -396,8 +450,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     target: 'center',
     shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, // plus de slam (08/10) : remplacé par la pluie de stalactites
-    stalactites: { count: 6, onSoldiers: 3, spread: 260, radius: 55, delay: 1.1, stagger: 0.12, damage: 80, knockback: 300 },
-    burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 30, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad, verrouillé 1,5 s avant (08/10)
+    stalactites: { count: 6, onSoldiers: 3, spread: 260, radius: 55, delay: 1.1, stagger: 0.12, damage: 80, knockback: 300, walk: { count: 3, onSoldiers: 2 } }, // + petite pluie de 3 quand il marche (08/10)
+    burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 60, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad ; 1,5 s avant, la direction du télégraphe se fige mais il suit encore la squad sur cet axe (08/10)
     boss: { kind: 'mini' },
     xp: 400,
     recruitChance: 1,
@@ -458,6 +512,25 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     recruitChance: 0,
     color: 0x9fe3ff,
     goo: 0x9fe3ff,
+    hpBarWidth: 30,
+  },
+  /** Orbe de feu lancé par le rhinocéros de feu : projectile destructible (500 PV) qui laisse une traînée de flammes au sol et brûle le soldat touché. */
+  fire_orb: {
+    id: 'fire_orb',
+    hp: 500,
+    speed: 403,
+    radius: 14,
+    mass: 0.5,
+    damage: 18,
+    attackCooldown: 1,
+    target: 'nearest',
+    floats: true,
+    projectile: { life: 1.56, ring: 44, kind: 'fire' },
+    trail: { every: 0.1, radius: 22, ttl: 8, dps: 31.2 },
+    xp: 0,
+    recruitChance: 0,
+    color: 0xff8a2a,
+    goo: 0xff8a2a,
     hpBarWidth: 30,
   },
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */

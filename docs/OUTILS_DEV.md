@@ -13,10 +13,10 @@ bouton « Copier le code » qui donne quoi y coller.
 | **Panneau Foule** | sliders du mouvement de foule (`CROWD`, `config.ts`) + config de travail |
 | **Panneau Triche** | tester vite une situation en jeu (hors ligne seulement) |
 | **Visionneuses** | Unités, Particules, Obstacles, Divers, Bonus, Vagues, Carte — des scènes dédiées (boutons à contour vert) |
-| **Panneau Équilibrage** | *annoncé, pas encore créé* : accueillera les réglages d'équilibrage du jeu (le « délai de soin » `CROWD.stillDelay` en a été retiré du panneau Foule pour y aller) |
+| **Panneau Difficulté** | TOUS les réglages globaux d'équilibrage (`DIFFICULTY` / `DIFFICULTY_DEFAULTS`, `config.ts`), par section : aliens, boss (PV, escalade, enragement), zombies, squad (stats de base), multijoueur, vagues (pause / reprise, rejeu pendant un boss), aides au joueur (power-ups, stimpack, revive, relances, prismatiques) ; Save / Reset (`src/dev/difficultyPanel.ts`, `src/debugDifficulty.ts`, bouton tête de mort du HUD) |
 
 Les menus (Réglages, Foule, Triche) s'ouvrent toujours **à gauche**, sous les boutons du HUD, côte à côte dans l'ordre
-d'ouverture (`src/dev/dock.ts`). Boutons du HUD (**en bas à gauche**), de gauche à droite : Réglages · Foule · Triche · Unités · Particules ·
+d'ouverture (`src/dev/dock.ts`). Boutons du HUD (**en bas à gauche**), de gauche à droite : Réglages · Foule · Triche · Difficulté · Unités · Particules ·
 Obstacles · Divers · Bonus · Upgrades · Vagues · Carte (les visionneuses ont un contour vert, `VIEW_BORDER` dans `dev/hudButtons.ts`). Dans une visionneuse, une **croix** en haut à droite de son panneau ramène au jeu (pas de navigation entre
 vues : on repasse par le jeu).
 
@@ -44,7 +44,7 @@ vidé, timeline des vagues reprise juste après l'apparition du boss (ou 30 s av
 par niveau comme en jeu (vraie offre de 3 cartes, toutes les upgrades, prismatiques et renforts compris ; carte retenue selon les préférences
 mesurées dans tes parties enregistrées : `PICK_WEIGHTS`), squad pleine de Gunners seulement (taille max après upgrades + renforts ; classes
 spéciales retirées en attendant les pièces). Réglages : `JUMPS` (niveau, durée de combat) et `PICK_WEIGHTS` en tête de `dev/jumpAhead.ts`. Aussi
-par l'URL, **build déployé compris** : `?jump=gling`, `?jump=rhino`, `?jump=scarab`, `?jump=crab` (saute le tutoriel ; « Rejouer » refait le
+par l'URL, **build déployé compris** : `?jump=gling`, `?jump=rhino`, `?jump=scarab`, `?jump=twins`, `?jump=crab` (saute le tutoriel ; « Rejouer » refait le
 saut) ; code : `Sim.fastForward`, `Squad.fastForward`, `WaveRunner.skipTo`.
 
 **Coéquipiers IA (coop)** : l'hôte d'une partie coop (`?net=host`) a, dans ce panneau, une section « Coéquipiers IA » (seule
@@ -75,7 +75,7 @@ sans navigateur (expert doit durer plus longtemps que standard, déterminisme).
 
 ## Visionneuse de particules (`?particles`, `src/fxParams.ts`, `src/debugFx.ts`)
 
-**Tous** les effets visuels du jeu, 24 entrées, chacune rejouable et avec son bloc de réglages dans `FX_DEFAULTS` : éclaboussure, explosion (flammes + onde + secousse), **fissures noires au sol** (avec une trace de brûlure noir / gris dessous), onde de choc, soin, texte flottant, impact de balle, éclatement de gelée, flaques, flash de tir, roquette + fumée, spirale et colonne de lumière, perte d'un soldat, **secousses d'écran** (slam, mort d'un soldat, mort d'un gros alien), poussière d'apparition, bulle de critique, flammes d'enragé, **croix de soin** dans les globes de soin, **glaçon** (éclats à chaque coup, fissures, taille qui rétrécit), globe de **stase** (flocon), **ondes de montée de niveau** (avec la déformation de l'écran), pluie prismatique des cartes, recrue (bonus +1). Sliders de
+**Tous** les effets visuels du jeu, 27 entrées, chacune rejouable et avec son bloc de réglages dans `FX_DEFAULTS` : **télégraphes** des attaques d'aliens (`telegraph` : une couleur par type — charge, saut, boules en cloche, kamikaze, pics du lurker, Scarab, stalactites, murs — et opacité à l'impact ; aperçu des 8 types en boucle ; code commun dans `view/telegraph.ts`), éclaboussure, explosion (flammes + onde + secousse), **fissures noires au sol** (avec une trace de brûlure noir / gris dessous), onde de choc, soin, texte flottant, impact de balle, éclatement de gelée, flaques, flash de tir, roquette + fumée, spirale et colonne de lumière, perte et **gain** d'un soldat, **globe d'upgrade** (taille, étoiles et paillettes multicolores, cercle au sol), **secousses d'écran** (slam, mort d'un soldat, mort d'un gros alien), poussière d'apparition, bulle de critique, flammes d'enragé, **croix de soin** dans les globes de soin, **glaçon** (éclats à chaque coup, fissures, taille qui rétrécit), globe de **stase** (flocon), **ondes de montée de niveau** (avec la déformation de l'écran), pluie prismatique des cartes, recrue (bonus +1). Sliders de
 vitesse / taille / opacité / durée / quantité / couleur / secousse, aperçu en boucle ou au clic, Gunner de référence (case pour
 le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS` ; **Save** réécrit les valeurs de tous les effets dans `fxParams.ts`, **Reset** revient à la dernière sauvegarde.
 **Règle** : tout nouvel effet (particules, tween, secousse, décor au sol) lit ses valeurs dans `FX` (`fxParams.ts`) et a une entrée dans la visionneuse (`EFFECTS`, `ParticleViewerScene.ts`) avec son aperçu ; pas de nombre codé en dur dans `Fx.ts` / `WorldView.ts`. Les effets partagés par le jeu et la visionneuse vivent dans `view/` (`Fx.ts`, `EnragedFx.ts`, `PrismFx.ts`, `ShockDistort.ts`).
@@ -134,6 +134,7 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `slice-boss-bar.mjs` | `jauge_boss.png` → `ui/boss/frame.png` + `fill.png` (jauge de la timeline en rouge ; à lancer après `slice-timeline-ui`) | `HudScene.drawBoss` |
 | `slice-hud-buttons.mjs` | `bouton pause sound musique.png` → `ui/hud/` (bouton vide + 3 icônes) | `view/HudButtons.ts` |
 | `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_<id>.png` (11 couleurs) + `card_prism.png` (holographique) | `LevelUpScene` |
+| `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |
 | `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |
 | `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty_<id>.png` | slots des cartes |
 | `slice-levelup-title.mjs`, `slice-reroll-button.mjs`, `slice-star-particle.mjs`, `slice-rewarded-icon.mjs` | titre, bouton Reroll, étoile (`fx/star.png`), icône rewarded | `LevelUpScene`, `Button` du moteur |

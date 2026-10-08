@@ -16,6 +16,7 @@ try {
   const { LoopbackHub } = await vite.ssrLoadModule('/src/net/LoopbackTransport.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
+  const { UPGRADE_IDS } = await vite.ssrLoadModule('/src/data/progression.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
   const { INTERP_DELAY_MS } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
   /** Ticks à attendre pour qu'un changement de l'hôte s'affiche chez le client : tampon d'interpolation (v38) + 2 ticks de marge. */
@@ -321,6 +322,18 @@ try {
     check(!!k && Math.abs(k.x - 1234.5) < 0.2 && Math.abs(k.y - 987.25) < 0.2 && k.r === 55 && Math.abs(k.t - 1.1) < 0.02 && Math.abs(k.dur - 1.1) < 0.02, 'stalactite du Scarab : zone et compte à rebours transmis au client', k ? `(${k.x}, ${k.y}) r ${k.r}, ${k.t.toFixed(2)} s` : 'absente');
     hs.stalactites.length = 0;
   }
+  { // coffres de boss et globes d'upgrade (v44) : position, progression, propriétaire et chute transmis au client
+    const c = hs.chests.drop(1500.25, 800.5);
+    c.progress = DIFFICULTY.chestTime / 2;
+    const o = hs.upgradeOrbs.drop(a.owner, 'damage', 1500.25, 800.5, 0.7);
+    const snap = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
+    const kc = snap.chests.at(-1);
+    const ko = snap.upgradeOrbs.at(-1);
+    check(!!kc && Math.abs(kc.x - c.x) < 0.2 && Math.abs(kc.y - c.y) < 0.2 && Math.abs(kc.progress - 0.5) < 0.01, 'coffre de boss : position et progression transmises au client', kc ? `${kc.progress.toFixed(2)}` : 'absent');
+    check(!!ko && ko.owner === a.owner && ko.upgrade === UPGRADE_IDS.indexOf('damage') && Math.abs(ko.fall - o.hop.t) < 0.02 && Math.abs(ko.x - o.x) < 0.2, 'globe d’upgrade : propriétaire, position et chute transmis au client', ko ? `${ko.owner}, chute ${ko.fall.toFixed(2)} s` : 'absent');
+    hs.chests.clear();
+    hs.upgradeOrbs.clear();
+  }
   hs.aliens.length = 0;
   // les escouades de ce test sont inactives : selon l'aléatoire de la partie, elles peuvent être anéanties avant ici (fin de partie coop) :
   // on attend la relance automatique de l'hôte ; un choix d'upgrade en cours met aussi le monde en pause (il se termine tout seul)
@@ -383,8 +396,8 @@ try {
   hs.aliens.length = 0;
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
-    const { SQUAD_BASE } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
-    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m * SQUAD_BASE.damage).texture.replace('fx_blaster_', '')).join(' > ');
+    const { DIFFICULTY: D } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
+    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m * D.squadDamage).texture.replace('fx_blaster_', '')).join(' > ');
     check(names === 'blue > green > yellow > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);

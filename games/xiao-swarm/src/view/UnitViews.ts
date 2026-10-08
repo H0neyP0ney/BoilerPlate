@@ -7,6 +7,7 @@ import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { iceLook } from './IceBlockFx';
 import { soldierSpriteId } from '../art/playerVariants';
 import { hasComposedRecruit, recruitSpriteId, RECRUIT_STAR } from '../art/recruits';
+import { createGlobeGlitter, type GlobeGlitter } from './GlobeGlitter';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
 
 /**
@@ -501,7 +502,7 @@ export class RecruitView {
   ry = 0;
   dim = false;
   private readonly img: Phaser.GameObjects.Sprite;
-  private readonly stars?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly glitter?: GlobeGlitter;
 
   constructor(
     scene: Phaser.Scene,
@@ -516,24 +517,8 @@ export class RecruitView {
     const id = recruitSpriteId(state.cls, slot);
     this.img = sprites.add(scene, id, state.x, state.y);
     sprites.play(this.img, id, 'idle');
-    // Étoiles qui scintillent autour d'une recrue composée : apparaissent, grossissent puis s'éteignent en tournant (FX.recruit).
-    if (hasComposedRecruit(scene, state.cls) && scene.textures.exists(RECRUIT_STAR)) {
-      const f = FX.recruit;
-      const r = f.starRadius;
-      this.stars = scene.add
-        .particles(state.x, state.y, RECRUIT_STAR, {
-          x: { min: -r, max: r },
-          y: { min: -r * 1.2, max: r * 0.6 },
-          speedY: { min: -f.starRise * 1.5, max: -f.starRise * 0.5 },
-          scale: { values: [0, f.starScale, f.starScale * 0.6, 0], interpolation: 'catmull' }, // pop puis extinction
-          alpha: { values: [0.4, 1, 1, 0], interpolation: 'linear' },
-          rotate: { start: 0, end: 90 },
-          lifespan: { min: f.starLifeMin, max: Math.max(f.starLifeMin, f.starLifeMax) },
-          frequency: f.starEvery,
-          blendMode: 'ADD',
-        })
-        .setDepth(DEPTH.actors + state.y + 1);
-    }
+    // étoiles qui scintillent autour d'une recrue composée (FX.recruit) : le même effet que les power-ups (vert) et les globes d'upgrade (rose)
+    if (hasComposedRecruit(scene, state.cls)) this.glitter = createGlobeGlitter(scene, state.x, state.y, RECRUIT_STAR) ?? undefined;
   }
 
   sync(alpha: number, time: number): void {
@@ -556,11 +541,11 @@ export class RecruitView {
     this.dim = blink;
     // centre du globe : l'image est ancrée vers son bas (originY 0.82)
     // centre du globe : l'image est ancrée sous lui (ses pieds)
-    this.stars?.setPosition(x, y + bob - this.img.displayHeight * (this.img.originY - 0.5) + FX.recruit.starY).setDepth(DEPTH.actors + y + 1);
+    this.glitter?.setPosition(x, y + bob - this.img.displayHeight * (this.img.originY - 0.5), DEPTH.actors + y + 1, blink ? 0.3 : 1);
   }
 
   destroy(): void {
     this.img.destroy();
-    this.stars?.destroy();
+    this.glitter?.destroy();
   }
 }

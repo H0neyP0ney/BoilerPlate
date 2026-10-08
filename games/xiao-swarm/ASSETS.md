@@ -96,3 +96,7 @@ par la simulation (`Arena`) et l'affichage (`ArenaView`). Placement sur la carte
 (champ « Taille » de la vue d'obstacles) redimensionne sprite, hitbox et taches ensemble.
 Réglage des hitbox et des taches : bouton « hitbox » en haut à gauche du jeu (dev) ou `?obstacles` (liste « Édition » : hitbox / taches), puis « Copier le code » → coller
 l'entrée dans `OBSTACLES`. Opacité des taches : menu Réglages, section « Visuel » ; leur taille (largeur, échelle Y) se règle par variante dans la vue Obstacles. Les réglages du navigateur (`localStorage`) ne servent qu'à tester en local.
+
+## Rhinos jumeaux (mini-boss de 7:30)
+
+Ids `boss_rhino_fire` et `boss_rhino_ice` : planches `public/assets/aliens/boss_rhino_fire.png` / `boss_rhino_ice.png`, la planche du Rhino Alpha recolorée par `node tools/hue-shift.mjs` (feu : `165 1.15 160 270`, glace : `-12 0.45 160 270 0.35` ; mêmes cases, ancrages, échelle et ombre que l'Alpha). L'orbe de feu (`alien_fire_orb`) est dessiné (`src/art/aliens.ts`). Les globes au sol (power-ups, globes d'upgrade) et leurs étoiles sont recolorés au chargement, sans fichier (`src/art/upgradeOrbs.ts`).

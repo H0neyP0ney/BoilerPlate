@@ -12,6 +12,13 @@ export const iconCrowd: Icon = (g) => {
   [[0, 0], [-9, -6], [9, -6], [-7, 8], [7, 8], [0, -12]].forEach(([x, y]) => g.fillCircle(x, y, 4));
 };
 
+/** Difficulté : une tête de mort. */
+export const iconDifficulty: Icon = (g) => {
+  g.fillStyle(0xff7a6a, 1).fillCircle(0, -3, 11).fillRoundedRect(-6, 4, 12, 9, 2);
+  g.fillStyle(0x1b2333, 1).fillCircle(-4.5, -4, 3.2).fillCircle(4.5, -4, 3.2).fillTriangle(0, 1, -2, 5, 2, 5);
+  g.fillRect(-3.5, 9, 1.6, 4).fillRect(-0.8, 9, 1.6, 4).fillRect(1.9, 9, 1.6, 4);
+};
+
 /** Triche : un éclair. */
 export const iconCheat: Icon = (g) => {
   g.fillStyle(0xffd166, 1).fillTriangle(4, -14, -7, 3, 1, 3).fillTriangle(-4, 14, 7, -3, -1, -3).fillRect(-3, -3, 6, 6);

@@ -128,6 +128,8 @@ export interface AlienState extends Body {
   noXp: boolean;
   /** Invoqué ou ressuscité : ne laisse jamais de recrue (les aliens des vagues rejouées pendant un boss, eux, en laissent). */
   noRecruit: boolean;
+  /** Apparaît sur place, sans trou ni délai d'émergence (araignées qui surgissent du cadavre d'un chaman). */
+  instant: boolean;
   /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */
   lurkPhase: number;
   lurkT: number;

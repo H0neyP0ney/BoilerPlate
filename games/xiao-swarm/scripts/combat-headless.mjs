@@ -62,7 +62,7 @@ try {
     check(!ALIENS.spitter.cloud && sim.puddles.length === 0, 'cracheur : plus de nuage ralentissant (retiré pour l’instant)', `${sim.puddles.length} nuage(s)`);
   }
 
-  // ---- chaman : 3 petits nuages de glace autour de la squad ; un soldat qui y entre est gelé
+  // ---- chaman : 2 petits nuages de glace autour de la squad ; un soldat qui y entre est gelé
   {
     const { sim, step } = fresh(23);
     clearAliens(sim);
@@ -73,7 +73,7 @@ try {
     sh.cloudCd = 0;
     step(2);
     const frosts = sim.puddles.filter((p) => p.frost);
-    check(frosts.length === 3 && frosts.every((p) => p.r === 30 && p.ttl > 9.5), 'chaman : 3 petits nuages de glace (10 s)', `${frosts.length} nuage(s)`);
+    check(frosts.length === 2 && frosts.every((p) => p.r === 25.5 && p.ttl > 9.5), 'chaman : 2 petits nuages de glace (10 s)', `${frosts.length} nuage(s)`);
     const gapToSquad = Math.min(...frosts.map((p) => Math.min(...sq.soldiers.map((s) => Math.hypot(p.x - s.x, p.y - s.y) - p.r - s.radius))));
     check(gapToSquad >= 80, 'chaman : nuages autour de la squad, à bonne distance de chaque soldat', `${Math.round(gapToSquad)} px au plus près`);
     check(sim.slowAt(frosts[0].x, frosts[0].y, 10) === 1, 'nuage de glace : ne ralentit pas');
@@ -84,7 +84,7 @@ try {
     sim.aliens = sim.aliens.filter((a) => a === sh); // isole
     step(1);
     check(s.frozen === 50 && !sim.aliens.some((a) => a !== sh), 'nuage de glace : le soldat qui y entre est gelé (50 PV de gel, aucun alien créé)', `${s.frozen}`);
-    check(sim.puddles.filter((p) => p.frost).length === 2, 'nuage de glace : consommé par le gel');
+    check(sim.puddles.filter((p) => p.frost).length === 1, 'nuage de glace : consommé par le gel (1 des 2 reste)');
   }
 
   // ---- aucun bouclier de soldat
@@ -192,6 +192,33 @@ try {
     check(Math.abs(sim.escalation - 1.21) < 1e-9, 'escalade : cumulée (2 boss = ×1,21)', `${sim.escalation.toFixed(3)}`);
     sim.restart();
     check(sim.bossKills === 0 && sim.escalation === 1, 'escalade : remise à zéro à la relance de la partie');
+  }
+
+  // ---- chaman : à sa mort, 5 araignées (invoquées : ni XP ni recrue) ; pas pendant le clear screen d'un boss
+  {
+    const { sim, step } = fresh(15);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    for (const o of sq.soldiers) o.invulnerable = 1e9;
+    check(ALIENS.shaman.deathSpawn?.spawn === 'spider' && ALIENS.shaman.deathSpawn?.count === 5, 'chaman : 5 araignées à sa mort (données)');
+    sim.horde.spawnAt('shaman', sq.center.x + 400, sq.center.y, 1, false);
+    step(60); // le chaman sort d'abord de terre (intouchable pendant ce temps)
+    const sh = sim.aliens.find((a) => a.def.id === 'shaman');
+    sim.damage(sh, 1e9, 'p1');
+    step(2);
+    const spiders = sim.aliens.filter((a) => a.def.id === 'spider' && a.alive);
+    check(spiders.length === 5, 'chaman tué : 5 araignées apparaissent autour de son corps', `${spiders.length} araignée(s)`);
+    check(spiders.every((a) => a.noXp && a.noRecruit && Math.hypot(a.x - sh.x, a.y - sh.y) < 80), 'araignées du chaman : sans XP ni recrue, près du cadavre');
+    check(spiders.every((a) => a.instant && !sim.horde.isEmerging(a) && sim.horde.targetable(a)), 'araignées du chaman : surgissent sur place (pas enterrées, ciblables tout de suite)');
+    // clear screen : un boss tué emporte le chaman sans qu'il laisse d'araignées
+    clearAliens(sim);
+    sim.horde.spawnAt('shaman', sq.center.x + 400, sq.center.y, 1, false);
+    sim.horde.spawnAt('boss_gling', sq.center.x - 400, sq.center.y, 1, false);
+    step(60);
+    const boss = sim.aliens.find((a) => a.def.id === 'boss_gling');
+    sim.damage(boss, 1e9, 'p1');
+    step(2);
+    check(!sim.aliens.some((a) => a.def.id === 'spider' && a.alive), 'boss tué (clear screen) : le chaman ne laisse pas d’araignées');
   }
 
   // ---- chaman : repos de 30 s après 3 résurrections

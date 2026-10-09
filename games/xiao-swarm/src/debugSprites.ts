@@ -30,6 +30,8 @@ export interface Placement {
   shadow?: number;
   /** Échelle d'affichage de l'unité (1 = taille de la planche). Ne change pas la hitbox. */
   scale?: number;
+  /** Décalage vertical (px) du sprite et de son ombre (positif = vers le bas). Ne change pas la hitbox. */
+  offsetY?: number;
 }
 
 let overrides: Record<string, Placement> = {};
@@ -38,7 +40,7 @@ const base = new Map<string, Placement>();
 
 const read = (id: string): Placement => {
   const d = sprites.get(id);
-  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, muzzleFlash: d.muzzleFlash, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale };
+  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, muzzleFlash: d.muzzleFlash, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale, offsetY: d.offsetY };
 };
 
 function persist(): void {
@@ -167,7 +169,7 @@ function commitMuzzles(id: string, anim: string, list: (Point | null)[]): void {
 /** Save : écrit le placement de l'unité (ancrage, échelle, ombre, bouche du canon) dans son entrée de assets/manifest.ts. */
 export async function saveSpriteToCode(id: string): Promise<string> {
   const d = sprites.get(id);
-  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, muzzleFlash: d.muzzleFlash, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
+  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, offsetY: d.offsetY, muzzleFlash: d.muzzleFlash, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
   const msg = await saveToCode('sprite', { id, props });
   if (msg.startsWith('✔')) {
     base.set(id, read(id)); // « Reset » ramène maintenant à cette sauvegarde
@@ -185,7 +187,8 @@ export function placementSnippet(id: string): string {
   const d = sprites.get(id);
   const lines = [`originX: ${n(d.originX ?? 0.5)}, originY: ${n(d.originY ?? 0.5)},`];
   lines.push(`scale: ${n(d.scale ?? 1)},`);
-  if (d.shadow !== undefined && d.shadow !== 1) lines.push(`shadow: ${n(d.shadow)},`);
+  if (d.shadow !== undefined) lines.push(`shadow: ${n(d.shadow)},`);
+  if (d.offsetY) lines.push(`offsetY: ${n(d.offsetY)},`);
   const anchors = Object.entries(d.anchors ?? {});
   if (anchors.length) lines.push(`anchors: { ${anchors.map(([k, v]) => `'${k}': ${pt(v)}`).join(', ')} },`);
   if (d.muzzleFlash) lines.push('muzzleFlash: true,');

@@ -1,7 +1,0 @@
-{
-  "output": "../public/assets/aliens/rino.png",
-  "scale": 0.25,
-  "sheets": [
-    { "name": "walk", "input": "rino.png", "cols": 4, "rows": 4 }
-  ]
-}

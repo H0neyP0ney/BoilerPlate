@@ -5,7 +5,7 @@ import Phaser from 'phaser';
  * Chargée en différé (hors du chargement initial, pour le budget Poki) puis jouée dès que le navigateur autorise le son
  * (premier input). Le SDK Poki coupe déjà le son pendant les pubs (`game.sound.mute`).
  *
- *   music.play(scene, 'music', ['assets/audio/music.ogg', 'assets/audio/music.mp3'], 0.5);
+ *   music.play(scene, 'music', ['assets/audio/music.mp3'], 0.5); // mp3 seul : lu par tous les navigateurs (Safari / iOS compris), pas d'ogg à livrer
  *   music.setVolume(scene.game, 0.3);
  */
 let current: { key: string; volume: number } | null = null;

@@ -17,7 +17,8 @@ const ICON_SCALE = 0.7;
 
 export const upgradeOrbKey = (id: UpgradeId): string => `upgrade_orb_${id}`;
 /** Texture du globe vert des power-ups (icône dessinée par-dessus). */
-export const POWERUP_GLOBE = 'powerup_globe';
+/** Clé de la texture du globe d'un power-up (une par sorte : chacun a sa teinte, `POWERUP_INFO`). */
+export const powerUpGlobeKey = (kind: string): string => `powerup_globe_${kind}`;
 
 /** Éclaircit tous les pixels de `data` (RGBA) vers le blanc de `amount` (0 à 1), transparence conservée. */
 export function lightenPixels(data: Uint8ClampedArray, amount: number): void {
@@ -117,7 +118,7 @@ export function ensureStarTexture(scene: Phaser.Scene, hue: number, light = 0): 
 
 /** Supprime les textures de globes déjà créées (visionneuse : une teinte `FX` a changé, elles sont refaites au prochain besoin). */
 export function clearGlobeTextures(scene: Phaser.Scene): void {
-  for (const k of scene.textures.getTextureKeys()) if (k.startsWith('upgrade_orb_') || k.startsWith('bonus_star_') || k === POWERUP_GLOBE) scene.textures.remove(k);
+  for (const k of scene.textures.getTextureKeys()) if (k.startsWith('upgrade_orb_') || k.startsWith('bonus_star_') || k.startsWith('powerup_globe_')) scene.textures.remove(k);
 }
 
 export function ensureUpgradeOrbTexture(scene: Phaser.Scene, id: UpgradeId): string | null {

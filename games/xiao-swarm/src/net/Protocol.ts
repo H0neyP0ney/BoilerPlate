@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 46; // 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 48; // 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -127,6 +127,8 @@ export interface AlienSnap {
   zombie: boolean;
   /** S'enterre avant d'être déplacé (recyclage des traînards, v39 : bit 16 des drapeaux de l'alien). */
   sinking: boolean;
+  /** Surgit sur place, sans trou d'apparition (`AlienState.instant`). */
+  instant: boolean;
   /** Niveau d'enragement d'un boss (0 à 2). */
   enraged: number;
   /** Lurker : phase, temps restant dans la phase (s) et direction des pics. */
@@ -293,6 +295,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       castCorpse: a.castCorpse,
       zombie: a.revived,
       sinking: a.sinkT > 0,
+      instant: a.instant,
       enraged: a.enraged,
       lurkPhase: a.lurkPhase,
       lurkT: a.lurkT,
@@ -496,7 +499,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(ALIEN_IDS.indexOf(a.type));
     w.pos(a.x);
     w.pos(a.y);
-    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2) | (a.sinking ? 16 : 0) | (bigHp ? 32 : 0));
+    w.u8((a.rushing ? 1 : 0) | (a.zombie ? 2 : 0) | (Math.min(a.enraged, 3) << 2) | (a.sinking ? 16 : 0) | (bigHp ? 32 : 0) | (a.instant ? 64 : 0));
     if (bigHp) w.f32(a.maxHp);
     else w.u16(a.maxHp);
     w.u16(Math.round(Math.max(0, Math.min(1, a.hp / a.maxHp)) * 65535));
@@ -782,7 +785,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         spikeAng = r.f32();
       }
       const shield = def.shield ? r.u8() / 255 : 0;
-      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), sinking: !!(aflags & 16), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
+      snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), sinking: !!(aflags & 16), instant: !!(aflags & 64), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
     }
 
     const nRecruits = r.u16();

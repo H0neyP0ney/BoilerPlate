@@ -34,7 +34,7 @@ export class PreloadScene extends Phaser.Scene {
     // Exemples :
     // this.load.image('bg', 'bg.webp');
     // this.load.spritesheet('hero', 'hero.png', { frameWidth: 64, frameHeight: 64 });
-    // this.load.audio('coin', ['coin.ogg', 'coin.mp3']);
+    // this.load.audio('coin', 'coin.mp3'); // mp3 seul : lu par tous les navigateurs, inutile de livrer aussi un ogg
   }
 
   create(): void {

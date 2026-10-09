@@ -64,7 +64,8 @@ sans navigateur (expert doit durer plus longtemps que standard, déterminisme).
 
 - **S'ouvre toujours sur la vue d'ensemble** (toutes les unités, à 80 %, 6 par ligne, boss sur une ligne à part, barre de défilement + molette) : pas de panneau, un clic sur une unité ouvre sa vue détaillée, la croix en haut à droite quitte vers le jeu. Chaque unité porte son nom anglais et son id ; les unités **inactives** (hors `ACTIVE_CLASSES` / `ACTIVE_ALIENS`) sont à 25 % d'opacité.
 - Vue d'une unité (panneau) : Save / Reset / Copier tout en haut, puis Zoom, Unité, Animation (seulement celles de la planche ; pas d'idle pour un alien qui a un walk), Orientation (boutons ← →). La croix du panneau ramène à la vue d'ensemble. Ombre à alpha 1.
-- Ordre du panneau : **Échelle** (réglage global du sprite), puis Ancrage (portée par défaut : « Cette séquence + direction »), Ombre, Muzzle flash.
+- Ordre du panneau : **Échelle** (réglage global du sprite), puis Ancrage (portée par défaut : « Cette séquence + direction »), Ombre (rayon en px, indépendant de la hitbox), **Décalage Y** (sprite + ombre, la hitbox ne bouge pas), Muzzle flash.
+- **Hitbox et poignées** (vue détaillée seulement) : cercle rouge transparent de rayon `radius` au point au sol (case « Hitbox ») ; trois poignées à glisser sur l'unité : **rouge** (à droite du cercle : `radius`, le même que le curseur du panneau Stats), **grise** (bas de l'ombre : rayon de l'ombre), **bleue** (coin haut droit du sprite : échelle).
 - **Muzzle flash** : case « Cette unité a un muzzle flash » (`muzzleFlash: true` dans le manifeste ; seul `soldier_trooper` en a un, le jeu n'affiche le flash que si la case est cochée). Cochée : point rouge (bouche du canon par frame), bouton **« Placer le canon au clic »** (le clic gauche pose le canon sur la frame affichée au lieu de déplacer le sprite), « Toutes les frames », « Effacer la frame », « Défaut unité ».
 - **Ancrage** (croix jaune, glisser le sprite) : pour toute l'unité, une séquence, ou une séquence **dans une direction**
   (`anchors: { 'walk': [x, y], 'walk:left': [x, y] }`). Pour un sprite retourné, `originX/Y` se rapportent à la boîte de l'image
@@ -131,7 +132,9 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 |---|---|---|
 | `slice-timeline-ui.mjs` | `timeline_next_boss.png` → `ui/timeline/*` (cadre, jauge jaune 3-slice, flèche, crans, anneau) et `ui/xp/fill.png` (jauge jaune recolorée en bleu) | `view/TimelineHud.ts`, barre d'XP |
 | `slice-xp-bar.mjs` | `experience bar.png` → `ui/xp/frame.png` (cadre vidé) | `HudScene.drawXp` |
-| `slice-boss-bar.mjs` | `jauge_boss.png` → `ui/boss/frame.png` + `fill.png` (jauge de la timeline en rouge ; à lancer après `slice-timeline-ui`) | `HudScene.drawBoss` |
+| `slice-boss-bar.mjs` | `jauge_boss.png` (cadre à cornes vidé) + `ui/xp/fill.png` recoloré en rouge → `ui/boss/frame.png` + `fill.png` (à lancer après `slice-xp-bar`) | `HudScene.drawBoss` |
+| `slice-powerup-icons.mjs` | `powerups.png` (grille 3 × 2) → `ui/powerups/<sorte>.png` + `fx/rocket.png` (la fusée, tournée vers la droite : projectile `fx_rocket`) | globes de power-up, texte flottant, tirs de roquette |
+| `slice-freezebot.mjs` | `freezebot.png` → `fx/freezebot.png` (le medibot est la case « soin » de `powerups.png`) | `PickupViews.syncBots` |
 | `slice-hud-buttons.mjs` | `bouton pause sound musique.png` → `ui/hud/` (bouton vide + 3 icônes) | `view/HudButtons.ts` |
 | `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_<id>.png` (11 couleurs) + `card_prism.png` (holographique) | `LevelUpScene` |
 | `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |

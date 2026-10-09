@@ -14,6 +14,8 @@ import { t as tr } from '../i18n';
 /** Flaques de mort groupées : au-delà de `PUDDLE_MAX_BATCHES` lots de même couleur dans ce rayon (px) et cette durée (ms), on n'en pose plus. */
 /** Rayon d'explosion (px) pour lequel la secousse vaut `FX.explosion.shakeAmount` ; plus petit = plus léger, plus grand = plus fort. */
 const SHAKE_REF_RADIUS = 120;
+/** Bleus des flocons de la traînée de l'orbe de glace (teinte multiplicative sur le flocon clair). */
+const BLUE_FLAKES = [0x4aa8ff, 0x6fc0ff, 0x3a8cf0];
 const PUDDLE_MERGE_RADIUS = 45;
 const PUDDLE_MERGE_MS = 700;
 const PUDDLE_MAX_BATCHES = 2;
@@ -327,11 +329,12 @@ export class Fx {
     const R = Phaser.Math.FloatBetween;
     for (; this.trailAcc >= 0.03; this.trailAcc -= 0.03) {
       const img = this.scene.add
-        .image(x + R(-6, 6), y + R(-6, 6), 'fx_ice_ball')
+        .image(x + R(-8, 8), y + R(-8, 8), 'fx_ice_ball')
         .setDepth(DEPTH.fx - 0.1)
-        .setScale(R(0.12, 0.26))
+        .setScale(R(0.2, 0.42)) // plus gros (0,12-0,26 avant le 09/10)
         .setRotation(R(0, Math.PI * 2))
         .setAlpha(0.9);
+      if (Math.random() < 0.5) img.setTint(BLUE_FLAKES[Math.floor(Math.random() * BLUE_FLAKES.length)]); // la moitié des flocons est plus bleue
       this.scene.tweens.add({ targets: img, y: img.y + R(8, 22), rotation: img.rotation + R(-3, 3), alpha: 0, scale: img.scale * 0.4, duration: R(350, 600), ease: 'Sine.In', onComplete: () => img.destroy() });
     }
   }

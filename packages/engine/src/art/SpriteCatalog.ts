@@ -33,8 +33,10 @@ export interface SpriteDef {
   facesLeft?: boolean;
   /** Recadrage (px de la frame) : x, y, largeur, hauteur. Ex. portrait = haut du corps. */
   crop?: [number, number, number, number];
-  /** Taille de l'ombre portée sous l'unité (1 = ombre par défaut, proportionnelle au rayon de l'unité). */
+  /** Rayon de l'ombre portée sous l'unité (px), indépendant du rayon de collision ; absent = le rayon de collision de l'unité. */
   shadow?: number;
+  /** Décalage vertical (px, positif = vers le bas) du sprite ET de son ombre portée par rapport au point au sol (la hitbox, elle, ne bouge pas). Absent = 0. */
+  offsetY?: number;
   /** Ne pas afficher (ex. arme déjà dessinée dans la planche du soldat). */
   hidden?: boolean;
   /** Animations : nom logique ('idle', 'walk', 'shoot'…) → clé d'animation Phaser. */

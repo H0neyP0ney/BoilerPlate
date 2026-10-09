@@ -1,0 +1,7 @@
+{
+  "output": "../public/assets/aliens/spider.png",
+  "scale": 0.18286,
+  "sheets": [
+    { "name": "walk", "input": "spider.png", "cols": 4, "rows": 4 }
+  ]
+}

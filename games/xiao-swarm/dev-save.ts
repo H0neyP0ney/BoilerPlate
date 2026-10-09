@@ -164,7 +164,7 @@ function saveObstacle(id: string, code: string): Result {
 
 // --- planches de sprites (assets/manifest.ts)
 
-const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'muzzleFlash', 'muzzle', 'anchors', 'muzzles'];
+const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'offsetY', 'muzzleFlash', 'muzzle', 'anchors', 'muzzles'];
 const pt = (p: [number, number]): string => `[${fmtNumber(p[0])}, ${fmtNumber(p[1])}]`;
 
 interface SpriteProps {
@@ -172,6 +172,7 @@ interface SpriteProps {
   originY?: number;
   scale?: number;
   shadow?: number;
+  offsetY?: number;
   muzzleFlash?: boolean;
   muzzle?: [number, number];
   anchors?: Record<string, [number, number]>;
@@ -183,7 +184,8 @@ function spriteLines(p: SpriteProps): string[] {
   if (p.originX !== undefined) out.push(`originX: ${fmtNumber(p.originX)},`);
   if (p.originY !== undefined) out.push(`originY: ${fmtNumber(p.originY)},`);
   if (p.scale !== undefined) out.push(`scale: ${fmtNumber(p.scale)},`);
-  if (p.shadow !== undefined && p.shadow !== 1) out.push(`shadow: ${fmtNumber(p.shadow)},`);
+  if (p.shadow !== undefined) out.push(`shadow: ${fmtNumber(p.shadow)},`);
+  if (p.offsetY) out.push(`offsetY: ${fmtNumber(p.offsetY)},`);
   if (p.muzzleFlash) out.push('muzzleFlash: true,');
   if (p.muzzle) out.push(`muzzle: ${pt(p.muzzle)},`);
   const anchors = Object.entries(p.anchors ?? {});

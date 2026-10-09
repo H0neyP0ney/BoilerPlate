@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
+import { alienOffsetY } from './spriteOffset';
 import { BURIED, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
@@ -148,16 +149,17 @@ export class SoldierView {
       this.body.setFlipX(sprites.flipFor(this.bodyId, facing));
     }
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
-    this.body.setPosition(this.rx, this.ry + bob).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));
+    const oy = sprites.get(this.bodyId).offsetY ?? 0; // décalage vertical du sprite (et de l'arme) réglé dans la visionneuse
+    this.body.setPosition(this.rx, this.ry + bob + oy).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));
     if (s.stun > 0) {
       this.stunIcon ??= this.scene.add.image(0, 0, 'fx_stun').setScale(0.9);
-      this.stunIcon.setVisible(true).setPosition(this.rx, this.ry - 44 + bob).setRotation(-time * 7).setDepth(DEPTH.actors + this.ry + 3);
+      this.stunIcon.setVisible(true).setPosition(this.rx, this.ry - 44 + bob + oy).setRotation(-time * 7).setDepth(DEPTH.actors + this.ry + 3);
     } else this.stunIcon?.setVisible(false);
 
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
       this.gun
-        .setPosition(this.rx + facing * 4, this.ry - 17 * (s.def.id === 'bruiser' ? 1.15 : 1) + bob)
+        .setPosition(this.rx + facing * 4, this.ry - 17 * (s.def.id === 'bruiser' ? 1.15 : 1) + bob + oy)
         .setRotation(aim)
         .setFlipY(Math.cos(aim) < 0)
         .setDepth(depth + 0.5);
@@ -226,12 +228,13 @@ export class SoldierView {
       this.lastIce = 0;
       return;
     }
-    this.ice ??= sprites.add(this.scene, 'alien_iceblock', this.rx, this.ry);
+    const oy = sprites.get(this.bodyId).offsetY ?? 0; // le glaçon enferme le soldat : il suit son sprite décalé
+    this.ice ??= sprites.add(this.scene, 'alien_iceblock', this.rx, this.ry + oy);
     const look = iceLook(frozen / FREEZE.hp);
     const k = sprites.scaleOf('alien_iceblock') * look.scale;
-    this.ice.setVisible(true).setPosition(this.rx, this.ry).setScale(k).setAlpha(0.82).setDepth(DEPTH.actors + this.ry + 1);
+    this.ice.setVisible(true).setPosition(this.rx, this.ry + oy).setScale(k).setAlpha(0.82).setDepth(DEPTH.actors + this.ry + 1);
     sprites.place(this.ice, 'alien_iceblock');
-    if (this.lastIce > 0 && frozen < this.lastIce) this.onIceHit?.(this.rx, this.ry - 8);
+    if (this.lastIce > 0 && frozen < this.lastIce) this.onIceHit?.(this.rx, this.ry + oy - 8);
     this.lastIce = frozen;
     if (look.stage > 0) {
       this.iceCracks ??= this.scene.add.image(0, 0, 'alien_iceblock_cracks_1');
@@ -306,7 +309,7 @@ export class AlienView {
     emerge = false,
   ) {
     // lurker (il creuse son propre trou) et ressuscité (il sort de sa flaque) n'ont pas de trou d'apparition
-    this.emergeT = emerge && !state.def.lurk && !state.revived && !state.def.projectile ? 0 : EMERGE_OPEN + EMERGE_POP + EMERGE_FADE; // un projectile n'a pas de trou
+    this.emergeT = emerge && !state.def.lurk && !state.revived && !state.instant && !state.def.projectile ? 0 : EMERGE_OPEN + EMERGE_POP + EMERGE_FADE; // un projectile n'a pas de trou
     // sort d'un trou d'apparition : il monte hors du sol (sprite rogné de 0 à 100 %, `groundCut`) au lieu de surgir en grossissant
     if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
@@ -362,7 +365,7 @@ export class AlienView {
     const dh = b.displayHeight;
     const top = b.y - b.originY * dh;
     const cutY = top + show * dh; // ligne de coupe avant décalage
-    const ground = this.ry + GROUND_CUT_DY; // fond du trou, juste sous le centre de l'ombre
+    const ground = this.ry + (sprites.get(this.id).offsetY ?? 0) + GROUND_CUT_DY; // fond du trou (suit le décalage du sprite et de l'ombre), juste sous le centre de l'ombre
     const k = Math.min(1, (1 - show) / 0.25);
     b.setCrop(0, 0, b.frame.width, b.frame.height * show);
     b.setY(b.y + (ground - cutY) * k);
@@ -372,11 +375,12 @@ export class AlienView {
   /** Trou d'apparition sous l'alien (null : aucun) : `open` 0 → 1 pendant qu'il se creuse, `alpha` qui tombe à 0 quand l'alien en est sorti. */
   hole(): { x: number; y: number; radius: number; open: number; alpha: number } | null {
     // s'enterre (recyclage des traînards) : le trou s'ouvre sous lui pendant qu'il s'enfonce
-    if (this.state.sinkT > 0) return { x: this.rx, y: this.ry, radius: this.state.radius * 1.3, open: Math.min(1, (1 - this.state.sinkT / RELOCATE.sink) * 2.5), alpha: 1 };
+    const oy = sprites.get(this.id).offsetY ?? 0; // le trou est sous l'ombre : même décalage
+    if (this.state.sinkT > 0) return { x: this.rx, y: this.ry + oy, radius: this.state.radius * 1.3, open: Math.min(1, (1 - this.state.sinkT / RELOCATE.sink) * 2.5), alpha: 1 };
     const total = EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
     if (this.emergeT >= total) return null;
     const alpha = this.emergeT < EMERGE_OPEN + EMERGE_POP ? 1 : 1 - (this.emergeT - EMERGE_OPEN - EMERGE_POP) / EMERGE_FADE;
-    return { x: this.rx, y: this.ry, radius: this.state.radius * 1.3, open: Math.min(1, this.emergeT / EMERGE_OPEN), alpha };
+    return { x: this.rx, y: this.ry + oy, radius: this.state.radius * 1.3, open: Math.min(1, this.emergeT / EMERGE_OPEN), alpha };
   }
 
   sync(alpha: number, dt: number, time: number): void {
@@ -385,10 +389,10 @@ export class AlienView {
     this.ry = lerp(a.py, a.y, alpha);
     const hidden = this.emergeT < EMERGE_OPEN; // le trou se creuse : l'alien n'est pas encore sorti
     this.emergeT += dt;
-    if (hidden && this.emergeT >= EMERGE_OPEN) this.onPop?.(this.rx, this.ry, a.radius * 1.3); // sort de son trou d'apparition
+    if (hidden && this.emergeT >= EMERGE_OPEN) this.onPop?.(this.rx, this.ry + alienOffsetY(a.def.id), a.radius * 1.3); // sort de son trou d'apparition
     // lurker (phase 5) et Scarab (phase 3) : ressortent de terre
     if (a.lurkPhase !== this.prevPhase) {
-      if ((a.def.lurk && a.lurkPhase === 5) || (a.def.burrow && a.lurkPhase === 3)) this.onPop?.(this.rx, this.ry, a.radius * 1.4);
+      if ((a.def.lurk && a.lurkPhase === 5) || (a.def.burrow && a.lurkPhase === 3)) this.onPop?.(this.rx, this.ry + alienOffsetY(a.def.id), a.radius * 1.4);
       this.prevPhase = a.lurkPhase;
     }
     if (a.def.lurk && (a.lurkPhase === 3 || a.lurkPhase === 4)) this.facing = Math.cos(a.spikeAng) >= 0 ? 1 : -1; // vise / lance ses pics : face à la ligne
@@ -414,7 +418,7 @@ export class AlienView {
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
     const flips = this.animated || a.def.id === 'charger' || a.def.id === 'boss_rhino';
     this.body
-      .setPosition(this.rx, this.ry + lift)
+      .setPosition(this.rx, this.ry + lift + (sprites.get(this.id).offsetY ?? 0))
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
@@ -486,7 +490,7 @@ export class AlienView {
       this.zombieFx.frequency = level === 2 ? 9 : 28;
       this.zombieFx.setScale(level === 2 ? 1.5 : 1);
     }
-    this.zombieFx.setPosition(this.rx, this.ry - a.radius * 0.4);
+    this.zombieFx.setPosition(this.rx, this.ry + alienOffsetY(a.def.id) - a.radius * 0.4);
   }
 
   destroy(): void {

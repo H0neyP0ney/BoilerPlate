@@ -22,7 +22,7 @@ export function xpBarLayout(width: number, height: number): { x: number; y: numb
 }
 
 /**
- * Barre de vie du boss (`ui_boss_frame`, art-src/jauge_boss.png découpé par tools/slice-boss-bar.mjs) : dimensions du cadre et de sa zone sombre
- * (pixels de la planche) ; la jauge rouge (`ui_boss_fill`, 53 × 32, capuchons de 14 px) est la jauge de la timeline recolorée.
+ * Barre de vie du boss : cadre à cornes (`ui_boss_frame`, art-src/jauge_boss.png vidé de sa jauge) et jauge de la barre d'XP recolorée en rouge (`ui_boss_fill`, 53 × 32,
+ * capuchons de 14 px), produits par tools/slice-boss-bar.mjs. Mesures du cadre (pixels de la planche) : zone sombre de `slotX0` à `slotX1`, centrée en `slotCy`, de hauteur `slotH`.
  */
-export const BOSS_ART = { W: 488, H: 113, slotX0: 47, slotX1: 441, slotCy: 60, slotH: 29, fillCap: 14, topOrnament: 24, bottom: 98 };
+export const BOSS_ART = { W: 500, H: 76, slotX0: 42, slotX1: 458, slotCy: 43.5, slotH: 25, fillCap: 14, bottom: 66 };

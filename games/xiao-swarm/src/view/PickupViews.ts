@@ -5,8 +5,9 @@ import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
-import { ensureGlobeTexture, ensureStarTexture, POWERUP_GLOBE } from '../art/upgradeOrbs';
+import { ensureGlobeTexture, ensureStarTexture, powerUpGlobeKey } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
+import { soldierOffsetY } from './spriteOffset';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
 
@@ -16,37 +17,56 @@ const CAPSULE_LIFT = 52;
 const CAPSULE_SCALE = 0.9;
 
 
-export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> = {
-  stim: { icon: '💉', color: 0xffd84a },
-  magnet: { icon: '🧲', color: 0x4aa8ff },
-  heal: { icon: '💚', color: 0x5dff84 },
-  stasis: { icon: '❄️', color: 0x6fd8ff },
-  rockets: { icon: '🚀', color: 0xff7a3a },
-  reroll: { icon: '🎲', color: 0xc78bff },
+/**
+ * `icon` : emoji de repli, utilisé seulement si l'image `powerup_icon_<kind>` (art-src/powerups.png) n'est pas chargée.
+ * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage) ; `hue` : décalage de teinte (°) du globe doré de la recrue et de son étoile
+ * (0 = doré, 75 = vert, 165 = bleu, 330 = rouge orangé, 350 = jaune orangé) ; `light` : éclaircissement vers le blanc (0 à 1, absent = 0). Chaque power-up a sa couleur (08/10 : tous verts avant).
+ */
+export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number; hue: number; light?: number }> = {
+  stim: { icon: '💉', color: 0xff5a2a, hue: 330 }, // rouge orangé
+  magnet: { icon: '🧲', color: 0xcfe6ff, hue: 165, light: 0.7 }, // blanc légèrement bleuté
+  heal: { icon: '💚', color: POWERUP_GREEN, hue: 75 }, // vert
+  stasis: { icon: '❄️', color: 0x4aa8ff, hue: 165 }, // bleu
+  rockets: { icon: '🚀', color: 0xffb02a, hue: 350 }, // jaune orangé
+  reroll: { icon: '🎲', color: RECRUIT_COLOR, hue: 0 }, // jaune, comme les recrues
 };
+
+/** Drone (medivac / freezebot) qui plane au centre d'un globe de soin / de stase : largeur (px monde) de l'image, hauteur de vol au-dessus du centre du globe, amplitude et vitesse du balancement. */
+const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
+/** Largeur (px monde) du medibot : son image est plus haute que celle du freezebot à largeur égale, on la réduit pour que les deux robots paraissent de même taille. */
+const MEDIBOT_WIDTH = 46;
+
+/** Clé de texture de l'icône d'un power-up. */
+export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;
 
 // couleurs et hauteur communes à tous les globes au sol : voir `GlobeGlitter.ts`
 export { GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK };
 
 /**
- * Power-up : globe vert (pièces du bonus recrue décalées en vert, `FX.powerUp`) avec l'icône du bonus au centre, centré sur (0, 0) ; partagé avec la
- * visionneuse de bonus. Sans les pièces d'art, repli sur un disque vert dessiné.
+ * Power-up : globe à la couleur du bonus (pièces du bonus recrue décalées de `POWERUP_INFO[kind].hue`) avec l'icône du bonus au centre, centré sur (0, 0) ;
+ * partagé avec la visionneuse de bonus. Sans les pièces d'art, repli sur un disque dessiné.
  */
 export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.GameObjects.Container {
   const info = POWERUP_INFO[kind];
-  const f = FX.powerUp;
   const scale = FX.recruit.displayScale; // même taille que les recrues et les globes d'upgrade
   const parts: Phaser.GameObjects.GameObject[] = [];
-  if (ensureGlobeTexture(scene, POWERUP_GLOBE, f.hue)) {
-    parts.push(scene.add.image(0, 0, POWERUP_GLOBE).setScale(scale));
+  const globeKey = powerUpGlobeKey(kind);
+  if (ensureGlobeTexture(scene, globeKey, info.hue, undefined, info.light ?? 0)) {
+    parts.push(scene.add.image(0, 0, globeKey).setScale(scale));
   } else {
     const g = scene.add.graphics();
     g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 160 * scale * 0.5);
-    g.fillStyle(POWERUP_GREEN, 0.4).fillCircle(0, 0, 160 * scale * 0.5);
-    g.lineStyle(4, POWERUP_GREEN, 1).strokeCircle(0, 0, 160 * scale * 0.5);
+    g.fillStyle(info.color, 0.4).fillCircle(0, 0, 160 * scale * 0.5);
+    g.lineStyle(4, info.color, 1).strokeCircle(0, 0, 160 * scale * 0.5);
     parts.push(g);
   }
-  parts.push(scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: `${Math.round(80 * scale)}px` }).setOrigin(0.5));
+  const key = powerUpIconKey(kind);
+  if (scene.textures.exists(key)) {
+    const img = scene.add.image(0, -1, key);
+    parts.push(img.setScale((160 * scale * 0.62) / Math.max(img.width, img.height))); // tient dans le globe (diamètre 160 × scale)
+  } else {
+    parts.push(scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: `${Math.round(80 * scale)}px` }).setOrigin(0.5));
+  }
   return scene.add.container(0, 0, parts);
 }
 
@@ -65,12 +85,12 @@ export function drawField(g: Phaser.GameObjects.Graphics, kind: 'heal' | 'stasis
 
 /**
  * Rond posé au sol sous un globe à ramasser (recrue : `RECRUIT_COLOR` jaune, power-up : `POWERUP_GREEN`, globe d'upgrade : `UPGRADE_PINK`) : disque, anneau
- * et anneau qui pulse, celui de la recrue pour tous. `a` : opacité globale (clignote en fin de vie).
+ * et anneau qui pulse, celui de la recrue pour tous. `a` : opacité globale (clignote en fin de vie) ; `k` : échelle (visionneuse de bonus, où les globes sont agrandis).
  */
-export function drawPickupSpot(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, time: number, id: number, a = 1): void {
+export function drawPickupSpot(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, time: number, id: number, a = 1, k = 1): void {
   const beat = 0.5 + 0.5 * Math.sin(time * 5 + id);
-  g.fillStyle(color, (0.16 + 0.12 * beat) * a).fillEllipse(x, y, 70, 38);
-  g.lineStyle(2, color, 0.6 * a).strokeEllipse(x, y, 58 + beat * 10, 30 + beat * 6);
+  g.fillStyle(color, (0.16 + 0.12 * beat) * a).fillEllipse(x, y, 70 * k, 38 * k);
+  g.lineStyle(2, color, 0.6 * a).strokeEllipse(x, y, (58 + beat * 10) * k, (30 + beat * 6) * k);
 }
 
 /** Zone de réanimation (coop) de rayon `r` ; `k` = progression de la réanimation (0 → 1). */
@@ -97,6 +117,9 @@ export class PickupViews {
   private readonly powerupPos = new Map<number, { px: number; py: number; x: number; y: number }>();
   /** Position affichée (interpolée) de chaque power-up, pour le cercle au sol. */
   private readonly powerupShown = new Map<number, { x: number; y: number }>();
+  /** Drone qui plane au centre de chaque globe de soin (medivac) ou de stase (freezebot), par id de champ, et son échelle d'apparition (0 → 1, rebond). */
+  private readonly bots = new Map<number, Phaser.GameObjects.Image>();
+  private readonly botScale = new Map<number, { v: number }>();
   private readonly counts = new Map<PlayerId, { box: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; x: number; y: number; shown: string }>();
 
   constructor(
@@ -112,6 +135,7 @@ export class PickupViews {
   sync(time: number, alpha = 1): void {
     this.syncPowerups(time, alpha);
     this.syncFieldParticles();
+    this.syncBots(time);
     this.syncCounts();
     this.syncSyringes(time);
   }
@@ -143,6 +167,36 @@ export class PickupViews {
     for (const id of this.zoneNext.keys()) if (!live.has(id)) this.zoneNext.delete(id);
   }
 
+  /**
+   * Un drone vole au centre de chaque globe de soin (medivac) ou de stase (freezebot) : il « pop » à l'apparition du globe (rebond), se balance,
+   * puis disparaît en fondu avec lui ; l'ombre est dessinée au sol (`drawGround`).
+   */
+  private syncBots(time: number): void {
+    const live = new Set<number>();
+    for (const f of this.sim.powerups.fields) {
+      const key = f.kind === 'heal' ? powerUpIconKey('heal') : 'fx_freezebot';
+      if (!this.scene.textures.exists(key)) continue;
+      live.add(f.id);
+      let img = this.bots.get(f.id);
+      if (!img) {
+        img = this.scene.add.image(f.x, f.y, key);
+        img.setDepth(DEPTH.fx + 1);
+        this.botScale.set(f.id, { v: 0 });
+        this.scene.tweens.add({ targets: this.botScale.get(f.id), v: 1, duration: 320, ease: 'Back.Out' });
+        this.bots.set(f.id, img);
+      }
+      const k = Math.min(1, f.ttl / 1.2);
+      const bob = Math.sin(time * BOT.bobSpeed + f.id) * BOT.bob;
+      img.setScale(((f.kind === 'heal' ? MEDIBOT_WIDTH : BOT.width) / img.width) * (this.botScale.get(f.id)?.v ?? 1)).setPosition(f.x, f.y - BOT.lift + bob).setAlpha(k).setRotation(Math.sin(time * 1.7 + f.id) * 0.06);
+    }
+    for (const [id, img] of this.bots) {
+      if (live.has(id)) continue;
+      img.destroy();
+      this.bots.delete(id);
+      this.botScale.delete(id);
+    }
+  }
+
   // ---------- Power-ups ----------
 
   private syncPowerups(time: number, alpha: number): void {
@@ -171,7 +225,7 @@ export class PickupViews {
       box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
       let glitter = this.powerupGlitter.get(p.id);
       if (!glitter) {
-        const tex = ensureStarTexture(this.scene, FX.powerUp.hue); // l'étoile de la recrue, en vert
+        const tex = ensureStarTexture(this.scene, POWERUP_INFO[p.kind].hue, POWERUP_INFO[p.kind].light ?? 0); // l'étoile de la recrue, à la teinte du power-up
         const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
         if (made) this.powerupGlitter.set(p.id, (glitter = made));
       }
@@ -203,7 +257,7 @@ export class PickupViews {
           this.rageFx.set(s.id, fx);
         }
         const p = this.posOf(s.id) ?? s;
-        fx.setPosition(p.x, p.y - s.def.radius * 0.6).setVisible(!blink);
+        fx.setPosition(p.x, p.y + soldierOffsetY(s.def.id) - s.def.radius * 0.6).setVisible(!blink); // flammes sur le sprite décalé
       }
     }
     for (const [id, fx] of this.rageFx) {
@@ -273,10 +327,15 @@ export class PickupViews {
   drawGround(g: Phaser.GameObjects.Graphics, time: number): void {
     for (const f of this.sim.powerups.fields) {
       drawField(g, f.kind as 'heal' | 'stasis', f.x, f.y, f.r, Math.min(1, f.ttl / 1.2), time);
+      if (this.bots.has(f.id)) {
+        const k = Math.min(1, f.ttl / 1.2);
+        const sway = Math.sin(time * BOT.bobSpeed + f.id); // l'ombre rétrécit quand le drone monte
+        g.fillStyle(0x000000, 0.28 * k).fillEllipse(f.x, f.y + 6, BOT.width * (0.62 - 0.05 * sway), BOT.width * (0.2 - 0.02 * sway));
+      }
     }
     for (const p of this.sim.powerups.items) {
       const at = this.powerupShown.get(p.id) ?? p;
-      drawPickupSpot(g, at.x, at.y, POWERUP_GREEN, time, p.id, p.life < 3.5 && Math.sin(time * 18) > 0 ? 0.3 : 1); // rond vert au sol (clignote avec le power-up en fin de vie)
+      drawPickupSpot(g, at.x, at.y, POWERUP_INFO[p.kind].color, time, p.id, p.life < 3.5 && Math.sin(time * 18) > 0 ? 0.3 : 1); // rond au sol à la couleur du power-up (clignote avec le power-up en fin de vie)
     }
     // bonus actifs
     for (const sq of this.sim.squads) {
@@ -286,6 +345,9 @@ export class PickupViews {
 
   destroy(): void {
     for (const b of this.powerups.values()) b.destroy();
+    for (const m of this.bots.values()) m.destroy();
+    this.bots.clear();
+    this.botScale.clear();
     for (const g of this.powerupGlitter.values()) g.destroy();
     this.powerupGlitter.clear();
     for (const c of this.counts.values()) c.box.destroy();

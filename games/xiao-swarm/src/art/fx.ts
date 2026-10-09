@@ -38,11 +38,11 @@ function drawScorch(ctx: CanvasRenderingContext2D, variant: number): void {
     blob(c + Math.cos(a) * d, c + Math.sin(a) * d, R * (0.3 + rnd() * 0.4), 0.5, 0.3); // lobes irréguliers
   }
   ctx.fillStyle = 'rgba(20,20,20,0.55)';
-  for (let i = 0; i < 46; i++) {
+  for (let i = 0; i < 14; i++) { // 14 éclaboussures (46 avant), plus grosses
     const a = rnd() * Math.PI * 2;
     const d = R * (0.45 + rnd() * 0.5);
     ctx.beginPath();
-    ctx.arc(c + Math.cos(a) * d, c + Math.sin(a) * d, 1.5 + rnd() * 4.5, 0, Math.PI * 2);
+    ctx.arc(c + Math.cos(a) * d, c + Math.sin(a) * d, 2.5 + rnd() * 6, 0, Math.PI * 2);
     ctx.fill(); // éclaboussures de suie autour
   }
 }
@@ -69,11 +69,11 @@ function drawCracks(ctx: CanvasRenderingContext2D, variant: number): void {
   ctx.lineJoin = 'round';
   /** Une faille en zigzag de (x, y) vers l'angle `a` sur `len` px : épaisseur `w0` au départ, 1 px au bout ; `branches` : sous-failles possibles. */
   const crack = (x: number, y: number, a: number, len: number, w0: number, branches: number): void => {
-    const steps = Math.max(4, Math.round(len / 11));
+    const steps = Math.max(3, Math.round(len / 24)); // peu de segments : failles plus nettes, moins découpées
     let px = x;
     let py = y;
     for (let i = 1; i <= steps; i++) {
-      a += (rnd() - 0.5) * 0.9; // le zigzag
+      a += (rnd() - 0.5) * 0.6; // le zigzag, plus doux
       const step = len / steps;
       const nx = px + Math.cos(a) * step;
       const ny = py + Math.sin(a) * step;
@@ -84,11 +84,11 @@ function drawCracks(ctx: CanvasRenderingContext2D, variant: number): void {
       ctx.stroke();
       px = nx;
       py = ny;
-      if (branches > 0 && i > 1 && i < steps - 1 && rnd() < 0.3) crack(px, py, a + (rnd() < 0.5 ? -1 : 1) * (0.5 + rnd() * 0.6), len * (0.25 + rnd() * 0.3) * (1 - i / steps) * 1.6, ctx.lineWidth * 0.7, branches - 1);
+      if (branches > 0 && i > 1 && i < steps - 1 && rnd() < 0.12) crack(px, py, a + (rnd() < 0.5 ? -1 : 1) * (0.5 + rnd() * 0.6), len * (0.25 + rnd() * 0.3) * (1 - i / steps) * 1.6, ctx.lineWidth * 0.7, branches - 1);
     }
   };
-  const n = 8 + Math.floor(rnd() * 3);
-  for (let k = 0; k < n; k++) crack(c, c, ((k + rnd() * 0.6) / n) * Math.PI * 2, R * (0.55 + rnd() * 0.45), 5 + rnd() * 3, 2);
+  const n = 5 + Math.floor(rnd() * 2); // 5 ou 6 failles (8 à 10 avant), une seule génération de branches
+  for (let k = 0; k < n; k++) crack(c, c, ((k + rnd() * 0.6) / n) * Math.PI * 2, R * (0.55 + rnd() * 0.45), 6 + rnd() * 3, 1);
 }
 
 /** Projectiles, particules et icônes d'effets. */

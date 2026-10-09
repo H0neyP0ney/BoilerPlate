@@ -61,6 +61,12 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'ui_levelup_title', url: 'ui/levelup_title.png' },
   // Icônes des upgrades — art-src/icon_upgrade.png découpé par `node tools/slice-upgrade-icons.mjs` ; affichées par view/upgradeIcons.ts (cartes, texte flottant, visionneuse).
   ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `upgrade_icon_${id}`, url: `ui/upgrades/${id}.png` })),
+  // Projectile du Rocket barrage (pointe vers la droite) — fusée de art-src/powerups.png tournée par `node tools/slice-powerup-icons.mjs` ; remplace la fusée procédurale `fx_rocket` (art/fx.ts).
+  { type: 'image', id: 'fx_rocket', url: 'fx/rocket.png' },
+  // Freezebot (drone qui plane au centre du globe de stase) — art-src/freezebot.png réduit par `node tools/slice-freezebot.mjs` ; affiché par view/PickupViews.ts.
+  { type: 'image', id: 'fx_freezebot', url: 'fx/freezebot.png' },
+  // Icônes des power-ups — art-src/powerups.png découpé par `node tools/slice-powerup-icons.mjs` ; affichées par view/PickupViews.ts (globe au sol, texte flottant).
+  ...(['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll'] as const).map((k): AssetEntry => ({ type: 'image', id: `powerup_icon_${k}`, url: `ui/powerups/${k}.png` })),
   // Timeline des vagues + « Next boss » — art-src/timeline_next_boss.png découpé par `node tools/slice-timeline-ui.mjs` ; affichés par view/TimelineHud.ts (mesures dans TIMELINE_ART).
   ...(['frame', 'fill', 'arrow', 'tick_off', 'tick_on', 'ring'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_tl_${n}`, url: `ui/timeline/${n}.png` })),
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.
@@ -79,7 +85,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.507,
         originY: 0.881,
         scale: 0.73,
-        shadow: 1.25,
+        shadow: 20,
         anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] },
         facesLeft: true,
         anims: {
@@ -101,7 +107,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.563,
         originY: 0.956,
         scale: 1.03,
-        shadow: 1.4,
+        shadow: 53.2,
         anchors: { 'walk:right': [0.4995, 0.745], 'walk:left': [0.5196, 0.745] },
         facesLeft: true,
         anims: {
@@ -123,7 +129,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.618,
         originY: 0.952,
         scale: 0.8,
-        shadow: 1.2,
+        shadow: 20.4,
         muzzleFlash: true,
         muzzle: [0.32, 0.35],
         anchors: { 'walk:right': [0.519, 0.8451], 'walk:left': [0.4848, 0.8451] },
@@ -149,12 +155,35 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.531,
         originY: 0.916,
         scale: 0.7,
-        shadow: 1.45,
+        shadow: 15.95,
         anchors: { 'walk:right': [0.4698, 0.8111], 'walk:left': [0.5302, 0.8111] },
         facesLeft: true,
         anims: {
           idle: { frames: range(0, 8), fps: 8 },
           walk: { frames: range(0, 8), fps: 18 },
+        },
+      },
+    },
+  },
+  // Araignée rouge (`spider`, calquée sur le gling : c'est ce que fait apparaître la Gling Mère).
+  // art-src/old/spider.png (grille 4×4, rangée sous art-src/spider.pack.json) réduit par node tools/pack-grids.mjs — 16 cases de 64×55, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
+  {
+    type: 'sheet',
+    url: 'aliens/spider.png',
+    frameWidth: 64,
+    frameHeight: 55,
+    sprites: {
+      alien_spider: {
+        originX: 0.589,
+        originY: 0.833,
+        scale: 1.12,
+        shadow: 23.1,
+        offsetY: 6,
+        anchors: { 'walk:right': [0.5069, 0.6302], 'walk:left': [0.5106, 0.6302] },
+        facesLeft: true,
+        anims: {
+          idle: { frames: range(0, 15), fps: 8 },
+          walk: { frames: range(0, 15), fps: 18 },
         },
       },
     },
@@ -171,7 +200,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.558,
         originY: 0.936,
         scale: 1.32,
-        shadow: 1.05,
+        shadow: 25.2,
         muzzleFlash: true,
         muzzle: [0.2, 0.41],
         anchors: { 'walk:right': [0.4379, 0.8643], 'walk:left': [0.5621, 0.8643] },
@@ -199,7 +228,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.425,
         originY: 0.917,
         scale: 1.31,
-        shadow: 0.75,
+        shadow: 112.5,
         anchors: { 'walk:right': [0.5156, 0.716], 'walk:left': [0.4903, 0.716] },
         anims: {
           idle: { frames: range(0, 15), fps: 8 },
@@ -220,7 +249,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.505,
         originY: 0.962,
         scale: 1.54,
-        shadow: 1.7,
+        shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
         anims: {
@@ -242,7 +271,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.505,
         originY: 0.962,
         scale: 1.54,
-        shadow: 1.7,
+        shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
         anims: {
@@ -262,7 +291,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.505,
         originY: 0.962,
         scale: 1.54,
-        shadow: 1.7,
+        shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
         anims: {
@@ -284,7 +313,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.571,
         originY: 0.957,
         scale: 1.02,
-        shadow: 1.95,
+        shadow: 46.8,
         anchors: { 'walk:right': [0.4946, 0.7948], 'walk:left': [0.5194, 0.7948] },
         facesLeft: true,
         anims: {
@@ -306,7 +335,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.481,
         originY: 0.914,
         scale: 1.45,
-        shadow: 2,
+        shadow: 30,
         anchors: { 'walk:right': [0.4906, 0.7764], 'walk:left': [0.5015, 0.7764], 'idle:right': [0.482, 0.635], 'idle:left': [0.4966, 0.6325] },
         facesLeft: true,
         anims: {
@@ -328,7 +357,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.502,
         originY: 0.931,
         scale: 1.51,
-        shadow: 2.15,
+        shadow: 34.4,
         muzzleFlash: true,
         muzzle: [0.26, 0.47],
         anchors: { 'walk:right': [0.4944, 0.8187], 'walk:left': [0.498, 0.8187] },
@@ -352,7 +381,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.509,
         originY: 0.915,
         scale: 1.78,
-        shadow: 2.1,
+        shadow: 35.7,
         muzzleFlash: true,
         muzzle: [0.57, 0.27],
         anchors: { 'walk:right': [0.4707, 0.7601], 'walk:left': [0.4988, 0.7601] },
@@ -379,7 +408,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.458,
         originY: 0.917,
         scale: 2.15,
-        shadow: 2.6,
+        shadow: 44.2,
         anchors: { 'walk:right': [0.5007, 0.8013], 'walk:left': [0.5136, 0.8013] },
         facesLeft: true,
         anims: {
@@ -401,7 +430,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.616,
         originY: 0.907,
         scale: 1.71,
-        shadow: 2.2,
+        shadow: 35.2,
         anchors: { 'walk:right': [0.5026, 0.6536], 'walk:left': [0.4974, 0.6536] },
         facesLeft: true,
         anims: {
@@ -423,7 +452,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.453,
         originY: 0.885,
         scale: 2.07,
-        shadow: 2.15,
+        shadow: 38.7,
         anchors: { 'walk:right': [0.497, 0.7275], 'walk:left': [0.5014, 0.7275] },
         facesLeft: true,
         anims: {
@@ -445,7 +474,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.467,
         originY: 1.057,
         scale: 1.59,
-        shadow: 1.75,
+        shadow: 38.5,
         anchors: { 'walk:right': [0.4593, 0.7642], 'walk:left': [0.533, 0.7642] },
         anims: {
           idle: { frames: range(0, 8), fps: 6 },
@@ -466,7 +495,7 @@ export const ASSETS: AssetEntry[] = [
         originX: 0.551,
         originY: 0.933,
         scale: 1.7,
-        shadow: 1.25,
+        shadow: 85,
         anchors: { 'walk:right': [0.4897, 0.7276], 'walk:left': [0.5056, 0.7276] },
         facesLeft: true,
         anims: {
@@ -487,8 +516,8 @@ export const ASSETS: AssetEntry[] = [
       alien_shaman: {
         originX: 0.525,
         originY: 0.918,
-        scale: 1.83,
-        shadow: 2.2,
+        scale: 1.36,
+        shadow: 29.7,
         anchors: { 'walk:right': [0.5045, 0.73], 'walk:left': [0.5033, 0.73] },
         anims: {
           idle: { frames: range(0, 8), fps: 6 },

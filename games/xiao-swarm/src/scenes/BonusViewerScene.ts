@@ -5,7 +5,8 @@ import { PALETTE, REVIVE_RADIUS, REVIVE_TIME, SCENES, VIEW_BG } from '../config'
 import { getName } from '../debugNames';
 import { header, note, panel } from '../dev/devUi';
 import { ScaleRef } from '../dev/scaleRef';
-import { drawField, drawReviveZone, makePowerUpIcon, POWERUP_INFO } from '../view/PickupViews';
+import { drawField, drawPickupSpot, drawReviveZone, GLOBE_LIFT, makePowerUpIcon, POWERUP_INFO, RECRUIT_COLOR } from '../view/PickupViews';
+import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import { ORB_SCALE, orbSize } from '../view/WorldView';
 
@@ -16,6 +17,8 @@ import { ORB_SCALE, orbSize } from '../view/WorldView';
  */
 const COL_GAP = 150;
 const ROW_GAP = 260;
+/** Agrandissement commun à tous les bonus de cette vue (pour les lire) : les proportions sont celles du jeu (recrue et power-up de même taille). */
+const VIEW_SCALE = 1.6;
 
 interface Item {
   node: Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject;
@@ -33,6 +36,8 @@ export class BonusViewerScene extends Phaser.Scene {
   /** Zones au sol (globes de soin / stase, réanimation) : redessinées à chaque frame (elles pulsent). */
   private ground?: Phaser.GameObjects.Graphics;
   private zones: { kind: 'heal' | 'stasis' | 'revive'; x: number; y: number }[] = [];
+  /** Ronds colorés posés au sol sous les globes à ramasser (recrues : jaune ; power-ups : couleur de chaque bonus), comme en jeu. */
+  private spots: { x: number; y: number; color: number; k: number }[] = [];
   private titles: { text: Phaser.GameObjects.Text; y: number }[] = [];
 
   constructor() {
@@ -66,6 +71,8 @@ export class BonusViewerScene extends Phaser.Scene {
     const g = this.ground;
     if (!g) return;
     g.clear();
+    // rond au sol sous chaque globe (à l'échelle de l'affichage ; le globe, lui, flotte au-dessus)
+    this.spots.forEach((s, i) => drawPickupSpot(g, s.x, s.y, s.color, t, i, 1, s.k));
     for (const z of this.zones) {
       if (z.kind === 'revive') drawReviveZone(g, z.x, z.y, REVIVE_RADIUS, (t % (REVIVE_TIME + 0.5)) / REVIVE_TIME > 1 ? 1 : (t % (REVIVE_TIME + 0.5)) / REVIVE_TIME, t);
       else drawField(g, z.kind, z.x, z.y, 70, 1, t);
@@ -98,15 +105,17 @@ export class BonusViewerScene extends Phaser.Scene {
     classes.forEach((cls, c) => {
       const id = `recruit_${cls}`;
       const x = (c - (classes.length - 1) / 2) * COL_GAP;
-      const img = sprites.add(this, id, x, y0).setScale(sprites.scaleOf(id));
+      const img = sprites.add(this, id, x, y0).setScale(sprites.scaleOf(id) * VIEW_SCALE);
       const name = getName(`class_${cls}`, 'en') || cls;
       const inactive = ACTIVE_CLASSES.includes(cls) ? '' : '\n(inactif)';
       if (inactive) img.setAlpha(0.25);
+      this.spots.push({ x, y: y0 + GLOBE_LIFT * FX.recruit.displayScale * VIEW_SCALE, color: RECRUIT_COLOR, k: VIEW_SCALE });
       this.items.push({ node: img, label: this.label(x, y0 + 40, `${name}\n${id}${inactive}`).setAlpha(inactive ? 0.25 : 1), x, y: y0, phase: c });
     });
     kinds.forEach((kind, c) => {
       const x = (c - (kinds.length - 1) / 2) * COL_GAP;
-      const box = makePowerUpIcon(this, kind).setPosition(x, y1).setScale(1.6);
+      const box = makePowerUpIcon(this, kind).setPosition(x, y1).setScale(VIEW_SCALE);
+      this.spots.push({ x, y: y1 + GLOBE_LIFT * FX.recruit.displayScale * VIEW_SCALE, color: POWERUP_INFO[kind].color, k: VIEW_SCALE });
       const name = getName(`pu_${kind}`, 'en') || kind;
       this.items.push({ node: box, label: this.label(x, y1 + 40, `${name}\npu_${kind}`), x, y: y1, phase: c });
     });
@@ -117,13 +126,13 @@ export class BonusViewerScene extends Phaser.Scene {
     const orbs = [{ value: 1, name: 'Petit' }, { value: 3, name: 'Moyen' }, { value: 8, name: 'Gros' }];
     orbs.forEach((o, c) => {
       const x = (c - (orbs.length - 1) / 2) * COL_GAP;
-      const img = this.add.image(x, y2, orbTex).setScale(orbSize(o.value) * ORB_SCALE * orbBase);
+      const img = this.add.image(x, y2, orbTex).setScale(orbSize(o.value) * ORB_SCALE * orbBase * VIEW_SCALE);
       this.items.push({ node: img, label: this.label(x, y2 + 40, `${o.name}
 xp_orb (valeur ${o.value})`), x, y: y2, phase: c });
     });
 
     // zones au sol : globes persistants (soin, stase) et zone de réanimation, dessinées comme en jeu (rayon réduit pour tenir dans la grille)
-    this.ground = this.add.graphics();
+    this.ground = this.add.graphics().setDepth(-0.5); // sous les globes et les sprites (la grille de fond est à -1), comme les ronds au sol en jeu
     const zones = [
       { kind: 'heal' as const, name: 'Healing field', id: 'field_heal' },
       { kind: 'stasis' as const, name: 'Stasis field', id: 'field_stasis' },

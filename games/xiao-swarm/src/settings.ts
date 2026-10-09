@@ -38,13 +38,13 @@ export const MUSIC_MAX_GAIN = 1 / 6;
  * Musique de fond (public/assets/audio), chargée en différé au lancement de la partie : OGG (léger), MP3 en secours pour les
  * navigateurs qui ne lisent pas l'OGG (vieux Safari iOS) ; un seul des deux est téléchargé. Source d'origine : art-src/audio.
  */
-export const MUSIC = { key: 'music', url: ['assets/audio/music.ogg', 'assets/audio/music.mp3'] };
+export const MUSIC = { key: 'music', url: ['assets/audio/music.mp3'] }; // mp3 seul : lu par tous les navigateurs (l'ogg a été retiré, 1,1 Mo de moins dans le zip)
 /** Bruitages (public/assets/audio, chargés avec les visuels) : même principe OGG + MP3 de secours. */
 export const SFX = {
   /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx` de l'engine). */
-  blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.ogg', 'assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
+  blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
   /** Explosion (grenade, kamikaze, boules des aliens, onde…) : superposition max 3 voix, chaque nouvelle voix plus discrète ; hauteur variable. */
-  blast: { key: 'sfx_blast', url: ['assets/audio/blast.ogg', 'assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
+  blast: { key: 'sfx_blast', url: ['assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
 };
 
 export const settings = {

@@ -1,7 +1,7 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
 import { BURIED, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
-import { ALIENS } from '../data/aliens';
+import { ALIENS, type AlienId } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
@@ -104,6 +104,8 @@ export class Sim {
   tick = 0;
   private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
+  /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
+  private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number }[] = [];
   private readonly fuses: { x: number; y: number; t: number; r: number; dmg: number; knock: number }[] = [];
 
   constructor(readonly config: SimConfig) {
@@ -165,6 +167,7 @@ export class Sim {
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
     this.fuses.length = 0;
+    this.deathSpawns.length = 0;
     this.combat.clear();
     this.recruits.clear();
     this.chests.clear();
@@ -200,6 +203,7 @@ export class Sim {
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
     this.fuses.length = 0;
+    this.deathSpawns.length = 0;
     this.combat.clear();
     this.recruits.clear();
     this.chests.clear();
@@ -775,7 +779,7 @@ export class Sim {
     if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: 300 });
   }
 
-  private killAlien(a: AlienState, killer: PlayerId | null): void {
+  private killAlien(a: AlienState, killer: PlayerId | null, wipe = false): void {
     a.alive = false;
     this.metrics.kills++;
     const squad = killer ? this.squadOf(killer) : undefined;
@@ -799,6 +803,8 @@ export class Sim {
       this.events.push({ t: 'corpse', id: c.id, x: c.x, y: c.y, alien: c.type, ttl: c.ttl });
       if (this.corpses.length > 60) this.endCorpse(this.corpses[0], false);
     }
+    const brood = a.def.deathSpawn;
+    if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius });
     const bomb = a.def.deathBlast;
     if (bomb) {
       this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.esc, knock: bomb.knockback });
@@ -831,7 +837,7 @@ export class Sim {
   private wipeAliens(boss: AlienState, killer: PlayerId | null): void {
     for (const o of this.aliens) {
       if (o === boss || !o.alive || o.def.boss) continue;
-      this.killAlien(o, killer);
+      this.killAlien(o, killer, true); // clear screen : pas de portée à la mort
     }
   }
 
@@ -877,6 +883,18 @@ export class Sim {
         }
       }
       if (this.mode.pvp) for (const sq of this.squads) if (sq.owner !== b.owner) for (const s of sq.soldiers) this.blastHit(s, b);
+    }
+
+    // aliens qui surgissent de la mort d'un autre (chaman : 5 araignées), répartis en cercle autour du corps
+    for (const d of this.deathSpawns.splice(0)) {
+      const start = this.rng.range(0, Math.PI * 2);
+      for (let i = 0; i < d.count; i++) {
+        const ang = start + (i / d.count) * Math.PI * 2;
+        const dist = d.radius * this.rng.range(0.8, 1.5);
+        const p = { x: d.x + Math.cos(ang) * dist, y: d.y + Math.sin(ang) * dist * 0.7, radius: ALIENS[d.type].radius };
+        this.arena.constrain(p);
+        this.horde.spawnAt(d.type, p.x, p.y, 1, false, true); // sur place : pas enterrées
+      }
     }
 
     for (let i = this.aliens.length - 1; i >= 0; i--) if (!this.aliens[i].alive) this.aliens.splice(i, 1);

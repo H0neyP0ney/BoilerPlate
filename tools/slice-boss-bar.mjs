@@ -1,11 +1,11 @@
-// Barre de vie du boss (HUD) : à partir de art-src/jauge_boss.png (cadre organique + jauge rouge à moitié pleine), produit
-//   games/xiao-swarm/public/assets/ui/boss/frame.png : le cadre VIDE (488 × 113), reconstitué ;
-//   games/xiao-swarm/public/assets/ui/boss/fill.png  : la jauge de la timeline (ui/timeline/fill.png, 3-slice) recolorée en rouge.
+// Barre de vie du boss (HUD) :
+//   games/xiao-swarm/public/assets/ui/boss/frame.png : le cadre à cornes de art-src/jauge_boss.png (500 × 76), sa jauge rouge remplacée par le fond sombre de la zone ;
+//   games/xiao-swarm/public/assets/ui/boss/fill.png  : la jauge de la barre d'XP (ui/xp/fill.png, 53 × 32, 3-slice) recolorée en rouge.
 //
-//   node tools/slice-boss-bar.mjs      (à lancer après tools/slice-timeline-ui.mjs, dont elle reprend la jauge)
+//   node tools/slice-boss-bar.mjs      (à lancer après tools/slice-xp-bar.mjs, dont elle reprend la jauge)
 //
-// Cadre vide : la planche est symétrique, la moitié droite (déjà vide) est recopiée en miroir à gauche ; dans la zone sombre du milieu
-// (lignes SLOT_ROWS), on répète une tranche lisse du fond sombre ; les ornements (haut / bas, centre) sont conservés tels quels.
+// Mesures de la planche (pixels) : SLOT_ROWS = lignes intérieures de la zone sombre (contours noirs exclus), SLOT_X = colonnes de la zone, FILL_END = fin de la jauge
+// dessinée dans la planche ; STRIP = tranche lisse du fond sombre, répétée pour effacer cette jauge. À reporter dans `BOSS_ART` (view/hudLayout.ts) si la planche change.
 import fs from 'node:fs';
 import path from 'node:path';
 import { PNG } from 'pngjs';
@@ -18,27 +18,22 @@ const W = src.width;
 const H = src.height;
 const at = (x, y) => (y * W + x) * 4;
 
-/** Mesures de la planche (pixels). */
-const SLOT_ROWS = [45, 76]; // lignes de la zone sombre, contours noirs compris
-const RIGHT_FROM = 352; // à partir de cette colonne, le cadre est vide
-const STRIP = [380, 440]; // tranche lisse du fond sombre
+const SLOT_ROWS = [31, 56];
+const SLOT_X = [42, 458];
+const FILL_END = 358;
+const STRIP = [380, 440];
 
-// ---------- 1. cadre vide ----------
+// ---------- 1. cadre vide : le fond sombre recouvre la jauge de la planche, ligne par ligne ----------
 const frame = new PNG({ width: W, height: H });
-const copy = (dx, dy, sx, sy) => {
-  for (let c = 0; c < 4; c++) frame.data[at(dx, dy) + c] = src.data[at(sx, sy) + c];
-};
-for (let y = 0; y < H; y++)
-  for (let x = 0; x < W; x++) {
-    const inSlot = y >= SLOT_ROWS[0] && y < SLOT_ROWS[1];
-    if (x >= RIGHT_FROM) copy(x, y, x, y);
-    else if (x < W - RIGHT_FROM) copy(x, y, W - 1 - x, y); // moitié gauche : miroir de la droite
-    else if (inSlot) copy(x, y, STRIP[0] + ((x - (W - RIGHT_FROM)) % (STRIP[1] - STRIP[0])), y); // milieu : fond sombre répété
-    else copy(x, y, x, y); // ornements du milieu
+src.data.copy(frame.data);
+for (let y = SLOT_ROWS[0]; y < SLOT_ROWS[1]; y++)
+  for (let x = SLOT_X[0]; x < FILL_END; x++) {
+    const sx = STRIP[0] + ((x - SLOT_X[0]) % (STRIP[1] - STRIP[0]));
+    for (let c = 0; c < 4; c++) frame.data[at(x, y) + c] = src.data[at(sx, y) + c];
   }
 fs.writeFileSync(path.join(outDir, 'frame.png'), PNG.sync.write(frame));
 
-// ---------- 2. jauge rouge : la jauge jaune de la timeline, teinte décalée vers le rouge ----------
+// ---------- 2. jauge : celle de la barre d'XP, bleu → rouge ----------
 function rgb2hsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
@@ -59,21 +54,13 @@ function hsl2rgb(h, s, l) {
   };
   return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
 }
-const fill = PNG.sync.read(fs.readFileSync(path.join(root, 'games/xiao-swarm/public/assets/ui/timeline/fill.png')));
+const fill = PNG.sync.read(fs.readFileSync(path.join(root, 'games/xiao-swarm/public/assets/ui/xp/fill.png')));
 for (let i = 0; i < fill.data.length; i += 4) {
   if (fill.data[i + 3] === 0) continue;
   const [h, s, l] = rgb2hsl(fill.data[i], fill.data[i + 1], fill.data[i + 2]);
-  if (s < 0.25 || h < 15 || h > 75) continue; // seuls le jaune et l'orange changent (contour sombre et reflets blancs restent)
-  const [r, g, b] = hsl2rgb(2 + (h - 45) * 0.35, Math.min(1, s * 1.05), l);
+  if (s < 0.15 || h < 150 || h > 270) continue; // contour sombre, reflets blancs : inchangés
+  const [r, g, b] = hsl2rgb((h - 210) * 0.4, Math.min(1, s * 1.05), l); // le bleu moyen (210°) devient rouge (0°)
   fill.data[i] = Math.round(r); fill.data[i + 1] = Math.round(g); fill.data[i + 2] = Math.round(b);
 }
 fs.writeFileSync(path.join(outDir, 'fill.png'), PNG.sync.write(fill));
-
-// ---------- mesures : bornes de la zone sombre sur la ligne médiane ----------
-const ym = 60;
-let l0 = -1, r0 = -1;
-for (let x = 30; x < W - 30; x++) {
-  const i = at(x, ym);
-  if (src.data[i] + src.data[i + 1] + src.data[i + 2] < 25 && src.data[i + 3] > 200) { if (l0 < 0) l0 = x; r0 = x; }
-}
-console.log(`frame.png ${W}×${H} ; fill.png ${fill.width}×${fill.height} ; contours noirs de la zone sombre sur la ligne ${ym} : x=${l0}..${r0} ; lignes de la zone ${SLOT_ROWS[0]}..${SLOT_ROWS[1]}`);
+console.log(`frame.png ${W}×${H} ; fill.png ${fill.width}×${fill.height}`);

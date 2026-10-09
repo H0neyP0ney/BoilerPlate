@@ -19,7 +19,9 @@ import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnch
  *
  * Avec une seule unité affichée, un éditeur de placement permet de régler :
  *  - l'ancrage (croix jaune) : pour toute l'unité, une séquence, ou une séquence dans une direction ;
- *  - la bouche du canon (point rouge) frame par frame.
+ *  - la bouche du canon (point rouge) frame par frame ;
+ *  - trois poignées à glisser directement sur l'unité : hitbox (point rouge, à droite du cercle : `radius`), ombre portée (point gris, en bas de l'ombre) et
+ *    échelle de l'unité (point bleu, au coin haut droit du sprite).
  * Voir debugSprites.ts pour la sauvegarde et la copie vers assets/manifest.ts.
  */
 
@@ -36,6 +38,8 @@ interface Entry {
   gun?: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Ellipse;
+  /** Hitbox : cercle de collision (`radius` des données) centré au point au sol de l'unité. */
+  hit: Phaser.GameObjects.Arc;
   baseScale: number;
   floats: boolean;
   /** Animation de planche en cours, sinon procédural. */
@@ -86,6 +90,14 @@ export class UnitViewerScene extends Phaser.Scene {
   private actionsRow!: HTMLElement;
   private fields!: Record<'ox' | 'oy' | 'mx' | 'my', HTMLInputElement>;
   private shadowSlider!: HTMLInputElement;
+  private offsetSlider!: HTMLInputElement;
+  private offsetLabel!: HTMLSpanElement;
+  /** Affiche la hitbox (cercle rouge transparent de rayon `radius`) de l'unité de la vue détaillée. */
+  private showHit = true;
+  /** Poignées à glisser sur l'unité : hitbox (`radius`), ombre portée et échelle. */
+  private handles!: { hit: Phaser.GameObjects.Arc; shadow: Phaser.GameObjects.Arc; scale: Phaser.GameObjects.Arc };
+  /** Resynchronise les réglettes du panneau Stats (après un changement de `radius` à la poignée). */
+  private statSyncs: (() => void)[] = [];
   private shadowLabel!: HTMLSpanElement;
   private scaleSlider!: HTMLInputElement;
   private scaleLabel!: HTMLSpanElement;
@@ -164,6 +176,7 @@ export class UnitViewerScene extends Phaser.Scene {
       e.gun?.destroy();
       e.label.destroy();
       e.shadow.destroy();
+      e.hit.destroy();
     }
     this.entries = [];
 
@@ -237,6 +250,7 @@ ${id}` : id;
         ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, SHADOW_ALPHA)
         : this.add.ellipse(x, y, radius * 2.2, radius, 0x000000, SHADOW_ALPHA);
     const sprite = sprites.add(this, id, x, y);
+    const hit = this.add.circle(x, y, radius, 0xff2a2a, 0.12).setStrokeStyle(2, 0xff2a2a, 0.55).setVisible(false); // rayon de collision, au point au sol (vue détaillée seulement : `updateEditor`)
     // unités inactives : affichées à moitié transparentes
     if (this.isInactive(kind, unit)) sprite.setAlpha(INACTIVE_ALPHA);
     // vue d'ensemble : un clic sur une unité ouvre sa vue détaillée
@@ -256,6 +270,7 @@ ${id}` : id;
       gun,
       label,
       shadow,
+      hit,
       baseScale: sprites.scaleOf(id),
       floats: kind === 'alien' && !!ALIENS[unit as AlienId].floats,
       playing: this.anim,
@@ -340,13 +355,15 @@ ${id}` : id;
         sy = e.baseScale * (1 - squash);
       }
     }
-    e.dy = bob + lift;
+    const oy = sprites.get(e.id).offsetY ?? 0; // décalage vertical du sprite et de l'ombre (la hitbox reste au point au sol) ; compris dans `dy` : canon et ancrage le suivent
+    e.dy = bob + lift + oy;
     // Ancrage de la séquence / direction affichées (même résolution que le jeu, sprites.place).
     const [ax, ay] = sprites.anchorFor(e.id, e.playing, sprites.dirOf(e.id, s.flipX));
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
-    const k = sprites.get(e.id).shadow ?? 1;
-    e.shadow.setScale((e.floats ? 0.7 : 1) * k, k).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : SHADOW_ALPHA);
+    e.shadow.setPosition(e.x, e.y + oy);
+    const sb = this.shadowBase(e);
+    e.shadow.setSize(sb.w, sb.h).setScale(e.floats ? 0.7 : 1, 1).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : SHADOW_ALPHA);
 
     if (e.gun) {
       const aim = this.facing > 0 ? 0 : Math.PI;
@@ -490,8 +507,8 @@ ${id}` : id;
     this.shadowSlider = document.createElement('input');
     this.shadowSlider.type = 'range';
     this.shadowSlider.min = '0';
-    this.shadowSlider.max = '3';
-    this.shadowSlider.step = '0.05';
+    this.shadowSlider.max = '150';
+    this.shadowSlider.step = '0.5';
     this.shadowSlider.style.cssText = 'flex:1;min-width:80px';
     this.shadowLabel = document.createElement('span');
     this.shadowLabel.style.cssText = 'min-width:36px;text-align:right';
@@ -500,6 +517,21 @@ ${id}` : id;
       if (t) setPlacement(t.id, { shadow: Number(this.shadowSlider.value) });
     });
     this.shadowSlider.addEventListener('change', () => this.shadowSlider.blur());
+
+    // --- Décalage vertical du sprite + de l'ombre (la hitbox ne bouge pas) ---
+    this.offsetSlider = document.createElement('input');
+    this.offsetSlider.type = 'range';
+    this.offsetSlider.min = '-100';
+    this.offsetSlider.max = '100';
+    this.offsetSlider.step = '0.5';
+    this.offsetSlider.style.cssText = 'flex:1;min-width:80px';
+    this.offsetLabel = document.createElement('span');
+    this.offsetLabel.style.cssText = 'min-width:36px;text-align:right';
+    this.offsetSlider.addEventListener('input', () => {
+      const t = this.target;
+      if (t) setPlacement(t.id, { offsetY: Number(this.offsetSlider.value) });
+    });
+    this.offsetSlider.addEventListener('change', () => this.offsetSlider.blur());
 
     // --- Frames + canon ---
     this.pauseBox = document.createElement('input');
@@ -600,8 +632,11 @@ ${id}` : id;
       line(ox.row, oy.row),
       line(clearAnchor),
       title('Ombre portée'),
-      note("Taille de l'ombre sous l'unité (1 = défaut). Appliquée aussi en jeu."),
+      note("Rayon de l'ombre sous l'unité (px), indépendant de la hitbox. Appliqué aussi en jeu."),
       line(this.shadowSlider, this.shadowLabel),
+      title('Décalage Y (sprite + ombre)'),
+      note('Descend (+) ou monte (−) le sprite et son ombre ensemble, en px. La hitbox ne bouge pas. Appliqué aussi en jeu.'),
+      line(this.offsetSlider, this.offsetLabel),
       title('Muzzle flash'),
       note('Coche pour que cette unité tire avec un flash (seul le Trooper en a un). Décoche pour le retirer.'),
       flashRow,
@@ -635,9 +670,54 @@ ${id}` : id;
       .setInteractive({ draggable: true, useHandCursor: true });
     this.muzzleDot.on('dragstart', () => this.setPaused(true));
     this.muzzleDot.on('drag', (_p: Phaser.Input.Pointer, x: number, y: number) => this.dragMuzzle(x, y));
+    // poignées à glisser sur l'unité : hitbox (rouge, à droite du cercle), ombre portée (grise, en bas de l'ombre), échelle de l'unité (bleue, coin haut droit du sprite)
+    const handle = (color: number): Phaser.GameObjects.Arc =>
+      this.add.circle(0, 0, 6, color, 0.95).setStrokeStyle(2, 0xffffff).setDepth(1003).setInteractive({ draggable: true, useHandCursor: true }).setVisible(false);
+    this.handles = { hit: handle(0xff2a2a), shadow: handle(0x555555), scale: handle(0x4ad0ff) };
+    this.handles.hit.on('drag', (p: Phaser.Input.Pointer) => {
+      const t = this.target;
+      if (!t || t.kind === 'recruit') return;
+      const r = Math.max(2, Math.round(Math.abs(p.worldX - t.x) * 2) / 2); // au demi-pixel
+      setStat(t.kind === 'alien' ? 'alien' : 'soldier', t.unit, 'radius', r);
+      for (const sy of this.statSyncs) sy();
+    });
+    this.handles.shadow.on('drag', (p: Phaser.Input.Pointer) => {
+      const t = this.target;
+      if (!t) return;
+      const r = Math.min(150, Math.max(1, Math.round((Math.abs(p.worldY - t.y - (sprites.get(t.id).offsetY ?? 0)) / (t.kind === 'alien' ? 0.45 : 0.5)) * 2) / 2)); // demi-hauteur de l'ellipse = 0,45 × rayon (alien) ou 0,5 × rayon, au demi-pixel
+      setPlacement(t.id, { shadow: r });
+    });
+    let scaleStart = { d: 1, s: 1 };
+    const anchorDist = (p: Phaser.Input.Pointer, t: Entry): number => Math.max(1, Math.hypot(p.worldX - t.x, p.worldY - (t.y + t.dy)));
+    this.handles.scale.on('dragstart', (p: Phaser.Input.Pointer) => {
+      const t = this.target;
+      if (t) scaleStart = { d: anchorDist(p, t), s: sprites.scaleOf(t.id) };
+    });
+    this.handles.scale.on('drag', (p: Phaser.Input.Pointer) => {
+      const t = this.target;
+      if (!t) return;
+      const s = Math.min(3, Math.max(0.2, Math.round((scaleStart.s * anchorDist(p, t)) / scaleStart.d * 100) / 100)); // proportionnel à la distance à l'ancrage
+      setPlacement(t.id, { scale: s });
+    });
     this.flash = this.add.image(0, 0, 'fx_glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xffd27a).setDepth(1002).setAlpha(0);
     this.cross.setVisible(false);
     this.muzzleDot.setVisible(false);
+  }
+
+  /** Rayon de l'ombre (px) : réglage `shadow` de l'unité, indépendant du rayon de collision ; à défaut le rayon de collision. */
+  private shadowRadius(e: Entry): number {
+    return sprites.get(e.id).shadow ?? this.radiusOf(e);
+  }
+
+  /** Taille (px) de l'ellipse d'ombre d'une unité : mêmes proportions qu'en jeu. */
+  private shadowBase(e: Entry): { w: number; h: number } {
+    const r = this.shadowRadius(e);
+    return e.kind === 'alien' ? { w: r * 2.1, h: r * 0.9 } : { w: r * 2.2, h: r };
+  }
+
+  /** Rayon de collision courant (stat `radius`, modifiable avec la poignée rouge ou le panneau Stats). */
+  private radiusOf(e: Entry): number {
+    return getStat(e.kind === 'alien' ? 'alien' : 'soldier', e.unit, 'radius');
   }
 
   /** L'unité éditée a-t-elle un muzzle flash (case cochée) ? */
@@ -661,6 +741,7 @@ ${id}` : id;
     this.actionsRow.style.display = t ? 'flex' : 'none';
     this.cross.setVisible(!!t);
     this.muzzleDot.setVisible(!!t && this.hasFlash());
+    for (const h of Object.values(this.handles)) h.setVisible(!!t);
     this.flash.setAlpha(0);
     this.setPlaceMuzzle(false);
     if (!t) return;
@@ -726,8 +807,19 @@ ${id}` : id;
 
   private updateEditor(time: number): void {
     const t = this.target;
+    for (const e of this.entries) e.hit.setVisible(this.showHit && e === t && e.kind !== 'recruit'); // hitbox : vue détaillée seulement
     if (!t) return;
     this.cross.setPosition(t.x, t.y);
+    // hitbox, ombre et poignées suivent les réglages courants
+    const r = this.radiusOf(t);
+    t.hit.setPosition(t.x, t.y).setRadius(r);
+    const sb = this.shadowBase(t);
+    t.shadow.setSize(sb.w, sb.h);
+
+    this.handles.hit.setPosition(t.x + r, t.y).setVisible(this.showHit && t.kind !== 'recruit');
+    this.handles.shadow.setPosition(t.x, t.y + (sprites.get(t.id).offsetY ?? 0) + sb.h / 2);
+    const tr = t.sprite.getTopRight();
+    this.handles.scale.setPosition(tr.x, tr.y);
 
     // frame affichée
     const idx = this.frameIndex(t);
@@ -766,9 +858,12 @@ ${id}` : id;
     const sc = sprites.scaleOf(t.id);
     if (document.activeElement !== this.scaleSlider) this.scaleSlider.value = String(sc);
     this.scaleLabel.textContent = `×${r3(sc)}`;
-    const sh = sprites.get(t.id).shadow ?? 1;
+    const sh = this.shadowRadius(t);
     if (document.activeElement !== this.shadowSlider) this.shadowSlider.value = String(sh);
-    this.shadowLabel.textContent = `×${r3(sh)}`;
+    this.shadowLabel.textContent = `${r3(sh)} px`;
+    const off = sprites.get(t.id).offsetY ?? 0;
+    if (document.activeElement !== this.offsetSlider) this.offsetSlider.value = String(off);
+    this.offsetLabel.textContent = `${r3(off)} px`;
     const flashOn = !!sprites.get(t.id).muzzleFlash;
     if (this.flashBox.checked !== flashOn) this.flashBox.checked = flashOn;
     this.muzzleSection.style.display = flashOn ? 'flex' : 'none';
@@ -844,6 +939,18 @@ ${id}` : id;
     this.syncSide = sync;
     sideRow.append('Orientation', ...sideBtns.map((x) => x.b));
 
+    // hitbox : cercle rouge du rayon de collision (`radius`) de chaque unité
+    const hitRow = document.createElement('label');
+    hitRow.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const hitBox = document.createElement('input');
+    hitBox.type = 'checkbox';
+    hitBox.checked = this.showHit;
+    hitBox.addEventListener('change', () => {
+      this.showHit = hitBox.checked;
+      hitBox.blur();
+    });
+    hitRow.append(hitBox, 'Hitbox (cercle rouge, vue détaillée)');
+
     const zoom = this.select(
       'Zoom',
       ZOOMS.map((z) => [String(z), `${z * 100} %`] as [string, string]),
@@ -858,7 +965,7 @@ ${id}` : id;
     this.info.style.cssText = 'font-size:12px;color:#9fe;min-height:2.4em;white-space:pre-wrap';
 
     const editor = this.buildEditorBox(); // crée aussi la rangée Save / Reset / Copier
-    p.append(title, this.actionsRow, zoom.row, units.row, anims.row, sideRow, editor, this.info);
+    p.append(title, this.actionsRow, zoom.row, units.row, anims.row, sideRow, hitRow, editor, this.info);
     document.body.append(p);
     this.panel = p;
 
@@ -912,6 +1019,7 @@ ${id}` : id;
     const info = document.createElement('div');
     info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
     const syncs: (() => void)[] = [];
+    this.statSyncs = syncs;
     const rows = listStats(kind, id).map((st) => {
       // échelle d'après la plus grande des valeurs courante et du code : à 0, la réglette garde sa course (on peut remonter à la valeur d'origine)
       const mag = Math.max(Math.abs(st.value), Math.abs(getDefaultStat(kind, id, st.path)));
@@ -993,7 +1101,11 @@ ${id}` : id;
     // repères et étiquettes de taille constante à l'écran
     this.cross?.setScale(1 / cam.zoom);
     this.muzzleDot?.setScale(1 / cam.zoom);
-    for (const e of this.entries) e.label.setScale(1 / cam.zoom).setY(e.y + 26 / cam.zoom);
+    if (this.handles) for (const h of Object.values(this.handles)) h.setScale(1 / cam.zoom);
+    for (const e of this.entries) {
+      e.label.setScale(1 / cam.zoom).setY(e.y + 26 / cam.zoom);
+      e.hit.setStrokeStyle(2 / cam.zoom, 0xff2a2a, 0.55); // trait d'épaisseur constante à l'écran
+    }
     // décalé vers la droite pour laisser la place au panneau
     cam.centerOn(all ? 0 : -(300 / 2) / cam.zoom, overflow ? (-contentPx / 2 + scrollPx + this.scale.height / 2) / cam.zoom : 0);
   };

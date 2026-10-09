@@ -22,9 +22,10 @@ import { teleColor, teleInner, teleOuter } from './telegraph';
 import { ROCKET_TEXTURE } from '../sim/Combat';
 import { CHEST_GOLD, LootViews } from './LootViews';
 import { HEAL_FIELD } from '../sim/PowerUps';
-import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, RECRUIT_COLOR } from './PickupViews';
+import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, powerUpIconKey, RECRUIT_COLOR } from './PickupViews';
 import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
+import { alienOffsetY, soldierOffsetY } from './spriteOffset';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
 export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0xffffff, 0x3de0c0, 0xff8a3a, 0x9aa0ff];
@@ -56,7 +57,7 @@ function drawHole(g: Phaser.GameObjects.Graphics, x: number, y: number, w: numbe
 
 function shadowWidth(id: AlienId): number {
   const def = ALIENS[id];
-  return def.radius * (def.floats ? 0.7 : 1) * (sprites.get(`alien_${id}`).shadow ?? 1) * 2.1;
+  return (sprites.get(`alien_${id}`).shadow ?? def.radius) * (def.floats ? 0.7 : 1) * 2.1; // `shadow` = rayon de l'ombre (px), indépendant du rayon de collision ; à défaut, le rayon de collision
 }
 
 /** Échelle de la flaque de mort (et de cadavre) d'un alien : largeur de son ombre portée × `FX.puddle.shadowMul` (le même pour tous). */
@@ -227,15 +228,16 @@ export class WorldView {
         }
         const def = ALIENS[e.alien];
         const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
-        this.fx.burst(e.x, e.y - def.radius * 0.6, goo, e.alien === 'boss_crab' ? 40 : 10);
+        const oyA = alienOffsetY(e.alien); // restes posés sous le sprite décalé
+        this.fx.burst(e.x, e.y + oyA - def.radius * 0.6, goo, e.alien === 'boss_crab' ? 40 : 10);
         // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
         if (e.alien === 'slime' || e.alien === 'shooter') {
           const size = e.alien === 'shooter' ? 1.6 : 1;
           const light = e.alien === 'shooter' ? 0x9fb8ff : 0xc8ffb0;
-          this.fx.gloop(e.x, e.y - def.radius * 0.6, goo, light, size);
+          this.fx.gloop(e.x, e.y + oyA - def.radius * 0.6, goo, light, size);
         }
         // flaque au sol de la couleur de ses restes, pour tous : largeur de son ombre portée × `FX.puddle.shadowMul`
-        if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, goo, puddleSize(e.alien));
+        if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y + oyA, goo, puddleSize(e.alien));
         // gros alien (charger, lurker, bulle, mini-boss) : légère secousse rapide ; le crabe final a déjà celle de son explosion
         if (e.alien !== 'boss_crab' && def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.bigKillMs, FX.shake.bigKillAmount);
         if (e.alien === 'boss_crab') {
@@ -247,7 +249,7 @@ export class WorldView {
       }
       case 'soldierDied': {
         this.corpse(e.id, e.cls, e.x, e.y, this.sim.squadOf(e.owner)?.slot ?? 0);
-        this.fx.death(e.x, e.y, CLASSES[e.cls].color);
+        this.fx.death(e.x, e.y + soldierOffsetY(e.cls), CLASSES[e.cls].color);
         if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(FX.shake.deathMs, FX.shake.deathAmount);
         break;
       }
@@ -264,7 +266,12 @@ export class WorldView {
         break;
       case 'alienShot': {
         // shooter, spitter (et crabe) : flash teinté à la bouche du canon, les boules en cloche en partent visuellement
-        if (!sprites.get(`alien_${e.alien}`)?.muzzleFlash || !nearCam(e.x, e.y)) break;
+        if (!sprites.get(`alien_${e.alien}`)?.muzzleFlash || !nearCam(e.x, e.y)) {
+          // pas de bouche posée : la boule part du point au sol ; si le sprite est décalé en Y, elle part visuellement de lui
+          const off = alienOffsetY(e.alien);
+          if (off && nearCam(e.x, e.y)) this.shiftFreshBullets(e.x, e.y, 0, off, !ALIENS[e.alien].ice);
+          break;
+        }
         const view = this.aliens.get(e.id);
         const mp = view?.muzzlePoint();
         const p = mp ?? e;
@@ -296,7 +303,7 @@ export class WorldView {
       }
       case 'fuse': {
         const id = `alien_${e.alien}`;
-        const img = sprites.add(this.scene, id, e.x, e.y).setDepth(DEPTH.actors + e.y);
+        const img = sprites.add(this.scene, id, e.x, e.y + alienOffsetY(e.alien)).setDepth(DEPTH.actors + e.y);
         sprites.place(img, id);
         const base = sprites.scaleOf(id);
         img.setScale(base);
@@ -306,7 +313,7 @@ export class WorldView {
       case 'corpse': {
         const color = ALIENS[e.alien].goo ?? ALIENS[e.alien].color;
         const img = this.scene.add
-          .image(e.x, e.y, 'fx_puddle')
+          .image(e.x, e.y + alienOffsetY(e.alien), 'fx_puddle')
           .setTint(color)
           .setDepth(DEPTH.groundFx - 0.3)
           .setScale(puddleSize(e.alien), puddleSize(e.alien) * 0.65) // largeur de son ombre portée × `FX.puddle.shadowMul`
@@ -343,8 +350,11 @@ export class WorldView {
         break;
       case 'thaw':
         // un soldat sort de la glace (dégelé, ou mort dedans) : elle vole en éclats
-        if (this.onScreen(e.x, e.y, 120)) this.fx.iceShards(e.x, e.y - 8, FX.ice.breakMul);
-        this.fx.ring(e.x, e.y, 60, 0xbfeaff);
+        {
+          const oyS = soldierOffsetY(this.sim.squads.flatMap((q) => q.soldiers).find((q) => q.id === e.soldier)?.def.id ?? ''); // glaçon centré sur le sprite décalé
+          if (this.onScreen(e.x, e.y, 120)) this.fx.iceShards(e.x, e.y + oyS - 8, FX.ice.breakMul);
+          this.fx.ring(e.x, e.y + oyS, 60, 0xbfeaff);
+        }
         break;
       case 'release':
         this.fx.ring(e.x, e.y, 80, 0xffffff);
@@ -434,7 +444,9 @@ export class WorldView {
         if (!info) break;
         this.fx.ring(e.x, e.y, 110, info.color);
         this.fx.burst(e.x, e.y - 14, info.color, 22);
-        const tx = this.fx.text(e.x, e.y - 46, `${info.icon} ${t(`pu_${e.kind}` as 'pu_stim')}`, '#ffffff', 22);
+        const label = t(`pu_${e.kind}` as 'pu_stim');
+        const iconKey = powerUpIconKey(e.kind as Parameters<typeof powerUpIconKey>[0]);
+        const tx = this.scene.textures.exists(iconKey) ? this.fx.iconText(e.x, e.y - 46, iconKey, label, '#ffffff', 22) : this.fx.text(e.x, e.y - 46, `${info.icon} ${label}`, '#ffffff', 22);
         const owner = e.owner;
         this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // idem : suit la squad qui bouge
         break;
@@ -471,7 +483,7 @@ export class WorldView {
   private corpse(soldierId: number, cls: SoldierClassId, x: number, y: number, slot: number): void {
     const id = soldierSpriteId(cls, slot); // à la couleur du joueur
     if (!sprites.hasAnim(id, 'die')) return;
-    const c = sprites.add(this.scene, id, x, y).setDepth(DEPTH.actors + y - 1);
+    const c = sprites.add(this.scene, id, x, y + soldierOffsetY(cls)).setDepth(DEPTH.actors + y - 1);
     c.setFlipX(this.soldiers.get(soldierId)?.flipX ?? false);
     sprites.play(c, id, 'die');
     sprites.place(c, id);
@@ -737,7 +749,7 @@ export class WorldView {
         img.setVisible(true).setPosition(bx, by).setRotation(rot);
         const rocket = p.texture === ROCKET_TEXTURE;
         img.setScale(rocket ? FX.rocket.scale : 1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
-        if (rocket) this.fx.rocketSmoke(bx - Math.cos(rot) * 16, by - Math.sin(rot) * 16); // fumée sortant de la tuyère
+        if (rocket) this.fx.rocketSmoke(bx - Math.cos(rot) * 24, by - Math.sin(rot) * 24); // fumée derrière la flamme de la fusée
       }
     }
   }
@@ -980,7 +992,7 @@ export class WorldView {
       const out = v.outOfGround;
       if (out <= 0.01) continue;
       const w = shadowWidth(v.state.def.id);
-      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx, v.ry, w, w * (0.9 / 2.1));
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx, v.ry + alienOffsetY(v.state.def.id), w, w * (0.9 / 2.1));
     }
     // Dernier rempart (upgrade) : aura rouge qui pulse sous chaque soldat dès qu'il manque un soldat, plus intense quand il en manque davantage
     for (const sq of this.sim.squads) {
@@ -990,8 +1002,9 @@ export class WorldView {
       for (const s of sq.soldiers) {
         const v = this.soldiers.get(s.id);
         if (!v || !this.onScreen(v.rx, v.ry, 60)) continue;
-        g.fillStyle(UPGRADES.lastStand.color, (0.05 + pulse * 0.05) + k * 0.2).fillEllipse(v.rx, v.ry, 58, 26);
-        g.lineStyle(2, UPGRADES.lastStand.color, (0.15 + pulse * 0.15) + k * 0.5).strokeEllipse(v.rx, v.ry, 58, 26);
+        const oy = soldierOffsetY(s.def.id); // suit le décalage du sprite et de l'ombre
+        g.fillStyle(UPGRADES.lastStand.color, (0.05 + pulse * 0.05) + k * 0.2).fillEllipse(v.rx, v.ry + oy, 58, 26);
+        g.lineStyle(2, UPGRADES.lastStand.color, (0.15 + pulse * 0.15) + k * 0.5).strokeEllipse(v.rx, v.ry + oy, 58, 26);
       }
     }
     for (const sq of this.sim.squads) {
@@ -1058,7 +1071,7 @@ export class WorldView {
       const L = a.def.lurk;
       if (!L || a.lurkPhase === 0 || !this.onScreen(a.x, a.y, a.radius * 2 + L.length + 60)) continue; // hors écran (télégraphe des pics compris) : rien à dessiner
       const open = a.lurkPhase === 1 ? 1 - a.lurkT / L.digTime : a.lurkPhase === 5 ? a.lurkT / L.rise : 1;
-      drawHole(g, v.rx, v.ry, shadowWidth(a.def.id) * open, 1); // trou de la taille de son ombre, sous sa position affichée
+      drawHole(g, v.rx, v.ry + alienOffsetY(a.def.id), shadowWidth(a.def.id) * open, 1); // trou de la taille de son ombre, sous sa position affichée
       if (a.lurkPhase === 3) {
         const k = 1 - a.lurkT / L.aim;
         const cos = Math.cos(a.spikeAng);
@@ -1080,10 +1093,11 @@ export class WorldView {
         if (this.onScreen(x, y, w + 40)) drawHole(g, x, y, w, alpha); // hors écran : pas de trou
       };
       const R = shadowWidth(a.def.id); // trous de la taille de son ombre portée
-      if (a.lurkPhase === 1) hole(a.x, a.y, R * (1 - a.lurkT / B.dig), 1);
+      const oy = alienOffsetY(a.def.id); // et au même décalage vertical
+      if (a.lurkPhase === 1) hole(a.x, a.y + oy, R * (1 - a.lurkT / B.dig), 1);
       if (a.lurkPhase === 2) {
         const el = B.wait - a.lurkT; // temps écoulé sous terre
-        hole(a.x, a.y, R, Math.max(0, 1 - el / 0.6)); // le trou de départ se rebouche
+        hole(a.x, a.y + oy, R, Math.max(0, 1 - el / 0.6)); // le trou de départ se rebouche
         // tant qu'il suit la squad : zone pâle, pas de trou ; verrouillé (`lock` s avant la sortie) : le trou se forme et la zone se remplit
         const locked = a.lurkT <= B.lock;
         const f = locked ? Math.min(1, (B.lock - a.lurkT) / B.lock) : 0;
@@ -1093,7 +1107,7 @@ export class WorldView {
         if (locked) g.fillStyle(teleColor('burrow'), teleInner(f)).fillEllipse(a.leapX, a.leapY, B.radius * 2 * f, B.radius * 1.4 * f);
         g.lineStyle(locked ? 4 : 2, teleColor('burrow'), locked ? 0.7 + 0.3 * f : 0.45).strokeEllipse(a.leapX, a.leapY, B.radius * 2, B.radius * 1.4);
       }
-      if (a.lurkPhase === 3) hole(a.x, a.y, R, a.lurkT / B.rise); // le boss ressort : le trou s'efface
+      if (a.lurkPhase === 3) hole(a.x, a.y + oy, R, a.lurkT / B.rise); // le boss ressort : le trou s'efface
     }
     // Stalactites du Scarab : zone rouge qui se remplit jusqu'à l'impact (clignote dans les 0,4 dernières secondes), ombre qui grossit
     for (const k of this.sim.stalactites) {
@@ -1192,9 +1206,10 @@ export class WorldView {
     }
     for (const v of this.soldiers.values()) {
       const r = v.state.radius;
-      const k = sprites.get(`soldier_${v.state.def.id}`).shadow ?? 1;
-      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx, v.ry, r * 2.2 * k, r * k);
-      g.lineStyle(3, v.ringColor, 0.9).strokeEllipse(v.rx, v.ry, r * 2.6, r * 1.3);
+      const sr = sprites.get(`soldier_${v.state.def.id}`).shadow ?? r; // rayon de l'ombre, indépendant du rayon de collision
+      const oy = soldierOffsetY(v.state.def.id);
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx, v.ry + oy, sr * 2.2, sr);
+      g.lineStyle(3, v.ringColor, 0.9).strokeEllipse(v.rx, v.ry + oy, r * 2.6, r * 1.3); // cercle d'équipe (bleu pour le joueur local) : centré sous le sprite décalé
     }
 
     const b = this.bars;
@@ -1202,7 +1217,7 @@ export class WorldView {
     this.barsSeen.clear();
     for (const v of this.soldiers.values()) {
       const s = v.state;
-      const y = v.ry - (s.def.id === 'bruiser' ? 66 : 58);
+      const y = v.ry + soldierOffsetY(s.def.id) - (s.def.id === 'bruiser' ? 66 : 58); // la barre suit le sprite décalé
       const frozen = s.frozen > 0;
       const over = s.hp > s.maxHp; // overheal (globe de soin) : barre toujours affichée tant qu'il dure
       if (s.hp < s.maxHp || frozen || over) {
@@ -1229,9 +1244,10 @@ export class WorldView {
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss || !!a.def.projectile; // orbe de glace : barre toujours affichée (on peut le détruire)
-      if (hurt) this.bar(b, v.rx, v.ry - top, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
+      const by = v.ry + alienOffsetY(a.def.id) - top; // la barre suit le sprite décalé
+      if (hurt) this.bar(b, v.rx, by, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
-      if (shielded) this.bar(b, v.rx, v.ry - top - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
+      if (shielded) this.bar(b, v.rx, by - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);
       if (boss) {
         let tag = this.bossTags.get(a.id);
         if (!tag) {
@@ -1241,7 +1257,7 @@ export class WorldView {
             .setDepth(DEPTH.bars);
           this.bossTags.set(a.id, tag);
         }
-        tag.setPosition(v.rx, v.ry - top - (shielded ? 8 : 0) - 4);
+        tag.setPosition(v.rx, by - (shielded ? 8 : 0) - 4);
         bossSeen.add(a.id);
       }
     }

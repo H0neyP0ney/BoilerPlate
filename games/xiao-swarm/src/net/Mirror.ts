@@ -417,6 +417,7 @@ export class Mirror {
         enraged: 0,
         noXp: false,
         noRecruit: false,
+        instant: false,
         age: 0,
         esc: 1,
         revives: 0,
@@ -468,6 +469,7 @@ export class Mirror {
     s.castT = a.castT;
     s.castCorpse = a.castCorpse;
     s.revived = a.zombie;
+    s.instant = a.instant;
     // s'enterre : le compte à rebours démarre à la première réception, puis il décompte localement (`step`), sans passer sous 0,001
     s.sinkT = a.sinking ? (s.sinkT > 0 ? s.sinkT : RELOCATE.sink) : 0;
     s.enraged = a.enraged;

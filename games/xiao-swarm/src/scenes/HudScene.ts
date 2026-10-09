@@ -155,8 +155,9 @@ export class HudScene extends Phaser.Scene {
     this.xpLevelSeen = 0;
     this.xpWrap = false;
     this.bossName = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
-      .setOrigin(0.5);
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '15px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 })
+      .setOrigin(0.5)
+      .setDepth(0.3); // au-dessus de la jauge (0.2)
     this.bossArrow = this.add.graphics();
     this.bossTip = this.add
       .text(0, 0, t('bossTip'), { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ff6a6a', stroke: '#2a0a08', strokeThickness: 5 })
@@ -289,7 +290,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const cx = width / 2;
     const top = hudTop() + 2;
     this.bossFrame.setPosition(cx, top + (BOSS_ART.H / 2) * k).setScale(k);
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, top + 9 * k); // dans le creux au-dessus de l'ornement central
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, top + BOSS_ART.slotCy * k); // nom du boss au centre de la jauge
     // jauges 3-slice dans la zone sombre : la part blanche reste sur la vie d'avant le coup (BAR_GHOST_HOLD s) puis rejoint la rouge, comme sur les barres de vie des aliens
     const ratio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
     const st = this.bossGhostState;
@@ -487,8 +488,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
         continue;
       }
       if (inside && target.kind === 'incoming') continue; // le point vert est dessiné au sol ; les ennemis déjà à l'écran n'ont plus besoin de flèche
-      const color = target.kind === 'marker' ? 0x5dff84 : target.kind === 'orbs' ? 0x5ac8ff : target.kind === 'incoming' ? 0xff4040 : 0xffe14a;
-      const back = target.kind === 'marker' ? 0x0a2210 : target.kind === 'orbs' ? 0x0a1c2a : target.kind === 'incoming' ? 0x2a0808 : 0x2a2208;
+      const color = target.kind === 'marker' || target.kind === 'powerup' ? 0x5dff84 : target.kind === 'orbs' ? 0x5ac8ff : target.kind === 'incoming' ? 0xff4040 : 0xffe14a;
+      const back = target.kind === 'marker' || target.kind === 'powerup' ? 0x0a2210 : target.kind === 'orbs' ? 0x0a1c2a : target.kind === 'incoming' ? 0x2a0808 : 0x2a2208;
       let px: number;
       let py: number;
       let ang: number;

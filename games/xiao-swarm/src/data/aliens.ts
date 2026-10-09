@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -115,6 +115,8 @@ export interface AlienDef {
   xp: number;
   /** Kamikaze : à sa mort le corps reste sur place, clignote `delay` s (zone rouge) puis explose : dégâts + recul aux soldats. */
   deathBlast?: { delay: number; radius: number; damage: number; knockback: number };
+  /** À sa mort, `count` aliens `spawn` surgissent autour de son corps (chaman : 5 araignées). Invoqués : ni XP ni recrue ; pas pendant le clear screen d'un boss. */
+  deathSpawn?: { spawn: AlienId; count: number };
   /** Langue : attrape un soldat à portée et le tire d'une fraction `pull` de la distance qui les sépare (jamais jusqu'à lui). */
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
@@ -173,7 +175,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'gling',
     hp: 15, // -10 %
     speed: 180, // +40 %
-    radius: 11,
+    radius: 13,
     mass: 0.6,
     damage: 2.5,
     attackCooldown: 0.3,
@@ -190,7 +192,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'slime',
     hp: 55,
     speed: 72,
-    radius: 16,
+    radius: 19.5,
     mass: 1,
     damage: 6,
     attackCooldown: 0.4,
@@ -225,7 +227,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'kamikaze',
     hp: 25,
     speed: 105,
-    radius: 15,
+    radius: 23.5,
     mass: 1,
     damage: 2,
     attackCooldown: 0.4,
@@ -242,7 +244,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'toad',
     hp: 40,
     speed: 70,
-    radius: 16,
+    radius: 25,
     mass: 1.4,
     damage: 3,
     attackCooldown: 0.45,
@@ -259,7 +261,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'charger',
     hp: 300, // ×3
     speed: 70, // +30 % (40, 07/10)
-    radius: 24,
+    radius: 39,
     mass: 5,
     damage: 20,
     attackCooldown: 0.5,
@@ -277,7 +279,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'spitter',
     hp: 100,
     speed: 90,
-    radius: 17,
+    radius: 28,
     mass: 1.2,
     damage: 2,
     attackCooldown: 0.45,
@@ -295,13 +297,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'shaman',
     hp: 60,
     speed: 60,
-    radius: 18,
+    radius: 24,
     mass: 1.5,
     damage: 1.5,
     attackCooldown: 0.5,
     target: 'nearest',
-    frost: { every: 9, range: 560, count: 3, gap: [90, 160], radius: 30, ttl: 10 }, // flocons à distance (07/10) : à 90-160 px du bord réel de la squad
+    frost: { every: 9, range: 560, count: 2, gap: [103.5, 184], radius: 25.5, ttl: 10 }, // flocons à distance (07/10) : à 103,5-184 px du bord réel de la squad (+15 % le 09/10, 90-160 avant)
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30 }, // le ressuscité est un ZOMBIE (2 exemplaires, ×3 PV, cadence ×3 : voir config.ZOMBIE_*)
+    deathSpawn: { spawn: 'spider', count: 5 }, // à sa mort : 5 araignées
     xp: 8,
     recruitChance: 0.1,
     color: 0xffd84a,
@@ -313,7 +316,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'wall',
     hp: 150,
     speed: 60,
-    radius: 17,
+    radius: 32.5,
     mass: 1.3,
     damage: 2,
     attackCooldown: 0.5,
@@ -330,7 +333,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'lurker',
     hp: 350, // ×3
     speed: 120,
-    radius: 18,
+    radius: 29.5,
     mass: 2,
     damage: 0,
     attackCooldown: 1,
@@ -367,7 +370,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'burner',
     hp: 80, // x2
     speed: 85,
-    radius: 16,
+    radius: 29,
     mass: 1,
     damage: 3,
     attackCooldown: 0.4,
@@ -384,7 +387,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'boss_rhino',
     hp: 900,
     speed: 71.5, // 55 + 30 %
-    radius: 38,
+    radius: 50,
     mass: 14,
     damage: 7,
     attackCooldown: 1,
@@ -406,7 +409,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'boss_rhino_fire',
     hp: 1100, // chacun : 2 × 1100 × bossHpMul = entre le Scarab (5:00) et le Giant Crab (10:00)
     speed: 71.5,
-    radius: 38,
+    radius: 50,
     mass: 14,
     damage: 7,
     attackCooldown: 1,
@@ -424,7 +427,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'boss_rhino_ice',
     hp: 1100,
     speed: 71.5,
-    radius: 38,
+    radius: 50,
     mass: 14,
     damage: 7,
     attackCooldown: 1,
@@ -459,18 +462,18 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0xbe5527, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 140,
   },
-  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 3 s pour faire apparaître 30 glings en 1,07 s. */
+  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4 s pour faire apparaître 22 araignées (`spider`) en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
     hp: 600, // +30 % (500)
     speed: 85,
-    radius: 38,
+    radius: 43.5,
     mass: 14,
     damage: 5,
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
-    swarm: { every: 4, duration: 1.07, count: 22, spawn: 'gling' },
+    swarm: { every: 4, duration: 1.07, count: 22, spawn: 'spider' },
     boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1,
@@ -538,7 +541,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     id: 'boss_crab',
     hp: 3000, // comme le Rhinocéros Alpha (× bossHpMul en jeu)
     speed: 48,
-    radius: 150, // 3× plus gros (affichage et collision)
+    radius: 75, // 3× plus gros (affichage et collision)
     scale: 3,
     mass: 30,
     damage: 12.5,
@@ -553,10 +556,30 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xd9435a,
     hpBarWidth: 200,
   },
+  /**
+   * Araignée rouge : calquée sur le gling (mêmes stats : rapide, fragile, arrive en essaims). C'est elle que la Gling Mère fait apparaître
+   * (`boss_gling.swarm.spawn`) à la place des glings. Ajoutée en DERNIER : l'ordre de `ALIENS` donne l'index réseau des aliens (`Protocol.ts`).
+   */
+  spider: {
+    id: 'spider',
+    hp: 15,
+    speed: 180,
+    radius: 18,
+    mass: 0.6,
+    damage: 2.5,
+    attackCooldown: 0.3,
+    target: 'nearest',
+    revivable: true,
+    xp: 1,
+    recruitChance: 0.02,
+    color: 0xe0364a, // rouge de l'araignée (éclaboussure à la mort)
+    goo: 0xc41f2e, // couleur principale de son sprite (éclats et flaque de mort)
+    hpBarWidth: 22,
+  },
 };
 
 /**
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer'];
+export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer', 'spider'];

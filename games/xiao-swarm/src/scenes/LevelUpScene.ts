@@ -82,17 +82,18 @@ export class LevelUpScene extends Phaser.Scene {
 
     // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
     const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;
-    let suggestArrow: Phaser.GameObjects.Text | null = null;
+    let suggestBox: Phaser.GameObjects.Container | null = null; // flèche + texte : un seul composant qui pulse d'un bloc (origine = pointe de la flèche)
     let suggestLabel: Phaser.GameObjects.Text | null = null;
     if (suggestIdx >= 0) {
       // texte au-dessus de la flèche : « Claim upgrade » (la flèche montre laquelle)
       suggestLabel = this.add
-        .text(0, 0, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
+        .text(0, -50, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
         .setOrigin(0.5, 1);
-      suggestArrow = this.add
+      const arrow = this.add
         .text(0, 0, '▼', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
         .setOrigin(0.5, 1);
-      this.tweens.add({ targets: suggestArrow, scale: { from: 1, to: 1.3 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      suggestBox = this.add.container(0, 0, [arrow, suggestLabel]);
+      this.tweens.add({ targets: suggestBox, scale: { from: 1, to: 1.3 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
 
     // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R)
@@ -129,19 +130,16 @@ export class LevelUpScene extends Phaser.Scene {
       const total = ch;
       // au centre de l'écran : titre, cartes, puis la barre de temps
       const top = h / 2 - total / 2;
-      title.setPosition(w / 2, top - 44 - (suggestArrow ? 80 : 0)).setScale(Math.min(vertical ? 240 : 360, w - 40) / title.width); // plus haut quand la flèche recommandée est au-dessus d'une carte
+      title.setPosition(w / 2, top - 20).setScale((Math.min(vertical ? 240 : 360, w - 40) * 0.7) / title.width);
       this.cards.forEach((c, i) => {
         const x = w / 2 + (i - (n - 1) / 2) * (cw + gap);
         const y = top + ch / 2;
         c.setPosition(x, y);
         resizeUpgradeCard(c, cw, ch, vertical);
-        if (suggestArrow && i === suggestIdx) {
+        if (suggestBox && i === suggestIdx) {
           // au-dessus de la carte, pointe vers le bas
-          suggestArrow.setText('▼').setOrigin(0.5, 1);
-          suggestArrow.setPosition(x, y - ch / 2 - 8);
+          suggestBox.setPosition(x, y - ch / 2 - 8);
           suggestLabel?.setWordWrapWidth(Math.max(120, cw + 40), true);
-          suggestLabel?.setOrigin(0.5, 1);
-          suggestLabel?.setPosition(x, y - ch / 2 - 58);
         }
         const fx = this.prismFx.get(i);
         if (fx) {

@@ -143,6 +143,7 @@ export class Horde {
       enraged: 0,
       noXp: this.sim.waves.replaying, // rejeu de vague pendant un combat de boss : pas de globe d'XP (mais des recrues possibles)
       noRecruit: false,
+      instant: false,
       esc,
       revives: 0,
       reviveLock: 0,
@@ -205,9 +206,10 @@ export class Horde {
   }
 
   /** Fait apparaître un alien à un endroit précis (invocation ou résurrection par un chaman), si le plafond le permet ; il ne donne jamais d'XP. */
-  spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false): void {
+  spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false, instant = false): void {
     if (!this.canSpawn(type)) return;
     const made = this.create(ALIENS[type], x, y, hpFrac, revived);
+    made.instant = instant; // surgit sur place : pas de trou d'apparition, ni de délai avant d'agir
     made.noXp = true; // invoqué (essaim de la Gling Mère) ou ressuscité (chaman) : ne laisse jamais de globe d'XP
     made.noRecruit = true; // ni de recrue
     this.sim.aliens.push(made);
@@ -270,7 +272,7 @@ export class Horde {
   }
 
   isEmerging(a: AlienState): boolean {
-    return !a.def.lurk && !a.revived && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
+    return !a.def.lurk && !a.revived && !a.instant && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
   }
 
   update(dt: number): void {

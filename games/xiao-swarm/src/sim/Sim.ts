@@ -527,7 +527,7 @@ export class Sim {
     u.kx += (dirX * 40) / u.mass;
     u.ky += (dirY * 40) / u.mass;
     this.events.push({ t: 'hit', id: u.id });
-    if (u.hp <= 0) this.killAlien(u, attacker);
+    if (u.hp <= 0) this.killAlien(u, attacker, false, dirX, dirY);
   }
 
   /** Une flaque disparaît (délai écoulé, trop nombreuses) ou sert : le chaman qui l'incante la ressuscite. */
@@ -817,7 +817,8 @@ export class Sim {
     if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: 300 });
   }
 
-  private killAlien(a: AlienState, killer: PlayerId | null, wipe = false): void {
+  /** (`dirX`, `dirY`) : sens du coup fatal (les globes d'XP y sont expulsés). */
+  private killAlien(a: AlienState, killer: PlayerId | null, wipe = false, dirX = 0, dirY = 0): void {
     a.alive = false;
     this.metrics.kills++;
     const squad = killer ? this.squadOf(killer) : undefined;
@@ -854,7 +855,7 @@ export class Sim {
       return;
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
-    if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y)); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
+    if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y), dirX, dirY); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 
   /** Bulle qui meurt : son prisonnier est libéré (brève protection, petit recul). */

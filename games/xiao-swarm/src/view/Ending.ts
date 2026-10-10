@@ -10,14 +10,16 @@ const DROP_TIME = 2.2;
 const BOARD_RADIUS = 55;
 const BOARD_TIMEOUT = 12;
 const LAUNCH_TIME = 2.4;
+/** Pause (s) entre la mort du boss final et l'apparition de la fusée. */
+const WAIT_TIME = 2;
 
 /**
- * Séquence de fin du solo (boss final tombé) : les commandes sont verrouillées (`moveDir` remplace l'input), une fusée (sprite `fx_rocket`, celui du power-up Rocket
+ * Séquence de fin du solo (boss final tombé) : les commandes sont verrouillées (`moveDir` remplace l'input), `WAIT_TIME` s plus tard une fusée (sprite `fx_rocket`, celui du power-up Rocket
  * barrage) descend à côté de la squad en freinant, les soldats marchent dedans et disparaissent (`Sim.boardSoldier`), puis la fusée décolle. `onLaunched` : la scène
  * affiche alors « Congratulations! ». Vue seulement : la simulation ne fait que figer les vagues, l'XP et les dégâts (`Sim.beginEnding`).
  */
 export class Ending {
-  private phase: 'drop' | 'board' | 'launch' | 'done' = 'drop';
+  private phase: 'wait' | 'drop' | 'board' | 'launch' | 'done' = 'wait';
   private t = 0;
   private boardT = 0;
   private emptyT = 0;
@@ -39,7 +41,7 @@ export class Ending {
     const c = sim.squadOf(owner)!.center;
     this.land.set(c.x + 260, c.y + 50);
     const src = scene.textures.get('fx_rocket').getSourceImage() as { width: number; height: number };
-    this.rocket = scene.add.image(this.land.x, 0, 'fx_rocket').setDisplaySize(ROCKET_LEN, (ROCKET_LEN * src.height) / src.width).setRotation(-Math.PI / 2); // pointe vers le haut
+    this.rocket = scene.add.image(this.land.x, 0, 'fx_rocket').setDisplaySize(ROCKET_LEN, (ROCKET_LEN * src.height) / src.width).setRotation(-Math.PI / 2).setVisible(false); // pointe vers le haut ; cachée pendant l'attente
     this.flame = scene.add.graphics().setDepth(DEPTH.fx);
     this.shadow = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.y = this.land.y - ROCKET_LEN / 2 - DROP_HEIGHT;
@@ -62,6 +64,13 @@ export class Ending {
     this.t += dt;
     const cam = this.scene.cameras.main;
     switch (this.phase) {
+      case 'wait':
+        if (this.t >= WAIT_TIME) {
+          this.phase = 'drop';
+          this.t = 0;
+          this.rocket.setVisible(true);
+        }
+        break;
       case 'drop': {
         const k = Math.min(1, this.t / DROP_TIME);
         const ease = 1 - (1 - k) ** 3; // freine en arrivant
@@ -110,7 +119,7 @@ export class Ending {
   private place(): void {
     this.rocket.setPosition(this.land.x, this.y).setDepth(this.phase === 'launch' ? DEPTH.fx : DEPTH.actors + this.land.y);
     // ombre au sol : grandit à mesure que la fusée approche, disparaît au décollage
-    const near = this.phase === 'drop' ? Math.min(1, this.t / DROP_TIME) : this.phase === 'launch' ? Math.max(0, 1 - this.t / 0.8) : 1;
+    const near = this.phase === 'wait' ? 0 : this.phase === 'drop' ? Math.min(1, this.t / DROP_TIME) : this.phase === 'launch' ? Math.max(0, 1 - this.t / 0.8) : 1;
     this.shadow.clear().fillStyle(0x000000, 0.28 * near).fillEllipse(this.land.x, this.land.y, 120 * (0.4 + 0.6 * near), 36 * (0.4 + 0.6 * near));
   }
 

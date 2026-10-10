@@ -265,7 +265,7 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'shake',
     label: "Secousses d'écran",
-    where: "Slam d'un alien, mort d'un de tes soldats, mort d'un gros alien (la secousse des explosions est dans « Explosion »). Amplitude = part de l'écran.",
+    where: "Slam d'un alien, mort d'un de tes soldats, mort d'un gros alien, boss tué, œuf de boss détruit (la secousse des explosions est dans « Explosion »). Amplitude = part de l'écran.",
     specs: [
       { key: 'slamMs', label: 'Slam : durée (ms)', min: 0, max: 800, step: 10 },
       { key: 'slamAmount', label: 'Slam : amplitude', min: 0, max: 0.03, step: 0.001 },
@@ -273,6 +273,10 @@ const EFFECTS: EffectDef[] = [
       { key: 'deathAmount', label: 'Mort d\'un soldat : amplitude', min: 0, max: 0.03, step: 0.001 },
       { key: 'bigKillMs', label: 'Gros alien : durée (ms)', min: 0, max: 800, step: 10 },
       { key: 'bigKillAmount', label: 'Gros alien : amplitude', min: 0, max: 0.03, step: 0.001 },
+      { key: 'bossMs', label: 'Boss tué : durée (ms)', min: 0, max: 1500, step: 10 },
+      { key: 'bossAmount', label: 'Boss tué : amplitude', min: 0, max: 0.04, step: 0.001 },
+      { key: 'eggMs', label: 'Œuf détruit : durée (ms)', min: 0, max: 1500, step: 10 },
+      { key: 'eggAmount', label: 'Œuf détruit : amplitude', min: 0, max: 0.04, step: 0.001 },
     ],
   },
   {
@@ -451,7 +455,7 @@ export class ParticleViewerScene extends Phaser.Scene {
   private shakePreview = true;
   /** Aperçus : dégâts de la bulle de critique, secousse jouée, déformation d'écran des ondes de niveau. */
   private critDmg = 123;
-  private shakeKind: 'slam' | 'death' | 'bigKill' = 'slam';
+  private shakeKind: 'slam' | 'death' | 'bigKill' | 'boss' | 'egg' = 'slam';
   private shock!: ShockDistort;
   /** Aperçu du globe de stase : zone dessinée à chaque image jusqu'à `until` (ms de la scène). */
   private field?: { kind: 'heal' | 'stasis'; x: number; y: number; until: number; nextCross: number };
@@ -580,7 +584,7 @@ export class ParticleViewerScene extends Phaser.Scene {
         break;
       case 'shake': {
         const k = FX.shake;
-        const [ms, amount] = this.shakeKind === 'slam' ? [k.slamMs, k.slamAmount] : this.shakeKind === 'death' ? [k.deathMs, k.deathAmount] : [k.bigKillMs, k.bigKillAmount];
+        const [ms, amount] = { slam: [k.slamMs, k.slamAmount], death: [k.deathMs, k.deathAmount], bigKill: [k.bigKillMs, k.bigKillAmount], boss: [k.bossMs, k.bossAmount], egg: [k.eggMs, k.eggAmount] }[this.shakeKind];
         if (amount > 0) this.cameras.main.shake(ms, amount);
         break;
       }
@@ -790,7 +794,7 @@ export class ParticleViewerScene extends Phaser.Scene {
     }
     if (e.id === 'crit') this.paramBox.append(slider('Dégâts (aperçu)', { min: 1, max: 9999, step: 1, get: () => this.critDmg, set: (v) => (this.critDmg = v) }).row);
     if (e.id === 'shake') {
-      const kind = select('Secousse jouée (aperçu)', [['slam', 'Slam (alien)'], ['death', "Mort d'un soldat"], ['bigKill', "Mort d'un gros alien"]]);
+      const kind = select('Secousse jouée (aperçu)', [['slam', 'Slam (alien)'], ['death', "Mort d'un soldat"], ['bigKill', "Mort d'un gros alien"], ['boss', 'Boss tué'], ['egg', 'Œuf de boss détruit']]);
       kind.select.value = this.shakeKind;
       kind.select.addEventListener('change', () => {
         this.shakeKind = kind.select.value as typeof this.shakeKind;

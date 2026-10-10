@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { DEPTH, FREEZE, ORB_BLINK_TIME, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_LIFE, XP_ORB_POP } from '../config';
-import { TICK_RATE } from '../net/Session';
+import { DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
@@ -127,6 +126,8 @@ export class WorldView {
   private readonly muzzleShift = new Map<Projectile, { sx: number; sy: number; dx: number; dy: number }>();
   /** Globes d'XP : pool d'images réutilisées dans l'ordre (comme les projectiles). */
   private readonly orbImgs: Phaser.GameObjects.Image[] = [];
+  /** Instant (s, horloge de la vue) où chaque globe d'XP a été vu pour la première fois : son âge pour l'apparition et le saut en cloche, aussi chez un client (qui ne connaît pas `life`). */
+  private readonly orbBorn = new Map<number, number>();
   /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
   /** Instant (s) où chaque nuage ralentissant est apparu à l'écran (animation de « pop »). */
   private readonly cloudBorn = new Map<number, number>();
@@ -242,8 +243,12 @@ export class WorldView {
         }
         // flaque au sol de la couleur de ses restes, pour tous : largeur de son ombre portée × `FX.puddle.shadowMul`
         if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y + oyA, goo, puddleSize(e.alien));
-        // gros alien (charger, lurker, bulle, mini-boss) : légère secousse rapide ; le crabe final a déjà celle de son explosion
-        if (e.alien !== 'boss_crab' && def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.bigKillMs, FX.shake.bigKillAmount);
+        // secousse : forte pour un boss tué (partout) et un œuf détruit ; légère et rapide pour un gros alien (charger, lurker, bulle)
+        const k = FX.shake;
+        if (def.boss) this.scene.cameras.main.shake(k.bossMs, k.bossAmount, true);
+        else if (def.egg) {
+          if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(k.eggMs, k.eggAmount, true);
+        } else if (def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(k.bigKillMs, k.bigKillAmount);
         if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
           sfx.play(this.scene, SFX.blast.key, SFX.blast);
@@ -825,6 +830,13 @@ export class WorldView {
     const orbTex = this.scene.textures.exists('xp_orb') ? 'xp_orb' : 'fx_xp';
     const orbBase = orbTex === 'xp_orb' ? 32 / this.scene.textures.get('xp_orb').getSourceImage().width : 1;
     while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, orbTex).setDepth(DEPTH.groundFx + 0.2));
+    // âge de chaque globe (hors caméra compris : un globe qui entre dans le champ plus tard ne refait pas son apparition)
+    const seen = new Set<number>();
+    for (const o of orbs) {
+      seen.add(o.id);
+      if (!this.orbBorn.has(o.id)) this.orbBorn.set(o.id, time);
+    }
+    if (this.orbBorn.size > seen.size) for (const id of this.orbBorn.keys()) if (!seen.has(id)) this.orbBorn.delete(id);
     for (let i = 0; i < this.orbImgs.length; i++) {
       const img = this.orbImgs[i];
       const o = orbs[i];
@@ -841,10 +853,12 @@ export class WorldView {
       const size = orbSize(o.value);
       const bob = Math.sin(time * 4 + o.id) * 2.5;
       const blink = o.life < ORB_BLINK_TIME && Math.sin(time * 18) > 0;
-      // apparition : petite animation d'échelle Back.Out sur les premières 0,3 s de vie (âge interpolé comme la position : `life` change par ticks de 30 Hz)
-      const age = XP_ORB_LIFE - o.life - (1 - alpha) / TICK_RATE;
+      // apparition : petite animation d'échelle Back.Out sur les premières 0,3 s de vie
+      const age = time - (this.orbBorn.get(o.id) ?? time);
       const pop = age >= XP_ORB_POP ? 1 : Phaser.Math.Easing.Back.Out(Math.max(0, age) / XP_ORB_POP);
-      img.setVisible(true).setPosition(x, y - 8 + bob).setScale(size * ORB_SCALE * orbBase * pop * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
+      const hk = age > 0 && age < XP_SLIDE.hopTime ? age / XP_SLIDE.hopTime : 0;
+      const hop = XP_SLIDE.hopHeight * 4 * hk * (1 - hk); // saut en cloche à la sortie de l'alien (pendant la glissade)
+      img.setVisible(true).setPosition(x, y - 8 + bob - hop).setScale(size * ORB_SCALE * orbBase * pop * (1 + Math.sin(time * 6 + o.id) * 0.06)).setAlpha(blink ? 0.35 : 1);
     }
   }
 

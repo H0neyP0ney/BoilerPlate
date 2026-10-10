@@ -52,7 +52,7 @@ export const FX_DEFAULTS = {
   /** Fissures noires au sol (fx_cracks_<n>) sous les grosses explosions (rayon >= minRadius) : elles restent `holdMs` puis s'effacent en `fadeMs` ; dessous, une trace de brûlure noir / gris (fx_scorch_<n>, `scorch*`) plus large qui dure plus longtemps. */
   cracks: { minRadius: 90, scale: 1.2, alpha: 0.85, holdMs: 1200, fadeMs: 3500, scorchAlpha: 0.6, scorchScale: 1.3, scorchHoldMs: 3000, scorchFadeMs: 7000 },
   /** Secousses d'écran (caméra) : slam d'un alien, mort d'un de TES soldats, mort d'un gros alien (amplitude = part de l'écran). La secousse des explosions est dans `explosion`. */
-  shake: { slamMs: 220, slamAmount: 0.01, deathMs: 160, deathAmount: 0.009, bigKillMs: 110, bigKillAmount: 0.004 },
+  shake: { slamMs: 220, slamAmount: 0.01, deathMs: 160, deathAmount: 0.009, bigKillMs: 110, bigKillAmount: 0.004, bossMs: 500, bossAmount: 0.016, eggMs: 300, eggAmount: 0.011 },
   /** Poussière quand une unité sort du sol (trou d'apparition, lurker, Scarab) : `countBase` + `countPerRadius` × rayon de l'unité de bouffées (fx_smoke). */
   dust: { countBase: 6, countPerRadius: 0.33, speedMin: 18, speedMax: 70, scaleStart: 0.4, scaleEnd: 1.1, alpha: 0.55, lifeMin: 450, lifeMax: 800, color: 0xb9a78c },
   /** Bulle de critique « ! 123 » : taille finale, grossissement des chiffres seuls, apparition, pause avant la montée, montée. */

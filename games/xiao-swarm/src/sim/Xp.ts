@@ -1,4 +1,4 @@
-import { DIFFICULTY, PICKUP, XP_ORB_LIFE } from '../config';
+import { DIFFICULTY, PICKUP, XP_ORB_LIFE, XP_SLIDE } from '../config';
 import { splitXp } from '../data/progression';
 import type { AlienState, XpOrb } from './entities';
 import { catchItem, chase } from './Pickup';
@@ -24,10 +24,17 @@ export class Xp {
    * `xp` : XP lâchée si elle diffère de celle de l'espèce (tutoriel). `squad` : celle qui a tué l'alien ; sa stat `xpGain` (upgrade « XP »)
    * multiplie l'XP du butin, donc le nombre et la taille des globes (1, 3 ou 8 XP) : chaque globe vaut toujours la même chose au ramassage.
    * La part décimale est tirée au sort (2 XP × 1,25 = 2,5 : 2 ou 3), pour que le bonus compte aussi sur les petits aliens.
+   * (`dirX`, `dirY`) : sens du tir qui l'a tué ; les globes y sont expulsés et glissent (`XP_SLIDE`). Sans direction : à l'opposé de `squad`.
    */
-  drop(a: AlienState, xp = a.def.xp, squad?: Squad): void {
+  drop(a: AlienState, xp = a.def.xp, squad?: Squad, dirX = 0, dirY = 0): void {
     if (xp <= 0) return;
     const { rng } = this.sim;
+    if (!dirX && !dirY && squad) {
+      dirX = a.x - squad.center.x;
+      dirY = a.y - squad.center.y;
+    }
+    const len = Math.hypot(dirX, dirY);
+    const dir = len > 1e-6 ? Math.atan2(dirY, dirX) : rng.range(0, Math.PI * 2);
     if (squad) {
       const scaled = xp * squad.stats.get('xpGain');
       xp = Math.floor(scaled) + (rng.chance(scaled - Math.floor(scaled)) ? 1 : 0);
@@ -37,7 +44,9 @@ export class Xp {
       const r = a.radius * rng.range(0.2, 1.1);
       const x = a.x + Math.cos(ang) * r;
       const y = a.y + Math.sin(ang) * r * 0.6;
-      this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME });
+      const slideAng = dir + rng.range(-XP_SLIDE.spread, XP_SLIDE.spread);
+      const v = XP_SLIDE.speed * rng.range(XP_SLIDE.speedJitter[0], XP_SLIDE.speedJitter[1]);
+      this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME, vx: Math.cos(slideAng) * v, vy: Math.sin(slideAng) * v });
     }
     if (this.orbs.length > MAX_ORBS) this.orbs.splice(0, this.orbs.length - MAX_ORBS);
   }
@@ -49,6 +58,18 @@ export class Xp {
       o.px = o.x;
       o.py = o.y;
       if (!o.caught) o.life -= dt; // attrapé : il ne disparaît plus
+      if (o.vx || o.vy) {
+        // glissade de sortie (sens du tir), freinée ; un globe attrapé ne glisse plus
+        if (o.caught) o.vx = o.vy = 0;
+        else {
+          o.x += o.vx! * dt;
+          o.y += o.vy! * dt;
+          const k = Math.exp(-XP_SLIDE.friction * dt);
+          o.vx! *= k;
+          o.vy! *= k;
+          if (Math.hypot(o.vx!, o.vy!) < 8) o.vx = o.vy = 0;
+        }
+      }
       if (o.life <= 0) {
         this.orbs.splice(i, 1);
         continue;

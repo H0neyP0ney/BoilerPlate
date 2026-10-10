@@ -298,6 +298,9 @@ export interface XpOrb {
   caught?: boolean;
   /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
   pullV?: number;
+  /** Glissade à la sortie de l'alien (px/s, freinée : `XP_SLIDE`) ; 0 / absent = immobile. Sim seulement (la position passe par le snapshot). */
+  vx?: number;
+  vy?: number;
 }
 
 /** Globe d'upgrade sorti d'un coffre : réservé à `owner`, ne disparaît jamais, donne une upgrade au hasard à son ramassage. */

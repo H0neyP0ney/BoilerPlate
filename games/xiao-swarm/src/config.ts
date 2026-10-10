@@ -120,6 +120,13 @@ export const PICKUP = { pickRadius: 34, maxSpeed: 1400, caughtLife: 8, pullStart
 /** Globes d'XP : durée de vie au sol (s) ; l'affichage s'en sert pour l'animation d'apparition (scale Back.Out sur les `XP_ORB_POP` premières secondes). */
 export const XP_ORB_LIFE = 45;
 export const XP_ORB_POP = 0.3;
+/**
+ * Globes d'XP lâchés par un alien : ils sont expulsés dans le sens du tir qui l'a tué (à défaut : à l'opposé de la squad du tueur) et glissent
+ * en freinant. `speed` = vitesse de départ (px/s, × un tirage entre `speedJitter[0]` et `[1]`), `spread` = écart d'angle max autour de la
+ * direction (radians), `friction` = freinage (1/s : distance parcourue ≈ speed / friction). Un globe attrapé par un soldat arrête de glisser.
+ * `hopHeight` / `hopTime` : saut en cloche à la sortie (affichage seulement, `WorldView.syncOrbs`) : hauteur max (px) et durée (s).
+ */
+export const XP_SLIDE = { speed: 600, speedJitter: [0.55, 1.15] as const, spread: 0.7, friction: 7, hopHeight: 30, hopTime: 0.45 };
 
 /** Multiplicateur de dégâts d'un coup critique (la chance de critique vient de la stat `crit` de la squad, en %, 0 de base). */
 export const CRIT_MUL = 2;

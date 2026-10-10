@@ -202,7 +202,7 @@ export class Combat {
       const lead = lob.lead ? rng.range(lob.lead[0], lob.lead[1]) : 1; // part de l'anticipation (au hasard : pas toujours pile devant)
       const lx = target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, lob.aoe, lob.texture, a.team, 'aliens');
       p.poison = lob.poison ?? 0;
       p.spawn = lob.spawn ?? 0;
     }
@@ -255,7 +255,7 @@ export class Combat {
       const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? zombieStats().dmgMul : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, sp.aoe, sp.texture, a.team, 'aliens');
       if (sp.puddle) {
         p.puddle = sp.puddle.radius;
         p.puddleTtl = sp.puddle.ttl;

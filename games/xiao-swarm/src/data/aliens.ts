@@ -100,6 +100,8 @@ export interface AlienDef {
   maxPerWave?: number;
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
   tint?: number;
+  /** Visuel : petits arcs électriques qui crépitent au hasard autour de lui (affichage seulement, `view/ElectricFx.ts` ; chargeur). */
+  electric?: boolean;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   boss?: { kind: 'mini' | 'final' };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -143,6 +145,8 @@ export interface AlienDef {
     trail?: { kind: 'fire' | 'frost'; every: number; radius: number; ttl: number; dps: number };
     /** À la fin de la charge, lance `count` alien-projectiles `orb` régulièrement répartis dans toutes les directions (le premier dans le sens de la charge). */
     burst?: { orb: AlienId; count: number };
+    /** Charge électrique : chaque soldat touché est étourdi `stun` s (il ne bouge ni ne tire ; tourbillon et arcs électriques sur lui). */
+    stun?: number;
   };
   /**
    * Saut écrasant : toutes les `every` s, vise l'endroit où la squad ciblée SERA à l'impact (centre + vitesse × durée), à `maxDist` px
@@ -284,7 +288,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.5,
     target: 'nearest',
     cleave: 70, // mêlée en zone (07/10)
-    rush: { cooldown: 5, windup: 0.4725, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700 }, // préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
+    rush: { cooldown: 5, windup: 0.4725, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
+    electric: true,
     xp: 10,
     recruitChance: 0.195, // avant : 0.15 (×1.3 intégré le 09/10)
     color: 0xb03a3a,

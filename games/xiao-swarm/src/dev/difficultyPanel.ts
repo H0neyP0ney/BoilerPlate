@@ -3,9 +3,12 @@ import { DIFFICULTY, DIFFICULTY_DEFAULTS } from "../config";
 import {
   DIFFICULTY_SECTIONS,
   resetDifficulty,
+  shiftDifficulty,
   saveDifficulty,
   saveDifficultyToCode,
 } from "../debugDifficulty";
+import { saveCrowdSpeedToCode, shiftCrowdSpeed } from "../debugCrowd";
+import { saveModifiedStatsToCode, shiftAllStat, type StatGroup, type StatKind } from "../debugStats";
 import {
   button,
   floatingPanel,
@@ -59,8 +62,42 @@ export class DifficultyPanel {
     }
     body.append(sliders);
     body.append(
+      heading("Stats de base de tous les aliens"),
+      note("Ajoute ou retranche 5 % de la valeur du code à la stat de chaque alien (boss compris). Dégâts : contact, capacités et flaques. Cadence : délai d'attaque raccourci quand elle monte. XP et chance de recrue : par alien. Save les écrit dans data/aliens.ts."),
+    );
+    const addRows = (kind: StatKind, rows: [StatGroup, string][], unit: string) => {
+      for (const [group, label] of rows) {
+        const shift = (part: number) => say(`${label} de ${shiftAllStat(kind, group, part)} ${unit} : ${part > 0 ? "+" : "−"}5 % de la valeur du code`);
+        body.append(line(`${label} `, button("−5 %", () => shift(-0.05)), button("+5 %", () => shift(0.05))));
+      }
+    };
+    addRows("alien", [["hp", "PV"], ["speed", "Vitesse"], ["damage", "Dégâts"], ["cadence", "Cadence"], ["xp", "XP laissée"], ["recruit", "Chance de recrue"]], "aliens");
+    body.append(
+      heading("Stats de base de tous les soldats"),
+      note("Même principe pour les classes de soldats (data/classes.ts) : dégâts de l'arme et de l'explosion, cadence = délai de tir raccourci, portée de l'arme (avant l'upgrade Portée). Vitesse de la squad = CROWD.speed (curseur Vitesse du panneau Foule), avant upgrade et stimpack."),
+    );
+    addRows("soldier", [["hp", "PV"], ["damage", "Dégâts"], ["cadence", "Cadence"], ["range", "Portée"], ["projSpeed", "Vitesse des projectiles"], ["spread", "Dispersion"]], "classes");
+    const shiftRow = (label: string, key: "magnetRadius" | "xpCostMul", unit: string) =>
+      body.append(
+        line(
+          `${label} `,
+          button("−5 %", () => { say(`${label} : ${shiftDifficulty(key, -0.05)}${unit} (−5 % de la valeur du code)`); this.syncs.forEach((f) => f()); }),
+          button("+5 %", () => { say(`${label} : ${shiftDifficulty(key, 0.05)}${unit} (+5 % de la valeur du code)`); this.syncs.forEach((f) => f()); }),
+        ),
+      );
+    body.append(
       line(
-        button("Save", () => void saveDifficultyToCode().then(say)),
+        "Vitesse de la squad ",
+        button("−5 %", () => say(`Vitesse de la squad : ${shiftCrowdSpeed(-0.05)} px/s (−5 % de la valeur du code)`)),
+        button("+5 %", () => say(`Vitesse de la squad : ${shiftCrowdSpeed(0.05)} px/s (+5 % de la valeur du code)`)),
+      ),
+    );
+    body.append(heading("Ramassage et progression"), note("Rayon d'attraction de base des objets au sol, et coût d'XP de chaque niveau (courbe xpToNext). Mêmes curseurs dans « Aides au joueur »."));
+    shiftRow("Rayon d'attraction", "magnetRadius", " px");
+    shiftRow("Coût d'XP des niveaux", "xpCostMul", " ×");
+    body.append(
+      line(
+        button("Save", () => void saveDifficultyToCode().then(async (m) => say([m, await saveModifiedStatsToCode(), await saveCrowdSpeedToCode()].filter(Boolean).join("\n")))),
         button("Reset", () => {
           resetDifficulty();
           this.syncs.forEach((f) => f());

@@ -123,8 +123,10 @@ export interface AlienState extends Body {
   enraged: number;
   /** Temps écoulé depuis l'apparition (s), pour l'enragement des boss. */
   age: number;
-  /** Escalade à sa création (`Sim.escalation` : ×1,1 par boss tué avant son apparition) : multiplie ses PV, sa vitesse, ses dégâts et sa cadence. */
-  esc: number;
+  /** Escalade à sa création (`Sim.escalation*` : ×(1 + gain) par boss tué avant son apparition ; ses PV sont multipliés une fois pour toutes à la création) : dégâts, cadence, vitesse. */
+  escDmg: number;
+  escRate: number;
+  escSpeed: number;
   /** Chaman : résurrections lancées depuis le dernier repos, et repos restant (s) après `revive.maxRevives` d'entre elles. */
   revives: number;
   reviveLock: number;

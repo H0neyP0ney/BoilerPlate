@@ -78,6 +78,21 @@ export async function saveCrowdToCode(): Promise<string> {
   return msg;
 }
 
+/** Boutons ±5 % du panneau Difficulté : ajoute (ou retranche) `part` × la vitesse du code à `CROWD.speed` (vitesse de base de la squad, avant l'upgrade et le stimpack). Additif : +5 % puis −5 % revient à l'origine. */
+export function shiftCrowdSpeed(part: number): number {
+  CROWD.speed = Number((CROWD.speed + CROWD_DEFAULTS.speed * part).toPrecision(5));
+  saveCrowd();
+  return CROWD.speed;
+}
+
+/** Save de la vitesse seule (Difficulté) : écrit `speed` dans `CROWD_DEFAULTS` sans toucher aux autres réglages de Foule non sauvegardés ; chaîne vide si elle n'a pas bougé. */
+export async function saveCrowdSpeedToCode(): Promise<string> {
+  if (CROWD.speed === CROWD_DEFAULTS.speed) return '';
+  const msg = await saveToCode('crowd', { ...CROWD_DEFAULTS, speed: CROWD.speed });
+  if (msg.startsWith('✔')) CROWD_DEFAULTS.speed = CROWD.speed;
+  return msg;
+}
+
 /** Copie les valeurs courantes en JSON (presse-papiers + console) : à recoller dans CROWD_DEFAULTS. */
 export function copyCrowd(): void {
   const json = JSON.stringify(CROWD, null, 2);

@@ -1,4 +1,4 @@
-import { PICKUP } from '../config';
+import { DIFFICULTY, PICKUP } from '../config';
 
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -18,12 +18,12 @@ export interface Attractor {
 /** Soldat vivant le plus proche de (x, y) qui peut l'attirer (`accept` : filtre, ex. une place libre pour une recrue). */
 export function findAttractor(sim: Sim, x: number, y: number, accept?: (s: SoldierState, sq: Squad) => boolean): Attractor | undefined {
   let best: Attractor | undefined;
-  for (const s of sim.soldierHash.query(x, y, PICKUP.magnetRadius * 2.6, sim.scratchSoldiers)) {
+  for (const s of sim.soldierHash.query(x, y, DIFFICULTY.magnetRadius * 2.6, sim.scratchSoldiers)) {
     if (!s.alive) continue;
     const squad = sim.squadOf(s.owner);
     if (!squad || (accept && !accept(s, squad))) continue;
     const stat = squad.stats.get('magnet');
-    const radius = PICKUP.magnetRadius * stat;
+    const radius = DIFFICULTY.magnetRadius * stat;
     const dist = Math.hypot(s.x - x, s.y - y);
     if (dist > radius || (best && dist >= best.dist)) continue;
     best = { soldier: s, squad, dist, radius, stat };

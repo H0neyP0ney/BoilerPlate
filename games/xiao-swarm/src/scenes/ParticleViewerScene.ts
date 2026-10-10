@@ -227,11 +227,8 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'upgradeOrb',
     label: "Globe d'upgrade (coffre de boss)",
-    where: "Même modèle que la recrue et le power-up, en rose : globe, anneau, icône de l'upgrade, mêmes étoiles, rond rose au sol. Taille et étoiles se règlent dans l'entrée « Recrue gunner » (communs aux trois globes). L'aperçu dure 4 s.",
-    specs: [
-      { key: 'hue', label: 'Teinte du globe (°)', min: 0, max: 360, step: 5, hint: '0 = doré (pièces du bonus recrue), 285 = rose' },
-      { key: 'light', label: 'Éclaircissement (0 à 1)', min: 0, max: 0.8, step: 0.05, hint: 'Rose plus clair : mélange avec du blanc (globe, étoiles ; le rond au sol est un rose clair fixe)' },
-    ],
+    where: "Même modèle que la recrue et le power-up, en rose : image du globe (public/assets/globes/globe_upgrade.png, à retoucher), icône de l'upgrade, étoiles star_upgrade.png, rond rose au sol. Taille et étoiles se règlent dans l'entrée « Recrue gunner » (communs aux trois globes). L'aperçu dure 4 s.",
+    specs: [],
   },
   {
     id: 'gain',

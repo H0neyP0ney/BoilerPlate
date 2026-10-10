@@ -85,7 +85,7 @@ export class Sim {
   ending = false;
   /** Soldats montés dans la fusée de fin : retirés sans mort (ni corps ni événement `soldierDied`). */
   private readonly boarded = new Set<SoldierState>();
-  /** Boss et mini-boss tués depuis le début de la partie (voir `escalation`). */
+  /** Boss et mini-boss tués depuis le début de la partie (voir `escalationHp` / `Damage` / `Rate` / `Speed`). */
   bossKills = 0;
   readonly alienHash = new SpatialHash<AlienState>(64);
   readonly soldierHash = new SpatialHash<SoldierState>(64);
@@ -266,9 +266,9 @@ export class Sim {
     return this.config.online === true;
   }
 
-  /** Multiplicateur du seuil de niveau (XP partagée : × nombre de joueurs). */
+  /** Multiplicateur du seuil de niveau (XP partagée : × nombre de joueurs ; `DIFFICULTY.xpCostMul`, sauf pendant le tutoriel). */
   get xpScale(): number {
-    return this.sharedXp ? Math.max(1, this.squads.length) : 1;
+    return (this.sharedXp ? Math.max(1, this.squads.length) : 1) * (this.tutorial?.active ? 1 : DIFFICULTY.xpCostMul);
   }
 
   /** XP gagnée par `from` versée dans la barre commune ; un niveau franchi = tous montent. */
@@ -490,9 +490,21 @@ export class Sim {
     return amount - taken;
   }
 
-  /** Multiplicateur appliqué à tout alien qui apparaît maintenant : ×(1 + `DIFFICULTY.bossEscalation`) par boss ou mini-boss déjà tué. */
-  get escalation(): number {
-    return (1 + DIFFICULTY.bossEscalation) ** this.bossKills;
+  /** Escalade de tout alien qui apparaît maintenant : ×(1 + gain) par boss ou mini-boss déjà tué, un gain par stat (`DIFFICULTY.bossEscalation*`). */
+  get escalationHp(): number {
+    return (1 + DIFFICULTY.bossEscalationHp) ** this.bossKills;
+  }
+
+  get escalationDamage(): number {
+    return (1 + DIFFICULTY.bossEscalationDamage) ** this.bossKills;
+  }
+
+  get escalationRate(): number {
+    return (1 + DIFFICULTY.bossEscalationRate) ** this.bossKills;
+  }
+
+  get escalationSpeed(): number {
+    return (1 + DIFFICULTY.bossEscalationSpeed) ** this.bossKills;
   }
 
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */
@@ -834,7 +846,7 @@ export class Sim {
     if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius });
     const bomb = a.def.deathBlast;
     if (bomb) {
-      this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.esc, knock: bomb.knockback });
+      this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.escDmg, knock: bomb.knockback });
       this.events.push({ t: 'fuse', x: a.x, y: a.y, r: bomb.radius, delay: bomb.delay, alien: a.def.id });
     }
     if (a.tut && this.tutorial) {

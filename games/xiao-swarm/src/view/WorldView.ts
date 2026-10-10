@@ -16,6 +16,7 @@ import type { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
 import { ShockDistort } from './ShockDistort';
+import { ElectricArcs } from './ElectricFx';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { teleColor, teleInner, teleOuter } from './telegraph';
@@ -108,6 +109,8 @@ interface Tracer {
 export class WorldView {
   readonly arena: ArenaView;
   readonly fx: Fx;
+  /** Arcs électriques : boss électrique (`AlienDef.electric`) et soldats étourdis. */
+  private readonly electric: ElectricArcs;
   private readonly soldiers = new Map<number, SoldierView>();
   private readonly aliens = new Map<number, AlienView>();
   private readonly recruits = new Map<number, RecruitView>();
@@ -162,6 +165,7 @@ export class WorldView {
   ) {
     this.arena = new ArenaView(scene, sim.map);
     this.fx = new Fx(scene);
+    this.electric = new ElectricArcs(scene);
     this.shock = new ShockDistort(scene);
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
@@ -590,6 +594,7 @@ export class WorldView {
         v.seen = true;
         v.sync(alpha, dt, time);
         if (v.healTick(dt)) this.fx.heal(v.rx, v.ry - 30);
+        if (s.stun > 0 && s.alive && this.onScreen(v.rx, v.ry, 60)) this.electric.crackle(v.rx, v.ry - 18 + soldierOffsetY(s.def.id), 18, 24, 16, dt); // étourdi : il crépite
       }
     }
     this.prune(this.soldiers);
@@ -608,8 +613,10 @@ export class WorldView {
       if (a.def.projectile && this.onScreen(v.rx, v.ry, 60)) (a.def.projectile.kind === 'fire' ? this.fx.fireTrail(v.rx, v.ry - 30, dt) : this.fx.iceTrail(v.rx, v.ry - 30, dt)); // orbe de feu : étincelles ; orbe de glace : flocons
       v.lookAt = a.def.lurk && a.lurkPhase > 0 ? this.nearestSoldierX(a.x, a.y) : null; // lurker enterré : regarde toujours sa proie
       v.sync(alpha, dt, time);
+      if (a.def.electric && a.alive && this.onScreen(v.rx, v.ry, 120)) this.electric.crackle(v.rx, v.ry - a.radius * 0.8 + alienOffsetY(a.def.id), a.radius * 1.1, 46, 11, dt); // alien électrique (chargeur) : arcs au hasard
     }
     this.prune(this.aliens);
+    this.electric.update(dt);
 
     for (const v of this.recruits.values()) v.seen = false;
     for (const r of this.sim.recruits.items) {

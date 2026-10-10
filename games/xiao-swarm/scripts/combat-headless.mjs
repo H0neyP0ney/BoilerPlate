@@ -176,22 +176,22 @@ try {
     clearAliens(sim);
     sim.horde.spawnAt('slime', 500, 500, 1, false);
     const a0 = sim.aliens[0];
-    check(a0.esc === 1 && sim.escalation === 1, 'escalade : aucun boss tué = ×1');
+    check(a0.escDmg === 1 && a0.escRate === 1 && a0.escSpeed === 1 && sim.escalationHp === 1, 'escalade : aucun boss tué = ×1');
     sim.horde.spawnAt('boss_gling', 800, 800, 1, false);
     const boss = sim.aliens.find((a) => a.def.boss);
     boss.age = 1; // sorti de son trou d'apparition (invulnérable avant)
     sim.damage(boss, 1e12, 'p1');
-    check(sim.bossKills === 1 && Math.abs(sim.escalation - (1 + DIFFICULTY.bossEscalation)) < 1e-9, 'escalade : un boss tué = ×1,1', `bossKills ${sim.bossKills}`);
+    check(sim.bossKills === 1 && Math.abs(sim.escalationHp - (1 + DIFFICULTY.bossEscalationHp)) < 1e-9, 'escalade : un boss tué = ×(1 + gain)', `bossKills ${sim.bossKills}`);
     sim.horde.spawnAt('slime', 520, 500, 1, false);
     const a1 = sim.aliens[sim.aliens.length - 1];
-    check(Math.abs(a1.maxHp / a0.maxHp - (1 + DIFFICULTY.bossEscalation)) < 1e-6 && a1.esc === 1 + DIFFICULTY.bossEscalation, `escalade : un slime apparu après a +${Math.round(DIFFICULTY.bossEscalation * 100)} % de PV (réglage du panneau Difficulté)`, `${(a1.maxHp / a0.maxHp).toFixed(3)}`);
+    check(Math.abs(a1.maxHp / a0.maxHp - (1 + DIFFICULTY.bossEscalationHp)) < 1e-6 && a1.escDmg === 1 + DIFFICULTY.bossEscalationDamage && a1.escRate === 1 + DIFFICULTY.bossEscalationRate && a1.escSpeed === 1 + DIFFICULTY.bossEscalationSpeed, `escalade : un slime apparu après a +${Math.round(DIFFICULTY.bossEscalationHp * 100)} % de PV, +${Math.round(DIFFICULTY.bossEscalationDamage * 100)} % de dégâts, +${Math.round(DIFFICULTY.bossEscalationRate * 100)} % de cadence, +${Math.round(DIFFICULTY.bossEscalationSpeed * 100)} % de vitesse (réglages séparés)`, `${(a1.maxHp / a0.maxHp).toFixed(3)}`);
     sim.horde.spawnAt('boss_rhino', 900, 900, 1, false);
     const rhino = sim.aliens.find((a) => a.def.id === 'boss_rhino');
     rhino.age = 1;
     sim.damage(rhino, 1e12, 'p1');
-    check(Math.abs(sim.escalation - (1 + DIFFICULTY.bossEscalation) ** 2) < 1e-9, 'escalade : cumulée (2 boss = ×(1 + gain)²)', `${sim.escalation.toFixed(3)}`);
+    check(Math.abs(sim.escalationHp - (1 + DIFFICULTY.bossEscalationHp) ** 2) < 1e-9 && Math.abs(sim.escalationSpeed - (1 + DIFFICULTY.bossEscalationSpeed) ** 2) < 1e-9, 'escalade : cumulée (2 boss = ×(1 + gain)²)', `PV ${sim.escalationHp.toFixed(3)}, vitesse ${sim.escalationSpeed.toFixed(3)}`);
     sim.restart();
-    check(sim.bossKills === 0 && sim.escalation === 1, 'escalade : remise à zéro à la relance de la partie');
+    check(sim.bossKills === 0 && sim.escalationHp === 1 && sim.escalationSpeed === 1, 'escalade : remise à zéro à la relance de la partie');
   }
 
   // ---- chaman : à sa mort, 5 araignées (invoquées : ni XP ni recrue) ; pas pendant le clear screen d'un boss
@@ -322,7 +322,7 @@ try {
     sim.stalactites.length = 1;
     Object.assign(sim.stalactites[0], { x: target.x, y: target.y, t: 0.01 });
     sim.step(1 / 30, new Map());
-    check(Math.abs(1000 - target.hp - S.damage * sc.esc) < 0.01 && sim.stalactites.length === 0, 'Scarab : une stalactite qui tombe sur un soldat lui retire 80 PV', `${(1000 - target.hp).toFixed(0)} dégâts`);
+    check(Math.abs(1000 - target.hp - S.damage * sc.escDmg) < 0.01 && sim.stalactites.length === 0, 'Scarab : une stalactite qui tombe sur un soldat lui retire 80 PV', `${(1000 - target.hp).toFixed(0)} dégâts`);
   }
 
   // ---- Scarab : pendant le verrouillage, la direction du télégraphe est figée mais il suit encore la squad sur cet axe :
@@ -402,6 +402,24 @@ try {
   // ---- rhinos jumeaux (7:30) : charge calquée sur l'Alpha ; le rhino de feu sème des flammes, celui de glace des nuages de gel ; fin de charge = 8 orbes
   {
     const { WAVE_SCRIPT, DEFAULT_WAVE_SCRIPT } = await vite.ssrLoadModule('/src/data/waves.ts');
+    {
+      // chargeur (électrique) : sa charge étourdit 1,5 s les soldats touchés ; les rhinos n'étourdissent pas
+      const { sim, step: rawStep } = fresh(40);
+      const step = (n) => { for (let i = 0; i < n; i++) { sim.aliens = sim.aliens.filter((a) => a.def.id === 'charger'); rawStep(1); } };
+      const sq = sim.squadOf('p1');
+      for (const o of sq.soldiers) o.invulnerable = 1e9;
+      sim.horde.spawnAt('charger', sq.center.x + 350, sq.center.y, 1, false);
+      const ch = sim.aliens.find((a) => a.def.id === 'charger');
+      ch.age = 99; ch.hp = ch.maxHp = 1e12; ch.rushCd = 0;
+      let stunned = 0;
+      for (let t = 0; t < 30 * 8 && !stunned; t++) {
+        step(1);
+        stunned = Math.max(0, ...sq.soldiers.map((o) => o.stun));
+      }
+      const R = ALIENS.charger.rush;
+      check(R.stun === 1.5 && stunned > R.stun - 0.1 && stunned <= R.stun && ALIENS.charger.electric === true, 'chargeur : sa charge électrique étourdit 1,5 s le soldat touché', `étourdi ${stunned.toFixed(2)} s`);
+      check(!ALIENS.boss_rhino.rush.stun && !ALIENS.boss_rhino.electric && !ALIENS.boss_rhino_fire.rush.stun && !ALIENS.boss_rhino_ice.rush.stun, "rhinos : leur charge n'étourdit pas");
+    }
     const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === 9 && e.config === 5);
     const cfg = DEFAULT_WAVE_SCRIPT.levels[9][4];
     check(!!entry && entry.at === 450 && cfg.groups.some((g) => g.type === 'boss_rhino_fire') && cfg.groups.some((g) => g.type === 'boss_rhino_ice'), 'rhinos jumeaux : un boss à 7:30 (450 s) avec le rhino de feu et le rhino de glace', `${entry ? entry.at : '—'} s`);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp } from '@xiao/engine';
-import { ensureStarTexture, ensureUpgradeOrbTexture } from '../art/upgradeOrbs';
+import { ensureUpgradeOrbTexture, loadedKey, starKey } from '../art/upgradeOrbs';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
 import { ORB_FALL_TIME } from '../sim/Chests';
@@ -43,7 +43,7 @@ export class UpgradeOrbView {
     if (key) this.img = scene.add.image(state.x, state.y, key).setScale(FX.recruit.displayScale);
     else this.g = scene.add.graphics();
     // les étoiles de la recrue, en rose : le même effet que les recrues (doré) et les power-ups (vert)
-    const star = ensureStarTexture(scene, FX.upgradeOrb.hue, FX.upgradeOrb.light);
+    const star = loadedKey(scene, starKey('upgrade'));
     if (star) this.glitter = createGlobeGlitter(scene, state.x, state.y, star) ?? undefined;
   }
 

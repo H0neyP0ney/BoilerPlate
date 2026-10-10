@@ -24,7 +24,10 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
   {
     title: 'Boss',
     specs: [
-      { key: 'bossEscalation', label: 'Gain des aliens après chaque boss', min: 0, max: 1, step: 0.01, hint: 'Part de puissance gagnée par les aliens à chaque boss ou mini-boss tué (0,10 = +10 % de PV, vitesse, dégâts et cadence, cumulés ×1,1 par boss). Vaut pour les aliens qui apparaissent ensuite' },
+      { key: 'bossEscalationHp', label: 'Escalade : PV des aliens / boss', min: 0, max: 1, step: 0.01, hint: 'PV gagnés par les aliens à chaque boss ou mini-boss tué (0,15 = +15 %, cumulés ×1,15 par boss). Vaut pour les aliens qui apparaissent ensuite' },
+      { key: 'bossEscalationDamage', label: 'Escalade : dégâts des aliens / boss', min: 0, max: 1, step: 0.01, hint: 'Dégâts (contact, tirs, flammes, explosions…) gagnés par les aliens à chaque boss ou mini-boss tué (cumulés). Vaut pour les aliens qui apparaissent ensuite' },
+      { key: 'bossEscalationRate', label: 'Escalade : cadence des aliens / boss', min: 0, max: 1, step: 0.01, hint: "Cadence d'attaque gagnée par les aliens à chaque boss ou mini-boss tué (cumulée). Vaut pour les aliens qui apparaissent ensuite" },
+      { key: 'bossEscalationSpeed', label: 'Escalade : vitesse des aliens / boss', min: 0, max: 1, step: 0.01, hint: 'Vitesse de déplacement gagnée par les aliens à chaque boss ou mini-boss tué (0,07 = +7 %, cumulés ×1,07 par boss). Vaut pour les aliens qui apparaissent ensuite' },
       { key: 'chestOrbs', label: 'Œuf de boss : globes d’upgrade par joueur', min: 0, max: 10, step: 1, hint: 'Globes d’upgrade aléatoire libérés par l’œuf détruit pour chaque joueur vivant ; chacun est réservé à son joueur et ne disparaît jamais' },
       { key: 'chestOrbGrace', label: 'Œuf de boss : globe imprenable (s)', min: 0, max: 5, step: 0.1, hint: 'Après sa sortie de l’œuf, un globe d’upgrade ne peut être ni attiré ni ramassé pendant ce temps : on le voit d’abord retomber' },
       { key: 'bossEnrageEvery', label: 'Enragement : toutes les (s)', min: 10, max: 300, step: 5, hint: "Un boss vivant gagne un niveau d'enragement toutes les N s après son apparition, sans fin" },
@@ -65,6 +68,12 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
       { key: 'reviveSquadFraction', label: 'Revive solo : part de la squad', min: 0.05, max: 1, step: 0.05, hint: 'La squad réapparaît avec cette part de son effectif maximal de la partie' },
       { key: 'coopReviveRatio', label: 'Réanimation coop : part de la squad', min: 0.05, max: 1, step: 0.05, hint: 'Un joueur réanimé par un équipier revient avec cette part de son effectif maximal' },
       { key: 'rerolls', label: 'Relances par partie', min: 0, max: 10, step: 1, hint: "Relances des propositions d'upgrade par partie et par joueur" },
+      { key: 'recruitMax', label: 'Recrues : facteur max (petite squad)', min: 0, max: 5, step: 0.05, hint: "Le taux de drop d'un alien (recruitChance) est multiplié par ce facteur quand la squad est petite ; il baisse avec sa taille. Facteur = max − (soldats − taille de départ) × pente, entre le plancher et ce max" },
+      { key: 'recruitSizeRef', label: 'Recrues : taille de départ', min: 0, max: 20, step: 1, hint: "Jusqu'à cette taille de squad, le facteur reste au maximum ; au-delà il baisse" },
+      { key: 'recruitSlope', label: 'Recrues : perte par soldat', min: 0, max: 0.5, step: 0.01, hint: 'Facteur perdu par soldat au-delà de la taille de départ' },
+      { key: 'recruitMin', label: 'Recrues : facteur plancher (grosse squad)', min: 0, max: 2, step: 0.05, hint: 'Le facteur ne descend jamais sous cette valeur' },
+      { key: 'magnetRadius', label: "Rayon d'attraction (px)", min: 20, max: 400, step: 5, hint: "Rayon d'attraction de base de tous les objets au sol (globes d'XP, recrues, power-ups, globes d'upgrade), avant l'upgrade Aimant" },
+      { key: 'xpCostMul', label: 'Coût d’XP des niveaux ×', min: 0.2, max: 3, step: 0.05, hint: 'Multiplie l’XP nécessaire à chaque niveau (courbe xpToNext). Sans effet pendant le tutoriel' },
       { key: 'prismChance', label: 'Chance de carte prismatique', min: 0, max: 1, step: 0.01, hint: "Chance qu'une upgrade proposée soit prismatique (bonus doublé), hors niveaux 10, 20, 30…" },
     ],
   },
@@ -92,6 +101,13 @@ export function loadSavedDifficulty(): void {
   } catch {
     // réglages illisibles : valeurs par défaut
   }
+}
+
+/** Boutons ±5 % : ajoute (ou retranche) `part` × la valeur du code à un réglage de `DIFFICULTY`. Additif : +5 % puis −5 % revient à l'origine. */
+export function shiftDifficulty(key: DifficultyKey, part: number): number {
+  DIFFICULTY[key] = Number((DIFFICULTY[key] + DIFFICULTY_DEFAULTS[key] * part).toPrecision(5));
+  saveDifficulty();
+  return DIFFICULTY[key];
 }
 
 export function resetDifficulty(): void {

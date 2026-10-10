@@ -1,4 +1,4 @@
-import { PICKUP, XP_ORB_LIFE } from '../config';
+import { DIFFICULTY, PICKUP, XP_ORB_LIFE } from '../config';
 import { splitXp } from '../data/progression';
 import type { AlienState, XpOrb } from './entities';
 import { catchItem, chase } from './Pickup';
@@ -6,7 +6,6 @@ import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
 /** Rayons d'attraction et de ramassage : ceux de `PICKUP` (config.ts), communs aux globes d'XP, recrues et power-ups, multipliés par la stat `magnet` de la squad. */
-const MAGNET_RADIUS = PICKUP.magnetRadius;
 const LIFETIME = XP_ORB_LIFE;
 /** Au-delà, les plus vieux globes disparaissent (garde l'affichage et la simulation légers). */
 const MAX_ORBS = 350;
@@ -58,11 +57,11 @@ export class Xp {
       let best: { x: number; y: number; owner: string } | undefined;
       let bestD = Infinity;
       let bestStat = 1; // stat `magnet` de la squad qui attire : accélère aussi le globe
-      for (const s of soldierHash.query(o.x, o.y, MAGNET_RADIUS * 2.6, this.sim.scratchSoldiers)) {
+      for (const s of soldierHash.query(o.x, o.y, DIFFICULTY.magnetRadius * 2.6, this.sim.scratchSoldiers)) {
         if (!s.alive) continue;
         const sq = this.sim.squadOf(s.owner);
         if (!sq) continue;
-        const mag = MAGNET_RADIUS * sq.stats.get('magnet');
+        const mag = DIFFICULTY.magnetRadius * sq.stats.get('magnet');
         const d = Math.hypot(s.x - o.x, s.y - o.y);
         if (d > mag || d >= bestD) continue;
         best = s;

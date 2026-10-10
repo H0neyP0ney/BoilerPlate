@@ -5,30 +5,32 @@ import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
-import { ensureGlobeTexture, ensureStarTexture, powerUpGlobeKey } from '../art/upgradeOrbs';
+import { globeKey, loadedKey, starKey } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
 import { soldierOffsetY } from './spriteOffset';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
-const CAPSULE_LIFT = 64; // 52 + 12 (09/10) : la capsule ne cache plus la barre de vie d'un soldat seul
+const CAPSULE_LIFT = 60; // 52 + 12 (09/10), 60 (10/10)
+/** Décalage en plus (px) quand il ne reste qu'un soldat : la capsule ne cache pas sa barre de vie. */
+const CAPSULE_LIFT_ALONE = 8;
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
 const CAPSULE_SCALE = 0.9;
 
 
 /**
  * `icon` : emoji de repli, utilisé seulement si l'image `powerup_icon_<kind>` (art-src/powerups.png) n'est pas chargée.
- * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage) ; `hue` : décalage de teinte (°) du globe doré de la recrue et de son étoile
- * (0 = doré, 75 = vert, 165 = bleu, 330 = rouge orangé, 350 = jaune orangé) ; `light` : éclaircissement vers le blanc (0 à 1, absent = 0). Chaque power-up a sa couleur (08/10 : tous verts avant).
+ * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage). Le globe et ses étoiles sont des images à la couleur du power-up
+ * (public/assets/globes/globe_<sorte>.png, star_<sorte>.png ; `art/upgradeOrbs.ts`).
  */
-export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number; hue: number; light?: number }> = {
-  stim: { icon: '💉', color: 0xff5a2a, hue: 330 }, // rouge orangé
-  magnet: { icon: '🧲', color: 0xcfe6ff, hue: 165, light: 0.7 }, // blanc légèrement bleuté
-  heal: { icon: '💚', color: POWERUP_GREEN, hue: 75 }, // vert
-  stasis: { icon: '❄️', color: 0x4aa8ff, hue: 165 }, // bleu
-  rockets: { icon: '🚀', color: 0xffb02a, hue: 350 }, // jaune orangé
-  reroll: { icon: '🎲', color: RECRUIT_COLOR, hue: 0 }, // jaune, comme les recrues
+export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> = {
+  stim: { icon: '💉', color: 0xff5a2a }, // rouge orangé
+  magnet: { icon: '🧲', color: 0xcfe6ff }, // blanc légèrement bleuté
+  heal: { icon: '💚', color: POWERUP_GREEN }, // vert
+  stasis: { icon: '❄️', color: 0x4aa8ff }, // bleu
+  rockets: { icon: '🚀', color: 0xffb02a }, // jaune orangé
+  reroll: { icon: '🎲', color: RECRUIT_COLOR }, // jaune, comme les recrues
 };
 
 /** Drone (medivac / freezebot) qui plane au centre d'un globe de soin / de stase : largeur (px monde) de l'image, hauteur de vol au-dessus du centre du globe, amplitude et vitesse du balancement. */
@@ -43,16 +45,16 @@ export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kin
 export { GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK };
 
 /**
- * Power-up : globe à la couleur du bonus (pièces du bonus recrue décalées de `POWERUP_INFO[kind].hue`) avec l'icône du bonus au centre, centré sur (0, 0) ;
+ * Power-up : globe à la couleur du bonus (image `globe_<sorte>`) avec l'icône du bonus au centre, centré sur (0, 0) ;
  * partagé avec la visionneuse de bonus. Sans les pièces d'art, repli sur un disque dessiné.
  */
 export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.GameObjects.Container {
   const info = POWERUP_INFO[kind];
   const scale = FX.recruit.displayScale; // même taille que les recrues et les globes d'upgrade
   const parts: Phaser.GameObjects.GameObject[] = [];
-  const globeKey = powerUpGlobeKey(kind);
-  if (ensureGlobeTexture(scene, globeKey, info.hue, undefined, info.light ?? 0)) {
-    parts.push(scene.add.image(0, 0, globeKey).setScale(scale));
+  const globe = loadedKey(scene, globeKey(kind));
+  if (globe) {
+    parts.push(scene.add.image(0, 0, globe).setScale(scale));
   } else {
     const g = scene.add.graphics();
     g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 160 * scale * 0.5);
@@ -225,7 +227,7 @@ export class PickupViews {
       box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
       let glitter = this.powerupGlitter.get(p.id);
       if (!glitter) {
-        const tex = ensureStarTexture(this.scene, POWERUP_INFO[p.kind].hue, POWERUP_INFO[p.kind].light ?? 0); // l'étoile de la recrue, à la teinte du power-up
+        const tex = loadedKey(this.scene, starKey(p.kind)); // l'étoile de la recrue, à la couleur du power-up
         const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
         if (made) this.powerupGlitter.set(p.id, (glitter = made));
       }
@@ -312,7 +314,7 @@ export class PickupViews {
         cap.g.fillStyle(0x0b1a4d, 0.92).fillRoundedRect(-w / 2, -13, w, 26, 13);
         cap.g.lineStyle(2, 0x3f6fe0, 0.9).strokeRoundedRect(-w / 2, -13, w, 26, 13);
       }
-      cap.box.setPosition(cap.x, cap.y - CAPSULE_LIFT).setScale(CAPSULE_SCALE);
+      cap.box.setPosition(cap.x, cap.y - CAPSULE_LIFT - (n === 1 ? CAPSULE_LIFT_ALONE : 0)).setScale(CAPSULE_SCALE);
     }
     for (const [owner, cap] of this.counts) {
       if (seen.has(owner)) continue;

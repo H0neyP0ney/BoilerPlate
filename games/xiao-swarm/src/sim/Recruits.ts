@@ -1,5 +1,5 @@
 import { clamp, Rng, type Point } from '@xiao/engine/sim';
-import { RECRUIT } from '../config';
+import { DIFFICULTY, RECRUIT } from '../config';
 import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
@@ -27,7 +27,8 @@ export class Recruits {
     if (!squad) return;
     const size = squad.size;
     // petite squad = beaucoup d'aide ; grosse squad = recrutement ralenti
-    const sizeFactor = clamp(1.8 - (size - 4) * 0.12, 0.25, 1.8);
+    const { recruitMax, recruitSizeRef, recruitSlope, recruitMin } = DIFFICULTY;
+    const sizeFactor = clamp(recruitMax - (size - recruitSizeRef) * recruitSlope, recruitMin, recruitMax);
     if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor * squad.stats.get('recruit'))) return;
     this.drop(this.chooseClass(squad), a.x, a.y, squad.center);
   }

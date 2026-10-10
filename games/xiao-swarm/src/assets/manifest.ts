@@ -1,4 +1,5 @@
 import { range, type AssetEntry } from '@xiao/engine';
+import { GLOBE_KINDS } from '../art/upgradeOrbs';
 import { UPGRADE_IDS } from '../data/progression';
 
 /**
@@ -76,6 +77,8 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).
   ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
+  // Globes au sol (power-ups, globe d'upgrade des œufs) et leurs étoiles : images à retoucher (générées une fois par python tools/bake-globes.py, art/upgradeOrbs.ts).
+  ...GLOBE_KINDS.flatMap((k): AssetEntry[] => [{ type: 'image', id: `globe_${k}`, url: `globes/globe_${k}.png` }, { type: 'image', id: `star_${k}`, url: `globes/star_${k}.png` }]),
   // Slime de base (`slime`, vert).
   // art-src/slime_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json — 9 cases de 82×78, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {

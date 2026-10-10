@@ -29,6 +29,7 @@ export { rng } from './math/random';
 
 // Art : procédural + planches de sprites
 export { canvasTexture, roundRect, fillOutlined } from './art/canvasTexture';
+export { recolorPixels, recolorTexture, type RecolorSpec } from './art/recolor';
 export { SpriteCatalog, sprites, type SpriteDef } from './art/SpriteCatalog';
 export { loadAssets, applyAssets, range, type AssetEntry, type AnimSpec, type SheetSprite, type AsepriteSprite } from './art/assetManifest';
 

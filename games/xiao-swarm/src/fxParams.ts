@@ -65,8 +65,8 @@ export const FX_DEFAULTS = {
   column: { height: 130, durationMs: 800, glowScale: 1.2, glowEnd: 2.4 },
   /** Perte d'un soldat (composé) : éclats, gouttes, flaque, double onde, flash blanc, colonne rouge et croix. */
   death: { burstCount: 64, flashCount: 30, gloopSize: 2.2, puddleSize: 1.3, ringBig: 190, ringSmall: 105, flashScale: 4.2, flashMs: 340, columnHeight: 260, columnMs: 900, crossSize: 54 }, // plus visible (08/10 : 44 / 20 / 1,8 / 130 / 75 / 3,4 / 260 / 170 / 700 / 34)
-  /** Globe d'upgrade d'un coffre de boss : `hue` = décalage de teinte (°) du globe doré d'origine : 285 = rose (0 = doré) ; `light` = éclaircissement vers le blanc (0 à 1) du globe, de ses étoiles et du rond au sol : rose plus clair. Tout le reste (taille, rond, étoiles, paillettes) est commun à tous les globes : `recruit`. */
-  upgradeOrb: { hue: 285, light: 0.3 },
+  /** Globe d'upgrade d'un œuf de boss : aucun réglage propre (entrée de la visionneuse, pour l'aperçu). Sa couleur vient de l'image public/assets/globes/globe_upgrade.png ; taille, rond, étoiles et paillettes sont communs à tous les globes : `recruit`. */
+  upgradeOrb: {},
   /** Gain d'un soldat (recrue qui rejoint la squad, composé) : éclats de la classe, double onde, flash, « +1 » ; la colonne bleue d'arrivée suit le soldat. */
   gain: { burstCount: 40, flashCount: 22, ringBig: 150, ringSmall: 85, flashScale: 3, flashMs: 320, columnHeight: 230, columnMs: 900, textSize: 40 },
   /** Pluie de particules arc-en-ciel des cartes d'upgrade prismatiques (fx_star, additif). */

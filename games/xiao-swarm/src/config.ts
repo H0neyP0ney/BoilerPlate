@@ -110,10 +110,10 @@ export const INTERSTITIALS_ENABLED = false;
 export const RECRUIT = { life: 18, hopTime: 0.55, hopDist: [110, 154] as [number, number], hopSpread: 0.5, hopHeight: 70 };
 /**
  * Ramassage des recrues et des power-ups : rayon de ramassage (px) et vitesse max (px/s) d'un objet attiré, multipliés par la stat
- * `magnet` de la squad (upgrade). `magnetRadius` (px) est le rayon d'attraction de base de TOUS les objets au sol, globes d'XP
+ * `magnet` de la squad (upgrade). `DIFFICULTY.magnetRadius` (px) est le rayon d'attraction de base de TOUS les objets au sol, globes d'XP
  * compris (`Xp.ts`), lui aussi multiplié par `magnet`.
  */
-export const PICKUP = { magnetRadius: 110, pickRadius: 34, maxSpeed: 1400, caughtLife: 8, pullStart: 250, pullAccel: 2600 };
+export const PICKUP = { pickRadius: 34, maxSpeed: 1400, caughtLife: 8, pullStart: 250, pullAccel: 2600 };
 // `pullStart` / `pullAccel` : un objet attrapé part à `pullStart` px/s vers son soldat et accélère de `pullAccel` px/s² jusqu'à `maxSpeed`
 // (× stat `magnet`) ; il suit la squad qui l'a attrapé sans limite de distance : une squad rapide ne peut plus le distancer (`Pickup.chase`).
 // `caughtLife` : durée de vie (s) d'un objet attrapé (attiré ou aspiré), au-dessus de tous les seuils de clignotement ; elle ne décompte plus (`catchItem`).
@@ -141,10 +141,16 @@ export const POWERUP_LIFE = 12;
 export const DIFFICULTY_DEFAULTS = {
   // ---- boss
   /**
-   * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts de cette part (0,1 = +10 % de PV, de vitesse,
-   * de dégâts et de cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
+   * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts, chaque stat avec son propre gain
+   * (0,15 = +15 % par boss tué, cumulés : ×1,15 puis ×1,3225…, `Sim.escalation*`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
    */
-  bossEscalation: 0.15,
+  bossEscalationHp: 0.15,
+  /** Escalade des dégâts (contact, tirs, flammes, explosions…) par boss ou mini-boss tué. */
+  bossEscalationDamage: 0.15,
+  /** Escalade de la cadence d'attaque (cooldowns écoulés plus vite) par boss ou mini-boss tué. */
+  bossEscalationRate: 0.15,
+  /** Escalade de la vitesse de déplacement par boss ou mini-boss tué. */
+  bossEscalationSpeed: 0.07,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).
@@ -193,6 +199,18 @@ export const DIFFICULTY_DEFAULTS = {
   rerolls: 2,
   /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
   prismChance: 0.05,
+  /** Recrues : le taux de drop d'un alien est multiplié par `clamp(recruitMax − (taille de la squad − recruitSizeRef) × recruitSlope, recruitMin, recruitMax)` (petite squad = plus de recrues). */
+  recruitMax: 1.8,
+  /** Recrues : taille de squad à partir de laquelle le facteur commence à baisser. */
+  recruitSizeRef: 4,
+  /** Recrues : perte de facteur par soldat au-delà de `recruitSizeRef`. */
+  recruitSlope: 0.12,
+  /** Recrues : plancher du facteur (grosse squad). */
+  recruitMin: 0.25,
+  /** Rayon d'attraction de base (px) de TOUS les objets au sol (globes d'XP, recrues, power-ups, globes d'upgrade), avant la stat `magnet` (upgrade). */
+  magnetRadius: 110,
+  /** Coût d'XP de chaque niveau × cette valeur (courbe `xpToNext`) ; sans effet pendant le tutoriel (le niveau 1 doit rester à 10 XP). */
+  xpCostMul: 1,
 };
 export type DifficultyKey = keyof typeof DIFFICULTY_DEFAULTS;
 export const DIFFICULTY: Record<DifficultyKey, number> = { ...DIFFICULTY_DEFAULTS };

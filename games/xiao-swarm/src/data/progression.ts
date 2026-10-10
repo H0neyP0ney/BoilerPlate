@@ -73,9 +73,9 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   /** Effet instantané : `value` gunners rejoignent l'escouade, même au-delà de la taille max, avec un bouclier plein. Plus proposée dès que la squad dépasse déjà son max de `REINFORCE_MAX_OVERCAP` (config.ts). */
   reinforce: { id: 'reinforce', maxStacks: 99, value: 3, color: 0xffa94d },
   /** Esprit d'équipe : +1 % de dégâts par soldat vivant de la squad, par prise (1,5 % avant le 09/10, nerf) (stat `teamSpirit`, lue par `Combat.update`). */
-  teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 1 }, maxStacks: 4, value: 1, color: 0xa8e04a },
+  teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 0.01 }, maxStacks: 4, value: 1, color: 0xa8e04a },
   /** Dernier rempart : +3 % de dégâts par soldat MANQUANT (taille max de la squad − soldats vivants), par prise : 3, 6, 9, 12 % (2 % avant le 09/10, buff : mécanique de comeback) (stat `lastStand`, lue par `Combat.update`). */
-  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 3 }, maxStacks: 3, value: 3, color: 0xe0304f },
+  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.03 }, maxStacks: 3, value: 3, color: 0xe0304f },
   /** Chasseur de boss : +30 % de dégâts aux boss et mini-boss par prise (stat `bossHunter`, lue par `Sim.damage`). */
   bossHunter: { id: 'bossHunter', stat: 'bossHunter', mod: { flat: 0.3 }, maxStacks: 4, value: 30, color: 0xe05ae0 },
 };

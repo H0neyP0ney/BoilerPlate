@@ -138,6 +138,7 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `slice-hud-buttons.mjs` | `bouton pause sound musique.png` → `ui/hud/` (bouton vide + 3 icônes) | `view/HudButtons.ts` |
 | `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_<id>.png` (11 couleurs) + `card_prism.png` (holographique) | `LevelUpScene` |
 | `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |
+| `bake-globes.py` | génère UNE FOIS les images des globes au sol et de leurs étoiles (`public/assets/globes/globe_<sorte>.png`, `star_<sorte>.png`) depuis les pièces dorées de la recrue : `python tools/bake-globes.py` (n'écrit que les fichiers absents ; `--force` réécrit tout et **écrase les retouches**) |
 | `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |
 | `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty_<id>.png` | slots des cartes |
 | `slice-egg.mjs` | œuf des boss et son socle (nid) : sépare `art-src/egg_socle.png` en deux images réduites de moitié | `aliens/egg.png` (`alien_boss_egg`), `aliens/egg_socle.png` (`alien_boss_egg_socle`, posé devant l'œuf par `AlienView`) |

@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { recolorTexture, type RecolorSpec } from './recolor';
 import { sprites, type SpriteDef } from './SpriteCatalog';
 
 /**
@@ -10,6 +11,9 @@ import { sprites, type SpriteDef } from './SpriteCatalog';
  *  - 'sheet'    : planche en grille (cases de taille fixe), frames numérotées 0,1,2… ligne par ligne.
  *  - 'atlas'    : PNG + JSON (TexturePacker, Free Texture Packer, Aseprite "hash"/"array"), frames nommées.
  *  - 'aseprite' : export Aseprite (PNG + JSON avec tags) : les tags deviennent les animations.
+ *
+ * Variante de couleur sans fichier : un sprite d'une planche ('sheet' / 'atlas') peut porter `recolor` ; il utilise alors une copie
+ * recolorée de la planche, fabriquée au lancement (`recolorTexture`), avec ses propres réglages (ancrage, échelle…) et animations.
  */
 export interface AnimSpec {
   /** Indices (sheet) ou noms de frames (atlas). */
@@ -25,6 +29,8 @@ export interface SheetSprite extends Placement {
   /** Frame affichée par défaut (sinon première frame de 'idle'). */
   frame?: number | string;
   anims?: Record<string, AnimSpec>;
+  /** Ce sprite utilise la planche recolorée au lancement (texture `<planche>#<id>`) au lieu de la planche telle quelle. */
+  recolor?: RecolorSpec;
 }
 
 export interface AsepriteSprite extends Placement {
@@ -107,21 +113,23 @@ export function applyAssets(scene: Phaser.Scene, entries: readonly AssetEntry[])
     }
 
     for (const [id, s] of Object.entries(e.sprites)) {
+      const tex = s.recolor ? `${key}#${id}` : key; // variante de couleur : copie recolorée de la planche
+      if (s.recolor && !recolorTexture(scene, key, tex, s.recolor)) continue;
       const anims: Record<string, string> = {};
       for (const [name, spec] of Object.entries(s.anims ?? {})) {
         const animKey = `${id}:${name}`;
         if (!scene.anims.exists(animKey)) {
           scene.anims.create({
             key: animKey,
-            frames: spec.frames.map((f) => ({ key, frame: f })),
+            frames: spec.frames.map((f) => ({ key: tex, frame: f })),
             frameRate: spec.fps ?? 10,
             repeat: spec.repeat ?? -1,
           });
         }
         anims[name] = animKey;
       }
-      const { anims: _a, frame, ...placement } = s;
-      sprites.define(id, { texture: key, frame: frame ?? s.anims?.idle?.frames[0] ?? 0, anims, ...placement });
+      const { anims: _a, frame, recolor: _r, ...placement } = s;
+      sprites.define(id, { texture: tex, frame: frame ?? s.anims?.idle?.frames[0] ?? 0, anims, ...placement });
       applied.push(id);
     }
   }

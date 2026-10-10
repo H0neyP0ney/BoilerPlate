@@ -86,8 +86,7 @@ export class Horde {
   private create(def: (typeof ALIENS)[AlienId], x: number, y: number, hpFrac: number, revived: boolean, hpMul = 1): AlienState {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
-    const esc = this.sim.escalation; // +10 % par boss déjà tué
-    const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * esc;
+    const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * this.sim.escalationHp; // escalade des PV : par boss déjà tué
     const maxShield = def.shield ? maxHp * def.shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
     return {
@@ -149,7 +148,9 @@ export class Horde {
       noXp: this.sim.waves.replaying, // rejeu de vague pendant un combat de boss : pas de globe d'XP (mais des recrues possibles)
       noRecruit: false,
       instant: false,
-      esc,
+      escDmg: this.sim.escalationDamage,
+      escRate: this.sim.escalationRate,
+      escSpeed: this.sim.escalationSpeed,
       revives: 0,
       reviveLock: 0,
       age: 0,
@@ -282,7 +283,7 @@ export class Horde {
 
   /** Vitesse d'écoulement des cooldowns spéciaux d'un boss enragé (−30 % par niveau, plancher à −90 %). */
   private cdRate(a: AlienState): number {
-    return (a.enraged ? 1 / Math.max(0.1, 1 - DIFFICULTY.bossEnrageCooldownCut * a.enraged) : 1) * a.esc;
+    return (a.enraged ? 1 / Math.max(0.1, 1 - DIFFICULTY.bossEnrageCooldownCut * a.enraged) : 1) * a.escRate;
   }
 
   /**
@@ -357,7 +358,7 @@ export class Horde {
       gx /= gd;
       gy /= gd;
 
-      let speed = def.speed * this.sim.stasisAt(a.x, a.y) * a.esc;
+      let speed = def.speed * this.sim.stasisAt(a.x, a.y) * a.escSpeed;
       if (def.burrow && a.lurkPhase === 4) {
         // Scarab ressorti : fonce tout droit vers le point anticipé (direction verrouillée), sans s'arrêter au contact
         gx = a.rushDx;
@@ -370,7 +371,7 @@ export class Horde {
         gy = this.steerV.y;
       }
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
-      const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
+      const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
       a.age += dt;
       if (def.boss) {
         const level = Math.floor(a.age / DIFFICULTY.bossEnrageEvery); // un boss qui traîne s'enrage toutes les `every` s, sans fin
@@ -381,7 +382,7 @@ export class Horde {
       }
       if (a.revived) speed *= zombieStats().speedMul; // enragé : plus rapide, attaque plus vite
       else if (a.enraged) speed *= 1 + DIFFICULTY.bossEnrageSpeed * a.enraged;
-      const rate = (a.revived ? zombieStats().attackMul : 1 + DIFFICULTY.bossEnrageAttack * a.enraged) * a.esc; // cadence d'attaque (cooldowns écoulés plus vite)
+      const rate = (a.revived ? zombieStats().attackMul : 1 + DIFFICULTY.bossEnrageAttack * a.enraged) * a.escRate; // cadence d'attaque (cooldowns écoulés plus vite)
       const cdRate = this.cdRate(a); // capacités spéciales (slam, saut, charge) : cooldown réduit
       let contactOverride: number | undefined;
       /** Bulle qui emporte son prisonnier à l'écart de la squad (vitesse imposée, remplace le déplacement normal). */
@@ -390,7 +391,7 @@ export class Horde {
       if (def.trail) {
         a.trailCd -= dt;
         if (a.trailCd <= 0 && Math.hypot(a.vx, a.vy) > 15) {
-          this.sim.addFire(a.x, a.y + 4, def.trail.radius, def.trail.ttl, def.trail.dps * a.esc);
+          this.sim.addFire(a.x, a.y + 4, def.trail.radius, def.trail.ttl, def.trail.dps * a.escDmg);
           a.trailCd = def.trail.every;
         }
       }
@@ -403,7 +404,7 @@ export class Horde {
           s.x = a.x;
           s.y = a.y;
           s.vx = s.vy = s.kx = s.ky = 0;
-          this.sim.damageSoldier(s, def.capture.dps * a.esc * dt, null, true);
+          this.sim.damageSoldier(s, def.capture.dps * a.escDmg * dt, null, true);
           // elle tire sa proie à l'écart de la squad (pour la dévorer tranquille), puis s'immobilise
           const sq = this.sim.squadOf(s.owner);
           if (sq) {
@@ -745,7 +746,9 @@ export class Horde {
       made.hp = a.hp;
       made.maxShield = a.maxShield;
       made.shield = a.shield;
-      made.esc = a.esc;
+      made.escDmg = a.escDmg;
+      made.escRate = a.escRate;
+      made.escSpeed = a.escSpeed;
       made.noXp = a.noXp;
       made.noRecruit = a.noRecruit;
       made.revives = a.revives;
@@ -827,7 +830,7 @@ export class Horde {
     if (T) {
       a.trailCd -= dt; // orbe de feu : traînée de flammes au sol, comme le slime de feu
       if (a.trailCd <= 0) {
-        this.sim.addFire(a.x, a.y + 6, T.radius, T.ttl, T.dps * a.esc);
+        this.sim.addFire(a.x, a.y + 6, T.radius, T.ttl, T.dps * a.escDmg);
         a.trailCd = T.every;
       }
     }
@@ -839,10 +842,10 @@ export class Horde {
     }
     for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
-      this.sim.damageSoldier(s, a.def.damage * a.esc);
+      this.sim.damageSoldier(s, a.def.damage * a.escDmg);
       if (fire) {
         // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
-        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, T.ttl, T.dps * a.esc);
+        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, T.ttl, T.dps * a.escDmg);
         this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
       } else this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
       a.alive = false;
@@ -893,7 +896,7 @@ export class Horde {
     const prevF = a.lurkT >= R.sweep ? -30 : (1 - a.lurkT / R.sweep) * R.length;
     a.lurkT -= dt;
     const curF = (1 - Math.max(0, a.lurkT) / R.sweep) * R.length;
-    const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc;
+    const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg;
     for (const s of soldierHash.query(a.x, a.y, R.length + 40, this.scratchS)) {
       if (!s.alive) continue;
       const dx = s.x - a.x;
@@ -1030,7 +1033,7 @@ export class Horde {
         const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
         const cos = Math.cos(a.spikeAng);
         const sin = Math.sin(a.spikeAng);
-        const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc;
+        const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg;
         for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
           if (!s.alive) continue;
           const dx = s.x - a.x;
@@ -1123,7 +1126,7 @@ export class Horde {
       }
       case 3: {
         // ressort en avançant déjà vers le point anticipé (direction verrouillée)
-        const sp = a.def.speed * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + DIFFICULTY.bossEnrageSpeed * a.enraged);
+        const sp = a.def.speed * this.sim.stasisAt(a.x, a.y) * a.escSpeed * (1 + DIFFICULTY.bossEnrageSpeed * a.enraged);
         a.vx = a.rushDx * sp;
         a.vy = a.rushDy * sp;
         a.x += a.vx * dt;
@@ -1220,7 +1223,7 @@ export class Horde {
       const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d * 0.8 };
       if (clear(p)) spots.push(p);
     }
-    spots.forEach((p, i) => this.sim.addStalactite(p.x, p.y, S.radius, S.delay + i * S.stagger, S.damage * a.esc, S.knockback));
+    spots.forEach((p, i) => this.sim.addStalactite(p.x, p.y, S.radius, S.delay + i * S.stagger, S.damage * a.escDmg, S.knockback));
   }
 
   /** Surgissement : onde de choc autour du trou (recul + dégâts aux soldats dans le rayon). */
@@ -1234,7 +1237,7 @@ export class Horde {
       if (!s.alive || d > B.radius + s.radius) continue;
       s.kx += (dx / d) * B.knockback;
       s.ky += (dy / d) * B.knockback;
-      this.sim.damageSoldier(s, B.damage * a.esc);
+      this.sim.damageSoldier(s, B.damage * a.escDmg);
     }
   }
 
@@ -1303,7 +1306,7 @@ export class Horde {
 
   /** Rhinocéros jumeaux : flamme (`fire`) ou nuage de gel (`frost`) laissé au sol pendant la charge. */
   private rushTrail(a: AlienState, T: NonNullable<NonNullable<AlienState['def']['rush']>['trail']>): void {
-    if (T.kind === 'fire') this.sim.addFire(a.x, a.y + 4, T.radius, T.ttl, T.dps * a.esc);
+    if (T.kind === 'fire') this.sim.addFire(a.x, a.y + 4, T.radius, T.ttl, T.dps * a.escDmg);
     else this.sim.addPuddle(a.x, a.y + 4, T.radius, T.ttl, 1, true);
   }
 
@@ -1329,7 +1332,8 @@ export class Horde {
       const along = dx * a.rushDx + dy * a.rushDy;
       const lateral = Math.abs(dx * a.rushDy - dy * a.rushDx);
       if (along < -a.radius || along > a.radius + s.radius + 26 || lateral > r.width / 2 + s.radius) continue;
-      this.sim.damageSoldier(s, r.damage * a.esc);
+      this.sim.damageSoldier(s, r.damage * a.escDmg);
+      if (r.stun && s.alive) s.stun = Math.max(s.stun, r.stun); // charge électrique (Rhino Alpha) : étourdi
       s.kx += (a.rushDx * r.knockback) / s.mass;
       s.ky += (a.rushDy * r.knockback) / s.mass;
       a.rushHits.add(s.id); // une seule fois par charge (pas d'invulnérabilité : les autres aliens peuvent le frapper)
@@ -1347,7 +1351,7 @@ export class Horde {
     s.kx += (dx / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
     s.ky += (dy / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
     s.grabbed = GRAB_IMMUNE;
-    this.sim.damageSoldier(s, t.damage * a.esc);
+    this.sim.damageSoldier(s, t.damage * a.escDmg);
     this.sim.events.push({ t: 'tongue', alien: a.id, target: s.id, dur: 0.5 });
     return true;
   }
@@ -1374,7 +1378,7 @@ export class Horde {
       s.kx += (dx / d) * slam.knockback;
       s.ky += (dy / d) * slam.knockback;
       if (slam.stun) s.stun = Math.max(s.stun, slam.stun);
-      this.sim.damageSoldier(s, slam.damage * a.esc);
+      this.sim.damageSoldier(s, slam.damage * a.escDmg);
     }
   }
 

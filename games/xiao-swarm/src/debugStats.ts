@@ -1,5 +1,5 @@
 import { DEV_TOOLS } from '@xiao/engine';
-import { ALIENS } from './data/aliens';
+import { ALIENS, type AlienDef } from './data/aliens';
 import { CLASSES } from './data/classes';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
@@ -89,6 +89,43 @@ export function setStat(kind: StatKind, id: string, path: string, value: number)
   persist();
 }
 
+/** Stats pilotables d'un coup (panneau Difficulté) : quels chemins de la définition elles touchent, et si une hausse allonge ou raccourcit la valeur. */
+export type StatGroup = 'hp' | 'speed' | 'damage' | 'cadence' | 'xp' | 'recruit' | 'range' | 'projSpeed' | 'spread';
+const GROUPS: Record<StatGroup, { match: (path: string) => boolean; sign: 1 | -1; skip: (d: AlienDef) => boolean }> = {
+  hp: { match: (p) => p === 'hp', sign: 1, skip: (d) => !!d.projectile || !!d.egg }, // PV exacts des orbes et de l'œuf
+  speed: { match: (p) => p === 'speed', sign: 1, skip: (d) => !!d.projectile }, // vitesse de déplacement (pas celle d'un orbe lancé) ; les soldats n'en ont pas : `CROWD.speed`
+  damage: { match: (p) => p === 'damage' || p.endsWith('.damage') || p.endsWith('.dps'), sign: 1, skip: (d) => !!d.egg }, // contact, capacités, flaques ; arme et explosion d'un soldat
+  cadence: { match: (p) => p === 'attackCooldown' || p === 'weapon.cooldown', sign: -1, skip: (d) => !!d.projectile }, // plus de cadence = délai plus court
+  xp: { match: (p) => p === 'xp', sign: 1, skip: (d) => !!d.egg }, // XP laissée à la mort (fractionnaire : tirée au sort entre deux entiers à la chute, `Xp.drop`)
+  recruit: { match: (p) => p === 'recruitChance', sign: 1, skip: () => false }, // chance de lâcher une recrue (par alien)
+  projSpeed: { match: (p) => p === 'weapon.projectileSpeed', sign: 1, skip: () => false }, // vitesse des projectiles d'un soldat
+  spread: { match: (p) => p === 'weapon.spread', sign: 1, skip: () => false }, // dispersion du tir d'un soldat (plus grande = moins précis)
+  range: { match: (p) => p === 'weapon.range', sign: 1, skip: () => false }, // portée de tir d'un soldat (avant l'upgrade Portée, qui la multiplie)
+};
+
+/**
+ * Ajoute (ou retranche, `part` négatif) `part` × la valeur du code à une stat de TOUTES les unités d'un camp (aliens, boss compris, ou classes de
+ * soldats) : PV, vitesse, dégâts (tout chemin `damage` / `dps`), cadence (`attackCooldown` / `weapon.cooldown`, raccourci quand la cadence monte), XP ou
+ * chance de recrue. Additif sur la valeur du code, donc +5 % puis −5 % ramène aux valeurs d'origine. Retourne le nombre d'unités modifiées.
+ */
+export function shiftAllStat(kind: StatKind, group: StatGroup, part: number): number {
+  const g = GROUPS[group];
+  let n = 0;
+  for (const [id, def] of Object.entries(defs(kind))) {
+    if (kind === 'alien' && g.skip(def as unknown as AlienDef)) continue;
+    let touched = false;
+    for (const { path } of listStats(kind, id)) {
+      if (!g.match(path)) continue;
+      const base = getDefaultStat(kind, id, path);
+      if (base <= 0) continue;
+      setStat(kind, id, path, Math.max(0, Number((getStat(kind, id, path) + g.sign * base * part).toPrecision(5))));
+      touched = true;
+    }
+    if (touched) n++;
+  }
+  return n;
+}
+
 /** Reset : revient aux valeurs du code pour cette unité. */
 export function resetStats(kind: StatKind, id: string): void {
   const def = DEFAULTS[keyOf(kind, id)];
@@ -148,6 +185,14 @@ export async function saveAllStatsToCode(kind: StatKind, id: string): Promise<st
   }
   const head = ok.length ? `✔ ${ok.length} unité(s) enregistrée(s) : ${ok.join(', ')}` : '';
   return [head, ...errors].filter(Boolean).join('\n');
+}
+
+/** Save des unités modifiées (celles qui ont une copie mémorisée) ; chaîne vide s'il n'y en a aucune. */
+export async function saveModifiedStatsToCode(): Promise<string> {
+  const [first] = Object.keys(overrides);
+  if (!first) return '';
+  const [kind, id] = first.split(':') as [StatKind, string];
+  return saveAllStatsToCode(kind, id);
 }
 
 export async function saveStatsToCode(kind: StatKind, id: string): Promise<string> {

@@ -5,7 +5,7 @@ import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Stats des upgrades éditées dans la visionneuse d'upgrades (dev uniquement) : « bonus » (valeur affichée sur la carte, qui fixe aussi
- * `mod.pct` = valeur / 100 ou `mod.flat` = valeur) et nombre maximal de prises. Modifiés en direct dans `UPGRADES` (pris en compte à la
+ * `mod.pct` = valeur / 100 ou `mod.flat` = valeur × `FLAT_SCALE`) et nombre maximal de prises. Modifiés en direct dans `UPGRADES` (pris en compte à la
  * prochaine prise), mémorisés dans le navigateur (`xiao-debug-upgrades`) et réappliqués au démarrage ; Save les écrit dans
  * data/progression.ts, Reset revient à la dernière sauvegarde.
  */
@@ -17,7 +17,12 @@ export interface UpgradeStats {
 }
 
 const DEFAULTS = new Map<UpgradeId, UpgradeStats>();
-for (const [id, u] of Object.entries(UPGRADES)) DEFAULTS.set(id as UpgradeId, { value: u.value, maxStacks: u.maxStacks });
+/** Échelle `mod.flat` / valeur affichée, d'après le code : 1 pour une valeur fixe (Max Squad), 0,01 pour une fraction affichée en % (Esprit d'équipe, Dernier rempart, Chasseur de boss). */
+const FLAT_SCALE = new Map<UpgradeId, number>();
+for (const [id, u] of Object.entries(UPGRADES)) {
+  DEFAULTS.set(id as UpgradeId, { value: u.value, maxStacks: u.maxStacks });
+  if (u.mod?.flat !== undefined && u.value !== 0) FLAT_SCALE.set(id as UpgradeId, u.mod.flat / u.value);
+}
 let overrides: Partial<Record<UpgradeId, UpgradeStats>> = {};
 
 /** Valeurs du code (dernière sauvegarde) : repère de l'échelle des réglettes, qui ne doit pas se réduire quand la valeur courante tombe à 0. */
@@ -32,7 +37,7 @@ function apply(id: UpgradeId, s: UpgradeStats): void {
   u.maxStacks = s.maxStacks;
   if (u.mod) {
     if (u.mod.pct !== undefined) u.mod.pct = s.value / 100;
-    else if (u.mod.flat !== undefined) u.mod.flat = s.value;
+    else if (u.mod.flat !== undefined) u.mod.flat = s.value * (FLAT_SCALE.get(id) ?? 1);
   }
 }
 

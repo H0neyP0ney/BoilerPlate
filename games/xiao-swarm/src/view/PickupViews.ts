@@ -12,7 +12,7 @@ import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_P
 import type { Fx } from './Fx';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
-const CAPSULE_LIFT = 52;
+const CAPSULE_LIFT = 64; // 52 + 12 (09/10) : la capsule ne cache plus la barre de vie d'un soldat seul
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
 const CAPSULE_SCALE = 0.9;
 

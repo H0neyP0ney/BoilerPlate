@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',
   // Dev uniquement : bouton « Save » des vues de dev (réécrit les valeurs par défaut dans le code source).
   plugins: [devSave()],
-  server: { host: true, port: 5173 },
+  server: { host: true, port: Number(process.env.PORT) || 5173 }, // PORT : port assigné par l'aperçu de Claude (sinon 5173)
   build: {
     outDir: 'dist',
     target: 'es2020',

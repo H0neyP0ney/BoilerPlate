@@ -13,7 +13,8 @@ const check = (ok, label, detail = '') => {
 try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
-  const { TUTORIAL } = await vite.ssrLoadModule('/src/data/tutorial.ts');
+  const { TUTORIAL, TUTORIAL_REWARD } = await vite.ssrLoadModule('/src/data/tutorial.ts');
+  const { UPGRADES } = await vite.ssrLoadModule('/src/data/progression.ts');
   const session = new LocalSession({ mode: MODES.survival, seed: 4242, bots: 0, tutorial: true });
   const sim = session.sim;
   const sq = sim.squadOf('p1');
@@ -68,7 +69,8 @@ try {
   check(!!offerSeen && offerSeen.offer.join() === TUTORIAL.offer.join() && offerSeen.prism.every((p) => !p) && offerSeen.rerolled === false, 'offre imposée (damage / speed / fireRate), sans relance ni prismatique', offerSeen?.offer.join('/'));
   check(recruitStart?.hopped === true && recruitDist !== null && recruitDist < 5, 'la recrue du slime saute en cloche sur place (imprenable en l air)', `${recruitDist?.toFixed(0)} px de déplacement`);
   check(sq.picked.speed === 1 && !sq.picked.damage, 'le joueur peut choisir une autre carte que celle suggérée', JSON.stringify(sq.picked));
-  check(Math.abs(sq.stats.get('damage') - 1.38) < 0.01 && Math.abs(sq.stats.get('range') - 1.2) < 0.01 && Math.abs(sq.stats.get('recruit') - 2.47) < 0.01, 'bonus caché de fin de tutoriel (dégâts ×1, cadence ×1, portée ×2, recrue ×3, PV max ×2…)', `dégâts ${sq.stats.get('damage').toFixed(2)}, portée ${sq.stats.get('range').toFixed(2)}, recrue ${sq.stats.get('recruit').toFixed(2)}`);
+  const expect = (id) => 1 + (TUTORIAL_REWARD[id] ?? 0) * UPGRADES[id].mod.pct; // bonus caché = prises × gain de l'upgrade (valeurs des données : réglables)
+  check(Math.abs(sq.stats.get('damage') - expect('damage')) < 0.01 && Math.abs(sq.stats.get('range') - expect('range')) < 0.01 && Math.abs(sq.stats.get('recruit') - expect('recruit')) < 0.01, 'bonus caché de fin de tutoriel (dégâts ×1, cadence ×1, portée ×2, recrue ×3, PV max ×2…)', `dégâts ${sq.stats.get('damage').toFixed(2)}, portée ${sq.stats.get('range').toFixed(2)}, recrue ${sq.stats.get('recruit').toFixed(2)}`);
   check(!sq.picked.damage && !sq.picked.range && !sq.picked.recruit, 'le bonus caché ne figure pas dans les upgrades prises');
   check(sq.size >= 6, 'les deux recrues ont été ramassées (4 de départ + 2)', `${sq.size} soldats`);
   check(sim.time === 0, 'la timeline normale n\'a pas démarré pendant le tutoriel', `${sim.time.toFixed(2)} s`);

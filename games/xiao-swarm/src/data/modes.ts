@@ -18,7 +18,7 @@ export interface ModeDef {
   duration: number;
   /** Script de vagues (niveaux + timeline, voir data/waves.ts). */
   waves: WaveScript;
-  /** Plafond d'aliens à l'apparition = (base + perPlayer × joueurs vivants) × `DIFFICULTY.alienCountMul` (voir `Horde.canSpawn`). */
+  /** Plafond d'aliens à l'apparition = (base + perPlayer × joueurs vivants) (voir `Horde.canSpawn`). */
   maxAliens: { base: number; perPlayer: number };
   spawnPoints(map: MapDef, players: number, rng: Rng): Point[];
 }
@@ -37,7 +37,7 @@ export const SURVIVAL: ModeDef = {
   duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
   waves: WAVE_SCRIPT,
   get maxAliens() {
-    return { base: 0, perPlayer: DIFFICULTY.maxAliensPerPlayer }; // × alienCountMul (1,5) = 150 par joueur vivant ; réglable (panneau Difficulté)
+    return { base: 0, perPlayer: DIFFICULTY.maxAliensPerPlayer }; // 150 par joueur vivant ; réglable (panneau Difficulté)
   },
   spawnPoints(map, players) {
     // seul : au centre ; à plusieurs : en cercle autour du centre

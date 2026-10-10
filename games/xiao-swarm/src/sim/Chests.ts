@@ -1,82 +1,16 @@
 import { clamp } from '@xiao/engine/sim';
 import { DIFFICULTY, RECRUIT } from '../config';
 import type { UpgradeId } from '../data/progression';
-import type { ChestState, UpgradeOrbState } from './entities';
+import type { UpgradeOrbState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-/** Durée (s) de la chute d'un globe d'upgrade qui sort du coffre (saut en cloche, comme une recrue) et distance de chute (px). */
+/** Durée (s) de la chute d'un globe d'upgrade qui sort de l'œuf (saut en cloche, comme une recrue) et distance de chute (px). */
 export const ORB_FALL_TIME = RECRUIT.hopTime;
-const ORB_FALL_DIST: [number, number] = [50, 100]; // à l'intérieur de la zone du coffre (rayon 100 par défaut) : à portée d'un soldat qui l'ouvre
-/** Au pire, un coffre non ouvert reste ; au-delà de ce nombre on retire le plus ancien (parties très longues). */
-const MAX_CHESTS = 8;
-
+const ORB_FALL_DIST: [number, number] = [50, 100]; // autour de l'œuf détruit : à portée d'un soldat
 /**
- * Coffres des boss : chaque boss tué (sauf le boss final : la partie est gagnée) laisse un coffre sur son cadavre. Un soldat resté à moins de
- * `DIFFICULTY.chestRadius` px pendant `DIFFICULTY.chestTime` s l'ouvre (la progression redescend quand personne n'est là, comme une zone de
- * réanimation) : il se détruit et libère `DIFFICULTY.chestOrbs` globes d'upgrade PAR JOUEUR vivant (`UpgradeOrbs`).
- */
-export class Chests {
-  readonly items: ChestState[] = [];
-
-  constructor(private readonly sim: Sim) {}
-
-  /** Pose un coffre en (x, y), ramené hors des obstacles et dans la carte. */
-  drop(x: number, y: number): ChestState {
-    const p = { x, y, radius: 24 };
-    this.sim.arena.constrain(p);
-    const c: ChestState = { id: this.sim.ids.get(), x: p.x, y: p.y, progress: 0 };
-    this.items.push(c);
-    if (this.items.length > MAX_CHESTS) this.items.shift();
-    return c;
-  }
-
-  update(dt: number): void {
-    const R = DIFFICULTY.chestRadius;
-    const T = Math.max(0.1, DIFFICULTY.chestTime);
-    for (let i = this.items.length - 1; i >= 0; i--) {
-      const c = this.items[i];
-      let inside = false;
-      for (const s of this.sim.soldierHash.query(c.x, c.y, R + 40, this.sim.scratchSoldiers)) {
-        if (s.alive && (s.x - c.x) ** 2 + (s.y - c.y) ** 2 <= R * R) {
-          inside = true;
-          break;
-        }
-      }
-      c.progress = inside ? Math.min(T, c.progress + dt) : Math.max(0, c.progress - dt);
-      if (c.progress < T) continue;
-      this.items.splice(i, 1);
-      this.open(c);
-    }
-  }
-
-  /** Le coffre s'ouvre : `chestOrbs` globes par squad vivante tombent autour de lui, chacun réservé à son joueur. */
-  private open(c: ChestState): void {
-    const squads = this.sim.aliveSquads;
-    const each = Math.max(0, Math.round(DIFFICULTY.chestOrbs));
-    const total = squads.length * each;
-    const turn = this.sim.rng.range(0, Math.PI * 2);
-    let k = 0;
-    for (const sq of squads) {
-      const given: UpgradeId[] = []; // des upgrades différentes pour un même joueur tant que possible
-      for (let n = 0; n < each; n++) {
-        const upgrade = sq.pickRandomUpgrade(given);
-        if (!upgrade) break; // tout est déjà au maximum
-        given.push(upgrade);
-        this.sim.upgradeOrbs.drop(sq.owner, upgrade, c.x, c.y, turn + ((k++ + this.sim.rng.range(-0.2, 0.2)) / total) * Math.PI * 2);
-      }
-    }
-    this.sim.events.push({ t: 'chestOpened', x: c.x, y: c.y });
-  }
-
-  clear(): void {
-    this.items.length = 0;
-  }
-}
-
-/**
- * Globes d'upgrade : sortent d'un coffre, retombent autour de lui puis attendent leur joueur. Chacun est RÉSERVÉ à un joueur (`owner`) : aucune
+ * Globes d'upgrade : sortent d'un œuf de boss détruit (`burst`), retombent autour de lui puis attendent leur joueur. Chacun est RÉSERVÉ à un joueur (`owner`) : aucune
  * autre squad ne peut l'attirer ni le ramasser, et il ne disparaît jamais. Le ramasser donne une upgrade au hasard (`Squad.grantRandomUpgrade`).
  */
 export class UpgradeOrbs {
@@ -102,6 +36,25 @@ export class UpgradeOrbs {
     };
     this.items.push(o);
     return o;
+  }
+
+  /** Un œuf de boss est détruit en (x, y) : `chestOrbs` globes par squad vivante tombent autour de lui, chacun réservé à son joueur. */
+  burst(x: number, y: number): void {
+    const squads = this.sim.aliveSquads;
+    const each = Math.max(0, Math.round(DIFFICULTY.chestOrbs));
+    const total = squads.length * each;
+    const turn = this.sim.rng.range(0, Math.PI * 2);
+    let k = 0;
+    for (const sq of squads) {
+      const given: UpgradeId[] = []; // des upgrades différentes pour un même joueur tant que possible
+      for (let n = 0; n < each; n++) {
+        const upgrade = sq.pickRandomUpgrade(given);
+        if (!upgrade) break; // tout est déjà au maximum
+        given.push(upgrade);
+        this.drop(sq.owner, upgrade, x, y, turn + ((k++ + this.sim.rng.range(-0.2, 0.2)) / total) * Math.PI * 2);
+      }
+    }
+    this.sim.events.push({ t: 'chestOpened', x, y });
   }
 
   update(dt: number): void {

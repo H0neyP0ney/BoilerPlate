@@ -4,9 +4,21 @@ import { DIFFICULTY } from '../config';
 import { BOSS_REPLAY, entryTimes, scaledCount, type WaveConfig, type WaveScript } from '../data/waves';
 
 /** Ce que le gestionnaire de vagues a besoin de savoir de la simulation (absent : la timeline avance toujours). */
+/** Réglage d'effectif des vagues rejouées de chaque boss (`DIFFICULTY.bossReplayMul…`). */
+const BOSS_REPLAY_KEY: Partial<Record<AlienId, 'bossReplayMulGling' | 'bossReplayMulRhino' | 'bossReplayMulScarab' | 'bossReplayMulTwins' | 'bossReplayMulCrab'>> = {
+  boss_gling: 'bossReplayMulGling',
+  boss_rhino: 'bossReplayMulRhino',
+  boss_scarab: 'bossReplayMulScarab',
+  boss_rhino_fire: 'bossReplayMulTwins',
+  boss_rhino_ice: 'bossReplayMulTwins',
+  boss_crab: 'bossReplayMulCrab',
+};
+
 export interface WaveRunnerHooks {
   /** Un boss est vivant. */
   bossAlive(): boolean;
+  /** Le boss vivant que la squad affronte (le premier, pour les rhinos jumeaux), sinon null. */
+  bossId?(): AlienId | null;
   /** Nombre d'aliens vivants. */
   aliveCount(): number;
 }
@@ -133,13 +145,20 @@ export class WaveRunner {
     while (this.replayIdx < this.replay.length && this.replayT >= this.replay[this.replayIdx].offset) {
       const r = this.replay[this.replayIdx++];
       this._replaying = true;
-      this.trigger(r.level, undefined, r.mul * DIFFICULTY.bossReplayMul); // une configuration au hasard du niveau ; effectif : celui de la vague × facteur de rejeu (panneau Difficulté)
+      this.trigger(r.level, undefined, r.mul * this.bossMul()); // une configuration au hasard du niveau ; effectif : celui de la vague × facteur de rejeu (panneau Difficulté)
       this._replaying = false;
     }
     if (this.replayIdx >= this.replay.length && this.replayT >= this.replayLen) {
       this.replayT = 0; // un tour de plus
       this.replayIdx = 0;
     }
+  }
+
+  /** Réglage d'effectif propre au boss affronté (panneau Difficulté, section Vagues) ; 1 pour un boss sans réglage. */
+  private bossMul(): number {
+    const id = this.hooks?.bossId?.();
+    const key = id ? BOSS_REPLAY_KEY[id] : undefined;
+    return key ? DIFFICULTY[key] : 1;
   }
 
   private endBossFight(): void {

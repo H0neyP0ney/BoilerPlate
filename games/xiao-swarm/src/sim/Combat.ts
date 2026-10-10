@@ -1,6 +1,6 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
-import { ALIENS } from '../data/aliens';
+import { ALIENS, zombieStats } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
@@ -45,6 +45,8 @@ export class Combat {
       puddleTtl: 0,
       puddleSlow: 1,
       freeze: 0,
+      poison: 0,
+      spawn: 0,
       texture: '',
       team: 'aliens',
       owner: '',
@@ -61,6 +63,8 @@ export class Combat {
       p.knock = 0;
       p.puddle = 0;
       p.freeze = 0;
+      p.poison = 0;
+      p.spawn = 0;
       p.flame = false;
       p.crit = false;
     },
@@ -198,7 +202,9 @@ export class Combat {
       const lead = lob.lead ? rng.range(lob.lead[0], lob.lead[1]) : 1; // part de l'anticipation (au hasard : pas toujours pile devant)
       const lx = target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter);
       const ly = target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter);
-      this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.esc, lob.aoe, lob.texture, a.team, 'aliens');
+      p.poison = lob.poison ?? 0;
+      p.spawn = lob.spawn ?? 0;
     }
   }
 
@@ -249,7 +255,7 @@ export class Combat {
       const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
       const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
       const flight = sp.flight * rng.range(0.92, 1.1);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? zombieStats().dmgMul : 1) * a.esc, sp.aoe, sp.texture, a.team, 'aliens');
       if (sp.puddle) {
         p.puddle = sp.puddle.radius;
         p.puddleTtl = sp.puddle.ttl;
@@ -373,9 +379,10 @@ export class Combat {
           p.y += p.vy * (dt + p.life);
           // crachat (et toute boule à flaque) : pas de recul ; les autres boules repoussent comme avant
           const spit = p.puddle > 0 || p.texture === 'fx_spit';
-          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : undefined);
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
+          if (p.spawn > 0) this.sim.horde.spawnEnragedRing('spider', p.x, p.y, p.spawn);
         }
         return true;
       }

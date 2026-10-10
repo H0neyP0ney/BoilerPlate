@@ -1,4 +1,4 @@
-// Icônes des upgrades : découpe art-src/icon_upgrade.png (11 icônes sur fond transparent, deux rangées) en une image par upgrade.
+// Icônes des upgrades : découpe art-src/icon_upgrade.png (13 icônes sur fond transparent, deux rangées) en une image par upgrade.
 //
 //   node tools/slice-upgrade-icons.mjs
 //
@@ -29,6 +29,8 @@ const ICONS = {
   recruit: [506, 189, 645, 326], // casque +1
   xpGain: [676, 182, 818, 333], // globe d'XP
   maxSquad: [829, 175, 976, 320], // escouade MAX
+  teamSpirit: [1014, 29, 1170, 163], // escouade entourée de croix vertes (Esprit d'équipe)
+  lastStand: [1013, 178, 1160, 314], // soldat seul devant des silhouettes grises, flèches de feu (Dernier rempart)
 };
 
 function crop(box, factor, pad = 2) {

@@ -341,6 +341,23 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.ellipse(12, 12, 4, 2.6, -0.5, 0, Math.PI * 2);
     ctx.fill();
   });
+  canvasTexture(scene, 'fx_blob_red', 34, 34, (ctx) => {
+    const g = ctx.createRadialGradient(13, 12, 1, 17, 17, 16);
+    g.addColorStop(0, '#ffd6d6');
+    g.addColorStop(0.35, '#e0383a');
+    g.addColorStop(1, '#8a1218');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = '#420a0d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(17, 18, 13.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(12, 12, 4, 2.6, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
   canvasTexture(scene, 'fx_slime_ball', 26, 26, (ctx) => {
     const g = ctx.createRadialGradient(10, 9, 1, 13, 13, 12);
     g.addColorStop(0, '#ffc0cc');

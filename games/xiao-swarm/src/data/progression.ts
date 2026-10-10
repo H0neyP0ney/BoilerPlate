@@ -61,21 +61,21 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   damage: { id: 'damage', stat: 'damage', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xff6a4a },
   fireRate: { id: 'fireRate', stat: 'fireRate', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xffd166 },
   /** PV max +15 % ; les soldats déjà là gagnent aussi, à plat, les PV max supplémentaires (pas de soin en plus). */
-  hp: { id: 'hp', stat: 'hp', mod: { pct: 0.15 }, maxStacks: 8, value: 15, color: 0x6fdc6f },
-  range: { id: 'range', stat: 'range', mod: { pct: 0.1 }, maxStacks: 5, value: 10, color: 0xffa07a },
+  hp: { id: 'hp', stat: 'hp', mod: { pct: 0.2 }, maxStacks: 8, value: 20, color: 0x6fdc6f },
+  range: { id: 'range', stat: 'range', mod: { pct: 0.07 }, maxStacks: 5, value: 7, color: 0xffa07a },
   /** Chance de critique en points de % (stat `crit`, 0 de base) : +5 par prise, dégâts × `CRIT_MUL`, plafonné à `CRIT_MAX` % (config.ts). */
-  crit: { id: 'crit', stat: 'crit', mod: { flat: 5 }, maxStacks: 6, value: 5, color: 0xffe14a },
-  speed: { id: 'speed', stat: 'speed', mod: { pct: 0.08 }, maxStacks: 5, value: 8, color: 0x7dd3ff },
+  crit: { id: 'crit', stat: 'crit', mod: { flat: 5 }, maxStacks: 5, value: 5, color: 0xffe14a },
+  speed: { id: 'speed', stat: 'speed', mod: { pct: 0.07 }, maxStacks: 5, value: 7, color: 0x7dd3ff },
   maxSquad: { id: 'maxSquad', stat: 'maxSquad', mod: { flat: 2 }, maxStacks: 6, value: 2, color: 0xb388ff },
   magnet: { id: 'magnet', stat: 'magnet', mod: { pct: 0.5 }, maxStacks: 3, value: 50, color: 0x5aa8ff },
-  recruit: { id: 'recruit', stat: 'recruit', mod: { pct: 0.3 }, maxStacks: 4, value: 30, color: 0xff8fc8 },
-  xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0x4fe0d0 },
+  recruit: { id: 'recruit', stat: 'recruit', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0xff8fc8 },
+  xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.25 }, maxStacks: 5, value: 25, color: 0x4fe0d0 },
   /** Effet instantané : `value` gunners rejoignent l'escouade, même au-delà de la taille max, avec un bouclier plein. Plus proposée dès que la squad dépasse déjà son max de `REINFORCE_MAX_OVERCAP` (config.ts). */
   reinforce: { id: 'reinforce', maxStacks: 99, value: 3, color: 0xffa94d },
   /** Esprit d'équipe : +1 % de dégâts par soldat vivant de la squad, par prise (1,5 % avant le 09/10, nerf) (stat `teamSpirit`, lue par `Combat.update`). */
-  teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 0.01 }, maxStacks: 4, value: 1, color: 0xa8e04a },
+  teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 1 }, maxStacks: 4, value: 1, color: 0xa8e04a },
   /** Dernier rempart : +3 % de dégâts par soldat MANQUANT (taille max de la squad − soldats vivants), par prise : 3, 6, 9, 12 % (2 % avant le 09/10, buff : mécanique de comeback) (stat `lastStand`, lue par `Combat.update`). */
-  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.03 }, maxStacks: 4, value: 3, color: 0xe0304f },
+  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 3 }, maxStacks: 3, value: 3, color: 0xe0304f },
   /** Chasseur de boss : +30 % de dégâts aux boss et mini-boss par prise (stat `bossHunter`, lue par `Sim.damage`). */
   bossHunter: { id: 'bossHunter', stat: 'bossHunter', mod: { flat: 0.3 }, maxStacks: 4, value: 30, color: 0xe05ae0 },
 };

@@ -51,7 +51,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: DIFFICULTY.squadDamage, fireRate: DIFFICULTY.squadFireRate, hp: 1, speed: DIFFICULTY.squadSpeed, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: DIFFICULTY.squadRecruit, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0, bossHunter: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0, bossHunter: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -254,7 +254,7 @@ export class Squad {
   /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */
   refreshMaxHp(): void {
     for (const s of this.soldiers) {
-      const max = s.def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
+      const max = s.def.hp * this.stats.get('hp');
       s.hp += max - s.maxHp;
       s.maxHp = max;
     }
@@ -312,7 +312,7 @@ export class Squad {
     if (id === 'hp') {
       // les soldats déjà là gagnent les PV max supplémentaires, et autant de PV courants (50/100 + 20 % → 70/120)
       for (const s of this.soldiers) {
-        const max = s.def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
+        const max = s.def.hp * this.stats.get('hp');
         s.hp += max - s.maxHp;
         s.maxHp = max;
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
@@ -361,7 +361,7 @@ export class Squad {
 
   add(id: SoldierClassId, at: Point): SoldierState {
     const def = CLASSES[id];
-    const maxHp = def.hp * DIFFICULTY.soldierHpMul * this.stats.get('hp');
+    const maxHp = def.hp * this.stats.get('hp');
     const s: SoldierState = {
       kind: 'soldier',
       id: this.sim.ids.get(),
@@ -396,6 +396,7 @@ export class Squad {
       frozen: 0,
       iceInvuln: 0,
       stun: 0,
+      poison: 0,
       grabbed: 0,
     };
     this.soldiers.push(s);
@@ -472,11 +473,6 @@ export class Squad {
   }
 
   update(dt: number, input: PlayerInput): void {
-    // stats de base réglables en direct (panneau Difficulté)
-    this.stats.setBase('damage', DIFFICULTY.squadDamage);
-    this.stats.setBase('fireRate', DIFFICULTY.squadFireRate);
-    this.stats.setBase('speed', DIFFICULTY.squadSpeed);
-    this.stats.setBase('recruit', DIFFICULTY.squadRecruit);
     if (this.buffs.stim > 0) this.buffs.stim -= dt;
     const total = this.soldiers.length;
     if (total === 0) return;

@@ -56,7 +56,7 @@ export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: numb
 }
 
 /**
- * Progression de l'upgrade en slots (images vide / plein) : une ligne par 5 prises maximum, chaque ligne centrée ; les prises déjà faites
+ * Progression de l'upgrade en slots (images vide / plein) : une ligne jusqu'à 5 prises maximum, sinon deux lignes équilibrées (6 → 3 + 3, 8 → 4 + 4), chaque ligne centrée ; les prises déjà faites
  * sont pleines, les autres vides (celle qu'on s'apprête à prendre n'est pas comptée). Aucun slot pour une upgrade sans limite (Renfort). Positions en pixels de
  * planche relatifs au centre de la carte (`CARD.slots`) : le conteneur est mis à l'échelle dans `resizeUpgradeCard`.
  */
@@ -64,11 +64,13 @@ function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: numbe
   const box = scene.add.container(0, 0);
   if (max >= 99) return box;
   const S = CARD.slots;
-  const rows = Math.ceil(max / S.cols);
+  // jusqu'à 5 slots : une ligne ; au-delà : deux lignes équilibrées (6 → 3 + 3, 8 → 4 + 4, 10 → 5 + 5, 7 → 4 + 3)
+  const perRow = max <= S.cols ? max : Math.ceil(max / 2);
+  const rows = Math.ceil(max / perRow);
   for (let i = 0; i < max; i++) {
-    const row = Math.floor(i / S.cols);
-    const inRow = Math.min(S.cols, max - row * S.cols);
-    const col = i - row * S.cols;
+    const row = Math.floor(i / perRow);
+    const inRow = Math.min(perRow, max - row * perRow);
+    const col = i - row * perRow;
     const img = scene.add.image((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep, i < count ? 'ui_slot_full' : `ui_slot_empty_${id}`);
     img.setScale(S.size / img.width);
     box.add(img);

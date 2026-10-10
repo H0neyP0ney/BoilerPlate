@@ -1,7 +1,7 @@
 {
   "name": "@xiao/swarm-attack",
   "private": true,
-  "version": "0.1.54",
+  "version": "0.1.68",
   "type": "module",
   "scripts": {
     "dev": "vite",

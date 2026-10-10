@@ -21,7 +21,7 @@ export const GRAB_OUT = 1.5;
 export const RELEASE_OUT = 1;
 
 /** Zone de réanimation (coop) : rayon (px) et temps (s) qu'un équipier doit y passer pour ramener un joueur mort. */
-export const REVIVE_RADIUS = 80;
+export const REVIVE_RADIUS = 96;
 export const REVIVE_TIME = 2;
 /** Invincibilité (s, les soldats clignotent) d'un joueur qui vient d'être réanimé par un équipier. */
 export const REVIVE_INVULN = 3;
@@ -139,67 +139,42 @@ export const POWERUP_LIFE = 12;
  * déjà là ne changent pas). Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
  */
 export const DIFFICULTY_DEFAULTS = {
-  // ---- aliens
-  /** PV des aliens (hors boss). */
-  alienHpMul: 1.5,
-  /** Dégâts infligés aux soldats par les aliens (mêlée, projectiles, capacités, flaques, stalactites…) ; les coups « un coup = un mort » restent mortels. */
-  alienDamageMul: 1,
-  /** Vitesse de déplacement des aliens (boss compris). */
-  alienSpeedMul: 1.25,
-  /** Nombre d'aliens des vagues et plafond d'aliens à l'apparition. */
-  alienCountMul: 1.5,
   // ---- boss
-  /** PV des boss (mini et final) : +1000 % = ×11. */
-  bossHpMul: 11,
   /**
    * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts de cette part (0,1 = +10 % de PV, de vitesse,
    * de dégâts et de cadence d'attaque, cumulés : ×1,1 par boss tué, `Sim.escalation`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
    */
-  bossEscalation: 0.1,
+  bossEscalation: 0.15,
   /**
-   * Coffre laissé par chaque boss tué (sauf le final) : un soldat doit rester à moins de `chestRadius` px pendant `chestTime` s pour l'ouvrir ;
-   * il libère alors `chestOrbs` globes d'upgrade aléatoire PAR JOUEUR vivant (réservés à leur joueur, entier).
+   * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
+   * PAR JOUEUR vivant (réservés à leur joueur, entier).
    */
-  chestTime: 2, // 3 avant le 08/10
-  chestRadius: 100,
   chestOrbs: 2,
   /** Un globe d'upgrade est imprenable (ni attiré ni ramassé) pendant ce temps (s) après sa sortie du coffre : on le voit retomber avant de pouvoir le prendre. */
   chestOrbGrace: 1,
   /** Boss enragé : un niveau d'enragement toutes les `bossEnrageEvery` s après son apparition, SANS FIN (flammes plus denses dès le niveau 2). */
-  bossEnrageEvery: 45,
+  bossEnrageEvery: 40,
   /** Par niveau d'enragement (cumulés) : + vitesse de déplacement, + cadence d'attaque, − cooldown des capacités (gain plafonné à ×10). */
   bossEnrageSpeed: 0.3,
   bossEnrageAttack: 0.3,
   bossEnrageCooldownCut: 0.3,
-  // ---- zombies (aliens ressuscités par un chaman)
-  /** Exemplaires ressuscités par incantation (entier). */
-  zombieCopies: 2,
-  /** PV, dégâts, vitesse de déplacement et cadence d'attaque d'un zombie par rapport à la version de base. */
-  zombieHpMul: 3,
-  zombieDmgMul: 1,
-  zombieSpeedMul: 1.35,
-  zombieAttackMul: 3,
-  // ---- squad (stats de base de toute squad avant upgrade, tutoriel compris)
-  /** PV max des soldats (ancien 0,7 × 1,3 de base de squad, fusionnés le 08/10). */
-  soldierHpMul: 0.91,
-  squadDamage: 1.2,
-  squadFireRate: 1.15,
-  squadSpeed: 1.08,
-  /** Chance de recrue (stat `recruit`). */
-  squadRecruit: 1.3,
   // ---- multijoueur
   /** Chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague et des PV des boss (0,75 = +75 %). */
   extraPlayerAliens: 0.75,
-  /** Plafond d'aliens à l'apparition par joueur vivant (× `alienCountMul`, survie). */
-  maxAliensPerPlayer: 100,
+  /** Plafond d'aliens à l'apparition par joueur vivant (survie). */
+  maxAliensPerPlayer: 150, // 100 × 1,5 (l'ancien `alienCountMul` est intégré aux effectifs des vagues et à ce plafond, 09/10)
   // ---- vagues (`WaveRunner`)
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,
   /** Pendant un combat de boss : nombre de derniers envois d'avant le boss rejoués en boucle (entier ; aliens sans XP). */
-  bossReplayCount: 5,
-  /** Effectif des vagues rejouées pendant un combat de boss (× celui de leur colonne « Effectif × » dans la timeline ; 0,8 = −20 %). */
-  bossReplayMul: 0.8,
+  bossReplayCount: 4,
+  /** Effectif des vagues rejouées pendant le combat de CHAQUE boss (× celui de leur colonne « Effectif × » dans la timeline ; 0,8 = −20 %). Rhinos jumeaux = un seul réglage. */
+  bossReplayMulGling: 0.8,
+  bossReplayMulRhino: 0.8,
+  bossReplayMulScarab: 0.8,
+  bossReplayMulTwins: 0.8,
+  bossReplayMulCrab: 0.8,
   // ---- aides au joueur
   /** Power-ups : premier à `powerupFirst` s, puis un toutes les `powerupEveryMin`-`powerupEveryMax` s, `powerupMax` au sol au plus (entier). */
   powerupFirst: 20,
@@ -232,7 +207,7 @@ export const DIFFICULTY: Record<DifficultyKey, number> = { ...DIFFICULTY_DEFAULT
  */
 export const CROWD_DEFAULTS = {
   /** Vitesse de l'ancre = vitesse max de la squad (px/s). */
-  speed: 210,
+  speed: 226.8, // 210 × 1,08 (l'ancien `squadSpeed` est intégré, 09/10)
   /** Distance entre voisins dans la formation (px). */
   spacing: 39,
   /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad (px) : plus grand = la squad « tire » plus loin devant. */
@@ -322,6 +297,7 @@ export const SCENES = {
   game: 'Game',
   levelUp: 'LevelUp',
   hud: 'Hud',
+  ending: 'Ending',
   pause: 'Pause',
   options: 'Options',
   viewer: 'Viewer',

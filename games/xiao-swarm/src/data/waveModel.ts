@@ -1,4 +1,3 @@
-import { DIFFICULTY } from '../config';
 import { ALIENS } from './aliens';
 import { entryTimes, scaledCount, type TimelineEntry, type WaveConfig, type WaveScript } from './waves';
 
@@ -32,15 +31,15 @@ export interface Pressure {
   dps: number[];
 }
 
-/** PV totaux d'une configuration, comme le jeu les fait apparaître (nombre × `alienCountMul`, PV × `alienHpMul` / `bossHpMul`). */
+/** PV totaux d'une configuration, comme le jeu les fait apparaître (nombre de la timeline, PV réels de `aliens.ts`). */
 export function configHp(config: WaveConfig, bossWeight = 1, mul = 1): number {
   let total = 0;
   for (const g of config.groups) {
     const def = ALIENS[g.type];
     if (!def || g.count <= 0) continue;
-    // un boss n'apparaît qu'une fois (pas de ×alienCountMul, voir Sim.ts), les autres sont multipliés
-    const count = def.boss ? g.count : Math.round(scaledCount(g.count, false, mul) * DIFFICULTY.alienCountMul); // effectif de l'envoi (`mul`), comme le WaveRunner
-    total += count * def.hp * (def.boss ? DIFFICULTY.bossHpMul * bossWeight : DIFFICULTY.alienHpMul) * (1 + (def.shield?.pct ?? 0)); // bouclier en plus des PV
+    // un boss n'apparaît qu'une fois (pas de part de joueur, voir Sim.ts)
+    const count = def.boss ? g.count : scaledCount(g.count, false, mul); // effectif de l'envoi (`mul`), comme le WaveRunner
+    total += count * def.hp * (def.boss ? bossWeight : 1) * (1 + (def.shield?.pct ?? 0)); // bouclier en plus des PV
   }
   return total;
 }

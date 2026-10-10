@@ -1,13 +1,18 @@
 import { damp, type Point } from '@xiao/engine/sim';
 import { CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
-import { ALIENS, type AlienId, type TargetPref } from '../data/aliens';
+import { ALIENS, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
 /** Bulle qui a capturé un soldat : elle l'éloigne de la squad jusqu'à `CAPTURE_DRAG_DIST` px au-delà de son rayon, à cette part de sa vitesse. */
 const CAPTURE_DRAG_DIST = 150;
-const CAPTURE_DRAG_SPEED = 0.35;
+/** Marge (px) entre deux lurkers enterrés, en plus de leurs hitbox : ils ne s'enterrent jamais tous au même endroit, ils se répartissent autour de la squad. */
+const LURKER_SPACING = 70;
+/** Au bout de ce délai (s) à chercher une place, un lurker se contente de `LURKER_MIN_SPACING` px d'écart (un groupe ne met pas des secondes à s'enterrer). */
+const LURKER_PATIENCE = 0.8;
+const LURKER_MIN_SPACING = 20;
+const CAPTURE_DRAG_SPEED = 0.28; // 0,35 avant l'intégration du ×1,25 de vitesse (ancien `alienSpeedMul`) à la vitesse de base des aliens
 /** Rayon dans lequel un alien cherche une cible précise (au-delà : il marche vers la squad la plus proche). */
 const SEEK_RADIUS = 700;
 /** Chaman : px de distance « gagnés » par PV de base du cadavre (un Spitter de 60 PV passe devant un slime 200 px plus près). */
@@ -34,7 +39,7 @@ export class Horde {
 
   get maxAliens(): number {
     const m = this.sim.mode.maxAliens;
-    return Math.round((m.base + m.perPlayer * this.sim.aliveSquads.length) * DIFFICULTY.alienCountMul);
+    return Math.round(m.base + m.perPlayer * this.sim.aliveSquads.length);
   }
 
   /**
@@ -82,7 +87,7 @@ export class Horde {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
     const esc = this.sim.escalation; // +10 % par boss déjà tué
-    const maxHp = def.hp * this.sim.alienHpMul * (def.boss ? DIFFICULTY.bossHpMul : DIFFICULTY.alienHpMul) * hpMul * (revived ? DIFFICULTY.zombieHpMul : 1) * esc;
+    const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * esc;
     const maxShield = def.shield ? maxHp * def.shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
     return {
@@ -149,6 +154,7 @@ export class Horde {
       reviveLock: 0,
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
+      lurkBlockT: 0,
       swarmT: 0,
       swarmAcc: 0,
       lurkPhase: 0,
@@ -215,11 +221,38 @@ export class Horde {
     this.sim.aliens.push(made);
   }
 
+  /** Œuf d'un boss tué : sur le cadavre (ramené hors des obstacles), sur place, 1000 PV exacts, sans XP ni recrue. Ne dépend pas du plafond d'aliens. */
+  spawnEgg(x: number, y: number): void {
+    const def = ALIENS.boss_egg;
+    const p = { x, y, radius: def.radius };
+    this.sim.arena.constrain(p);
+    const egg = this.create(def, p.x, p.y, 1, false);
+    egg.maxHp = egg.hp = def.hp; // exacts : ni escalade ni multiplicateur
+    egg.instant = true; // pas de trou d'apparition, ni de délai avant d'être ciblable
+    egg.noXp = true;
+    egg.noRecruit = true;
+    this.sim.aliens.push(egg);
+  }
+
+  /** `count` aliens enragés (niveau 1 : plus rapides, attaquent plus vite) qui surgissent sur place en cercle autour de (x, y) : araignées des boules du Giant Crab. */
+  spawnEnragedRing(type: AlienId, x: number, y: number, count: number): void {
+    const start = this.sim.rng.range(0, Math.PI * 2);
+    for (let i = 0; i < count; i++) {
+      const ang = start + (i / count) * Math.PI * 2;
+      const p = { x: x + Math.cos(ang) * 32, y: y + Math.sin(ang) * 22, radius: ALIENS[type].radius };
+      this.sim.arena.constrain(p);
+      const before = this.sim.aliens.length;
+      this.spawnAt(type, p.x, p.y, 1, false, true);
+      if (this.sim.aliens.length > before) this.sim.aliens[this.sim.aliens.length - 1].enraged = 1;
+    }
+  }
+
   /**
    * Gèle le soldat `s` (`FREEZE.hp` PV de gel) : il ne bouge plus, ne tire plus et sort du contrôle de foule, mais reste attaquable par
    * les aliens ; les tirs alliés le dégèlent (`Sim.chipIce`). Pas d'alien « glaçon » : c'est un état du soldat, dessiné sur sa vue.
    */
   freezeSoldier(s: SoldierState): void {
+    if (this.sim.ending) return; // séquence de fin : plus personne ne gèle
     s.frozen = FREEZE.hp;
     s.iceInvuln = FREEZE.invuln; // le temps de voir la glace se former : elle n'est pas brisée dans la même rafale
     s.vx = s.vy = s.kx = s.ky = 0;
@@ -283,6 +316,12 @@ export class Horde {
       if (!a.alive) continue;
       const def = a.def;
 
+      // Œuf de boss : immobile et inoffensif, il attend d'être détruit
+      if (def.egg) {
+        a.vx = a.vy = a.kx = a.ky = 0;
+        continue;
+      }
+
       // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
       if (def.shield && a.maxShield > 0) {
         a.shieldT += dt;
@@ -318,7 +357,7 @@ export class Horde {
       gx /= gd;
       gy /= gd;
 
-      let speed = def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc;
+      let speed = def.speed * this.sim.stasisAt(a.x, a.y) * a.esc;
       if (def.burrow && a.lurkPhase === 4) {
         // Scarab ressorti : fonce tout droit vers le point anticipé (direction verrouillée), sans s'arrêter au contact
         gx = a.rushDx;
@@ -331,7 +370,7 @@ export class Horde {
         gy = this.steerV.y;
       }
       if (def.dash && a.target && gd < def.dash.range) speed *= def.dash.speedMul;
-      const power = (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
+      const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc; // zombie : bonus de dégâts (config) ; escalade : +10 % par boss tué
       a.age += dt;
       if (def.boss) {
         const level = Math.floor(a.age / DIFFICULTY.bossEnrageEvery); // un boss qui traîne s'enrage toutes les `every` s, sans fin
@@ -340,9 +379,9 @@ export class Horde {
           this.sim.events.push({ t: 'bossEnrage', id: a.id, alien: def.id, level });
         }
       }
-      if (a.revived) speed *= DIFFICULTY.zombieSpeedMul; // enragé : plus rapide, attaque plus vite
+      if (a.revived) speed *= zombieStats().speedMul; // enragé : plus rapide, attaque plus vite
       else if (a.enraged) speed *= 1 + DIFFICULTY.bossEnrageSpeed * a.enraged;
-      const rate = (a.revived ? DIFFICULTY.zombieAttackMul : 1 + DIFFICULTY.bossEnrageAttack * a.enraged) * a.esc; // cadence d'attaque (cooldowns écoulés plus vite)
+      const rate = (a.revived ? zombieStats().attackMul : 1 + DIFFICULTY.bossEnrageAttack * a.enraged) * a.esc; // cadence d'attaque (cooldowns écoulés plus vite)
       const cdRate = this.cdRate(a); // capacités spéciales (slam, saut, charge) : cooldown réduit
       let contactOverride: number | undefined;
       /** Bulle qui emporte son prisonnier à l'écart de la squad (vitesse imposée, remplace le déplacement normal). */
@@ -447,6 +486,13 @@ export class Horde {
         }
       }
 
+      // Couronne de pics (Giant Crab) : immobile pendant le télégraphe et la poussée des pics
+      if (def.spikeRing && a.lurkPhase !== 0 && this.updateSpikeRing(a, dt)) {
+        a.vx = a.vy = a.kx = a.ky = 0;
+        if (a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt); // la récupération du saut continue pendant les pics
+        continue;
+      }
+
       // Saut écrasant : préparation (télégraphe), vol jusqu'au point d'impact, écrasement, récupération. Rien d'autre pendant la séquence.
       if (def.leap) {
         const L = def.leap;
@@ -461,7 +507,10 @@ export class Horde {
             a.x = a.leapFromX + (a.leapX - a.leapFromX) * k;
             a.y = a.leapFromY + (a.leapY - a.leapFromY) * k;
           }
-          if (before < land && elapsed >= land) this.leapImpact(a);
+          if (before < land && elapsed >= land) {
+            this.leapImpact(a);
+            if (def.spikeRing) this.startSpikeRing(a); // à la réception : la couronne de pics se prépare
+          }
           a.vx = a.vy = a.kx = a.ky = 0;
           continue;
         }
@@ -556,8 +605,10 @@ export class Horde {
       // Tireur en cloche : lance dès que la cible est à portée et se tient à distance au lieu de foncer dessus
       if (def.lob) {
         a.lobCd -= dt * rate;
-        if (a.lobCd <= 0 && a.target && gd < def.lob.range) {
-          this.sim.combat.throwBlob(a, a.target);
+        // cible « centre » (Giant Crab) : pas de soldat visé, on lance sur le soldat le plus proche du centre de la squad (il en porte la vitesse : tir devant la squad)
+        const lobTarget = a.target ?? this.centerSoldier(a);
+        if (a.lobCd <= 0 && lobTarget && gd < def.lob.range) {
+          this.sim.combat.throwBlob(a, lobTarget);
           a.lobCd = def.lob.cooldown * rng.range(0.85, 1.2);
         }
       }
@@ -645,7 +696,7 @@ export class Horde {
           this.cleave(a, def.damage * power);
           a.attackCd = def.attackCooldown;
         } else if (a.attackCd <= 0) {
-          if (def.oneShot) this.sim.damageSoldier(s, s.hp + s.shield + 1, null, false, false); // un coup = un mort, quelle que soit la difficulté
+          if (def.oneShot) this.sim.damageSoldier(s, s.hp + s.shield + 1, null, false); // un coup = un mort
           else this.sim.damageSoldier(s, def.damage * power);
           a.attackCd = def.attackCooldown;
         }
@@ -670,7 +721,7 @@ export class Horde {
       if (!sq) return;
       if (a.sinkT <= 0) {
         // pas encore en train de s'enterrer : assez loin depuis assez longtemps ?
-        if (!a.alive || a.def.boss || a.def.projectile || a.captive || a.castT > 0 || a.lurkPhase > 0 || Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RELOCATE.far) {
+        if (!a.alive || a.def.boss || a.def.egg || a.def.projectile || a.captive || a.castT > 0 || a.lurkPhase > 0 || Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RELOCATE.far) {
           a.farT = 0;
           continue;
         }
@@ -815,6 +866,71 @@ export class Horde {
     return null;
   }
 
+  /** Début de la couronne de pics (`def.spikeRing`) : télégraphe `aim` s, angle de départ tiré au hasard. */
+  private startSpikeRing(a: AlienState): void {
+    const R = a.def.spikeRing!;
+    a.spikeAng = this.sim.rng.next() * ((Math.PI * 2) / R.rays);
+    a.lurkPhase = 3;
+    a.lurkT = R.aim;
+  }
+
+  /**
+   * Couronne de pics (`def.spikeRing`), lancée par `startSpikeRing` à la réception d'un saut. Phases (`lurkPhase`, envoyées au client) : 0 repos,
+   * 3 télégraphe (`aim` s), 4 poussée des pics (`sweep` s). Renvoie vrai tant qu'elle occupe l'alien.
+   */
+  private updateSpikeRing(a: AlienState, dt: number): boolean {
+    const R = a.def.spikeRing!;
+    const { soldierHash } = this.sim;
+    if (a.lurkPhase === 3) {
+      a.spikeAng += (R.turn / R.aim) * dt; // le télégraphe tourne autour du crabe, puis les pics sont lâchés dans la direction atteinte
+      if ((a.lurkT -= dt) <= 0) {
+        a.lurkPhase = 4;
+        a.lurkT = R.sweep;
+      }
+      return true;
+    }
+    // 4 : les pics s'étendent, chaque soldat est blessé une fois quand un front passe sur lui
+    const prevF = a.lurkT >= R.sweep ? -30 : (1 - a.lurkT / R.sweep) * R.length;
+    a.lurkT -= dt;
+    const curF = (1 - Math.max(0, a.lurkT) / R.sweep) * R.length;
+    const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc;
+    for (const s of soldierHash.query(a.x, a.y, R.length + 40, this.scratchS)) {
+      if (!s.alive) continue;
+      const dx = s.x - a.x;
+      const dy = s.y - a.y;
+      for (let i = 0; i < R.rays; i++) {
+        const ang = a.spikeAng + (i * Math.PI * 2) / R.rays;
+        const cos = Math.cos(ang);
+        const sin = Math.sin(ang);
+        const along = dx * cos + dy * sin;
+        const across = Math.abs(-dx * sin + dy * cos);
+        if (along > prevF && along <= curF && across <= R.width / 2 + s.radius * 0.6) {
+          this.sim.damageSoldier(s, R.damage * power);
+          break; // une seule fois par passage de front
+        }
+      }
+    }
+    if (a.lurkT <= 0) {
+      a.lurkPhase = 0;
+    }
+    return true;
+  }
+
+  /** Autre lurker (enterré, qui s'enterre ou qui ressort) dont la hitbox, plus une marge, recouvre l'endroit où `a` voudrait s'enterrer ; le plus proche, sinon null. */
+  private lurkerInTheWay(a: AlienState, spacing: number): AlienState | null {
+    let best: AlienState | null = null;
+    let bestD = Infinity;
+    for (const o of this.sim.aliens) {
+      if (o === a || !o.alive || !o.def.lurk || o.lurkPhase === 0) continue;
+      const d = Math.hypot(o.x - a.x, o.y - a.y);
+      if (d < a.radius + o.radius + spacing && d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
   /**
    * Lurker : en route vers le point où la squad SERA, s'enterre, attend qu'elle passe à portée, vise puis lance une ligne de pics
    * qui s'étend progressivement (chaque soldat est blessé une fois quand le front passe sur lui).
@@ -840,15 +956,31 @@ export class Horde {
         const py = sq.center.y + (n ? vy / n : 0) * L.lead;
         const d = Math.hypot(px - a.x, py - a.y) || 1;
         const dSquad = Math.hypot(sq.center.x - a.x, sq.center.y - a.y);
-        if (d < L.digRange || dSquad < L.trigger * 0.7) {
+        const blocker = this.lurkerInTheWay(a, a.lurkBlockT > LURKER_PATIENCE ? LURKER_MIN_SPACING : LURKER_SPACING); // un autre lurker enterré (ou qui s'enterre / ressort) à cet endroit : on ne s'enterre pas dessus
+        if (blocker) a.lurkBlockT += dt;
+        if (!blocker && (d < L.digRange || dSquad < L.trigger * 0.7)) {
+          a.lurkBlockT = 0;
           a.lurkPhase = 1;
           a.lurkT = L.digTime;
           a.vx = a.vy = 0;
           break;
         }
-        const speed = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y);
-        a.vx = damp(a.vx, ((px - a.x) / d) * speed, 8, dt);
-        a.vy = damp(a.vy, ((py - a.y) / d) * speed, 8, dt);
+        const speed = a.def.speed * this.sim.stasisAt(a.x, a.y);
+        let tx = (px - a.x) / d;
+        let ty = (py - a.y) / d;
+        if (blocker) {
+          // s'écarte de la hitbox du lurker enterré (poussée dominante) tout en gardant le cap sur la squad, puis s'enterrera ailleurs
+          const bx = a.x - blocker.x;
+          const by = a.y - blocker.y;
+          const bd = Math.hypot(bx, by) || 1;
+          tx += (bx / bd) * 0.9; // poussée plus faible que le cap sur la squad : il glisse sur le côté sans s'éloigner
+          ty += (by / bd) * 0.9;
+          const tl = Math.hypot(tx, ty) || 1;
+          tx /= tl;
+          ty /= tl;
+        }
+        a.vx = damp(a.vx, tx * speed, 8, dt);
+        a.vy = damp(a.vy, ty * speed, 8, dt);
         this.steerV.x = a.vx;
         this.steerV.y = a.vy;
         arena.steer(a.x, a.y, a.radius, this.steerV);
@@ -898,7 +1030,7 @@ export class Horde {
         const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
         const cos = Math.cos(a.spikeAng);
         const sin = Math.sin(a.spikeAng);
-        const power = (a.revived ? DIFFICULTY.zombieDmgMul : 1) * a.esc;
+        const power = (a.revived ? zombieStats().dmgMul : 1) * a.esc;
         for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
           if (!s.alive) continue;
           const dx = s.x - a.x;
@@ -991,7 +1123,7 @@ export class Horde {
       }
       case 3: {
         // ressort en avançant déjà vers le point anticipé (direction verrouillée)
-        const sp = a.def.speed * DIFFICULTY.alienSpeedMul * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + DIFFICULTY.bossEnrageSpeed * a.enraged);
+        const sp = a.def.speed * this.sim.stasisAt(a.x, a.y) * a.esc * (1 + DIFFICULTY.bossEnrageSpeed * a.enraged);
         a.vx = a.rushDx * sp;
         a.vy = a.rushDy * sp;
         a.x += a.vx * dt;
@@ -1165,7 +1297,7 @@ export class Horde {
     this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: L.radius });
     for (const s of this.sim.soldierHash.query(a.x, a.y, L.radius + 30, this.scratchS)) {
       if (!s.alive || Math.hypot(s.x - a.x, s.y - a.y) > L.radius + s.radius) continue;
-      this.sim.damageSoldier(s, s.hp + s.maxHp, null, false, false); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
+      this.sim.damageSoldier(s, s.hp + s.maxHp, null, false); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
     }
   }
 
@@ -1244,6 +1376,23 @@ export class Horde {
       if (slam.stun) s.stun = Math.max(s.stun, slam.stun);
       this.sim.damageSoldier(s, slam.damage * a.esc);
     }
+  }
+
+  /** Soldat vivant le plus proche du centre de la squad la plus proche (cible de tir des aliens qui visent « le centre »). */
+  private centerSoldier(a: AlienState): SoldierState | null {
+    const sq = this.sim.nearestSquad(a.x, a.y);
+    if (!sq) return null;
+    let best: SoldierState | null = null;
+    let bestD = Infinity;
+    for (const s of sq.soldiers) {
+      if (!s.alive || s.capturedBy) continue;
+      const d = Math.hypot(s.x - sq.center.x, s.y - sq.center.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
   }
 
   /**

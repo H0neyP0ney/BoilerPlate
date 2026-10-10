@@ -140,6 +140,7 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |
 | `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |
 | `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty_<id>.png` | slots des cartes |
+| `slice-egg.mjs` | œuf des boss et son socle (nid) : sépare `art-src/egg_socle.png` en deux images réduites de moitié | `aliens/egg.png` (`alien_boss_egg`), `aliens/egg_socle.png` (`alien_boss_egg_socle`, posé devant l'œuf par `AlienView`) |
 | `slice-levelup-title.mjs`, `slice-reroll-button.mjs`, `slice-star-particle.mjs`, `slice-rewarded-icon.mjs` | titre, bouton Reroll, étoile (`fx/star.png`), icône rewarded | `LevelUpScene`, `Button` du moteur |
 | `lighten-crit-digits.mjs [part]` | éclaircit le jaune des chiffres de critique (originaux sauvegardés dans `art-src/crit-original/`) | `Fx.crit` |
 

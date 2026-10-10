@@ -272,6 +272,9 @@ export class SoldierView {
 /** Silhouettes fantômes de la charge (chargeur, rhinocéros) : intervalle (s), durée d'effacement (s), opacité de départ, teinte. */
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
+/** Décalage vertical (px) du socle de l'œuf par rapport au point au sol de l'œuf : le nid, dessiné devant, recouvre le bas de l'œuf. */
+const EGG_SOCLE_DY = 2;
+
 export class AlienView {
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
   private attackStarted = false;
@@ -292,6 +295,8 @@ export class AlienView {
   private readonly id: string;
   private readonly animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
+  /** Œuf de boss : socle (nid) posé devant son bas. */
+  private readonly socle?: Phaser.GameObjects.Sprite;
 
   /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -316,6 +321,7 @@ export class AlienView {
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);
+    if (state.def.egg) this.socle = sprites.add(scene, 'alien_boss_egg_socle', state.x, state.y);
   }
 
   /** Touché : flash de `duration` s, sauf s'il est déjà en cours ou en repos (le flash n'est jamais prolongé : sous un tir continu l'unité clignote). */
@@ -403,7 +409,14 @@ export class AlienView {
     // Squash / lévitation procéduraux seulement sans planche animée.
     const t = time * 7 + this.phase;
     const squash = this.animated || a.def.floats ? 0 : Math.sin(t) * 0.06;
-    const lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
+    let lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
+    // saut écrasant : pendant le vol, le sprite monte en arc (l'ombre et la position restent au sol)
+    const L = a.def.leap;
+    if (L?.height && a.leapT > 0) {
+      const total = L.windup + L.flight + L.recover;
+      const k = (total - (a.leapT + (1 - alpha) / TICK_RATE) - L.windup) / L.flight;
+      if (k > 0 && k < 1) lift -= Math.sin(Math.PI * k) * L.height;
+    }
     const wind = a.slamWind > 0 ? 1 - a.slamWind * 1.2 : 0;
     if (this.animated) {
       // attaque (slam, charge, saut) : la séquence « attack » est lancée UNE fois puis reste sur sa dernière frame jusqu'à la fin de l'action
@@ -437,6 +450,10 @@ export class AlienView {
     }
 
     this.body.setVisible(!hidden);
+    if (this.socle) {
+      sprites.place(this.socle, 'alien_boss_egg_socle');
+      this.socle.setPosition(this.rx, this.ry + EGG_SOCLE_DY).setDepth(DEPTH.actors + this.ry + 0.5).setVisible(!hidden); // DEVANT l'œuf : le nid entoure son bas
+    }
     // enfouissement : `show` = part du sprite au-dessus du sol, en partant du haut (BURIED). Lurker : s'enfonce (1) jusqu'à n'en laisser
     // dépasser que le haut, semi-enterré (2-4), ressort (5). Scarab : s'enfonce (1), totalement enterré (2), ressort (3). Recyclage : s'enfonce.
     let show = 1;
@@ -495,6 +512,7 @@ export class AlienView {
 
   destroy(): void {
     this.body.destroy();
+    this.socle?.destroy();
     this.zombieFx?.destroy();
   }
 }

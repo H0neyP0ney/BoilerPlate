@@ -716,7 +716,7 @@ export class WorldView {
         const h = 4 * LOB_HEIGHT * k * (1 - k);
         this.lobShadows.push({ x, y, h });
         // les boules ennemies passent au-dessus des acteurs (le crabe géant les cachait) ; le blob vert du crabe est plus gros
-        const big = p.texture === 'fx_blob_green' ? 1.9 : 1;
+        const big = p.texture === 'fx_blob_green' || p.texture === 'fx_blob_red' ? 1.9 : 1;
         let lx = x;
         let ly = y;
         const lsh = this.muzzleShift.get(p); // boule d'alien : elle part de la bouche du canon dessinée, puis rejoint sa trajectoire
@@ -1051,7 +1051,7 @@ export class WorldView {
             g.lineBetween(fx - Math.cos(t) * s, fy - Math.sin(t) * s, fx + Math.cos(t) * s, fy + Math.sin(t) * s);
           }
         }
-        g.lineStyle(2, 0xe6f7ff, 0.7 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
+        g.lineStyle(3, 0xff3a3a, 0.9 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3); // contour rouge (danger : y entrer = gelé) au lieu de blanc
         continue;
       }
       g.fillStyle(0x6a2aa8, 0.32 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);
@@ -1082,6 +1082,24 @@ export class WorldView {
         g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(L.length, hw), true);
         g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(L.length * k, hw * k), true);
         g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
+      }
+    }
+    // Giant Crab : couronne de pics, les lignes rouges de chaque direction se remplissent pendant le télégraphe
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const R = a.def.spikeRing;
+      if (!R || a.lurkPhase !== 3 || !this.onScreen(a.x, a.y, R.length + 60)) continue;
+      const k = 1 - a.lurkT / R.aim;
+      const hw = R.width / 2;
+      for (let i = 0; i < R.rays; i++) {
+        const ang = a.spikeAng + (i * Math.PI * 2) / R.rays;
+        const cos = Math.cos(ang);
+        const sin = Math.sin(ang);
+        const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
+          [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(a.x + cos * u - sin * w, a.y + sin * u + cos * w));
+        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(R.length, hw), true);
+        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(R.length * k, hw * k), true);
+        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(R.length, hw), true);
       }
     }
     // Scarab : trou sous lui qui se creuse puis se rebouche, et trou d'arrivée DERRIÈRE la squad qui se forme (zone rouge qui se remplit) avant sa sortie
@@ -1296,31 +1314,38 @@ export class WorldView {
     const step = 28;
     for (const v of this.aliens.values()) {
       const a = v.state;
-      const L = a.def.lurk;
+      const L = a.def.lurk ?? a.def.spikeRing;
       if (!L || a.lurkPhase !== 4) continue;
       if (!this.onScreen(a.x, a.y, L.length + 80)) continue; // hors écran : rien à dessiner
       const p = 1 - a.lurkT / L.sweep;
       const front = p * L.length;
-      const cos = Math.cos(a.spikeAng);
-      const sin = Math.sin(a.spikeAng);
       const fade = p > 0.75 ? 1 - (p - 0.75) / 0.25 * 0.6 : 1;
-      const bin = Math.round((((a.spikeAng % Math.PI) + Math.PI) % Math.PI) / (Math.PI / SPIKE_BINS)) % SPIKE_BINS; // direction de la rangée, à un demi-tour près
-      const key = `fx_spike3_${bin}`;
-      for (let d = 18, col = 0; d <= front; d += step, col++) {
-        const rise = Math.min(1, (front - d) / 70 + 0.25); // la pointe sort du sol quand le front passe
-        const off = col % 2 ? 4 : -4; // quinconce d'une colonne à l'autre
-        let img = this.spikeSprites[n];
-        if (!img) {
-          img = this.scene.add.image(0, 0, key).setOrigin(0.5, SPIKE3.baseY / SPIKE3.h).setDepth(DEPTH.fx);
-          this.spikeSprites[n] = img;
+      const rays = a.def.spikeRing ? a.def.spikeRing.rays : 1;
+      for (let i = 0; i < rays; i++) {
+        const ang = a.spikeAng + (i * Math.PI * 2) / rays;
+        const cos = Math.cos(ang);
+        const sin = Math.sin(ang);
+        const bin = Math.round((((ang % Math.PI) + Math.PI) % Math.PI) / (Math.PI / SPIKE_BINS)) % SPIKE_BINS; // direction de la rangée, à un demi-tour près
+        const key = `fx_spike3_${bin}`;
+        for (let d = 18, col = 0; d <= front; d += step, col++) {
+          const rise = Math.min(1, (front - d) / 70 + 0.25); // la pointe sort du sol quand le front passe
+          const off = col % 2 ? 4 : -4; // quinconce d'une colonne à l'autre
+          let img = this.spikeSprites[n];
+          if (!img) {
+            img = this.scene.add.image(0, 0, key).setOrigin(0.5, SPIKE3.baseY / SPIKE3.h);
+            this.spikeSprites[n] = img;
+          }
+          const px = a.x + cos * d - sin * off;
+          const py = a.y + sin * d + cos * off;
+          img
+            .setTexture(key)
+            .setVisible(true)
+            .setAlpha(fade)
+            .setScale(1, rise)
+            .setPosition(px, py)
+            .setDepth(DEPTH.actors + py); // triés en profondeur avec les unités (par la base de la pointe) : un soldat devant une pointe la cache, derrière elle, c'est la pointe qui passe devant
+          n++;
         }
-        img
-          .setTexture(key)
-          .setVisible(true)
-          .setAlpha(fade)
-          .setScale(1, rise)
-          .setPosition(a.x + cos * d - sin * off, a.y + sin * d + cos * off);
-        n++;
       }
     }
     for (let i = n; i < this.spikeSprites.length; i++) this.spikeSprites[i].setVisible(false);

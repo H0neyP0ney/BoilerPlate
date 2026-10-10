@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, DIFFICULTY, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
+import { CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
@@ -164,8 +164,6 @@ export class Mirror {
     }
     prune(this.orbs, seenOrbs);
 
-    sim.chests.items.length = 0; // progression en part de `chestTime` : celle de l'hôte peut différer du réglage local
-    for (const c of snap.chests) sim.chests.items.push({ id: c.id, x: c.x, y: c.y, progress: c.progress * DIFFICULTY.chestTime });
     const seenUpOrbs = new Set<number>();
     sim.upgradeOrbs.items.length = 0;
     for (const o of snap.upgradeOrbs) {
@@ -227,7 +225,7 @@ export class Mirror {
         // la squad locale suit l'ancre prédite : pas d'extrapolation à la vitesse reçue (elle est déjà dans le décalage)
         sq.anchor.x = this.predictor.anchor.x;
         sq.anchor.y = this.predictor.anchor.y;
-        for (const s of sq.soldiers) this.followPredicted(s);
+        for (const s of sq.soldiers) this.followPredicted(s, dt);
       } else {
         for (const s of sq.soldiers) this.follow(s, dt);
       }
@@ -240,6 +238,7 @@ export class Mirror {
       if (a.rushWind > 0) a.rushWind = Math.max(0, a.rushWind - dt); // négatif après la charge : on n'y touche pas
       if (a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt);
       if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
+      if (a.lurkPhase === 3 && a.def.spikeRing) a.spikeAng += (a.def.spikeRing.turn / a.def.spikeRing.aim) * dt; // télégraphe des pics du crabe : il tourne, la rotation continue entre deux snapshots
       if (a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
       if (a.sinkT > 0) a.sinkT = Math.max(1e-3, a.sinkT - dt);
     }
@@ -333,6 +332,7 @@ export class Mirror {
         frozen: 0,
         iceInvuln: 0,
         stun: 0,
+        poison: 0,
         grabbed: 0,
       };
       this.soldiers.set(u.id, s);
@@ -423,6 +423,7 @@ export class Mirror {
         revives: 0,
         reviveLock: 0,
         swarmCd: 0,
+        lurkBlockT: 0,
         swarmT: 0,
         swarmAcc: 0,
         lurkPhase: 0,
@@ -589,13 +590,24 @@ export class Mirror {
     u.px = u.x;
     u.py = u.y;
     if (!g) return;
-    g.x += u.vx * dt;
-    g.y += u.vy * dt;
+    // un soldat gelé reste statique chez l'hôte : pas d'extrapolation à sa dernière vitesse
+    if (!(u.kind === 'soldier' && u.frozen > 0)) {
+      g.x += u.vx * dt;
+      g.y += u.vy * dt;
+    }
     this.approach(u, g);
   }
 
-  /** Soldat de la squad locale : but = position hôte du dernier snapshot + déplacement prédit de l'ancre depuis. */
-  private followPredicted(u: Unit): void {
+  /**
+   * Soldat de la squad locale : but = position hôte du dernier snapshot + déplacement prédit de l'ancre depuis.
+   * Un soldat gelé ou avalé par une bulle ne suit pas l'ancre (il est hors du mouvement de foule) : il rejoint seulement sa position hôte
+   * (la bulle, elle, bouge : extrapolation à la vitesse reçue).
+   */
+  private followPredicted(u: Unit, dt: number): void {
+    if (u.kind === 'soldier' && (u.frozen > 0 || u.capturedBy)) {
+      this.follow(u, dt);
+      return;
+    }
     const g = this.goals.get(u);
     u.px = u.x;
     u.py = u.y;

@@ -40,36 +40,40 @@ export interface SoldierClassDef {
   color: number;
 }
 
+/**
+ * Stats de base : les anciens multiplicateurs globaux de squad (dégâts ×1,2, cadence ×1,15, PV ×0,91 ; vitesse ×1,08 dans `CROWD.speed`, recrues ×1,3 dans
+ * `recruitChance` des aliens) sont intégrés ici depuis le 09/10 ; les curseurs correspondants du panneau Difficulté ont été supprimés.
+ */
 export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
   trooper: {
     id: 'trooper',
-    hp: 100,
+    hp: 91,
     radius: 14,
     mass: 3,
     color: 0x3d7fe0,
     // Blaster bleu : tir quasi rectiligne vers la cible (très faible dispersion).
-    weapon: { kind: 'bullet', range: 290, cooldown: 0.32, damage: 10, projectileSpeed: 760, spread: 0.015, texture: 'fx_blaster_blue' },
+    weapon: { kind: 'bullet', range: 290, cooldown: 0.2783, damage: 12, projectileSpeed: 760, spread: 0.015, texture: 'fx_blaster_blue' },
   },
   medic: {
     id: 'medic',
-    hp: 80,
+    hp: 72.8,
     radius: 14,
     mass: 3,
     color: 0xf2f2f2,
-    weapon: { kind: 'bullet', range: 240, cooldown: 0.7, damage: 6, projectileSpeed: 620, spread: 0.05, texture: 'fx_bolt_green' },
+    weapon: { kind: 'bullet', range: 240, cooldown: 0.6087, damage: 7.2, projectileSpeed: 620, spread: 0.05, texture: 'fx_bolt_green' },
     heal: { radius: 230, perSecond: 7 },
   },
   flammer: {
     id: 'flammer',
-    hp: 95,
+    hp: 86.45,
     radius: 14,
     mass: 3,
     color: 0xe0413d,
     weapon: {
       kind: 'flame',
       range: 160,
-      cooldown: 0.06,
-      damage: 3.2,
+      cooldown: 0.0522,
+      damage: 3.84,
       projectileSpeed: 420,
       spread: 0.28,
       pierce: Infinity,
@@ -80,23 +84,23 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
   },
   sniper: {
     id: 'sniper',
-    hp: 70,
+    hp: 63.7,
     radius: 14,
     mass: 3,
     color: 0x5aa84a,
-    weapon: { kind: 'beam', range: 520, cooldown: 1.3, damage: 55, texture: 'fx_beam' },
+    weapon: { kind: 'beam', range: 520, cooldown: 1.1304, damage: 66, texture: 'fx_beam' },
   },
   bruiser: {
     id: 'bruiser',
-    hp: 230,
+    hp: 209.3,
     radius: 18,
     mass: 8,
     color: 0x8a96a8,
     weapon: {
       kind: 'bullet',
       range: 200,
-      cooldown: 0.95,
-      damage: 9,
+      cooldown: 0.8261,
+      damage: 10.8,
       projectileSpeed: 640,
       pellets: 4,
       spread: 0.4,
@@ -106,12 +110,12 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
   },
   bomber: {
     id: 'bomber',
-    hp: 85,
+    hp: 77.35,
     radius: 14,
     mass: 3,
     color: 0x9a5ad8,
     // Tir lent, en cloche : dégâts de zone (petit rayon) à l'atterrissage, pas de collision en vol.
-    weapon: { kind: 'grenade', range: 340, cooldown: 1.9, damage: 38, projectileSpeed: 300, aoe: 70, texture: 'fx_grenade' },
+    weapon: { kind: 'grenade', range: 340, cooldown: 1.6522, damage: 45.6, projectileSpeed: 300, aoe: 70, texture: 'fx_grenade' },
   },
 };
 

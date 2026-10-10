@@ -1,4 +1,3 @@
-import { DIFFICULTY } from '../config';
 
 /**
  * Paliers de dégâts : le tir du Gunner (blaster bleu) change de couleur quand le multiplicateur de dégâts de la squad (stat `damage`,
@@ -7,7 +6,7 @@ import { DIFFICULTY } from '../config';
  * des seuils doit être croissant. Les textures voyagent dans le snapshot comme n'importe quel projectile (liste `TEXTURES`).
  */
 export interface DamageTier {
-  /** Seuil, en multiple des dégâts de base de la squad (`DIFFICULTY.squadDamage`), à partir duquel ce palier s'applique. */
+  /** Seuil, en multiple des dégâts de base de la squad (1 = dégâts de la classe), à partir duquel ce palier s'applique. */
   min: number;
   texture: string;
   /** Traînée (RGB 0-255) et tête (RGB 0-255) du projectile. */
@@ -22,7 +21,7 @@ export const TIERED_TEXTURE = 'fx_blaster_blue';
 
 /**
  * bleu > vert > jaune > orangé > violet > rouge : un palier toutes les 2 prises de l'upgrade de dégâts (+15 % chacune, 10 prises max → ×2,5 :
- * 1, 1,3, 1,6, 1,9, 2,2, 2,5), seuils en multiples des dégâts de base de la squad (`DIFFICULTY.squadDamage`, réglable). Seuils légèrement sous la valeur exacte : le cumul de flottants (0,15 × 4…) ne doit pas faire rater un palier.
+ * 1, 1,3, 1,6, 1,9, 2,2, 2,5), seuils en multiples des dégâts de base de la squad. Seuils légèrement sous la valeur exacte : le cumul de flottants (0,15 × 4…) ne doit pas faire rater un palier.
  */
 export const DAMAGE_TIERS: DamageTier[] = [
   { min: 1, texture: 'fx_blaster_blue', glow: [60, 150, 255], head: [130, 205, 255], impact: 0x5ab4ff },
@@ -36,7 +35,7 @@ export const DAMAGE_TIERS: DamageTier[] = [
 /** Palier atteint pour ce multiplicateur de dégâts. */
 export function damageTier(mult: number): DamageTier {
   let tier = DAMAGE_TIERS[0];
-  for (const t of DAMAGE_TIERS) if (mult >= t.min * DIFFICULTY.squadDamage) tier = t;
+  for (const t of DAMAGE_TIERS) if (mult >= t.min) tier = t;
   return tier;
 }
 

@@ -1,12 +1,12 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
 import { BURIED, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
-import { ALIENS, type AlienId } from '../data/aliens';
+import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
-import { Chests, UpgradeOrbs } from './Chests';
+import { UpgradeOrbs } from './Chests';
 import { Combat } from './Combat';
 import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
@@ -81,6 +81,10 @@ export class Sim {
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
+  /** Séquence de fin (solo, boss final tombé) : plus de vagues, d'XP ni de dégâts aux soldats ; la vue pilote la squad vers la fusée (`beginEnding`). */
+  ending = false;
+  /** Soldats montés dans la fusée de fin : retirés sans mort (ni corps ni événement `soldierDied`). */
+  private readonly boarded = new Set<SoldierState>();
   /** Boss et mini-boss tués depuis le début de la partie (voir `escalation`). */
   bossKills = 0;
   readonly alienHash = new SpatialHash<AlienState>(64);
@@ -89,7 +93,6 @@ export class Sim {
   readonly combat: Combat;
   readonly recruits: Recruits;
   /** Coffres des boss tués et globes d'upgrade qui en sortent (réservés à leur joueur). */
-  readonly chests: Chests;
   readonly upgradeOrbs: UpgradeOrbs;
   readonly powerups: PowerUps;
   readonly xp: Xp;
@@ -98,11 +101,10 @@ export class Sim {
   readonly waves: WaveRunner;
   /** Onboarding en cours (null hors tutoriel) : tant qu'il est actif, la timeline de vagues est suspendue. */
   readonly tutorial: Tutorial | null;
-  alienHpMul = 1;
   /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
   private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number }[] = [];
@@ -115,7 +117,6 @@ export class Sim {
     this.horde = new Horde(this);
     this.combat = new Combat(this);
     this.recruits = new Recruits(this);
-    this.chests = new Chests(this);
     this.upgradeOrbs = new UpgradeOrbs(this);
     this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
@@ -139,12 +140,13 @@ export class Sim {
           // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
-          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * DIFFICULTY.alienCountMul * share)), SPAWN_DISTANCE);
+          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * share)), SPAWN_DISTANCE);
         }
       },
       this.rng,
       {
         bossAlive: () => this.aliens.some((a) => a.alive && !!a.def.boss),
+        bossId: () => this.aliens.find((a) => a.alive && !!a.def.boss)?.def.id ?? null,
         aliveCount: () => {
           let n = 0;
           for (const a of this.aliens) if (a.alive) n++;
@@ -170,11 +172,12 @@ export class Sim {
     this.deathSpawns.length = 0;
     this.combat.clear();
     this.recruits.clear();
-    this.chests.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
+    this.ending = false;
+    this.boarded.clear();
     this.bossKills = 0;
     this.choiceT = 0;
     this.choiceDelay = 0;
@@ -206,7 +209,6 @@ export class Sim {
     this.deathSpawns.length = 0;
     this.combat.clear();
     this.recruits.clear();
-    this.chests.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
     this.xp.clear();
@@ -217,7 +219,33 @@ export class Sim {
   }
 
   get xpEnabled(): boolean {
-    return this.config.xp === true;
+    return this.config.xp === true && !this.ending;
+  }
+
+  /** Début de la séquence de fin : le monde se calme (plus de vagues, d'XP ni de dégâts) le temps que la squad monte dans la fusée. */
+  beginEnding(): void {
+    this.ending = true;
+    this.choiceDelay = 0; // pas de choix d'upgrade en attente : la pause figerait la séquence sans écran pour la lever
+    this.choiceT = 0;
+    // soldats libres (les dégâts sont déjà ignorés : `damageSoldier`) : ceux qui étaient gelés (ou empoisonnés, étourdis) sont dégelés, plus personne ne peut l'être
+    for (const sq of this.squads) {
+      for (const s of sq.soldiers) {
+        if (s.frozen > 0) {
+          s.frozen = 0;
+          s.iceInvuln = 0;
+          this.events.push({ t: 'thaw', soldier: s.id, x: s.x, y: s.y });
+        }
+        s.poison = 0;
+        s.stun = 0;
+      }
+    }
+  }
+
+  /** Un soldat monte dans la fusée de fin : il disparaît sans mourir. */
+  boardSoldier(s: SoldierState): void {
+    if (!s.alive) return;
+    s.alive = false;
+    this.boarded.add(s);
   }
 
   // ---------- Progression : XP partagée (coop) et pause du choix d'upgrade ----------
@@ -417,13 +445,12 @@ export class Sim {
       return;
     }
 
-    if (!this.tutorial?.active) this.waves.update(dt); // onboarding : la timeline normale attend la fin du tutoriel
+    if (!this.tutorial?.active && !this.ending) this.waves.update(dt); // onboarding : la timeline normale attend la fin du tutoriel
     this.rebuildHashes();
     for (const sq of this.squads) sq.update(dt, inputs.get(sq.owner) ?? NO_INPUT);
     this.horde.update(dt);
     this.combat.update(dt);
     this.recruits.update(dt);
-    this.chests.update(dt);
     this.upgradeOrbs.update(dt);
     if (this.xpEnabled) this.xp.update(dt);
     this.updateCorpsesAndRocks(dt);
@@ -434,6 +461,7 @@ export class Sim {
     this.updatePuddles(dt);
     this.powerups.update(dt);
     this.updateShockwaves(dt);
+    this.updatePoison(dt);
     for (let i = this.fuses.length - 1; i >= 0; i--) {
       const f = this.fuses[i];
       f.t -= dt;
@@ -500,7 +528,7 @@ export class Sim {
   /** Ressuscite le slime de la flaque `c` avec `hpFrac` de ses PV (il ne pourra pas l'être une seconde fois). */
   reviveCorpse(c: Corpse, hpFrac: number): void {
     this.endCorpse(c, true);
-    for (let i = 0; i < Math.round(DIFFICULTY.zombieCopies); i++) {
+    for (let i = 0; i < Math.round(zombieStats().copies); i++) {
       const ang = this.rng.range(0, Math.PI * 2);
       const r = i === 0 ? 0 : this.rng.range(18, 45);
       this.horde.spawnAt(c.type, c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r, hpFrac, true);
@@ -594,7 +622,7 @@ export class Sim {
       const p = w.reach > 0 ? Math.min(1, w.t / w.reach) : 1;
       const front = w.r * (1 - (1 - p) ** 3);
       for (const a of this.aliens) {
-        if (!a.alive) continue;
+        if (!a.alive || a.def.egg) continue; // l'œuf d'un boss est scellé sur son socle : ni repoussé ni détruit par l'onde (level up, revive)
         let h = w.hit.get(a.id);
         if (!h) {
           if (w.t - dt > w.reach) continue; // front arrivé au bout : un alien apparu après n'est pas repoussé
@@ -748,18 +776,16 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
-  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid'): void {
-    this.blasts.push({ x, y, r, dmg, team, owner, knock, style });
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0): void {
+    this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison });
   }
 
   /**
-   * `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). Sans `attacker` (coup
-   * d'alien), × `DIFFICULTY.alienDamageMul` sauf si `scaled` = false (un coup = un mort : boss en mêlée, écrasement du saut).
+   * `force` : dégâts qui passent même sur un soldat protégé (digestion par une bulle : c'est la seule source qui l'atteint). 
    */
-  damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false, scaled = true): void {
-    if (!s.alive) return;
+  damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
+    if (!s.alive || (this.ending && !force)) return;
     if (!force && (s.invulnerable > 0 || s.capturedBy)) return; // avalé par une bulle : protégé (gelé : attaquable)
-    if (attacker === null && scaled) amount *= DIFFICULTY.alienDamageMul; // coup d'alien (`scaled` = false : un coup = un mort, intact)
     this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
     s.hp -= this.absorb(s, amount);
     if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
@@ -785,15 +811,16 @@ export class Sim {
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
+    if (a.def.egg) this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
     if (a.def.boss) {
-      // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul compte (escalade, bandeau) et laisse le coffre
+      // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul compte (escalade, bandeau) et laisse l'œuf
       const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
       this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss encore en vie est épargné
       if (last) {
         this.bossKills++; // escalade : les aliens suivants sont plus forts
         this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
-        if (a.def.boss.kind !== 'final') this.chests.drop(a.x, a.y); // coffre sur le cadavre (le boss final, lui, gagne la partie)
+        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre (le boss final, lui, gagne la partie)
       }
     }
     this.releaseCaptive(a);
@@ -836,7 +863,7 @@ export class Sim {
    */
   private wipeAliens(boss: AlienState, killer: PlayerId | null): void {
     for (const o of this.aliens) {
-      if (o === boss || !o.alive || o.def.boss) continue;
+      if (o === boss || !o.alive || o.def.boss || o.def.egg) continue; // un œuf d'un boss précédent survit au clear screen
       this.killAlien(o, killer, true); // clear screen : pas de portée à la mort
     }
   }
@@ -903,9 +930,10 @@ export class Sim {
       const hadSoldiers = sq.size > 0;
       const deadOfSquad = sq.removeDead();
       for (const s of deadOfSquad) {
+        if (this.boarded.delete(s)) continue;
         this.events.push({ t: 'soldierDied', id: s.id, x: s.x, y: s.y, cls: s.def.id, owner: s.owner });
       }
-      if (hadSoldiers && sq.size === 0) {
+      if (hadSoldiers && sq.size === 0 && !this.ending) {
         this.events.push({ t: 'squadWiped', owner: sq.owner });
         if (this.mode.reviveZones && this.config.online && !this.reviveZones.some((z) => z.owner === sq.owner)) {
           const last = deadOfSquad[deadOfSquad.length - 1];
@@ -915,7 +943,7 @@ export class Sim {
     }
   }
 
-  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number }): void {
+  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number; poison?: number }): void {
     if (!u.alive) return;
     const dx = u.x - b.x;
     const dy = u.y - b.y;
@@ -924,6 +952,18 @@ export class Sim {
     u.kx += ((dx / d) * b.knock) / u.mass;
     u.ky += ((dy / d) * b.knock) / u.mass;
     this.damage(u, b.dmg, b.owner);
+    if (b.poison && u.kind === 'soldier' && u.alive) u.poison = Math.max(u.poison, b.poison); // empoisonné (ou durée remise à plein)
+  }
+
+  /** Poison : les PV du soldat descendent linéairement vers 1 en `poison` s (il ne meurt jamais de poison ; un soin remonte la barre, la descente continue). */
+  private updatePoison(dt: number): void {
+    for (const sq of this.squads) {
+      for (const s of sq.soldiers) {
+        if (s.poison <= 0 || !s.alive) continue;
+        if (s.hp > 1) s.hp -= (s.hp - 1) * Math.min(1, dt / s.poison);
+        s.poison = Math.max(0, s.poison - dt);
+      }
+    }
   }
 
   // ---------- Revive ----------

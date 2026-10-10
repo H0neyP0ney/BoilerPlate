@@ -75,8 +75,9 @@ export class TimelineHud {
   private readonly label: Phaser.GameObjects.Text;
   private readonly time: Phaser.GameObjects.Text;
   private readonly ticks: Phaser.GameObjects.Image[] = [];
-  private icon?: Phaser.GameObjects.Sprite;
-  private iconType: AlienId | null = null;
+  /** Icônes du disque : celle du prochain boss, ou les deux des rhinos jumeaux côte à côte. */
+  private icons: Phaser.GameObjects.Sprite[] = [];
+  private iconKey = '';
   private labelShown = '';
   private ringStep = -1;
 
@@ -107,7 +108,7 @@ export class TimelineHud {
     this.ring.setVisible(on);
     this.label.setVisible(on);
     this.time.setVisible(on);
-    this.icon?.setVisible(on);
+    for (const i of this.icons) i.setVisible(on);
     if (!on) for (const tk of this.ticks) tk.setVisible(false);
   }
 
@@ -175,8 +176,8 @@ export class TimelineHud {
     this.arrow.setVisible(true).setScale(arrowK).setPosition(fillEnd + ART.arrowDx * u, y0 + ART.arrowTop * u);
 
     // disque : icône du prochain boss ; la jauge circulaire se remplit jusqu'à son arrivée
-    this.syncIcon(next.type, discX, discY, u);
-    this.icon?.setVisible(true);
+    this.syncIcons(next.types, discX, discY, u);
+    for (const i of this.icons) i.setVisible(true);
     this.ring.setVisible(showCountdown).setPosition(discX, discY).setScale(k);
     this.label.setVisible(showCountdown);
     this.time.setVisible(showCountdown);
@@ -234,22 +235,27 @@ export class TimelineHud {
     this.ringTex.refresh();
   }
 
-  /** Icône animée du prochain boss au centre du disque, recréée quand le boss change. */
-  private syncIcon(type: AlienId, x: number, y: number, u: number): void {
-    if (this.iconType !== type) {
-      this.icon?.destroy();
-      const id = `alien_${type}`;
-      const icon = sprites.add(this.scene, id, x, y);
-      sprites.play(icon, id, 'idle');
-      icon.setOrigin(0.5, 0.5).setDepth(5);
-      const tint = ALIENS[type].tint;
-      if (tint !== undefined) icon.setTint(tint);
-      this.icon = icon;
-      this.iconType = type;
-      this.iconBase = Math.max(icon.width, icon.height);
+  /** Icônes animées du prochain boss au centre du disque (recréées quand le boss change) ; plusieurs boss (rhinos jumeaux) : côte à côte, plus petits. */
+  private syncIcons(types: AlienId[], x: number, y: number, u: number): void {
+    const key = types.join(',');
+    if (this.iconKey !== key) {
+      for (const i of this.icons) i.destroy();
+      this.icons = types.map((type) => {
+        const id = `alien_${type}`;
+        const icon = sprites.add(this.scene, id, x, y);
+        sprites.play(icon, id, 'idle');
+        icon.setOrigin(0.5, 0.5).setDepth(5);
+        const tint = ALIENS[type].tint;
+        if (tint !== undefined) icon.setTint(tint);
+        return icon;
+      });
+      this.iconKey = key;
     }
-    this.icon!.setPosition(x, y).setScale((ART.disc.icon * u) / this.iconBase);
+    const n = this.icons.length;
+    const size = ART.disc.icon * u * (n > 1 ? 0.68 : 1); // chaque icône d'un duo est plus petite pour tenir dans le disque
+    this.icons.forEach((icon, i) => {
+      const dx = n > 1 ? (i - (n - 1) / 2) * ART.disc.icon * u * 0.34 : 0;
+      icon.setPosition(x + dx, y + (n > 1 ? ART.disc.icon * u * 0.04 : 0)).setScale(size / Math.max(icon.width, icon.height));
+    });
   }
-
-  private iconBase = 1;
 }

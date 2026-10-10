@@ -16,6 +16,7 @@ try {
   const { LoopbackHub } = await vite.ssrLoadModule('/src/net/LoopbackTransport.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
+  const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { UPGRADE_IDS } = await vite.ssrLoadModule('/src/data/progression.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
   const { INTERP_DELAY_MS } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
@@ -109,7 +110,7 @@ try {
   hs.aliens.length = 0;
   hs.waves.trigger(9, 1);
   const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
-  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(900 * DIFFICULTY.bossHpMul * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (et × bossHpMul)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
+  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
   hs.waves.trigger(1, 3); // « Petit groupe » (slime ×4 × 1,15) : chaque squad vivante reçoit la vague
@@ -322,16 +323,16 @@ try {
     check(!!k && Math.abs(k.x - 1234.5) < 0.2 && Math.abs(k.y - 987.25) < 0.2 && k.r === 55 && Math.abs(k.t - 1.1) < 0.02 && Math.abs(k.dur - 1.1) < 0.02, 'stalactite du Scarab : zone et compte à rebours transmis au client', k ? `(${k.x}, ${k.y}) r ${k.r}, ${k.t.toFixed(2)} s` : 'absente');
     hs.stalactites.length = 0;
   }
-  { // coffres de boss et globes d'upgrade (v44) : position, progression, propriétaire et chute transmis au client
-    const c = hs.chests.drop(1500.25, 800.5);
-    c.progress = DIFFICULTY.chestTime / 2;
+  { // œuf de boss (alien `boss_egg`, v51) et globes d'upgrade (v44) : type, PV exacts, propriétaire et chute transmis au client
+    hs.horde.spawnEgg(1500.25, 800.5);
+    const egg = hs.aliens.find((x) => x.def.egg);
     const o = hs.upgradeOrbs.drop(a.owner, 'damage', 1500.25, 800.5, 0.7);
     const snap = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
-    const kc = snap.chests.at(-1);
+    const ke = snap.aliens.find((x) => x.id === egg.id);
     const ko = snap.upgradeOrbs.at(-1);
-    check(!!kc && Math.abs(kc.x - c.x) < 0.2 && Math.abs(kc.y - c.y) < 0.2 && Math.abs(kc.progress - 0.5) < 0.01, 'coffre de boss : position et progression transmises au client', kc ? `${kc.progress.toFixed(2)}` : 'absent');
+    check(!!ke && ke.type === 'boss_egg' && Math.round(ke.hp) === ALIENS.boss_egg.hp && Math.round(ke.maxHp) === ALIENS.boss_egg.hp && Math.abs(ke.x - egg.x) < 0.2 && Math.abs(ke.y - egg.y) < 0.2, 'œuf de boss : type, PV et position transmis au client', ke ? `${ke.type}, ${ke.hp} PV` : 'absent');
     check(!!ko && ko.owner === a.owner && ko.upgrade === UPGRADE_IDS.indexOf('damage') && Math.abs(ko.fall - o.hop.t) < 0.02 && Math.abs(ko.x - o.x) < 0.2, 'globe d’upgrade : propriétaire, position et chute transmis au client', ko ? `${ko.owner}, chute ${ko.fall.toFixed(2)} s` : 'absent');
-    hs.chests.clear();
+    egg.alive = false;
     hs.upgradeOrbs.clear();
   }
   hs.aliens.length = 0;
@@ -397,7 +398,7 @@ try {
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
     const { DIFFICULTY: D } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
-    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m * D.squadDamage).texture.replace('fx_blaster_', '')).join(' > ');
+    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
     check(names === 'blue > green > yellow > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);

@@ -26,6 +26,7 @@ import { saveToCode } from '../dev/devSave';
 import type { Squad } from '../sim/Squad';
 import type { SimEvent } from '../sim/types';
 import { scoreRows } from '../view/Scoreboard';
+import { Ending } from '../view/Ending';
 import { WorldView } from '../view/WorldView';
 import type { GameOverData } from './GameOverScene';
 
@@ -54,6 +55,8 @@ export class GameScene extends Phaser.Scene {
   /** Partie qui a commencé par le tutoriel : la première mort offre un revive gratuit, et son onde de choc détruit les aliens (aide à la première expérience). */
   private freeRevive = false;
   private ended = false;
+  /** Séquence de fin du solo (boss final tombé) : fusée, soldats qui montent dedans, texte de victoire, fondu au noir, nouvelle partie. */
+  private ending?: Ending;
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
   private upgradeOpen = false;
   private recorder: RunRecorder | null = null;
@@ -81,6 +84,7 @@ export class GameScene extends Phaser.Scene {
     this.revived = false;
     this.freeRevive = false;
     this.ended = false;
+    this.ending = undefined;
     this.upgradeOpen = false;
     this.moveLocked = false;
     this.shownOffer = '';
@@ -102,7 +106,8 @@ export class GameScene extends Phaser.Scene {
       const mode = test ? alienTestMode() : this.pickMode();
       const botsParam = Number(poki.getURLParam('bots'));
       const jumpParam = poki.getURLParam('jump');
-      const jump = jumpParam && jumpParam in JUMPS ? (jumpParam as JumpId) : null; // ?jump=gling|rhino|scarab|twins|crab : partie avancée, build déployé compris
+      const endTest = !!poki.getURLParam('endtest'); // ?endtest=1 : test de la séquence de fin (équivalent de ?jump=crab, crabe aux PV réels, 16 troopers)
+      const jump = jumpParam && jumpParam in JUMPS ? (jumpParam as JumpId) : endTest ? 'crab' : null; // ?jump=gling|rhino|scarab|twins|crab : partie avancée, build déployé compris
       this.session = new LocalSession({
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
@@ -116,6 +121,7 @@ export class GameScene extends Phaser.Scene {
           })
         : undefined;
       if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer, jump)); // test : partie avancée dès le lancement
+      if (endTest) this.prepareEndTest();
     }
     // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
     this.freeRevive = !online && !!this.session.sim.tutorial;
@@ -163,6 +169,10 @@ export class GameScene extends Phaser.Scene {
       if (!this.move.joystick.active) this.moveLocked = false;
       else dir.set(0, 0);
     }
+    if (this.ending) {
+      const d = this.ending.moveDir(); // fin de partie : commandes verrouillées, la squad marche vers la fusée
+      dir.set(d.x, d.y);
+    }
     this.session.setLocalInput(dir.x, dir.y);
     if (this.flow.state === 'ready' && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
 
@@ -182,6 +192,7 @@ export class GameScene extends Phaser.Scene {
     if (running) {
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.alienTest?.update(dt * this.timeScale);
+      this.ending?.update(dt);
       this.checkEnd();
       this.trackProgress();
     }
@@ -327,7 +338,7 @@ export class GameScene extends Phaser.Scene {
     // En ligne, une squad anéantie réapparaît toute seule (voir HostSession) : jamais d'écran de fin.
     if (this.session.online || this.alienTest) return; // test d'un alien : la squad anéantie revient (dev/alienTest.ts)
     if (!this.localSquad.alive) return this.endRun(false);
-    if (this.mode.id === 'survival' && sim.finalBossDead) return this.endRun(true); // victoire : le boss final est tombé
+    if (this.mode.id === 'survival' && sim.finalBossDead) return this.startEnding(); // victoire : le boss final est tombé
     if (this.mode.id === 'royale' && sim.squads.length > 1 && sim.aliveSquads.length === 1) return this.endRun(true);
   }
 
@@ -379,7 +390,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   readonly pauseGame =(): void => {
-    if (this.session.online || this.upgradeOpen) return; // pause impossible : les autres joueurs continuent
+    if (this.session.online || this.upgradeOpen || this.ending) return; // pause impossible : les autres joueurs continuent
     if (!this.scene.isActive()) return;
     // avant le premier input (état « prêt ») le gameplay n'a pas démarré : rien à interrompre côté Poki, mais la pause reste possible
     if (this.flow.state !== 'ready' && !this.flow.interrupt()) return;
@@ -401,6 +412,37 @@ export class GameScene extends Phaser.Scene {
     this.recorder = null; // une relance coop repart sur un nouvel enregistrement
     if (!rec || rec.samples.length < 10) return;
     void saveToCode('bench-run', rec.finish(this.session.localPlayer, this.mode.id, victory)).then((m) => console.info(m));
+  }
+
+  /** Test de la fin (`?endtest=1`) : 16 troopers et le Giant Crab déjà là (PV réels), devant la squad. */
+  private prepareEndTest(): void {
+    const sim = this.session.sim;
+    const me = this.session.localPlayer;
+    const sq = sim.squadOf(me)!;
+    for (const s of sq.soldiers) s.alive = false; // `spawn` ajoute aux soldats existants : on repart d'une squad vide
+    sq.removeDead();
+    sim.respawnSquad(me, Array.from({ length: 16 }, () => 'trooper'), 2);
+    const c = sq.center;
+    sim.horde.spawnAt('boss_crab', c.x + 450, c.y, 1, false);
+  }
+
+  /** Victoire solo : record et enregistrement comme `endRun`, puis la séquence de fin (le gameplay Poki s'arrête quand la fusée est partie). */
+  private startEnding(): void {
+    this.ended = true;
+    this.saveRun(true);
+    if (!this.session.online) storage.set('bestTime', Math.max(Math.floor(this.runTime), storage.get('bestTime', 0)));
+    this.session.sim.beginEnding();
+    this.ending = new Ending(this, this.session.sim, this.session.localPlayer, () => {
+      this.flow.win();
+      this.scene.launch(SCENES.ending, { onDone: () => void this.rebootAfterWin() });
+    });
+  }
+
+  /** Fin de la séquence (écran noir) : retour à une partie neuve, prête à démarrer au premier input. */
+  private async rebootAfterWin(): Promise<void> {
+    this.scene.stop(SCENES.ending);
+    await this.flow.restart({ ad: false });
+    this.scene.restart();
   }
 
   private endRun(victory: boolean, connectionLost = false): void {

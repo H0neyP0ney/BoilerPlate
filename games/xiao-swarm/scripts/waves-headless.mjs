@@ -26,7 +26,7 @@ try {
       DEFAULT_WAVE_SCRIPT,
       (type, count) => log.push({ type, count, at: runner.cursor, time: runner.time, replaying: runner.replaying, boss: !!ALIENS[type].boss }),
       new Rng(7),
-      { bossAlive: () => state.boss, aliveCount: () => state.aliens },
+      { bossAlive: () => state.boss, aliveCount: () => state.aliens, bossId: () => 'boss_gling' },
     );
     return { runner, log, state };
   };
@@ -67,23 +67,23 @@ try {
     check(runner.cursor > cursorBefore + 4.5 && !runner.replaying, 'boss tué : la timeline reprend', `${cursorBefore.toFixed(1)} → ${runner.cursor.toFixed(1)} s`);
   }
 
-  // 2 bis) vagues rejouées pendant un boss : effectif × DIFFICULTY.bossReplayMul (même graine, facteur 1 puis réglage du code)
+  // 2 bis) vagues rejouées pendant un boss : effectif × DIFFICULTY.bossReplayMulGling (réglage du boss ; même graine, facteur 1 puis réglage du code)
   {
     const replayTotal = (mul) => {
-      const saved = DIFFICULTY.bossReplayMul;
-      DIFFICULTY.bossReplayMul = mul;
+      const saved = DIFFICULTY.bossReplayMulGling;
+      DIFFICULTY.bossReplayMulGling = mul;
       const { runner, log, state } = make();
       runUntilBoss(runner, log);
       state.boss = true;
       const before = log.length;
       run(runner, 40);
-      DIFFICULTY.bossReplayMul = saved;
+      DIFFICULTY.bossReplayMulGling = saved;
       return log.slice(before).reduce((n, e) => n + e.count, 0);
     };
     const full = replayTotal(1);
-    const reduced = replayTotal(DIFFICULTY.bossReplayMul);
+    const reduced = replayTotal(DIFFICULTY.bossReplayMulGling);
     const ratio = reduced / full;
-    check(DIFFICULTY.bossReplayMul === 0.8 && ratio < 0.95 && ratio > 0.7, 'rejeu pendant un boss : effectif × 0,8 (panneau Difficulté ; arrondi, au moins 1 par groupe)', `${full} → ${reduced} aliens en 40 s (×${ratio.toFixed(2)})`);
+    check(DIFFICULTY.bossReplayMulGling === 0.8 && ratio < 0.95 && ratio > 0.7, 'rejeu pendant un boss : effectif × 0,8 (panneau Difficulté ; arrondi, au moins 1 par groupe)', `${full} → ${reduced} aliens en 40 s (×${ratio.toFixed(2)})`);
   }
 
   // 3) trop d'aliens : plus aucun envoi, curseur figé, reprise sous le seuil bas (hystérésis)
@@ -116,7 +116,7 @@ try {
     check(log.length === sent, 'boss vivant et trop d\'aliens : le rejeu s\'arrête aussi', `${log.length - sent} envois`);
   }
 
-  check(DIFFICULTY.bossReplayCount === 5, 'le rejeu porte sur les 5 dernières vagues avant le boss');
+  check(Number.isInteger(DIFFICULTY.bossReplayCount) && DIFFICULTY.bossReplayCount >= 1, `le rejeu porte sur les ${DIFFICULTY.bossReplayCount} dernières vagues avant le boss (réglage du panneau Difficulté)`);
 } finally {
   await vite.close();
 }

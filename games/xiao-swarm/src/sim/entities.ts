@@ -51,6 +51,8 @@ export interface SoldierState extends Body {
   frozen: number;
   /** Début du gel (s) : les coups alliés ne retirent pas encore de PV de gel. */
   iceInvuln: number;
+  /** Temps restant (s) d'empoisonnement (boules du Giant Crab) : ses PV descendent progressivement vers 1 (jamais mortel), voir `Sim.updatePoison`. */
+  poison: number;
   /** Temps restant (s) d'étourdissement (slam du Scarab) : il ne bouge ni ne tire, mais reste attaquable. */
   stun: number;
   /**
@@ -113,6 +115,8 @@ export interface AlienState extends Body {
   revived: boolean;
   /** Boss Gling : compte à rebours avant l'essaim (s), temps d'essaim restant (s) et temps écoulé depuis le dernier gling apparu. */
   swarmCd: number;
+  /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */
+  lurkBlockT: number;
   swarmT: number;
   swarmAcc: number;
   /** Boss resté trop longtemps en vie : niveau d'enragement (0 = calme, +1 toutes les `DIFFICULTY.bossEnrageEvery` s sans fin). */
@@ -169,6 +173,10 @@ export interface Projectile {
   puddleSlow: number;
   /** Boucle de glace : rayon (px) de la zone gelée à l'impact sur un soldat (0 = aucune). */
   freeze: number;
+  /** Durée (s) du poison infligé aux soldats de la zone à l'impact (0 = aucun). */
+  poison: number;
+  /** Nombre d'araignées enragées qui surgissent à l'impact (boules du Giant Crab ; 0 = aucune). */
+  spawn: number;
   texture: string;
   team: Team;
   owner: PlayerId;
@@ -288,14 +296,6 @@ export interface XpOrb {
   caught?: boolean;
   /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
   pullV?: number;
-}
-
-/** Coffre laissé par un boss tué : `progress` (s) monte tant qu'un soldat est à côté, il s'ouvre à `DIFFICULTY.chestTime`. */
-export interface ChestState {
-  id: number;
-  x: number;
-  y: number;
-  progress: number;
 }
 
 /** Globe d'upgrade sorti d'un coffre : réservé à `owner`, ne disparaît jamais, donne une upgrade au hasard à son ramassage. */

@@ -28,6 +28,9 @@ import { UPGRADE_IDS } from '../data/progression';
  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
  */
 export const ASSETS: AssetEntry[] = [
+  // Œuf d'un boss tué et son socle (nid) — art-src/egg_socle.png séparé et réduit de moitié par `node tools/slice-egg.mjs` ; l'œuf est l'alien `boss_egg` (view/UnitViews.ts pose le socle devant son bas).
+  { type: 'image', id: 'alien_boss_egg', url: 'aliens/egg.png', originX: 0.5, originY: 0.82, scale: 0.65 },
+  { type: 'image', id: 'alien_boss_egg_socle', url: 'aliens/egg_socle.png', originX: 0.5, originY: 0.5, scale: 0.65 },
   // Obstacles volcaniques — art-src/obstacle_N.png convertis en WebP. Échelle, ancrage et hitbox : data/obstacles.ts.
   // Taches sombres posées sous les obstacles pour les fondre dans le sol — art-src/tache_N.png réduits de moitié (WebP).
   ...[1, 2, 3, 4].map((n): AssetEntry => ({ type: 'image', id: `tache_${n}`, url: `decor/tache_${n}.webp` })),

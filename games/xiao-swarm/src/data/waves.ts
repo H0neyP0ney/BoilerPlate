@@ -32,7 +32,7 @@ export interface TimelineEntry {
   until?: number;
   /**
    * Effectif × `mul` pour chaque envoi de cette entrée : nombre de chaque groupe hors boss × `mul`, arrondi, au moins 1 (absent = 1). Affiché et
-   * modifiable dans le Gestionnaire de vagues. Rejouée pendant un combat de boss, une vague prend en plus × `DIFFICULTY.bossReplayMul`.
+   * modifiable dans le Gestionnaire de vagues. Rejouée pendant un combat de boss, une vague prend en plus × le réglage du boss affronté (`DIFFICULTY.bossReplayMul…`).
    */
   mul?: number;
 }
@@ -66,56 +66,56 @@ export const WAVE_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export const DEFAULT_WAVE_SCRIPT: WaveScript = {
   levels: {
     1: [
-      { name: 'Quelques slimes', groups: [{ type: 'slime', count: 2 }] },
-      { name: 'Trio', groups: [{ type: 'slime', count: 3 }] },
-      { name: 'Petit groupe', groups: [{ type: 'slime', count: 5 }] },
+      { name: 'Quelques slimes', groups: [{ type: 'slime', count: 3 }] },
+      { name: 'Trio', groups: [{ type: 'slime', count: 5 }] },
+      { name: 'Petit groupe', groups: [{ type: 'slime', count: 8 }] },
     ],
     2: [
-      { name: 'Essaim rose', groups: [{ type: 'gling', count: 5 }] },
-      { name: 'Mixte', groups: [{ type: 'slime', count: 4 }, { type: 'gling', count: 4 }] },
-      { name: 'Ruée rose', groups: [{ type: 'gling', count: 8 }, { type: 'slime', count: 1 }] },
+      { name: 'Essaim rose', groups: [{ type: 'gling', count: 8 }] },
+      { name: 'Mixte', groups: [{ type: 'slime', count: 6 }, { type: 'gling', count: 6 }] },
+      { name: 'Ruée rose', groups: [{ type: 'gling', count: 12 }, { type: 'slime', count: 2 }] },
     ],
     3: [
-      { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 3 }, { type: 'slime', count: 4 }] },
-      { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 4 }, { type: 'gling', count: 4 }] },
-      { name: 'Deux kamikazes', groups: [{ type: 'kamikaze', count: 3 }] },
+      { name: 'Kamikazes', groups: [{ type: 'kamikaze', count: 5 }, { type: 'slime', count: 6 }] },
+      { name: 'Kamikazes + roses', groups: [{ type: 'kamikaze', count: 6 }, { type: 'gling', count: 6 }] },
+      { name: 'Deux kamikazes', groups: [{ type: 'kamikaze', count: 5 }] },
     ],
     4: [
-      { name: 'Langue', groups: [{ type: 'toad', count: 2 }, { type: 'slime', count: 7 }] },
-      { name: 'Grenouilles', groups: [{ type: 'toad', count: 3 }, { type: 'kamikaze', count: 3 }] },
-      { name: 'Langue + essaim', groups: [{ type: 'toad', count: 2 }, { type: 'gling', count: 8 }] },
-      { name: 'Cracheurs', groups: [{ type: 'spitter', count: 2 }, { type: 'slime', count: 4 }] }, // le spitter arrive avec le niveau 4, joué pour la première fois à 1:15 (après la Gling Mère)
-      { name: 'Cracheurs et essaim', groups: [{ type: 'spitter', count: 2 }, { type: 'gling', count: 8 }] }, // 2e vague de cracheurs, de difficulté proche des autres du niveau
+      { name: 'Langue', groups: [{ type: 'toad', count: 3 }, { type: 'slime', count: 11 }] },
+      { name: 'Grenouilles', groups: [{ type: 'toad', count: 5 }, { type: 'kamikaze', count: 5 }] },
+      { name: 'Langue + essaim', groups: [{ type: 'toad', count: 3 }, { type: 'gling', count: 12 }] },
+      { name: 'Cracheurs', groups: [{ type: 'spitter', count: 3 }, { type: 'slime', count: 6 }] }, // le spitter arrive avec le niveau 4, joué pour la première fois à 1:15 (après la Gling Mère)
+      { name: 'Cracheurs et essaim', groups: [{ type: 'spitter', count: 3 }, { type: 'gling', count: 12 }] }, // 2e vague de cracheurs, de difficulté proche des autres du niveau
     ],
     5: [
-      { name: 'Un gros', groups: [{ type: 'shooter', count: 2 }, { type: 'slime', count: 7 }] },
-      { name: 'Artillerie', groups: [{ type: 'shooter', count: 4 }, { type: 'gling', count: 6 }] },
-      { name: 'Mélange', groups: [{ type: 'shooter', count: 2 }, { type: 'toad', count: 2 }, { type: 'kamikaze', count: 4 }] },
-      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 2 }, { type: 'slime', count: 4 }] },
+      { name: 'Un gros', groups: [{ type: 'shooter', count: 3 }, { type: 'slime', count: 11 }] },
+      { name: 'Artillerie', groups: [{ type: 'shooter', count: 6 }, { type: 'gling', count: 9 }] },
+      { name: 'Mélange', groups: [{ type: 'shooter', count: 3 }, { type: 'toad', count: 3 }, { type: 'kamikaze', count: 6 }] },
+      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 3 }, { type: 'slime', count: 6 }] },
     ],
     6: [
-      { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 4 }, { type: 'burner', count: 4 }, { type: 'slime', count: 6 }] },
-      { name: 'Brasier', groups: [{ type: 'burner', count: 6 }, { type: 'gling', count: 10 }] },
-      { name: 'Chaman', groups: [{ type: 'shaman', count: 2 }, { type: 'slime', count: 10 }, { type: 'gling', count: 6 }] },
+      { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 6 }, { type: 'burner', count: 6 }, { type: 'slime', count: 9 }] },
+      { name: 'Brasier', groups: [{ type: 'burner', count: 9 }, { type: 'gling', count: 15 }] },
+      { name: 'Chaman', groups: [{ type: 'shaman', count: 3 }, { type: 'slime', count: 15 }, { type: 'gling', count: 9 }] },
     ],
     7: [
-      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 2 }, { type: 'wall', count: 4 }, { type: 'slime', count: 6 }] },
-      { name: 'Embuscade', groups: [{ type: 'lurker', count: 3 }, { type: 'slime', count: 8 }, { type: 'gling', count: 6 }] },
-      { name: 'Bulle', groups: [{ type: 'bubble', count: 1 }, { type: 'spitter', count: 4 }, { type: 'gling', count: 11 }] },
-      { name: 'Barrage', groups: [{ type: 'wall', count: 6 }, { type: 'toad', count: 4 }, { type: 'burner', count: 4 }] },
+      { name: 'Rhinocéros', groups: [{ type: 'charger', count: 3 }, { type: 'wall', count: 6 }, { type: 'slime', count: 9 }] },
+      { name: 'Embuscade', groups: [{ type: 'lurker', count: 5 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
+      { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 6 }, { type: 'gling', count: 17 }] },
+      { name: 'Barrage', groups: [{ type: 'wall', count: 9 }, { type: 'toad', count: 6 }, { type: 'burner', count: 6 }] },
     ],
     8: [
-      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 2 }, { type: 'bubble', count: 1 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
-      { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 5 }, { type: 'toad', count: 3 }, { type: 'kamikaze', count: 4 }] },
-      { name: 'Troupeau', groups: [{ type: 'charger', count: 5 }, { type: 'spitter', count: 5 }, { type: 'kamikaze', count: 7 }] },
-      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 5 }, { type: 'charger', count: 2 }, { type: 'burner', count: 7 }, { type: 'bubble', count: 1 }] },
+      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 3 }, { type: 'bubble', count: 2 }, { type: 'slime', count: 18 }, { type: 'gling', count: 14 }] },
+      { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 8 }, { type: 'toad', count: 5 }, { type: 'kamikaze', count: 6 }] },
+      { name: 'Troupeau', groups: [{ type: 'charger', count: 8 }, { type: 'spitter', count: 8 }, { type: 'kamikaze', count: 11 }] },
+      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 8 }, { type: 'charger', count: 3 }, { type: 'burner', count: 11 }, { type: 'bubble', count: 2 }] },
     ],
     9: [
-      { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 6 }] },
-      { name: 'Mini-boss : Scarab', groups: [{ type: 'boss_scarab', count: 1 }, { type: 'shooter', count: 3 }, { type: 'slime', count: 6 }] },
-      { name: 'BOSS FINAL : Giant Crab', groups: [{ type: 'boss_crab', count: 1 }, { type: 'shaman', count: 1 }, { type: 'bubble', count: 1 }, { type: 'charger', count: 1 }] },
-      { name: 'Mini-boss : Gling Mère', groups: [{ type: 'boss_gling', count: 1 }, { type: 'gling', count: 6 }] },
-      { name: 'Mini-boss : Rhinos jumeaux (feu et glace)', groups: [{ type: 'boss_rhino_fire', count: 1 }, { type: 'boss_rhino_ice', count: 1 }, { type: 'slime', count: 6 }] },
+      { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 9 }] },
+      { name: 'Mini-boss : Scarab', groups: [{ type: 'boss_scarab', count: 1 }, { type: 'shooter', count: 5 }, { type: 'slime', count: 9 }] },
+      { name: 'BOSS FINAL : Giant Crab', groups: [{ type: 'boss_crab', count: 1 }, { type: 'shaman', count: 2 }, { type: 'bubble', count: 2 }, { type: 'charger', count: 2 }] },
+      { name: 'Mini-boss : Gling Mère', groups: [{ type: 'boss_gling', count: 1 }, { type: 'gling', count: 9 }] },
+      { name: 'Mini-boss : Rhinos jumeaux (feu et glace)', groups: [{ type: 'boss_rhino_fire', count: 1 }, { type: 'boss_rhino_ice', count: 1 }, { type: 'slime', count: 9 }] },
     ],
   },
   timeline: [
@@ -218,6 +218,9 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 352.5, level: 5, every: 2, until: 358.5 },
     { at: 360.5, level: 5 },
     { at: 368.5, level: 5, every: 8, until: 376.5 },
+    { at: 380, level: 6 }, // 10/10 : le creux de 376 à 392 s (16 s) avant les rhinos jumeaux est comblé
+    { at: 383.5, level: 5, every: 2, until: 387.5 },
+    { at: 389.5, level: 6 },
     { at: 392.5, level: 5 },
     { at: 395, level: 5, every: 2, until: 399 },
     { at: 400.5, level: 6 },
@@ -225,6 +228,10 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 409, level: 6, every: 2, until: 415 },
     { at: 414.5, level: 7 },
     { at: 418, level: 8 },
+    { at: 421.5, level: 6 }, // 10/10 : comble 418-440 s (22 s sans rien) juste avant les rhinos jumeaux
+    { at: 424.5, level: 7 },
+    { at: 431, level: 6, every: 2, until: 435 },
+    { at: 436.5, level: 7 },
     { at: 428, level: 6 },
     { at: 440.5, level: 6, every: 2, until: 444.5 },
     { at: 450, level: 9, config: 5 }, // Rhinos jumeaux (feu et glace), 7:30
@@ -305,13 +312,17 @@ export function levelAt(script: WaveScript, time: number): number {
   return level;
 }
 
-/** Prochain boss (mini ou final) après l'instant `time` : moment du spawn et type du boss ; null s'il n'y en a plus. */
-export function nextBoss(script: WaveScript, time: number): { at: number; type: AlienId } | null {
-  let best: { at: number; type: AlienId } | null = null;
+/**
+ * Prochain boss (mini ou final) après l'instant `time` : moment du spawn et type du premier boss, plus `types` = tous les boss distincts de la
+ * configuration (2 pour les rhinos jumeaux : la timeline affiche les deux) ; null s'il n'y en a plus.
+ */
+export function nextBoss(script: WaveScript, time: number): { at: number; type: AlienId; types: AlienId[] } | null {
+  let best: { at: number; type: AlienId; types: AlienId[] } | null = null;
   for (const e of script.timeline) {
     if (e.config === undefined || e.at <= time || (best && e.at >= best.at)) continue;
-    const type = script.levels?.[e.level]?.[e.config - 1]?.groups[0]?.type;
-    if (type && ALIENS[type].boss) best = { at: e.at, type };
+    const groups = script.levels?.[e.level]?.[e.config - 1]?.groups ?? [];
+    const type = groups[0]?.type;
+    if (type && ALIENS[type].boss) best = { at: e.at, type, types: [...new Set(groups.map((g) => g.type).filter((t) => ALIENS[t].boss))] };
   }
   return best;
 }

@@ -1,4 +1,4 @@
-import { DIFFICULTY, ORB_BLINK_TIME, REVIVE_TIME } from '../config';
+import { ORB_BLINK_TIME, REVIVE_TIME } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DAMAGE_TIERS } from '../data/damageTiers';
@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 48; // 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 51; // 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -198,7 +198,6 @@ export interface Snapshot {
   /** Stalactites annoncées par le Scarab (v40) : zone, temps restant avant l'impact et durée du télégraphe (s). */
   stalactites: { id: number; x: number; y: number; r: number; t: number; dur: number }[];
   /** Coffres laissés par les boss tués (v44) : position et progression d'ouverture (0 → 1). */
-  chests: { id: number; x: number; y: number; progress: number }[];
   /** Globes d'upgrade des coffres (v44), chacun réservé à `owner`, `upgrade` = index dans `UPGRADE_IDS` (son icône) ; `fall` = temps de chute restant en cloche (s, 0 = posé au sol). */
   upgradeOrbs: { id: number; owner: PlayerId; upgrade: number; x: number; y: number; fall: number }[];
   /**
@@ -324,7 +323,6 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
     fires: sim.fires.map((f) => ({ id: f.id, x: f.x, y: f.y, r: f.r })),
     stalactites: sim.stalactites.map((k) => ({ id: k.id & 0xffff, x: k.x, y: k.y, r: k.r, t: k.t, dur: k.dur })),
-    chests: sim.chests.items.map((c) => ({ id: c.id, x: c.x, y: c.y, progress: Math.min(1, c.progress / Math.max(0.1, DIFFICULTY.chestTime)) })),
     upgradeOrbs: sim.upgradeOrbs.items.map((o) => ({ id: o.id, owner: o.owner, upgrade: Math.max(0, UPGRADE_IDS.indexOf(o.upgrade)), x: o.x, y: o.y, fall: o.hop?.t ?? 0 })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
   };
@@ -527,7 +525,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
       w.u8(castByte);
       if (castByte > 0) w.u32(a.castCorpse);
     }
-    if (def.lurk || def.burrow) {
+    if (def.lurk || def.burrow || def.spikeRing) {
       w.u8(a.lurkPhase);
       w.u8(Math.min(255, Math.round(a.lurkT * 30)));
       w.f32(a.spikeAng);
@@ -652,13 +650,6 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(Math.round(k.dur * 50));
   }
   mark('stalactites');
-  w.u8(Math.min(255, s.chests.length));
-  for (const c of s.chests.slice(0, 255)) {
-    w.u32(c.id);
-    w.pos(c.x);
-    w.pos(c.y);
-    w.u8(Math.round(Math.min(1, c.progress) * 255));
-  }
   w.u8(Math.min(255, s.upgradeOrbs.length));
   for (const o of s.upgradeOrbs.slice(0, 255)) {
     w.u32(o.id);
@@ -693,7 +684,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
     const seq = r.u32();
-    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [], chests: [], upgradeOrbs: [] };
+    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [], upgradeOrbs: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
@@ -779,7 +770,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       let lurkPhase = 0;
       let lurkT = 0;
       let spikeAng = 0;
-      if (def.lurk || def.burrow) {
+      if (def.lurk || def.burrow || def.spikeRing) {
         lurkPhase = r.u8();
         lurkT = r.u8() / 30;
         spikeAng = r.f32();
@@ -840,8 +831,6 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nFires; i++) snap.fires.push({ id: r.u16(), x: r.u16(), y: r.u16(), r: r.u8() });
     const nStal = r.u8();
     for (let i = 0; i < nStal; i++) snap.stalactites.push({ id: r.u16(), x: r.pos(), y: r.pos(), r: r.u8(), t: r.u8() / 50, dur: r.u8() / 50 });
-    const nChests = r.u8();
-    for (let i = 0; i < nChests; i++) snap.chests.push({ id: r.u32(), x: r.pos(), y: r.pos(), progress: r.u8() / 255 });
     const nUpOrbs = r.u8();
     for (let i = 0; i < nUpOrbs; i++) snap.upgradeOrbs.push({ id: r.u32(), owner: r.str(), upgrade: r.u8(), x: r.pos(), y: r.pos(), fall: r.u8() / 100 });
     const nShots = r.u16();

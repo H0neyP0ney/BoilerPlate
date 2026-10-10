@@ -184,12 +184,12 @@ try {
     check(sim.bossKills === 1 && Math.abs(sim.escalation - (1 + DIFFICULTY.bossEscalation)) < 1e-9, 'escalade : un boss tué = ×1,1', `bossKills ${sim.bossKills}`);
     sim.horde.spawnAt('slime', 520, 500, 1, false);
     const a1 = sim.aliens[sim.aliens.length - 1];
-    check(Math.abs(a1.maxHp / a0.maxHp - 1.1) < 1e-6 && a1.esc === 1.1, 'escalade : un slime apparu après a +10 % de PV', `${(a1.maxHp / a0.maxHp).toFixed(3)}`);
+    check(Math.abs(a1.maxHp / a0.maxHp - (1 + DIFFICULTY.bossEscalation)) < 1e-6 && a1.esc === 1 + DIFFICULTY.bossEscalation, `escalade : un slime apparu après a +${Math.round(DIFFICULTY.bossEscalation * 100)} % de PV (réglage du panneau Difficulté)`, `${(a1.maxHp / a0.maxHp).toFixed(3)}`);
     sim.horde.spawnAt('boss_rhino', 900, 900, 1, false);
     const rhino = sim.aliens.find((a) => a.def.id === 'boss_rhino');
     rhino.age = 1;
     sim.damage(rhino, 1e12, 'p1');
-    check(Math.abs(sim.escalation - 1.21) < 1e-9, 'escalade : cumulée (2 boss = ×1,21)', `${sim.escalation.toFixed(3)}`);
+    check(Math.abs(sim.escalation - (1 + DIFFICULTY.bossEscalation) ** 2) < 1e-9, 'escalade : cumulée (2 boss = ×(1 + gain)²)', `${sim.escalation.toFixed(3)}`);
     sim.restart();
     check(sim.bossKills === 0 && sim.escalation === 1, 'escalade : remise à zéro à la relance de la partie');
   }
@@ -449,7 +449,7 @@ try {
         check(!orb.alive && sq.soldiers.some((o) => o.frozen > 0), 'orbe de glace des rhinos : comme d’habitude, il gèle le soldat touché', `${sq.soldiers.filter((o) => o.frozen > 0).length} soldat(s) gelé(s)`);
       }
     }
-    // deux boss tués = deux coffres, l'autre jumeau est épargné par le clear screen du premier
+    // deux boss tués : l'autre jumeau est épargné par le clear screen du premier, un seul œuf (sur le dernier tué)
     const { sim } = fresh(43);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
@@ -458,11 +458,12 @@ try {
     const [f, i] = sim.aliens;
     f.age = i.age = 99;
     sim.damage(f, 1e12, 'p1');
-    check(i.alive && sim.chests.items.length === 0 && sim.bossKills === 0, 'rhinos jumeaux : tuer le premier épargne l’autre, ni coffre ni escalade : le boss n’est pas fini', `${sim.chests.items.length} coffre, ${sim.bossKills} boss tués`);
+    const eggsOf = () => sim.aliens.filter((a) => a.alive && a.def.egg);
+    check(i.alive && eggsOf().length === 0 && sim.bossKills === 0, 'rhinos jumeaux : tuer le premier épargne l’autre, ni œuf ni escalade : le boss n’est pas fini', `${eggsOf().length} œuf, ${sim.bossKills} boss tués`);
     i.x = sq.center.x - 350; i.y = sq.center.y + 120;
     sim.damage(i, 1e12, 'p1');
-    const c = sim.chests.items[0];
-    check(sim.chests.items.length === 1 && Math.hypot(c.x - i.x, c.y - i.y) < 40 && sim.bossKills === 1, 'rhinos jumeaux : le coffre apparaît sur le dernier jumeau tué (escalade ×1,1, une seule fois)', `${sim.chests.items.length} coffre, ${sim.bossKills} boss tué`);
+    const c = eggsOf()[0];
+    check(eggsOf().length === 1 && Math.hypot(c.x - i.x, c.y - i.y) < 40 && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : l’œuf (PV exacts de `boss_egg`) apparaît sur le dernier jumeau tué (escalade ×1,1, une seule fois)', `${eggsOf().length} œuf, ${sim.bossKills} boss tué`);
   }
 
   // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)
@@ -675,16 +676,17 @@ try {
     check(sim.fuses.length >= 1, 'boss tué : un kamikaze nettoyé explose quand même', `${sim.fuses.length} explosion(s) en attente`);
     check(prisoner.capturedBy === 0 && bubble.captive === null, 'boss tué : la bulle morte avec lui libère son prisonnier');
     check(!sim.powerups.items.some((p) => p.kind === 'magnet'), 'boss tué : plus d’aimant garanti');
-    check(sim.chests.items.length === 0, 'boss tué avec un autre boss encore en vie : pas de coffre tant que le combat de boss n’est pas fini', `${sim.chests.items.length} coffre(s)`);
+    const eggs = () => sim.aliens.filter((a) => a.alive && a.def.egg);
+    check(eggs().length === 0, 'boss tué avec un autre boss encore en vie : pas d’œuf tant que le combat de boss n’est pas fini', `${eggs().length} œuf(s)`);
     other.age = 99;
     sim.damage(other, 1e12, 'p1');
-    check(sim.chests.items.length === 1 && Math.hypot(sim.chests.items[0].x - other.x, sim.chests.items[0].y - other.y) < 40, 'boss tué (le dernier) : un coffre apparaît sur son cadavre', `${sim.chests.items.length} coffre(s)`);
+    check(eggs().length === 1 && Math.hypot(eggs()[0].x - other.x, eggs()[0].y - other.y) < 40, 'boss tué (le dernier) : un œuf apparaît sur son cadavre', `${eggs().length} œuf(s)`);
   }
 
-  // ---- coffre : 2 s à côté pour l'ouvrir, 2 globes d'upgrade PAR JOUEUR, réservés à leur joueur ; globe ramassé = une upgrade au hasard
+  // ---- œuf de boss : 1000 PV à détruire, 2 globes d'upgrade PAR JOUEUR, réservés à leur joueur ; globe ramassé = une upgrade au hasard
   {
     const { sim, step: rawStep } = fresh(31);
-    const step = (n) => { for (let i = 0; i < n; i++) { sim.aliens.length = 0; sim.xp.clear(); rawStep(1); } }; // aucun alien (les vagues en enverraient) : pas de montée de niveau qui figerait la partie
+    const step = (n) => { for (let i = 0; i < n; i++) { sim.aliens = sim.aliens.filter((a) => a.def.egg); sim.xp.clear(); rawStep(1); } }; // aucun alien sauf l'œuf (les vagues en enverraient) : pas de montée de niveau qui figerait la partie
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     for (const s of sq.soldiers) s.invulnerable = 1e9;
@@ -693,28 +695,29 @@ try {
     sq2.recruit('trooper', { x: sq.center.x + 2000, y: sq.center.y });
     const x = sq.center.x + 700;
     const y = sq.center.y;
-    sim.chests.drop(x, y);
-    const chest = sim.chests.items[0];
-    const T = DIFFICULTY.chestTime;
-    check(T === 2 && DIFFICULTY.chestOrbs === 2, 'coffre : 2 s pour l’ouvrir, 2 globes par joueur (réglages du panneau Difficulté)');
+    sim.horde.spawnEgg(x, y);
+    const egg = sim.aliens.find((a) => a.def.egg);
+    const EGG_HP = ALIENS.boss_egg.hp;
+    check(!!egg && egg.hp === EGG_HP && egg.maxHp === EGG_HP && DIFFICULTY.chestOrbs === 2, 'œuf : PV exacts de `boss_egg` (ni escalade ni multiplicateur), 2 globes par joueur (réglage du panneau Difficulté)', `${egg?.hp} PV`);
     step(30 * 5);
-    check(chest.progress === 0 && sim.chests.items.length === 1, 'coffre : personne à côté, il reste fermé');
+    check(egg.alive && egg.hp === EGG_HP && Math.hypot(egg.x - x, egg.y - y) < 1 && sim.upgradeOrbs.items.length === 0, 'œuf : immobile, inoffensif, rien ne sort tant qu’il n’est pas détruit');
+    // onde de choc (level up, revive gratuit mortel) : l'œuf, scellé sur son socle, ne bouge pas et n'est pas détruit
+    sim.shockwave(x - 150, y, 640, 460, 0.9, 0.6, 'p1');
+    step(30 * 2);
+    check(egg.alive && Math.hypot(egg.x - x, egg.y - y) < 1e-6 && egg.hp === EGG_HP, 'œuf : insensible à l’onde de choc (ni poussé ni détruit, même par un revive mortel)', `${Math.hypot(egg.x - x, egg.y - y).toFixed(1)} px de déplacement`);
     // les soldats viennent se poster dessus (replacés à chaque tick : sinon la formation les ramène vers le centre de la squad)
     const hold = (dx, ticks) => { for (let i = 0; i < ticks; i++) { for (const s of sq.soldiers) { s.x = x + dx; s.y = y; s.px = s.x; s.py = s.y; } step(1); } };
     const picked0 = Object.values(sq.picked).reduce((n, v) => n + v, 0);
-    hold(20, 45);
-    check(chest.progress > 1.2 && chest.progress < T && sim.chests.items.length === 1, 'coffre : la progression monte tant qu’un soldat est à côté', `${chest.progress.toFixed(2)} s`);
-    hold(900, 30);
-    check(chest.progress < 1 && sim.chests.items.length === 1, 'coffre : la progression redescend quand on s’éloigne', `${chest.progress.toFixed(2)} s`);
-    let opened = false;
-    for (let t = 0; t < 30 * 6 && !opened; t++) {
-      hold(20, 1);
-      opened = sim.chests.items.length === 0;
-    }
+    sim.damage(egg, 600, 'p1');
+    step(2);
+    check(egg.alive && Math.round(egg.hp) === EGG_HP - 600 && sim.upgradeOrbs.items.length === 0, 'œuf : abîmé mais pas détruit, rien ne sort', `${egg.hp} PV`);
+    sim.damage(egg, 1e9, 'p1');
+    step(1);
+    const opened = !sim.aliens.some((a) => a.def.egg);
     const mine = sim.upgradeOrbs.items.filter((o) => o.owner === 'p1');
     const theirs = sim.upgradeOrbs.items.filter((o) => o.owner === 'p2');
-    check(opened && mine.length === 2 && theirs.length === 2, 'coffre : il s’ouvre et libère 2 globes d’upgrade par joueur', `${mine.length} + ${theirs.length} globes`);
-    check(sim.upgradeOrbs.items.every((o) => o.hop && o.hop.t > 0), 'coffre : les globes tombent en cloche autour de lui');
+    check(opened && mine.length === 2 && theirs.length === 2, 'œuf détruit : il libère 2 globes d’upgrade par joueur', `${mine.length} + ${theirs.length} globes`);
+    check(sim.upgradeOrbs.items.every((o) => o.hop && o.hop.t > 0), 'œuf détruit : les globes tombent en cloche autour de lui');
     // imprenable la première seconde : même un soldat posé juste dessus ne le prend pas
     const grace = DIFFICULTY.chestOrbGrace;
     check(grace === 1, 'globe d’upgrade : imprenable la première seconde (réglage du panneau Difficulté)');
@@ -725,7 +728,7 @@ try {
     }
     check(mine.every((o) => sim.upgradeOrbs.items.includes(o)) && Object.values(sq.picked).reduce((n, v) => n + v, 0) === picked0, 'globe d’upgrade : un soldat posé dessus ne le prend pas avant la fin de la première seconde', `${sim.upgradeOrbs.items.length} globes encore au sol`);
     hold(20, 30);
-    check(sim.upgradeOrbs.items.every((o) => !o.hop && Math.hypot(o.x - x, o.y - y) > 30 && Math.hypot(o.x - x, o.y - y) < DIFFICULTY.chestRadius + 30), 'coffre : ils retombent à côté, au sol, dans la zone du coffre');
+    check(sim.upgradeOrbs.items.every((o) => !o.hop && Math.hypot(o.x - x, o.y - y) > 30 && Math.hypot(o.x - x, o.y - y) < 130), 'œuf détruit : ils retombent à côté, au sol');
     // jamais prismatique : même avec 100 % de chance de prismatique
     const chance = DIFFICULTY.prismChance;
     const keep = { ...sq.picked };
@@ -754,13 +757,13 @@ try {
     // les globes du joueur 2 ne sont pas attirés par le joueur 1, même collés à lui
     for (const o of theirs) { o.x = sq.soldiers[0].x; o.y = sq.soldiers[0].y; o.px = o.x; o.py = o.y; }
     hold(20, 30 * 3);
-    check(theirs.every((o) => sim.upgradeOrbs.items.includes(o)) && Object.values(sq.picked).reduce((n, v) => n + v, 0) === picked0 + 2 && Object.values(sq2.picked).reduce((n, v) => n + v, 0) === 0, 'coffre : chaque joueur ne ramasse que ses globes (aucun vol possible)', `p1 +${Object.values(sq.picked).reduce((n, v) => n + v, 0) - picked0} upgrades, p2 ${Object.values(sq2.picked).reduce((n, v) => n + v, 0)}`);
-    check(sim.upgradeOrbs.items.length === 2 && sim.upgradeOrbs.items.every((o) => o.owner === 'p2'), 'coffre : ses 2 globes ramassés disparaissent, ceux de l’autre joueur restent', `${sim.upgradeOrbs.items.length} globe(s) restant(s)`);
+    check(theirs.every((o) => sim.upgradeOrbs.items.includes(o)) && Object.values(sq.picked).reduce((n, v) => n + v, 0) === picked0 + 2 && Object.values(sq2.picked).reduce((n, v) => n + v, 0) === 0, 'globes d’upgrade : chaque joueur ne ramasse que ses globes (aucun vol possible)', `p1 +${Object.values(sq.picked).reduce((n, v) => n + v, 0) - picked0} upgrades, p2 ${Object.values(sq2.picked).reduce((n, v) => n + v, 0)}`);
+    check(sim.upgradeOrbs.items.length === 2 && sim.upgradeOrbs.items.every((o) => o.owner === 'p2'), 'globes d’upgrade : ses 2 globes ramassés disparaissent, ceux de l’autre joueur restent', `${sim.upgradeOrbs.items.length} globe(s) restant(s)`);
     // pas d'expiration : 3 minutes plus tard, le globe du joueur 2 attend toujours
     step(30 * 180);
     check(sim.upgradeOrbs.items.length === 2, 'coffre : un globe d’upgrade ne disparaît jamais', `${sim.upgradeOrbs.items.length} globe(s) après 3 min`);
     sim.restart();
-    check(sim.chests.items.length === 0 && sim.upgradeOrbs.items.length === 0, 'coffre : coffres et globes effacés à la relance');
+    check(sim.upgradeOrbs.items.length === 0, 'globes d’upgrade effacés à la relance');
   }
 
   // ---- recrues attirées devenues inutiles : elles ne restent plus figées en l'air (avant : `caught` les bloquait sans fin)

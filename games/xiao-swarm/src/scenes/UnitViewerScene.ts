@@ -36,6 +36,8 @@ interface Entry {
   unit: string;
   sprite: Phaser.GameObjects.Sprite;
   gun?: Phaser.GameObjects.Sprite;
+  /** Œuf de boss : socle (nid) dessiné devant son bas. */
+  socle?: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Ellipse;
   /** Hitbox : cercle de collision (`radius` des données) centré au point au sol de l'unité. */
@@ -60,8 +62,8 @@ const INACTIVE_ALPHA = 0.25;
 
 const GROUPS: { kind: Kind; prefix: string; ids: string[] }[] = [
   { kind: 'soldier', prefix: 'soldier_', ids: Object.keys(CLASSES) },
-  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_')) },
-  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => id.startsWith('boss_')) }, // boss : ligne à part
+  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_') || id === 'boss_egg') }, // l'œuf n'est pas un boss : il rejoint les aliens (la ligne des boss est pleine)
+  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => id.startsWith('boss_') && id !== 'boss_egg') }, // boss : ligne à part
 ];
 const ZOOMS = [0.5, 1, 1.5, 2, 3, 4];
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
@@ -174,6 +176,7 @@ export class UnitViewerScene extends Phaser.Scene {
     for (const e of this.entries) {
       e.sprite.destroy();
       e.gun?.destroy();
+      e.socle?.destroy();
       e.label.destroy();
       e.shadow.destroy();
       e.hit.destroy();
@@ -218,7 +221,7 @@ ${id}` : id;
 
   /** Unité définie mais écartée du jeu (hors ACTIVE_CLASSES / ACTIVE_ALIENS ; les boss, pilotés par la timeline, comptent comme actifs). */
   private isInactive(kind: Kind, unit: string): boolean {
-    if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ACTIVE_ALIENS.includes(unit as AlienId);
+    if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ALIENS[unit as AlienId].egg && !ACTIVE_ALIENS.includes(unit as AlienId); // l'œuf des boss est en jeu
     return !ACTIVE_CLASSES.includes(unit as SoldierClassId);
   }
 
@@ -258,6 +261,8 @@ ${id}` : id;
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
     if (gun && this.isInactive(kind, unit)) gun.setAlpha(INACTIVE_ALPHA); // l'arme d'une classe inactive est transparente comme son soldat
+    const socle = kind === 'alien' && ALIENS[unit as AlienId].egg ? sprites.add(this, 'alien_boss_egg_socle', x, y).setDepth(1) : undefined;
+    if (socle) sprite.setDepth(0);
     const label = this.add
       .text(x, y + 26, this.labelOf(kind, unit, id), { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim, align: 'center' })
       .setOrigin(0.5, 0)
@@ -268,6 +273,7 @@ ${id}` : id;
       unit,
       sprite,
       gun,
+      socle,
       label,
       shadow,
       hit,
@@ -362,6 +368,10 @@ ${id}` : id;
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
     e.shadow.setPosition(e.x, e.y + oy);
+    if (e.socle) {
+      sprites.place(e.socle, 'alien_boss_egg_socle');
+      e.socle.setPosition(e.x, e.y + oy + 2).setScale(sx / e.baseScale * sprites.scaleOf('alien_boss_egg_socle'), sy / e.baseScale * sprites.scaleOf('alien_boss_egg_socle')); // suit le léger rebond de l'œuf
+    }
     const sb = this.shadowBase(e);
     e.shadow.setSize(sb.w, sb.h).setScale(e.floats ? 0.7 : 1, 1).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : SHADOW_ALPHA);
 

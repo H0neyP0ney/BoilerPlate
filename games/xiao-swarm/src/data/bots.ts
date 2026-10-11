@@ -88,7 +88,6 @@ export const BOT_UPGRADE_PRIORITY: Record<UpgradeId, number> = {
   damage: 10,
   fireRate: 9,
   hp: 8,
-  reinforce: 7,
   maxSquad: 6,
   xpGain: 5,
   speed: 5,
@@ -98,7 +97,6 @@ export const BOT_UPGRADE_PRIORITY: Record<UpgradeId, number> = {
   recruit: 3,
   teamSpirit: 6,
   lastStand: 3,
-  bossHunter: 4,
 };
 
 /** Plafond de bots dans une partie coop (avec l'hôte et les clients : `MAX_PLAYERS` au total). */

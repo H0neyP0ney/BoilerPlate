@@ -529,24 +529,63 @@ try {
     check(dist > 1500 && sim.xp.orbs.length === 0 && gotXp && sq.soldiers.length > size0 && sq.buffs.stim > 0, 'aimant : aspire globes, recrues et power-ups de toute la carte', `objets à ${dist.toFixed(0)} px ; restent ${sim.xp.orbs.length} globe(s), ${sim.recruits.items.length} recrue(s), ${sim.powerups.items.length} power-up(s)`);
   }
 
+  // ---- relance : un loot rare lâché par un alien tué (pas un power-up tiré au hasard), environ 5 par partie de 10 minutes
+  {
+    const { sim } = fresh(33);
+    if (sim.tutorial) sim.tutorial = null; // hors onboarding
+    const sq = sim.squadOf('p1');
+    const seen = new Set();
+    let hopped = false;
+    let randomReroll = false;
+    let neverExpires = true;
+    for (let t = 0; t < 600; t += 0.5) {
+      sim.powerups.update(0.5);
+      const kill = { x: sq.center.x + 300, y: sq.center.y, noRecruit: false, def: { egg: false } }; // un alien tué loin de la squad
+      sim.powerups.maybeDropReroll(kill, sq);
+      for (const p of sim.powerups.items) {
+        if (p.kind !== 'reroll' || seen.has(p.id)) continue;
+        seen.add(p.id);
+        if (p.hop) hopped = true;
+        if (p.life < 1e5) neverExpires = false; // aucune relance n'expire
+        if (Math.abs(p.x - kill.x) > 1 || Math.abs(p.y - kill.y) > 1) randomReroll = true; // né ailleurs que sur l'alien : tiré au hasard comme un power-up
+      }
+      sim.powerups.items.length = 0; // le test ne ramasse rien : on vide pour ne compter que les apparitions
+    }
+    check(seen.size >= 4 && seen.size <= 6, 'relance (loot) : environ 5 en 10 minutes', `${seen.size} relances`);
+    check(hopped && !randomReroll, 'relance (loot) : sort de l\'alien tué et retombe en cloche à l’écart');
+    check(neverExpires, 'relance (loot) : n’expire jamais');
+  }
+
+  // ---- relance : imprenable la première seconde (comme les globes d'upgrade), puis ramassée
+  {
+    const { sim } = fresh(35);
+    if (sim.tutorial) sim.tutorial = null;
+    const sq = sim.squadOf('p1');
+    sim.powerups.items.length = 0;
+    const before = sq.rerolls;
+    sim.powerups.rerollReady = true;
+    sim.powerups.maybeDropReroll({ x: sq.center.x + 5, y: sq.center.y, noRecruit: false, def: { egg: false } }, sq); // pile sur la squad : pas de saut
+    for (let i = 0; i < 8; i++) sim.powerups.update(0.1); // 0,8 s
+    check(sim.powerups.items.length === 1 && sq.rerolls === before, 'relance : imprenable pendant le délai (0,8 s)', `${sim.powerups.items.length} au sol, ${sq.rerolls - before} ramassée(s)`);
+    for (let i = 0; i < 12; i++) sim.powerups.update(0.1); // 2 s au total
+    check(sim.powerups.items.length === 0 && sq.rerolls === before + 1, 'relance : ramassée une fois le délai écoulé', `${sim.powerups.items.length} au sol, +${sq.rerolls - before}`);
+  }
+
   // ---- upgrades : aux niveaux 10, 20, 30… les 3 propositions sont prismatiques
   {
     const { sim } = fresh(19);
     const sq = sim.squadOf('p1');
     const allPrismAt = [];
     let mixedAt10 = false;
-    let offeredReinforce = false;
     for (let guard = 0; guard < 200 && sq.level < 21; guard++) {
       sq.gainXp(sq.xpNeeded - sq.xp + 0.01); // un niveau
       while (sq.offer) {
-        if (sq.offer.includes('reinforce')) offeredReinforce = true;
         const choosing = sq.level; // un seul niveau en attente à la fois ici
         if (sq.offerPrism.length === 3 && sq.offerPrism.every(Boolean)) allPrismAt.push(choosing);
         else if (choosing % 10 === 0) mixedAt10 = true;
         sim.chooseUpgrade('p1', 0);
       }
     }
-    check(!offeredReinforce, 'upgrades : le renfort (désactivé) n’est jamais proposé');
     check(allPrismAt.includes(10) && allPrismAt.includes(20) && !mixedAt10, 'upgrades : 3 propositions prismatiques aux niveaux 10 et 20', `tout prismatique aux niveaux ${allPrismAt.join(', ') || 'aucun'}`);
     // relance au niveau 30 : les prismatiques sont retirées au sort (5 % chacune), plus garanties
     while (sq.level < 29) {

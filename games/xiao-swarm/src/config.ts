@@ -97,8 +97,6 @@ export const PRISM_LEVEL_EVERY = 10;
 export const UPGRADE_CHOICE_TIME = 5;
 /** Montée de niveau : délai (s) de jeu normal entre la montée (onde de choc, texte « LEVEL UP! ») et la pause qui ouvre l'écran des cartes. */
 export const LEVEL_UP_DELAY = 0.75;
-/** Renforts express : plus proposés quand la squad dépasse déjà sa taille max d'au moins ce nombre de soldats (15/12 → plus de carte). */
-export const REINFORCE_MAX_OVERCAP = 3;
 /** Les `FREE_GAMES` premières parties jouées sont sans pub interstitielle : elle précède chaque partie à partir de la suivante (la 4e). Compteur des parties lancées, mémorisé d'une session à l'autre (`gamesPlayed`). */
 export const FREE_GAMES = 3;
 /** Interrupteur des interstitielles entre deux parties : FAUX pour le moment (seule la pub récompensée du revive est active). Remettre à `true` pour appliquer la règle `FREE_GAMES`. */
@@ -151,13 +149,13 @@ export const DIFFICULTY_DEFAULTS = {
    * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts, chaque stat avec son propre gain
    * (0,15 = +15 % par boss tué, cumulés : ×1,15 puis ×1,3225…, `Sim.escalation*`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
    */
-  bossEscalationHp: 0.15,
+  bossEscalationHp: 0.1,
   /** Escalade des dégâts (contact, tirs, flammes, explosions…) par boss ou mini-boss tué. */
-  bossEscalationDamage: 0.15,
+  bossEscalationDamage: 0.1,
   /** Escalade de la cadence d'attaque (cooldowns écoulés plus vite) par boss ou mini-boss tué. */
-  bossEscalationRate: 0.15,
+  bossEscalationRate: 0.1,
   /** Escalade de la vitesse de déplacement par boss ou mini-boss tué. */
-  bossEscalationSpeed: 0.07,
+  bossEscalationSpeed: 0.05,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).
@@ -183,17 +181,23 @@ export const DIFFICULTY_DEFAULTS = {
   /** Pendant un combat de boss : nombre de derniers envois d'avant le boss rejoués en boucle (entier ; aliens sans XP). */
   bossReplayCount: 4,
   /** Effectif des vagues rejouées pendant le combat de CHAQUE boss (× celui de leur colonne « Effectif × » dans la timeline ; 0,8 = −20 %). Rhinos jumeaux = un seul réglage. */
-  bossReplayMulGling: 0.8,
-  bossReplayMulRhino: 0.8,
-  bossReplayMulScarab: 0.8,
-  bossReplayMulTwins: 0.8,
-  bossReplayMulCrab: 0.8,
+  bossReplayMulGling: 0.75,
+  bossReplayMulRhino: 0.75,
+  bossReplayMulScarab: 0.75,
+  bossReplayMulTwins: 0.75,
+  bossReplayMulCrab: 0.75,
   // ---- aides au joueur
   /** Power-ups : premier à `powerupFirst` s, puis un toutes les `powerupEveryMin`-`powerupEveryMax` s, `powerupMax` au sol au plus (entier). */
   powerupFirst: 20,
-  powerupEveryMin: 10.6, // fréquence +10 % le 09/10 (ajout du power-up Relance ; 11,7 et 18,3 avant)
-  powerupEveryMax: 16.6,
+  powerupEveryMin: 10, // fréquence +10 % le 09/10 (ajout du power-up Relance ; 11,7 et 18,3 avant)
+  powerupEveryMax: 15,
   powerupMax: 3,
+  /**
+   * Relance (loot rose, pas un power-up) : la première à `rerollLootFirst` s, puis une toutes les ~`rerollLootEvery` s (± 20 %, plus vite avec
+   * plusieurs squads vivantes), sortie du prochain alien tué (comme une recrue) ; elle n'expire jamais. Environ 5 par partie de 10 min.
+   */
+  rerollLootFirst: 90,
+  rerollLootEvery: 110,
   /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
   rocketIdleRange: 1000,
   /** Durée du stimpack (s). */

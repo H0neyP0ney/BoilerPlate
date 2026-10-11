@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REINFORCE_MAX_OVERCAP, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -27,7 +27,7 @@ export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number,
   arena.constrain(anchor);
 }
 
-export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'bossHunter';
+export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -51,7 +51,7 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0, bossHunter: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -183,7 +183,7 @@ export class Squad {
 
   /** `reroll` : relance du joueur (niveaux 10, 20, 30… compris : les prismatiques y sont retirées au sort, plus garanties). */
   private rollOffer(avoid: readonly UpgradeId[] = [], reroll = false): void {
-    let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || this.size - this.maxSize < REINFORCE_MAX_OVERCAP));
+    let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
     const fresh = eligible.filter((id) => !avoid.includes(id));
     if (fresh.length >= OFFER_SIZE) eligible = fresh;
     const forced = this.sim.tutorial?.forcedOffer() ?? null; // onboarding : offre imposée, jamais prismatique
@@ -216,10 +216,10 @@ export class Squad {
   /**
    * Dev (panneau Triche) : progression d'une partie avancée. La squad est vidée (sans morts : à refaire avec `Sim.respawnSquad`), les
    * upgrades remises à zéro puis un choix par niveau franchi jusqu'à `level`, comme en jeu : vraie offre de 3 cartes (mêmes règles
-   * d'éligibilité, prismatique possible) et carte retenue selon `weight` (préférences du joueur ; absent = au hasard). Les renforts
-   * comptent comme pris mais leurs Gunners sont renvoyés (à ajouter à la squad refaite). XP du niveau à zéro, aucun choix en attente.
+   * d'éligibilité, prismatique possible) et carte retenue selon `weight` (préférences du joueur ; absent = au hasard). XP du niveau à zéro,
+   * aucun choix en attente.
    */
-  fastForward(level: number, weight: (id: UpgradeId) => number = () => 1): number {
+  fastForward(level: number, weight: (id: UpgradeId) => number = () => 1): void {
     this.soldiers.length = 0;
     this.detached.clear();
     this.crowd.length = 0;
@@ -233,22 +233,16 @@ export class Squad {
     this.offerPrism = [];
     this.pendingLevels = 0;
     const { rng } = this.sim;
-    let reinforcements = 0;
     for (let l = 1; l < level; l++) {
-      // squad supposée pleine : seuls les Gunners des renforts déjà pris la font dépasser son max
-      const eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks && (id !== 'reinforce' || reinforcements < REINFORCE_MAX_OVERCAP));
+      const eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
       if (eligible.length === 0) break;
       const offer = rng.sample(eligible, OFFER_SIZE);
       const id = rng.weighted(offer, weight) ?? rng.pick(offer);
       const prism = rng.chance(DIFFICULTY.prismChance);
-      if (id === 'reinforce') {
-        this.picked[id] = (this.picked[id] ?? 0) + 1;
-        reinforcements += UPGRADES.reinforce.value * (prism ? 2 : 1);
-      } else this.applyUpgrade(id, prism);
+      this.applyUpgrade(id, prism);
     }
     this.level = level;
     this.xp = 0;
-    return reinforcements;
   }
 
   /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */
@@ -316,14 +310,6 @@ export class Squad {
         s.hp += max - s.maxHp;
         s.maxHp = max;
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
-      }
-    } else if (id === 'reinforce') {
-      // proposée même squad pleine : elle dépasse alors temporairement la taille max (14/12), seuls les ramassages sont bloqués
-      for (let i = 0; i < def.value * mult; i++) {
-        const a = this.sim.rng.range(0, Math.PI * 2);
-        const r = this.radius * 0.5;
-        const s = this.recruit('trooper', { x: this.center.x + Math.cos(a) * r, y: this.center.y + Math.sin(a) * r });
-        s.invulnerable = 1;
       }
     }
   }

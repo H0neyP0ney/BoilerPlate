@@ -42,7 +42,7 @@ export function splitXp(value: number, max = 9): number[] {  // `max` = nombre m
   return out;
 }
 
-export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'reinforce' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'bossHunter';
+export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -58,36 +58,32 @@ export interface UpgradeDef {
 }
 
 export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
-  damage: { id: 'damage', stat: 'damage', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xff6a4a },
-  fireRate: { id: 'fireRate', stat: 'fireRate', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xffd166 },
+  damage: { id: 'damage', stat: 'damage', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xff2a2a },
+  fireRate: { id: 'fireRate', stat: 'fireRate', mod: { pct: 0.15 }, maxStacks: 10, value: 15, color: 0xffe8b3 },
   /** PV max +15 % ; les soldats déjà là gagnent aussi, à plat, les PV max supplémentaires (pas de soin en plus). */
   hp: { id: 'hp', stat: 'hp', mod: { pct: 0.2 }, maxStacks: 10, value: 20, color: 0x6fdc6f },
-  range: { id: 'range', stat: 'range', mod: { pct: 0.07 }, maxStacks: 5, value: 7, color: 0xe05ae0 },
+  range: { id: 'range', stat: 'range', mod: { pct: 0.08 }, maxStacks: 5, value: 8, color: 0xa178a1 },
   /** Chance de critique en points de % (stat `crit`, 0 de base) : +5 par prise, dégâts × `CRIT_MUL`, plafonné à `CRIT_MAX` % (config.ts). */
-  crit: { id: 'crit', stat: 'crit', mod: { flat: 5 }, maxStacks: 5, value: 5, color: 0xffa94d },
+  crit: { id: 'crit', stat: 'crit', mod: { flat: 5 }, maxStacks: 5, value: 5, color: 0xff7e05 },
   speed: { id: 'speed', stat: 'speed', mod: { pct: 0.07 }, maxStacks: 5, value: 7, color: 0x7dd3ff },
   maxSquad: { id: 'maxSquad', stat: 'maxSquad', mod: { flat: 2 }, maxStacks: 10, value: 2, color: 0xb388ff },
   magnet: { id: 'magnet', stat: 'magnet', mod: { pct: 0.5 }, maxStacks: 4, value: 50, color: 0x4fe0d0 },
   recruit: { id: 'recruit', stat: 'recruit', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0xff8fc8 },
   xpGain: { id: 'xpGain', stat: 'xpGain', mod: { pct: 0.25 }, maxStacks: 5, value: 25, color: 0x5aa8ff },
-  /** Effet instantané : `value` gunners rejoignent l'escouade, même au-delà de la taille max, avec un bouclier plein. Plus proposée dès que la squad dépasse déjà son max de `REINFORCE_MAX_OVERCAP` (config.ts). */
-  reinforce: { id: 'reinforce', maxStacks: 99, value: 3, color: 0xffe14a },
   /** Esprit d'équipe : +1 % de dégâts par soldat vivant de la squad, par prise (1,5 % avant le 09/10, nerf) (stat `teamSpirit`, lue par `Combat.update`). */
   teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 0.01 }, maxStacks: 4, value: 1, color: 0x1f7a4a },
   /** Dernier rempart : +2 % de dégâts par soldat MANQUANT (taille max de la squad − soldats vivants), par prise : 2, 4, 6 % (2 % avant le 09/10, 3 % ensuite : mécanique de comeback) (stat `lastStand`, lue par `Combat.update`). */
-  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.02 }, maxStacks: 3, value: 2, color: 0xe0304f },
-  /** Chasseur de boss : +30 % de dégâts aux boss et mini-boss par prise (stat `bossHunter`, lue par `Sim.damage`). */
-  bossHunter: { id: 'bossHunter', stat: 'bossHunter', mod: { flat: 0.3 }, maxStacks: 4, value: 30, color: 0xa8e04a },
+  lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.02 }, maxStacks: 3, value: 2, color: 0x8f3243 },
 };
 
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /**
- * Upgrades désactivées : jamais proposées (elles restent dans `UPGRADES` / `UPGRADE_IDS` : le format réseau n'a pas à changer).
- * `reinforce` (renforts : +3 soldats tout de suite) retirée le 08/10 : elle ne permet pas de capitaliser, personne ne la prenait.
- * `bossHunter` (Chasseur de boss) retirée le 09/10 : elle raccourcit les combats de boss.
+ * Upgrades désactivées : jamais proposées (elles restent dans `UPGRADES` / `UPGRADE_IDS` : le format réseau n'a pas à changer). Aucune pour
+ * l'instant. Supprimées pour de bon le 11/10 : `reinforce` (renforts : +3 soldats tout de suite, désactivée le 08/10 : elle ne permet pas
+ * de capitaliser) et `bossHunter` (Chasseur de boss, désactivée le 09/10 : elle raccourcit les combats de boss).
  */
-export const DISABLED_UPGRADES: readonly UpgradeId[] = ['reinforce', 'bossHunter'];
+export const DISABLED_UPGRADES: readonly UpgradeId[] = [];
 
 /** Nombre d'upgrades proposées à chaque niveau. */
 export const OFFER_SIZE = 3;

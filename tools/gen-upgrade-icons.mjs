@@ -98,15 +98,6 @@ const ICONS = {
     L(box(44, 42, 5, 15, 4), [255, 245, 235], false),
     L(circle(44, 66, 5.5), [255, 245, 235], false),
   ],
-  // Chasseur de boss : crâne dans un viseur (magenta)
-  bossHunter: [
-    L(ring(44, 44, 32, 4), [224, 90, 224]),
-    L(union(box(44, 7, 4, 9), box(44, 81, 4, 9), box(7, 44, 9, 4), box(81, 44, 9, 4)), [224, 90, 224]),
-    L(union(circle(44, 40, 18), box(44, 56, 11, 8, 3)), [240, 236, 228]),
-    L(union(circle(37, 41, 5.5), circle(51, 41, 5.5)), DARK, false),
-    L(poly([[44, 47], [47.5, 53], [40.5, 53]]), DARK, false),
-    L(union(box(40, 61, 1.2, 3), box(48, 61, 1.2, 3)), DARK, false),
-  ],
 };
 
 for (const [id, layers] of Object.entries(ICONS)) {

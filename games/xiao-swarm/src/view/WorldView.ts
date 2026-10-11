@@ -463,13 +463,9 @@ export class WorldView {
       case 'heal':
         if (nearCam(e.x, e.y)) this.fx.heal(e.x, e.y);
         break;
-      case 'squadSpawned': {
-        this.quietUntil = this.scene.time.now + 1000;
-        const ring = this.fx.ring(e.x, e.y, 200, this.colorOf(e.owner));
-        const owner = e.owner;
-        this.followers.push({ parts: [{ img: ring, dy: 0 }], pos: () => this.squadFocus(owner) }); // l'onde suit la squad qui bouge
+      case 'squadSpawned':
+        this.quietUntil = this.scene.time.now + 1000; // plus d'onde à l'apparition d'une squad (retirée le 11/10)
         break;
-      }
       case 'levelUp': {
         // tous les soldats de la squad qui monte de niveau flashent en blanc puis repassent à leur couleur (FX.levelFlash)
         for (const s of this.sim.squadOf(e.owner)?.soldiers ?? []) this.soldiers.get(s.id)?.levelFlash();

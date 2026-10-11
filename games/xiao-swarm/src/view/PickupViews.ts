@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, theme } from '@xiao/engine';
-import { DEPTH } from '../config';
+import { DEPTH, RECRUIT } from '../config';
 import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
@@ -8,6 +8,7 @@ import type { PlayerId } from '../sim/types';
 import { globeKey, loadedKey, starKey } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
 import { soldierOffsetY } from './spriteOffset';
+import { BEAM_PINK, createLootBeam, type LootBeam } from './LootBeam';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
 
@@ -30,13 +31,16 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   heal: { icon: '💚', color: POWERUP_GREEN }, // vert
   stasis: { icon: '❄️', color: 0x4aa8ff }, // bleu
   rockets: { icon: '🚀', color: 0xffb02a }, // jaune orangé
-  reroll: { icon: '🎲', color: RECRUIT_COLOR }, // jaune, comme les recrues
+  reroll: { icon: '🎲', color: UPGRADE_PINK }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
 /** Drone (medivac / freezebot) qui plane au centre d'un globe de soin / de stase : largeur (px monde) de l'image, hauteur de vol au-dessus du centre du globe, amplitude et vitesse du balancement. */
 const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 /** Largeur (px monde) du medibot : son image est plus haute que celle du freezebot à largeur égale, on la réduit pour que les deux robots paraissent de même taille. */
 const MEDIBOT_WIDTH = 46;
+
+/** Sorte de globe (image du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
+const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind);
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;
@@ -52,7 +56,7 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
   const info = POWERUP_INFO[kind];
   const scale = FX.recruit.displayScale; // même taille que les recrues et les globes d'upgrade
   const parts: Phaser.GameObjects.GameObject[] = [];
-  const globe = loadedKey(scene, globeKey(kind));
+  const globe = loadedKey(scene, globeKey(globeKind(kind)));
   if (globe) {
     parts.push(scene.add.image(0, 0, globe).setScale(scale));
   } else {
@@ -117,6 +121,10 @@ export class PickupViews {
   private readonly powerupGlitter = new Map<number, GlobeGlitter>();
   /** Position de simulation du tick courant et du précédent, par power-up : la simulation ne le déplace qu'à 30 Hz (aspiration), l'affichage l'interpole. */
   private readonly powerupPos = new Map<number, { px: number; py: number; x: number; y: number }>();
+  /** Instant où chaque power-up est apparu à l'écran (saut en cloche du loot de relance). */
+  private readonly powerupBorn = new Map<number, number>();
+  /** Colonne de lumière rose de la relance (loot rare), une par relance au sol. */
+  private readonly powerupBeam = new Map<number, LootBeam>();
   /** Position affichée (interpolée) de chaque power-up, pour le cercle au sol. */
   private readonly powerupShown = new Map<number, { x: number; y: number }>();
   /** Drone qui plane au centre de chaque globe de soin (medivac) ou de stase (freezebot), par id de champ, et son échelle d'apparition (0 → 1, rebond). */
@@ -212,6 +220,8 @@ export class PickupViews {
         this.powerups.set(p.id, box);
         this.powerupPos.set(p.id, { px: p.x, py: p.y, x: p.x, y: p.y });
       }
+      const born = this.powerupBorn.get(p.id) ?? time;
+      this.powerupBorn.set(p.id, born);
       const pos = this.powerupPos.get(p.id)!;
       if (pos.x !== p.x || pos.y !== p.y) {
         pos.px = pos.x;
@@ -223,11 +233,21 @@ export class PickupViews {
       const y = lerp(pos.py, pos.y, alpha);
       this.powerupShown.set(p.id, { x, y });
       const blink = p.life < 3.5 && Math.sin(time * 18) > 0;
-      const cy = y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(time * 4 + p.id) * 4;
+      if (p.kind === 'reroll') {
+        let beam = this.powerupBeam.get(p.id);
+        if (!beam) this.powerupBeam.set(p.id, (beam = createLootBeam(this.scene, BEAM_PINK, p.id)));
+        const landed = time - born >= RECRUIT.hopTime; // la colonne apparaît quand la relance a fini de retomber
+        beam.setVisible(landed);
+        if (landed) beam.setPosition(x, y, DEPTH.fx + 1.5, time);
+      }
+      // loot de relance : saut en cloche à la sortie de l'alien, comme une recrue (le déplacement au sol vient de la simulation)
+      const hk = p.kind === 'reroll' ? (time - born) / RECRUIT.hopTime : 1; // loot de relance : saut en cloche à la sortie de l'alien / de l'œuf
+      const hop = hk >= 0 && hk < 1 ? 4 * RECRUIT.hopHeight * hk * (1 - hk) : 0;
+      const cy = y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(time * 4 + p.id) * 4 - hop;
       box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
       let glitter = this.powerupGlitter.get(p.id);
       if (!glitter) {
-        const tex = loadedKey(this.scene, starKey(p.kind)); // l'étoile de la recrue, à la couleur du power-up
+        const tex = loadedKey(this.scene, starKey(globeKind(p.kind))); // l'étoile de la recrue, à la couleur du power-up (relance : étoile rose des globes d'upgrade)
         const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
         if (made) this.powerupGlitter.set(p.id, (glitter = made));
       }
@@ -237,6 +257,9 @@ export class PickupViews {
       if (live.has(id)) continue;
       this.powerups.delete(id);
       this.powerupPos.delete(id);
+      this.powerupBorn.delete(id);
+      this.powerupBeam.get(id)?.destroy();
+      this.powerupBeam.delete(id);
       this.powerupShown.delete(id);
       this.powerupGlitter.get(id)?.destroy();
       this.powerupGlitter.delete(id);

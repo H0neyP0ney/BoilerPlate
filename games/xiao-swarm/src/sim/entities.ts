@@ -201,6 +201,10 @@ export interface PowerUpState {
   caught?: boolean;
   /** Vitesse (px/s) d'un objet attrapé qui vole vers son soldat : elle croît jusqu'à `PICKUP.maxSpeed` (`Pickup.chase`). */
   pullV?: number;
+  /** Loot de relance : saut en cloche à la sortie de l'alien (comme une recrue), en l'air ni aimant ni ramassage (simulation seulement ; l'affichage trace l'arc). */
+  hop?: { vx: number; vy: number; t: number };
+  /** Loot de relance : âge (s) depuis sa chute ; imprenable avant `DIFFICULTY.chestOrbGrace`, comme les globes d'upgrade (simulation seulement). */
+  age?: number;
 }
 
 /** Zone persistante laissée par un power-up : globe de soin (soigne les soldats dedans) ou de stase (ralentit énormément les aliens). */

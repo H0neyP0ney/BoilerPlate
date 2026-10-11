@@ -30,8 +30,8 @@ import { UPGRADE_IDS } from '../data/progression';
  */
 export const ASSETS: AssetEntry[] = [
   // Œuf d'un boss tué et son socle (nid) — art-src/egg_socle.png séparé et réduit de moitié par `node tools/slice-egg.mjs` ; l'œuf est l'alien `boss_egg` (view/UnitViews.ts pose le socle devant son bas).
-  { type: 'image', id: 'alien_boss_egg', url: 'aliens/egg.png', originX: 0.5, originY: 0.82, scale: 0.65 },
-  { type: 'image', id: 'alien_boss_egg_socle', url: 'aliens/egg_socle.png', originX: 0.5, originY: 0.5, scale: 0.65 },
+  { type: 'image', id: 'alien_boss_egg', url: 'aliens/egg.png', originX: 0.5, originY: 0.82, scale: 0.88, shadow: 41, offsetY: 10 },
+  { type: 'image', id: 'alien_boss_egg_socle', url: 'aliens/egg_socle.png', originX: 0.5, originY: 0.5, scale: 0.76, offsetY: 12.5 },
   // Obstacles volcaniques — art-src/obstacle_N.png convertis en WebP. Échelle, ancrage et hitbox : data/obstacles.ts.
   // Taches sombres posées sous les obstacles pour les fondre dans le sol — art-src/tache_N.png réduits de moitié (WebP).
   ...[1, 2, 3, 4].map((n): AssetEntry => ({ type: 'image', id: `tache_${n}`, url: `decor/tache_${n}.webp` })),
@@ -46,6 +46,9 @@ export const ASSETS: AssetEntry[] = [
   ...(['button', 'pause', 'sound', 'music'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_hud_${n}`, url: `ui/hud/${n}.png` })),
   // Fond des cartes d'upgrade : une seule carte de base (art-src/card_upgrade.png recadrée par `node tools/slice-upgrade-cards.mjs`) ; les cartes de chaque upgrade et la prismatique en sont fabriquées au lancement (art/cardTextures.ts), affichées par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_card_base', url: 'ui/cards/card_base.png' },
+  // Touches du clavier du tutoriel — art-src/keyboard.png découpé par `node tools/slice-keyboard.mjs` : la touche et les lettres W A S D Z Q ; affichées par scenes/HudScene.ts (`makeHint`).
+  { type: 'image', id: 'ui_key', url: 'ui/keys/key.png' },
+  ...(['W', 'A', 'S', 'D', 'Z', 'Q'] as const).map((l): AssetEntry => ({ type: 'image', id: `ui_key_${l}`, url: `ui/keys/key_${l}.png` })),
   // Bouton « Relancer » du choix d'upgrade — art-src/bouton_reroll.png rogné par `node tools/slice-reroll-button.mjs` ; affiché par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_reroll', url: 'ui/reroll.png' },
   // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.

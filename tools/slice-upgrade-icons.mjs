@@ -24,7 +24,6 @@ const ICONS = {
   range: [622, 18, 766, 164], // cible
   crit: [824, 21, 982, 166], // explosion
   speed: [15, 190, 138, 313], // botte
-  reinforce: [172, 191, 316, 310], // escouade +
   magnet: [343, 196, 476, 312], // aimant
   recruit: [506, 189, 645, 326], // casque +1
   xpGain: [676, 182, 818, 333], // globe d'XP

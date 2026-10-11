@@ -32,8 +32,12 @@ try {
   const lag = async (client) => {
     for (let i = 0; i < LAG_TICKS; i++) await tick(client);
   };
+  const sizes = (s) => s.squads.map((q) => `${q.owner}:${q.size}`).join(' ');
+  const sizeHistory = []; // tailles des squads de l'hôte aux derniers ticks : le client affiche l'état d'il y a LAG_TICKS ticks
   const tick = async (client) => {
     host.advance(1000 / 30, (e) => hostEvents.push(e));
+    sizeHistory.push(sizes(host.sim));
+    if (sizeHistory.length > LAG_TICKS + 2) sizeHistory.shift();
     client?.advance(1000 / 30, (e) => clientEvents.push(e));
     hub.pump();
     await new Promise((r) => setImmediate(r));
@@ -59,8 +63,7 @@ try {
   for (let i = 0; i < seconds * 30; i++) await tick(client);
   const hs = host.sim;
   const cs = client.sim;
-  const sizes = (s) => s.squads.map((q) => `${q.owner}:${q.size}`).join(' ');
-  check(sizes(hs) === sizes(cs), 'mêmes squads et tailles', `hôte [${sizes(hs)}] client [${sizes(cs)}]`);
+  check(sizeHistory.includes(sizes(cs)), 'mêmes squads et tailles (à l’interpolation près)', `hôte [${sizes(hs)}] client [${sizes(cs)}]`);
   check(Math.abs(hs.aliens.length - cs.aliens.length) <= 3, 'même nombre d\'aliens (±3)', `${hs.aliens.length} vs ${cs.aliens.length}`);
   check(Math.abs(hs.time - cs.time) < 0.2, 'même horloge de jeu', `${hs.time.toFixed(2)} vs ${cs.time.toFixed(2)}`);
   let maxErr = 0;
@@ -362,21 +365,6 @@ try {
   // plus aucun bouclier de soldat : le power-up a disparu (seuls certains aliens, comme le Scarab, en ont)
   const onS = a.soldiers.find((s) => s.alive);
   check(a.soldiers.every((s) => s.shield === 0 && s.maxShield === 0), 'aucun soldat n’a de bouclier');
-  // renforts express : proposés et pris même squad pleine (dépassement du cap), sans aucun bouclier
-  { const n0 = a.soldiers.length; a.stats.add('maxSquad', { flat: n0 - a.maxSize }); // plafond = taille actuelle : squad pleine
-    a.pendingLevels = 1; a.offer = ['reinforce']; a.offerPrism = [false];
-    const before = new Set(a.soldiers);
-    a.chooseUpgrade(0);
-    check(a.soldiers.length === n0 + 3 && a.size > a.maxSize, 'renforts express : +3 soldats même squad pleine (dépasse le cap)', `${a.size}/${a.maxSize}`);
-    const fresh = a.soldiers.filter((s) => !before.has(s));
-    check(fresh.length === 3 && a.soldiers.every((s) => s.shield === 0), 'renforts express : aucun bouclier, ni pour les renforts ni pour le reste de la squad');
-    // plus proposés quand la squad dépasse déjà son max de 3 (ou plus) ; encore proposés à +2
-    const { REINFORCE_MAX_OVERCAP } = await vite.ssrLoadModule('/src/config.ts');
-    const offers = (over) => { a.stats.add('maxSquad', { flat: a.size - over - a.maxSize }); let seen = false;
-      for (let k = 0; k < 60 && !seen; k++) { a.offer = null; a.pendingLevels = 1; a.rollPending(); seen = !!a.offer?.includes('reinforce'); } a.offer = null; a.pendingLevels = 0; return seen; };
-    const { DISABLED_UPGRADES } = await vite.ssrLoadModule('/src/data/progression.ts');
-    if (DISABLED_UPGRADES.includes('reinforce')) check(!offers(0) && !offers(-3), 'renforts express : désactivés, jamais proposés (DISABLED_UPGRADES)');
-    else check(!offers(REINFORCE_MAX_OVERCAP) && !offers(REINFORCE_MAX_OVERCAP + 2) && offers(REINFORCE_MAX_OVERCAP - 1), `renforts express : plus proposés quand la squad dépasse déjà son max de ${REINFORCE_MAX_OVERCAP}`); }
   // Scarab : bouclier = 10 % de ses PV max, régénéré vite après 5 s sans dégâts (encodage conditionnel par type : lecture fidèle chez le client)
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);

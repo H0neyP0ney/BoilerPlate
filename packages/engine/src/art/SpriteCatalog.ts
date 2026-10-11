@@ -37,6 +37,8 @@ export interface SpriteDef {
   shadow?: number;
   /** Décalage vertical (px, positif = vers le bas) du sprite ET de son ombre portée par rapport au point au sol (la hitbox, elle, ne bouge pas). Absent = 0. */
   offsetY?: number;
+  /** Décalage horizontal (px, positif = vers la droite) du sprite par rapport au point au sol. Absent = 0. Sert aux éléments posés à part d'une unité (ex. le socle de l'œuf de boss). */
+  offsetX?: number;
   /** Ne pas afficher (ex. arme déjà dessinée dans la planche du soldat). */
   hidden?: boolean;
   /** Animations : nom logique ('idle', 'walk', 'shoot'…) → clé d'animation Phaser. */

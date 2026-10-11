@@ -272,9 +272,6 @@ export class SoldierView {
 /** Silhouettes fantômes de la charge (chargeur, rhinocéros) : intervalle (s), durée d'effacement (s), opacité de départ, teinte. */
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
-/** Décalage vertical (px) du socle de l'œuf par rapport au point au sol de l'œuf : le nid, dessiné devant, recouvre le bas de l'œuf. */
-const EGG_SOCLE_DY = 2;
-
 export class AlienView {
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
   private attackStarted = false;
@@ -452,7 +449,8 @@ export class AlienView {
     this.body.setVisible(!hidden);
     if (this.socle) {
       sprites.place(this.socle, 'alien_boss_egg_socle');
-      this.socle.setPosition(this.rx, this.ry + EGG_SOCLE_DY).setDepth(DEPTH.actors + this.ry + 0.5).setVisible(!hidden); // DEVANT l'œuf : le nid entoure son bas
+      const sd = sprites.get('alien_boss_egg_socle'); // le nid, dessiné devant, recouvre le bas de l'œuf ; position et échelle propres (visionneuse d'unités : poignées orange de l'œuf)
+      this.socle.setScale(sprites.scaleOf('alien_boss_egg_socle')).setPosition(this.rx + (sd.offsetX ?? 0), this.ry + (sd.offsetY ?? 0)).setDepth(DEPTH.actors + this.ry + 0.5).setVisible(!hidden); // DEVANT l'œuf : le nid entoure son bas
     }
     // enfouissement : `show` = part du sprite au-dessus du sol, en partant du haut (BURIED). Lurker : s'enfonce (1) jusqu'à n'en laisser
     // dépasser que le haut, semi-enterré (2-4), ressort (5). Scarab : s'enfonce (1), totalement enterré (2), ressort (3). Recyclage : s'enfonce.

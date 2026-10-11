@@ -86,6 +86,15 @@ export function keyLabel(bind: HotkeyBind): string {
   return nominalLabel(bind.code);
 }
 
+/**
+ * Lettres des touches de déplacement PAR DÉFAUT (haut, gauche, bas, droite) telles qu'imprimées sur le clavier du joueur : W A S D sur un QWERTY,
+ * Z Q S D sur un AZERTY. Le tutoriel les montre toujours, quelles que soient les touches choisies dans Options > Hotkeys.
+ */
+export function defaultMoveLabels(): [string, string, string, string] {
+  const l = (a: HotkeyAction): string => keyLabel({ code: HOTKEY_DEFAULTS[a] });
+  return [l('up'), l('left'), l('down'), l('right')];
+}
+
 /** Libellé à mémoriser au moment où le joueur appuie sur la touche : la lettre réellement imprimée dessus (« Z » pour la touche W d'un AZERTY). */
 export function labelFromEvent(e: KeyboardEvent): string {
   if (e.code.startsWith('Key') && e.key.length === 1) return e.key.toUpperCase();

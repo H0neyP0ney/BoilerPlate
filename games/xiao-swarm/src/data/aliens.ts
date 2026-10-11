@@ -194,7 +194,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Petit cafard (id historique `gling`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
   gling: {
     id: 'gling',
-    hp: 22.5, // avant : 15 (×1.5 intégré le 09/10) ; -10 %
+    hp: 21.375, // avant : 15 (×1.5 intégré le 09/10) ; -10 %
     speed: 225, // avant : 180 (×1.25 intégré le 09/10) ; +40 %
     radius: 13,
     mass: 0.6,
@@ -211,7 +211,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime de base (vert). */
   slime: {
     id: 'slime',
-    hp: 82.5, // avant : 55 (×1.5 intégré le 09/10)
+    hp: 78.375, // avant : 55 (×1.5 intégré le 09/10)
     speed: 90, // avant : 72 (×1.25 intégré le 09/10)
     radius: 19.5,
     mass: 1,
@@ -228,7 +228,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
   shooter: {
     id: 'shooter',
-    hp: 105, // avant : 70 (×1.5 intégré le 09/10)
+    hp: 99.75, // avant : 70 (×1.5 intégré le 09/10)
     speed: 68.75, // avant : 55 (×1.25 intégré le 09/10)
     radius: 24,
     mass: 3,
@@ -246,7 +246,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Kamikaze : fonce sur les soldats ; le tuer déclenche une explosion retardée (il faut le tuer de loin). */
   kamikaze: {
     id: 'kamikaze',
-    hp: 37.5, // avant : 25 (×1.5 intégré le 09/10)
+    hp: 35.625, // avant : 25 (×1.5 intégré le 09/10)
     speed: 131.25, // avant : 105 (×1.25 intégré le 09/10)
     radius: 23.5,
     mass: 1,
@@ -263,7 +263,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Grenouille : reste à distance, tire la langue sur un soldat et le tire vers elle. */
   toad: {
     id: 'toad',
-    hp: 60, // avant : 40 (×1.5 intégré le 09/10)
+    hp: 57, // avant : 40 (×1.5 intégré le 09/10)
     speed: 87.5, // avant : 70 (×1.25 intégré le 09/10)
     radius: 25,
     mass: 1.4,
@@ -280,7 +280,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Rhinocéros : lent à quatre pattes, mais charge toutes les 5 s dans une zone signalée en rouge. */
   charger: {
     id: 'charger',
-    hp: 700, // avant : 300 (×1.5 intégré le 09/10) ; ×3
+    hp: 665, // avant : 300 (×1.5 intégré le 09/10) ; ×3
     speed: 87.5, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
     radius: 39,
     mass: 5,
@@ -299,7 +299,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Cracheur : crache quelques boules violettes en cloche qui laissent une flaque ralentissante. */
   spitter: {
     id: 'spitter',
-    hp: 150, // avant : 100 (×1.5 intégré le 09/10)
+    hp: 142.5, // avant : 100 (×1.5 intégré le 09/10)
     speed: 112.5, // avant : 90 (×1.25 intégré le 09/10)
     radius: 28,
     mass: 1.2,
@@ -317,7 +317,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Chaman : slime magique qui reste en retrait et ressuscite les slimes morts depuis leur flaque (une fois chacun). */
   shaman: {
     id: 'shaman',
-    hp: 90, // avant : 60 (×1.5 intégré le 09/10)
+    hp: 85.5, // avant : 60 (×1.5 intégré le 09/10)
     speed: 75, // avant : 60 (×1.25 intégré le 09/10)
     radius: 24,
     mass: 1.5,
@@ -336,7 +336,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bâtisseur de murs : de très loin, fait surgir (après un télégraphe jaune) des murs allongés autour de la squad pour gêner sa fuite. */
   wall: {
     id: 'wall',
-    hp: 225, // avant : 150 (×1.5 intégré le 09/10)
+    hp: 213.75, // avant : 150 (×1.5 intégré le 09/10)
     speed: 75, // avant : 60 (×1.25 intégré le 09/10)
     radius: 32.5,
     mass: 1.3,
@@ -353,7 +353,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Lurker : s'enterre sur le trajet anticipé de la squad et la frappe d'une ligne de pics (comme les lurkers de StarCraft). */
   lurker: {
     id: 'lurker',
-    hp: 600, // avant : 350 (×1.5 intégré le 09/10) ; ×3
+    hp: 570, // avant : 350 (×1.5 intégré le 09/10) ; ×3
     speed: 200, // avant : 120 (×1.25 intégré le 09/10)
     radius: 29.5,
     mass: 2,
@@ -370,7 +370,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
     id: 'bubble',
-    hp: 3500, // avant : 2000 (×1.5 intégré le 09/10) ; ×3
+    hp: 3325, // avant : 2000 (×1.5 intégré le 09/10) ; ×3
     speed: 280, // avant : 210 (×1.25 intégré le 09/10)
     radius: 22,
     mass: 3,
@@ -390,7 +390,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime de feu : laisse derrière lui une traînée de flammes qui brûle les soldats qui marchent dedans. */
   burner: {
     id: 'burner',
-    hp: 120, // avant : 80 (×1.5 intégré le 09/10) ; x2
+    hp: 114, // avant : 80 (×1.5 intégré le 09/10) ; x2
     speed: 106.25, // avant : 85 (×1.25 intégré le 09/10)
     radius: 29,
     mass: 1,
@@ -407,7 +407,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (2:00) : énorme rhinocéros, charge tous les 4,5 s dans un couloir large signalé en rouge. */
   boss_rhino: {
     id: 'boss_rhino',
-    hp: 10000, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
+    hp: 9500, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10) ; 55 + 30 %
     radius: 50,
     mass: 14,
@@ -429,7 +429,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   boss_rhino_fire: {
     id: 'boss_rhino_fire',
-    hp: 15000, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (5:00) et le Giant Crab (10:00)
+    hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (5:00) et le Giant Crab (10:00)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
     mass: 14,
@@ -447,7 +447,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   boss_rhino_ice: {
     id: 'boss_rhino_ice',
-    hp: 15000,
+    hp: 14250,
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
     mass: 14,
@@ -466,7 +466,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (5:00) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
-    hp: 20000, // 1500 × 11
+    hp: 19000, // 1500 × 11
     speed: 187.5, // avant : 150 (×1.25 intégré le 09/10) ; ×3
     radius: 68,
     mass: 50,
@@ -487,7 +487,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4 s pour faire apparaître 22 araignées (`spider`) en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
-    hp: 6000, // 600 × 11 (600 = +30 % de 500)
+    hp: 5700, // 600 × 11 (600 = +30 % de 500)
     speed: 106.25, // avant : 85 (×1.25 intégré le 09/10)
     radius: 43.5,
     mass: 14,
@@ -505,7 +505,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime bleu ciel (difficulté 3/10, dès 45 s) : lance une boucle de glace qui gèle les soldats touchés dans un glaçon. */
   iceballer: {
     id: 'iceballer',
-    hp: 105, // avant : 70 (×1.5 intégré le 09/10)
+    hp: 99.75, // avant : 70 (×1.5 intégré le 09/10)
     speed: 77.5, // avant : 62 (×1.25 intégré le 09/10)
     radius: 17,
     mass: 1.1,
@@ -561,7 +561,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */
   boss_crab: {
     id: 'boss_crab',
-    hp: 50000, // 3000 × 11
+    hp: 47500, // 3000 × 11
     speed: 60, // avant : 48 (×1.25 intégré le 09/10)
     radius: 75, // 3× plus gros (affichage et collision)
     scale: 3,
@@ -585,7 +585,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   spider: {
     id: 'spider',
-    hp: 22.5, // avant : 15 (×1.5 intégré le 09/10)
+    hp: 21.375, // avant : 15 (×1.5 intégré le 09/10)
     speed: 225, // avant : 180 (×1.25 intégré le 09/10)
     radius: 18,
     mass: 0.6,

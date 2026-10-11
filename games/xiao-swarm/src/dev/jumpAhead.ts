@@ -21,7 +21,7 @@ export type JumpId = keyof typeof JUMPS;
  * Préférences du joueur entre les 3 cartes proposées (% des upgrades prises dans les parties enregistrées, docs/bench/runs, 291 choix) :
  * la carte retenue à chaque niveau de la partie avancée est tirée avec ces poids.
  */
-const PICK_WEIGHTS: Record<UpgradeId, number> = { damage: 17.9, crit: 12, hp: 11, fireRate: 10.7, maxSquad: 9.3, speed: 8.6, range: 7.9, reinforce: 6.5, magnet: 6.5, recruit: 5.2, xpGain: 4.5, teamSpirit: 6, lastStand: 3, bossHunter: 5 };
+const PICK_WEIGHTS: Record<UpgradeId, number> = { damage: 17.9, crit: 12, hp: 11, fireRate: 10.7, maxSquad: 9.3, speed: 8.6, range: 7.9, magnet: 6.5, recruit: 5.2, xpGain: 4.5, teamSpirit: 6, lastStand: 3 };
 
 /**
  * Partie avancée (outil de test, hors ligne), au point `id` de `JUMPS` : terrain vidé, timeline des vagues reprise juste après l'apparition
@@ -47,9 +47,9 @@ export function jumpAhead(sim: Sim, me: PlayerId, id: JumpId = 'scarab'): string
   sim.fastForward(cursor + (J.after ? J.fight : 0), cursor, kills); // temps de partie : + la durée du combat qu'on vient de « jouer »
   const sq = sim.squadOf(me);
   if (!sq) return '';
-  const reinforcements = sq.fastForward(J.level, (u) => PICK_WEIGHTS[u]);
-  // Gunners seulement (classes spéciales retirées du jeu en attendant les pièces) ; les renforts dépassent la taille max, comme en jeu
-  sim.respawnSquad(me, Array.from({ length: sq.maxSize + reinforcements }, () => 'trooper'), 2);
+  sq.fastForward(J.level, (u) => PICK_WEIGHTS[u]);
+  // Gunners seulement (classes spéciales retirées du jeu en attendant les pièces)
+  sim.respawnSquad(me, Array.from({ length: sq.maxSize }, () => 'trooper'), 2);
   const picks = Object.entries(sq.picked).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).map(([id, n]) => `${id} ×${n}`).join(', ');
   return `${J.label} (${kills} boss tués) — niveau ${sq.level}, ${sq.size} soldats\n${picks}`;
 }

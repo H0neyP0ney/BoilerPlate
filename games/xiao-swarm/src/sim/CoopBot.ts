@@ -128,7 +128,6 @@ export class CoopBot {
     let bestScore = -Infinity;
     offer.forEach((id, i) => {
       let score = BOT_UPGRADE_PRIORITY[id] * (sq.offerPrism[i] ? 2 : 1);
-      if (id === 'reinforce' && sq.size < sq.maxSize * 0.5) score *= 1.5; // squad décimée : des soldats d'abord
       if (score > bestScore) {
         bestScore = score;
         best = i;

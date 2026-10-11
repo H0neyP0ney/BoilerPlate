@@ -1,10 +1,13 @@
-import { DIFFICULTY, POWERUP_LIFE } from '../config';
-import type { Field, PowerUpKind, PowerUpState } from './entities';
+import { Rng } from '@xiao/engine/sim';
+import { DIFFICULTY, POWERUP_LIFE, RECRUIT } from '../config';
+import type { AlienState, Field, PowerUpKind, PowerUpState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll'];
+/** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
+const REROLL_FALL_DIST: [number, number] = [50, 100];
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
@@ -20,12 +23,17 @@ const ROCKETS = 30;
 /**
  * Power-ups : de temps en temps un petit boost apparaît près d'une squad vivante et disparaît vite si personne ne le prend.
  * Ramassé par un soldat, il applique son effet à sa squad : stimpack, aimant à XP (coup unique), globe de soin (persistant), globe de
- * stase (persistant), rafale de roquettes, relance (+1 relance des choix d'upgrade). Seul l'hôte / le solo simule ; l'état passe dans les snapshots.
+ * stase (persistant), rafale de roquettes. Seul l'hôte / le solo simule ; l'état passe dans les snapshots.
+ * La relance (+1 relance des choix d'upgrade) n'est PAS un power-up tiré au hasard : c'est un loot rare, lâché par un alien tué comme une
+ * recrue (`maybeDropReroll`) ; il réutilise l'entité et le ramassage des power-ups (kind `reroll`).
  */
 export class PowerUps {
   readonly items: PowerUpState[] = [];
   readonly fields: Field[] = [];
   private timer: number = DIFFICULTY.powerupFirst;
+  /** Relance (loot) : compte à rebours (s) avant la prochaine, puis `rerollReady` = elle sortira de l'alien tué suivant. */
+  private rerollTimer: number = DIFFICULTY.rerollLootFirst;
+  private rerollReady = false;
 
   constructor(private readonly sim: Sim) {}
 
@@ -36,8 +44,37 @@ export class PowerUps {
     return p;
   }
 
+  /**
+   * Relance (loot) : si une relance est « prête » (compte à rebours écoulé), l'alien tué la laisse : elle retombe en cloche à l'écart, dans une
+   * direction au hasard à 50-100 px de l'alien (comme les globes d'upgrade, PAS vers la squad comme une recrue). Pas pendant le tutoriel, ni pour un
+   * alien invoqué / ressuscité, ni pour l'œuf d'un boss.
+   */
+  maybeDropReroll(a: AlienState, killer: Squad | undefined): void {
+    if (!this.rerollReady || this.sim.tutorial?.active || a.noRecruit || a.def.egg) return;
+    const squad = killer ?? this.sim.nearestSquad(a.x, a.y);
+    if (!squad) return;
+    this.rerollReady = false;
+    this.rerollTimer = this.nextRerollDelay();
+    const p = this.drop('reroll', a.x, a.y, true); // forcé : la relance n'expire jamais
+    p.age = 0; // imprenable la première seconde, comme les globes d'upgrade
+    const rng = new Rng((p.id * 2654435761) >>> 0); // propre au loot : ne décale pas la séquence aléatoire de la simulation
+    const ang = rng.range(0, Math.PI * 2);
+    const dist = rng.range(REROLL_FALL_DIST[0], REROLL_FALL_DIST[1]);
+    p.hop = { vx: (Math.cos(ang) * dist) / RECRUIT.hopTime, vy: (Math.sin(ang) * dist) / RECRUIT.hopTime, t: RECRUIT.hopTime };
+  }
+
+  /** Délai (s) avant la relance suivante : `rerollLootEvery` ± 20 %. */
+  private nextRerollDelay(): number {
+    return DIFFICULTY.rerollLootEvery * this.sim.rng.range(0.8, 1.2);
+  }
+
   update(dt: number): void {
     const { rng } = this.sim;
+    if (!this.sim.tutorial?.active && !this.rerollReady) {
+      // plus il y a de squads vivantes, plus le compte à rebours est rapide : à peu près autant de relances par joueur
+      this.rerollTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
+      if (this.rerollTimer <= 0) this.rerollReady = true;
+    }
     if (!this.sim.tutorial?.active) {
       // pendant le tutoriel, aucun power-up au hasard : seuls ceux du script apparaissent
       this.timer -= dt;
@@ -49,10 +86,21 @@ export class PowerUps {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const p = this.items[i];
       if (!p.caught) p.life -= dt; // attrapé : il ne disparaît plus
+      if (p.age !== undefined) p.age += dt;
       if (p.life <= 0) {
         this.items.splice(i, 1);
         continue;
       }
+      // saut en cloche à la sortie de l'alien (loot de relance) : en l'air, ni aimant ni ramassage
+      if (p.hop) {
+        const { minX, maxX, minY, maxY } = this.sim.arena.bounds;
+        p.x = Math.min(maxX, Math.max(minX, p.x + p.hop.vx * dt));
+        p.y = Math.min(maxY, Math.max(minY, p.y + p.hop.vy * dt));
+        p.hop.t -= dt;
+        if (p.hop.t <= 0) p.hop = undefined;
+        continue;
+      }
+      if (p.age !== undefined && p.age < DIFFICULTY.chestOrbGrace) continue; // imprenable la première seconde : on le voit d'abord retomber
       // attiré par le soldat le plus proche dont la squad a l'aimant (stat `magnet` : rayon d'attraction, de ramassage et vitesse)
       const pulled = p.pulled ? pulledAttractor(this.sim, p.x, p.y, p.pulled) : undefined; // aspiré par le power-up aimant : vole vers la squad
       if (p.pulled && !pulled) p.pulled = undefined;
@@ -133,7 +181,7 @@ export class PowerUps {
   /** Aimant : les power-ups à moins de `radius` px de la squad sont aspirés vers elle (le power-up aimant lui-même vient d'être ramassé). */
   private magnetize(squad: Squad, radius: number): void {
     for (const p of this.items) {
-      if (Math.hypot(squad.center.x - p.x, squad.center.y - p.y) > radius) continue;
+      if (p.hop || (p.age !== undefined && p.age < DIFFICULTY.chestOrbGrace) || Math.hypot(squad.center.x - p.x, squad.center.y - p.y) > radius) continue; // en l'air ou imprenable : l'aimant ne l'aspire pas
       p.pulled = squad.owner;
       catchItem(p); // il ne disparaît pas en route
     }
@@ -152,5 +200,7 @@ export class PowerUps {
     this.items.length = 0;
     this.fields.length = 0;
     this.timer = DIFFICULTY.powerupFirst;
+    this.rerollTimer = DIFFICULTY.rerollLootFirst;
+    this.rerollReady = false;
   }
 }

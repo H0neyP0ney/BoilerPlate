@@ -518,7 +518,6 @@ export class Sim {
     if (this.horde.burial(u) === 'semi') amount *= BURIED.semiDmg; // semi-enterré (lurker en embuscade)
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     const sq = attacker ? this.squadOf(attacker) : undefined;
-    if (sq && u.def.boss) amount *= 1 + sq.stats.get('bossHunter'); // upgrade Chasseur de boss (boss et mini-boss)
     const effective = Math.min(amount, Math.max(0, u.hp) + u.shield); // PV et bouclier réellement retirés (sans l'overkill)
     this.metrics.dealt += effective;
     if (sq) sq.dealt += effective;
@@ -855,6 +854,7 @@ export class Sim {
       return;
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
+    this.powerups.maybeDropReroll(a, squad); // loot rare : ~5 relances par partie (DIFFICULTY.rerollLootFirst / rerollLootEvery)
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y), dirX, dirY); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { device, music, sfx, theme, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
-import { keyLabel } from '../hotkeys';
+import { defaultMoveLabels } from '../hotkeys';
 import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
@@ -629,10 +629,9 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
   }
 
-  /** « WASD » (ou les touches choisies : « ZQSD », « I / J / K / L »…) pour le texte du tutoriel. */
+  /** « WASD » ou « ZQSD » selon le clavier (touches par défaut, jamais celles choisies dans Options) pour le texte du tutoriel. */
   private moveKeysText(): string {
-    const l = [settings.hotkeys.up, settings.hotkeys.left, settings.hotkeys.down, settings.hotkeys.right].map(keyLabel);
-    return l.every((x) => x.length === 1) ? l.join('') : l.join(' / ');
+    return defaultMoveLabels().join('');
   }
 
   private makeHint(): Phaser.GameObjects.Container {
@@ -665,18 +664,16 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
         },
       });
     } else {
-      // clavier : vraies touches W / A S D dessinées (une touche s'enfonce à tour de rôle)
-      label.setY(96);
-      const caps: [string, number, number][] = [[keyLabel(settings.hotkeys.up), 0, -26], [keyLabel(settings.hotkeys.left), -52, 26], [keyLabel(settings.hotkeys.down), 0, 26], [keyLabel(settings.hotkeys.right), 52, 26]]; // touches choisies dans Options > Hotkeys
+      // clavier : vraies touches (image `ui_key`) avec la lettre dessinée (`ui_key_<lettre>`) : toujours WASD ou ZQSD selon le clavier, quelles que soient les touches choisies dans Options ; une touche s'enfonce à tour de rôle
+      label.setY(152); // sous les touches (descendues de 40 px, texte compris)
+      const [up, left, down, right] = defaultMoveLabels();
+      const caps: [string, number, number][] = [[up, 0, 10], [left, -65, 70], [down, 0, 70], [right, 65, 70]];
       caps.forEach(([letter, kx, ky], i) => {
         const key = this.add.container(kx, ky);
-        const g = this.add.graphics();
-        g.fillStyle(0x0a1422, 0.55).fillRoundedRect(-24, -20, 48, 48, 9); // ombre
-        g.fillStyle(0x2a3a52, 1).fillRoundedRect(-24, -24, 48, 48, 9); // flanc de la touche
-        g.fillStyle(0xf2f5fa, 1).fillRoundedRect(-22, -24, 44, 42, 8); // dessus
-        g.lineStyle(2, 0x13233a, 1).strokeRoundedRect(-22, -24, 44, 42, 8);
-        const txt = this.add.text(0, -3, letter, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#13233a' }).setOrigin(0.5);
-        key.add([g, txt]);
+        const face = this.textures.exists(`ui_key_${letter}`)
+          ? this.add.image(0, -6, `ui_key_${letter}`)
+          : this.add.text(0, -6, letter, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#0c2f66', strokeThickness: 5 }).setOrigin(0.5);
+        key.add([this.add.image(0, 0, 'ui_key'), face]);
         c.add(key);
         // à tour de rôle, la touche s'enfonce de quelques pixels
         // ordre W → A → S → D (haut, gauche, bas, droite = sens anti-horaire) ; chaque touche se relève avant que la suivante s'enfonce, le cycle boucle régulièrement

@@ -8,6 +8,7 @@ import type { UpgradeOrbState } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { createGlobeGlitter, GLOBE_LIFT, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
+import { BEAM_PINK, createLootBeam, type LootBeam } from './LootBeam';
 import { drawPickupSpot } from './PickupViews';
 
 /** Or de l'éclat quand un œuf de boss est détruit. */
@@ -34,6 +35,8 @@ export class UpgradeOrbView {
   private readonly img?: Phaser.GameObjects.Image;
   private readonly g?: Phaser.GameObjects.Graphics;
   private readonly glitter?: GlobeGlitter;
+  /** Colonne de lumière rose qui monte du globe (loot rare). */
+  private readonly beam: LootBeam;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -45,10 +48,13 @@ export class UpgradeOrbView {
     // les étoiles de la recrue, en rose : le même effet que les recrues (doré) et les power-ups (vert)
     const star = loadedKey(scene, starKey('upgrade'));
     if (star) this.glitter = createGlobeGlitter(scene, state.x, state.y, star) ?? undefined;
+    this.beam = createLootBeam(scene, BEAM_PINK, state.id);
   }
 
-  sync(x: number, y: number, depthY: number, time: number): void {
+  sync(x: number, y: number, depthY: number, time: number, grounded = true): void {
     this.glitter?.setPosition(x, y, DEPTH.actors + depthY + 41);
+    this.beam.setVisible(grounded); // la colonne apparaît quand le globe a fini de retomber
+    if (grounded) this.beam.setPosition(this.state.x, this.state.y, DEPTH.actors + depthY + 39, time);
     if (this.img) {
       this.img.setScale(FX.recruit.displayScale).setPosition(x, y).setDepth(DEPTH.actors + depthY + 40); // `FX` modifié à chaud dans la visionneuse
     } else if (this.g) {
@@ -61,6 +67,7 @@ export class UpgradeOrbView {
   destroy(): void {
     const targets = [this.img, this.g].filter((t): t is Phaser.GameObjects.Image | Phaser.GameObjects.Graphics => !!t);
     this.glitter?.destroy();
+    this.beam.destroy();
     this.scene.tweens.add({ targets, alpha: 0, scale: this.img ? FX.recruit.displayScale * 1.8 : 1.8, duration: 240, onComplete: () => targets.forEach((t) => t.destroy()) });
   }
 
@@ -69,6 +76,7 @@ export class UpgradeOrbView {
     this.img?.destroy();
     this.g?.destroy();
     this.glitter?.destroy();
+    this.beam.destroy();
   }
 }
 
@@ -107,7 +115,7 @@ export class LootViews {
       const fall = o.hop ? Math.max(0, Math.min(1, 1 - o.hop.t / ORB_FALL_TIME)) : 1;
       const arc = o.hop ? Math.sin(Math.PI * fall) * ORB_FALL_HEIGHT : 0; // retombe en cloche depuis l'œuf
       const bob = o.hop ? 0 : Math.sin(time * 5 + o.id) * 4;
-      v.sync(x, y - GLOBE_LIFT * FX.recruit.displayScale - arc + bob, y, time);
+      v.sync(x, y - GLOBE_LIFT * FX.recruit.displayScale - arc + bob, y, time, !o.hop);
     }
     for (const [id, v] of this.orbs) {
       if (liveOrbs.has(id)) continue;

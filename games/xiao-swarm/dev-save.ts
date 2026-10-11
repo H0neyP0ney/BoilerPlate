@@ -294,7 +294,7 @@ function saveStats(kind: string, id: string, values: Record<string, number>): Re
 }
 
 /** Upgrade (data/progression.ts) : ligne `id: { ..., mod: { pct }, maxStacks, value, ... }` ; seuls les nombres sont réécrits. */
-function saveUpgrade(id: string, d: { value: number; maxStacks: number; pct?: number; flat?: number }): Result {
+function saveUpgrade(id: string, d: { value: number; maxStacks: number; color?: number; pct?: number; flat?: number }): Result {
   if (!/^[A-Za-z]+$/.test(id)) return { ok: false, message: `Id invalide : ${id}` };
   const rel = 'data/progression.ts';
   const src = readSrc(rel);
@@ -309,6 +309,7 @@ function saveUpgrade(id: string, d: { value: number; maxStacks: number; pct?: nu
     const next = patchPath(block, path.split('.'), v, false);
     if (next !== null) block = next;
   }
+  if (typeof d.color === 'number' && Number.isFinite(d.color)) block = block.replace(/color: 0x[0-9a-fA-F]+/, `color: 0x${(d.color & 0xffffff).toString(16).padStart(6, '0')}`);
   writeSrc(rel, src, src.slice(0, open) + block + src.slice(close + 1));
   return { ok: true, message: `Upgrade ${id} enregistrée dans ${rel}` };
 }

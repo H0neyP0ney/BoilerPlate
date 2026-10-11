@@ -133,3 +133,20 @@ export function holoCard(data: Uint8ClampedArray, w: number): void {
       }
   }
 }
+
+/**
+ * Slot vide d'une carte (`ui/slot_empty.png`, rouge) recoloré à la couleur de la carte : même recoloration que `recolorCard`, sans plaque
+ * dorée à préserver et sans toucher à la luminosité.
+ */
+export function recolorSlot(data: Uint8ClampedArray, color: number): void {
+  const [hc, sc] = rgb2hsl((color >> 16) & 255, (color >> 8) & 255, color & 255);
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue;
+    const [h, s, l] = rgb2hsl(data[i], data[i + 1], data[i + 2]);
+    if (!((h <= 32 || h >= 335) && s > 0.35 && l > 0.03)) continue;
+    const [r, g, b] = hsl2rgb(hc + ((h >= 335 ? h - 360 : h) - 6) * 0.6, Math.min(1, s * (0.8 + 0.2 * sc)), l);
+    data[i] = Math.round(r);
+    data[i + 1] = Math.round(g);
+    data[i + 2] = Math.round(b);
+  }
+}

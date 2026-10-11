@@ -84,10 +84,10 @@ export class Combat {
     for (const squad of this.sim.squads) {
       const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
       const rangeMul = squad.stats.get('range');
-      // upgrades Esprit d'équipe (+x % de dégâts par soldat vivant) et Dernier rempart (+x % par soldat manquant sous la taille max)
+      // upgrades Esprit d'équipe (+x % de dégâts par soldat vivant) et Dernier rempart (+x % par soldat manquant sous la taille max) : s'ajoutent aux bonus de Damage
       const stand = squad.stats.get('lastStand');
       squad.lastStand = stand > 0 && squad.missing > 0;
-      const damageMul = squad.stats.get('damage') * (1 + squad.stats.get('teamSpirit') * squad.soldiers.length + stand * squad.missing);
+      const damageMul = squad.stats.get('damage') + squad.stats.get('teamSpirit') * squad.soldiers.length + stand * squad.missing; // bonus additifs (Damage, Esprit d'équipe, Dernier rempart)
       for (const s of squad.soldiers) {
         if (s.capturedBy || s.frozen > 0 || s.stun > 0) continue; // avalé par une bulle, gelé ou étourdi : ne tire plus
         const weapon = s.def.weapon;

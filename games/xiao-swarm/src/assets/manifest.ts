@@ -49,7 +49,7 @@ export const ASSETS: AssetEntry[] = [
   // Bouton « Relancer » du choix d'upgrade — art-src/bouton_reroll.png rogné par `node tools/slice-reroll-button.mjs` ; affiché par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_reroll', url: 'ui/reroll.png' },
   // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.
-  ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `ui_slot_empty_${id}`, url: `ui/slot_empty_${id}.png` })), // vide, à la couleur de la carte
+  { type: 'image', id: 'ui_slot_empty', url: 'ui/slot_empty.png' }, // vide : base des slots à la couleur de chaque carte (art/cardTextures.ts)
   { type: 'image', id: 'ui_slot_full', url: 'ui/slot_full.png' },
   // Étoile des cartes prismatiques — art-src/star.png rogné par `node tools/slice-star-particle.mjs` ; particule teintée par l'émetteur de scenes/LevelUpScene.ts.
   { type: 'image', id: 'fx_star', url: 'fx/star.png' },

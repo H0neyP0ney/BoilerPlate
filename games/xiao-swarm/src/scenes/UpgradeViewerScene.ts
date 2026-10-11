@@ -2,12 +2,19 @@ import Phaser from 'phaser';
 import { SCENES, VIEW_BG } from '../config';
 import { DISABLED_UPGRADES, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../data/progression';
 import { getDefaultUpgradeStats, getUpgradeStats, resetUpgrade, saveUpgradeToCode, setUpgradeStat } from '../debugUpgrades';
-import { button, checkbox, header, line, note, panel, slider } from '../dev/devUi';
+import { button, checkbox, colorInput, header, line, note, panel, slider } from '../dev/devUi';
+import { repaintUpgradeTextures } from '../art/cardTextures';
 import { t } from '../i18n';
 import { CARD, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
 
 /** Opacité d'une upgrade désactivée (`DISABLED_UPGRADES`), comme les unités inactives de la vue d'unités. */
 const DISABLED_ALPHA = 0.25;
+
+/** Teintes proposées dans le panneau (clic = essai sur la carte sélectionnée) : celles qu'aucune carte n'utilise. */
+const TINT_SWATCHES: [string, number][] = [
+  ['Écarlate', 0xff2a2a], ['Citron', 0xf0f03a], ['Vert pomme', 0x5be83a], ['Menthe', 0x3af0a0], ['Cyan glacier', 0x1ee6ff],
+  ['Indigo', 0x5a5ae6], ['Orchidée', 0xc04aff], ['Cuivre', 0xb8743a],
+];
 
 /**
  * Visionneuse d'upgrades (dev uniquement) : toutes les cartes de choix d'upgrade affichées d'un coup, dessinées par le même code que la fenêtre
@@ -119,7 +126,41 @@ export class UpgradeViewerScene extends Phaser.Scene {
         this.refreshAll();
       },
     });
-    syncs.push(v.sync, m.sync);
+    // Teinte de la carte (et de ses slots vides) : l'aperçu se refait en direct ; Save écrit `color` dans data/progression.ts.
+    const hexOf = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.maxLength = 7;
+    hex.style.cssText = 'width:72px;font:12px monospace';
+    const applyColor = (c: number): void => {
+      setUpgradeStat(id, 'color', c);
+      repaintUpgradeTextures(id);
+      this.refreshAll();
+      col.sync();
+    };
+    const col = colorInput('Teinte de la carte', () => getUpgradeStats(id).color, applyColor);
+    const syncHex = col.sync;
+    col.sync = (): void => {
+      syncHex();
+      hex.value = hexOf(getUpgradeStats(id).color);
+    };
+    hex.addEventListener('change', () => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex.value.trim());
+      if (m) applyColor(parseInt(m[1], 16));
+      else col.sync();
+    });
+    col.row.append(hex);
+    col.sync();
+    const swatches = document.createElement('div');
+    swatches.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px';
+    for (const [name, c] of TINT_SWATCHES) {
+      const b = document.createElement('button');
+      b.title = `${name} ${hexOf(c)}`;
+      b.style.cssText = `width:24px;height:24px;border:1px solid #fff8;border-radius:4px;cursor:pointer;background:${hexOf(c)}`;
+      b.addEventListener('click', () => applyColor(c));
+      swatches.append(b);
+    }
+    syncs.push(v.sync, m.sync, col.sync);
     p.append(
       header(t(`up_${id}`), () => {
         this.statsPanel?.remove();
@@ -128,11 +169,12 @@ export class UpgradeViewerScene extends Phaser.Scene {
         this.refreshAll();
         this.layout();
       }),
-      note("Équilibrage : le bonus s'applique aux prochaines prises (la carte se met à jour tout de suite). Save écrit dans data/progression.ts."),
+      note("Équilibrage : le bonus s'applique aux prochaines prises ; la teinte se voit tout de suite sur la carte et ses slots. Save écrit dans data/progression.ts."),
       line(
         button('Save', () => void saveUpgradeToCode(id).then((msg) => (info.textContent = msg))),
         button('Reset', () => {
           resetUpgrade(id);
+          repaintUpgradeTextures(id);
           for (const s of syncs) s();
           this.refreshAll();
           info.textContent = 'Retour à la dernière sauvegarde.';
@@ -141,6 +183,8 @@ export class UpgradeViewerScene extends Phaser.Scene {
       info,
       v.row,
       m.row,
+      col.row,
+      swatches,
     );
     document.body.append(p);
     this.statsPanel = p;

@@ -5,7 +5,7 @@ import { dropStaleOverride } from './dev/staleOverrides';
 
 /**
  * Stats des upgrades éditées dans la visionneuse d'upgrades (dev uniquement) : « bonus » (valeur affichée sur la carte, qui fixe aussi
- * `mod.pct` = valeur / 100 ou `mod.flat` = valeur × `FLAT_SCALE`) et nombre maximal de prises. Modifiés en direct dans `UPGRADES` (pris en compte à la
+ * `mod.pct` = valeur / 100 ou `mod.flat` = valeur × `FLAT_SCALE`) nombre maximal de prises et couleur de la carte. Modifiés en direct dans `UPGRADES` (pris en compte à la
  * prochaine prise), mémorisés dans le navigateur (`xiao-debug-upgrades`) et réappliqués au démarrage ; Save les écrit dans
  * data/progression.ts, Reset revient à la dernière sauvegarde.
  */
@@ -14,13 +14,15 @@ const STORAGE_KEY = 'xiao-debug-upgrades';
 export interface UpgradeStats {
   value: number;
   maxStacks: number;
+  /** Couleur de la carte (0xRRGGBB). */
+  color: number;
 }
 
 const DEFAULTS = new Map<UpgradeId, UpgradeStats>();
 /** Échelle `mod.flat` / valeur affichée, d'après le code : 1 pour une valeur fixe (Max Squad), 0,01 pour une fraction affichée en % (Esprit d'équipe, Dernier rempart, Chasseur de boss). */
 const FLAT_SCALE = new Map<UpgradeId, number>();
 for (const [id, u] of Object.entries(UPGRADES)) {
-  DEFAULTS.set(id as UpgradeId, { value: u.value, maxStacks: u.maxStacks });
+  DEFAULTS.set(id as UpgradeId, { value: u.value, maxStacks: u.maxStacks, color: u.color });
   if (u.mod?.flat !== undefined && u.value !== 0) FLAT_SCALE.set(id as UpgradeId, u.mod.flat / u.value);
 }
 let overrides: Partial<Record<UpgradeId, UpgradeStats>> = {};
@@ -28,13 +30,14 @@ let overrides: Partial<Record<UpgradeId, UpgradeStats>> = {};
 /** Valeurs du code (dernière sauvegarde) : repère de l'échelle des réglettes, qui ne doit pas se réduire quand la valeur courante tombe à 0. */
 export const getDefaultUpgradeStats = (id: UpgradeId): UpgradeStats => ({ ...(DEFAULTS.get(id) ?? getUpgradeStats(id)) });
 
-export const getUpgradeStats = (id: UpgradeId): UpgradeStats => ({ value: UPGRADES[id].value, maxStacks: UPGRADES[id].maxStacks });
+export const getUpgradeStats = (id: UpgradeId): UpgradeStats => ({ value: UPGRADES[id].value, maxStacks: UPGRADES[id].maxStacks, color: UPGRADES[id].color });
 
 /** Applique le bonus à la définition : valeur affichée + modificateur (pourcentage ou valeur fixe selon l'upgrade). */
 function apply(id: UpgradeId, s: UpgradeStats): void {
   const u = UPGRADES[id];
   u.value = s.value;
   u.maxStacks = s.maxStacks;
+  if (s.color !== undefined) u.color = s.color; // réglages mémorisés avant l'ajout de la couleur : pas de couleur
   if (u.mod) {
     if (u.mod.pct !== undefined) u.mod.pct = s.value / 100;
     else if (u.mod.flat !== undefined) u.mod.flat = s.value * (FLAT_SCALE.get(id) ?? 1);
@@ -78,7 +81,7 @@ export function loadUpgradeOverrides(): void {
 /** Save : écrit l'upgrade dans data/progression.ts (elle devient la valeur par défaut). */
 export async function saveUpgradeToCode(id: UpgradeId): Promise<string> {
   const u = UPGRADES[id];
-  const msg = await saveToCode('upgrades', { id, value: u.value, maxStacks: u.maxStacks, pct: u.mod?.pct, flat: u.mod?.flat });
+  const msg = await saveToCode('upgrades', { id, value: u.value, maxStacks: u.maxStacks, color: u.color, pct: u.mod?.pct, flat: u.mod?.flat });
   if (msg.startsWith('✔')) {
     DEFAULTS.set(id, getUpgradeStats(id));
     delete overrides[id];

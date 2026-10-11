@@ -112,7 +112,7 @@ Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE
 
 ## Visionneuse d'upgrades (`?upgrades`, `src/scenes/UpgradeViewerScene.ts`, `src/debugUpgrades.ts`)
 
-Toutes les cartes de choix d'upgrade d'un coup d'œil (zoom et colonnes ajustés à la fenêtre). Un clic sur une carte ouvre son panneau : **Bonus** (valeur affichée ; fixe aussi `mod.pct` = valeur / 100 ou `mod.flat`) et **Prises max** ; la carte suit en direct, Save écrit dans `data/progression.ts`, Reset revient au code.
+Toutes les cartes de choix d'upgrade d'un coup d'œil (zoom et colonnes ajustés à la fenêtre). Un clic sur une carte ouvre son panneau : **Bonus** (valeur affichée ; fixe aussi `mod.pct` = valeur / 100 ou `mod.flat`) et **Prises max** ; la carte suit en direct, Save écrit dans `data/progression.ts`, Reset revient au code. **Teinte de la carte** : sélecteur de couleur, champ hexadécimal et pastilles de teintes inutilisées ; le fond et les slots vides de la carte sont refaits tout de suite (`repaintUpgradeTextures`, `art/cardTextures.ts`), Save écrit `color`.
 
 ## Visionneuse bonus (`?bonus`, `src/scenes/BonusViewerScene.ts`)
 
@@ -140,7 +140,7 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |
 | `bake-globes.py` | génère UNE FOIS les images des globes au sol et de leurs étoiles (`public/assets/globes/globe_<sorte>.png`, `star_<sorte>.png`) depuis les pièces dorées de la recrue : `python tools/bake-globes.py` (n'écrit que les fichiers absents ; `--force` réécrit tout et **écrase les retouches**) |
 | `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |
-| `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty_<id>.png` | slots des cartes |
+| `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty.png` (base : les slots vides à la couleur de chaque carte sont fabriqués au lancement) | slots des cartes |
 | `slice-egg.mjs` | œuf des boss et son socle (nid) : sépare `art-src/egg_socle.png` en deux images réduites de moitié | `aliens/egg.png` (`alien_boss_egg`), `aliens/egg_socle.png` (`alien_boss_egg_socle`, posé devant l'œuf par `AlienView`) |
 | `slice-levelup-title.mjs`, `slice-reroll-button.mjs`, `slice-star-particle.mjs`, `slice-rewarded-icon.mjs` | titre, bouton Reroll, étoile (`fx/star.png`), icône rewarded | `LevelUpScene`, `Button` du moteur |
 | `lighten-crit-digits.mjs [part]` | éclaircit le jaune des chiffres de critique (originaux sauvegardés dans `art-src/crit-original/`) | `Fx.crit` |

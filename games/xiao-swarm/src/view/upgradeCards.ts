@@ -3,10 +3,12 @@ import { theme } from '@xiao/engine';
 import { UPGRADES, type UpgradeId } from '../data/progression';
 import { t } from '../i18n';
 import { upgradeIconKey } from './upgradeIcons';
+import { finishUpgradeCardTextures } from '../art/cardTextures';
 
 /**
- * Fond des cartes d'upgrade : une image par upgrade (`public/assets/ui/cards/card_<id>.png`, couleur de `UPGRADES[id].color`), produite par
- * `node tools/slice-upgrade-cards.mjs` à partir de `art-src/card_upgrade.png`. Id de texture d'une carte : `ui_card_<id>` ; carte prismatique : `ui_card_prism` (arc-en-ciel holographique, même pour toutes les upgrades).
+ * Fond des cartes d'upgrade : une texture par upgrade (couleur de `UPGRADES[id].color`), fabriquée au lancement par `art/cardTextures.ts` à partir
+ * de `ui/cards/card_base.png` (`node tools/slice-upgrade-cards.mjs`, depuis `art-src/card_upgrade.png`). Id de texture d'une carte : `ui_card_<id>` ;
+ * carte prismatique : `ui_card_prism` (arc-en-ciel holographique, même pour toutes les upgrades).
  */
 export const cardTexture = (id: UpgradeId, prism = false): string => (prism ? 'ui_card_prism' : `ui_card_${id}`);
 
@@ -38,6 +40,7 @@ export const CARD_TEXT_RES = 3;
  * `resizeUpgradeCard` la met à la taille voulue. Partagée par la fenêtre de choix et la visionneuse d'upgrades : un seul dessin.
  */
 export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: number, prism: boolean): Phaser.GameObjects.Container {
+  finishUpgradeCardTextures(); // fonds fabriqués en tâche de fond après le lancement : rattrape ceux qui manquent
   const def = UPGRADES[id];
   const c = scene.add.container(0, 0);
   const bg = scene.add.image(0, 0, cardTexture(id, prism)); // prismatique : fond holographique

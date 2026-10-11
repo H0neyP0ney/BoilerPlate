@@ -15,6 +15,7 @@ import { loadStatOverrides } from '../debugStats';
 import { loadUpgradeOverrides } from '../debugUpgrades';
 import { makeEnvironmentTextures } from '../art/environment';
 import { makeFxTextures } from '../art/fx';
+import { startUpgradeCardTextures } from '../art/cardTextures';
 import { makeSoldierTextures } from '../art/soldiers';
 import { makeRecruitTextures } from '../art/recruits';
 import { t } from '../i18n';
@@ -64,6 +65,7 @@ export class BootScene extends Phaser.Scene {
     makeAlienTextures(this);
     makeEnvironmentTextures(this);
     makeFxTextures(this);
+    startUpgradeCardTextures(this); // fonds des cartes d'upgrade (une carte de base recolorée par upgrade + la prismatique), fabriqués en tâche de fond
     registerDefaultSprites();
     if (DEV_TOOLS) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
     if (DEV_TOOLS) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités

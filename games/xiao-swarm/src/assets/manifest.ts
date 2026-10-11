@@ -44,8 +44,8 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
   // Boutons du HUD (pause, son, musique) — art-src/bouton pause sound musique.png découpé par `node tools/slice-hud-buttons.mjs` : cadre vide + une icône chacun ; affichés par view/HudButtons.ts.
   ...(['button', 'pause', 'sound', 'music'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_hud_${n}`, url: `ui/hud/${n}.png` })),
-  // Fonds des cartes d'upgrade — art-src/card_upgrade.png recoloré par `node tools/slice-upgrade-cards.mjs` (une image par upgrade, à sa couleur) ; affichés par scenes/LevelUpScene.ts.
-  ...[...UPGRADE_IDS, 'prism'].map((id): AssetEntry => ({ type: 'image', id: `ui_card_${id}`, url: `ui/cards/card_${id}.png` })),
+  // Fond des cartes d'upgrade : une seule carte de base (art-src/card_upgrade.png recadrée par `node tools/slice-upgrade-cards.mjs`) ; les cartes de chaque upgrade et la prismatique en sont fabriquées au lancement (art/cardTextures.ts), affichées par scenes/LevelUpScene.ts.
+  { type: 'image', id: 'ui_card_base', url: 'ui/cards/card_base.png' },
   // Bouton « Relancer » du choix d'upgrade — art-src/bouton_reroll.png rogné par `node tools/slice-reroll-button.mjs` ; affiché par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_reroll', url: 'ui/reroll.png' },
   // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.

@@ -136,7 +136,7 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `slice-powerup-icons.mjs` | `powerups.png` (grille 3 × 2) → `ui/powerups/<sorte>.png` + `fx/rocket.png` (la fusée, tournée vers la droite : projectile `fx_rocket`) | globes de power-up, texte flottant, tirs de roquette |
 | `slice-freezebot.mjs` | `freezebot.png` → `fx/freezebot.png` (le medibot est la case « soin » de `powerups.png`) | `PickupViews.syncBots` |
 | `slice-hud-buttons.mjs` | `bouton pause sound musique.png` → `ui/hud/` (bouton vide + 3 icônes) | `view/HudButtons.ts` |
-| `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_<id>.png` (11 couleurs) + `card_prism.png` (holographique) | `LevelUpScene` |
+| `slice-upgrade-cards.mjs` | `card_upgrade.png` → `ui/cards/card_base.png` (une seule carte ; les 14 couleurs et la prismatique holographique sont fabriquées au lancement par `art/cardPixels.ts` / `cardTextures.ts`) | `LevelUpScene` |
 | `hue-shift.mjs` | recolore une planche : `node tools/hue-shift.mjs entrée.png sortie.png <degrés> [saturation] [teinteMin teinteMax] [éclaircissement]` ; avec un intervalle de teintes seul le corps change (rhinos jumeaux : corps bleu → rouge / bleu pâle, corne beige intacte) | `public/assets/aliens/boss_rhino_fire.png`, `boss_rhino_ice.png` |
 | `bake-globes.py` | génère UNE FOIS les images des globes au sol et de leurs étoiles (`public/assets/globes/globe_<sorte>.png`, `star_<sorte>.png`) depuis les pièces dorées de la recrue : `python tools/bake-globes.py` (n'écrit que les fichiers absents ; `--force` réécrit tout et **écrase les retouches**) |
 | `slice-upgrade-icons.mjs` | `icon_upgrade.png` → `ui/upgrades/<id>.png` | cartes, texte flottant, visionneuse |

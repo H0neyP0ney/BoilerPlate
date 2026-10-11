@@ -36,7 +36,7 @@ export class BootScene extends Phaser.Scene {
     if (ASSETS.length === 0) return;
     const { width, height } = this.scale;
     const w = Math.min(420, width * 0.7);
-    this.add.text(width / 2, height / 2 - 40, '…', { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim }).setOrigin(0.5);
+    this.add.text(width / 2, height / 2 - 40, `${t('loading')}...`, { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim }).setOrigin(0.5);
     this.add.rectangle(width / 2, height / 2, w, 16, PALETTE.panel).setOrigin(0.5);
     const fill = this.add.rectangle(width / 2 - w / 2, height / 2, 0, 16, PALETTE.primary).setOrigin(0, 0.5);
     this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => (fill.width = w * p));
@@ -89,7 +89,8 @@ export class BootScene extends Phaser.Scene {
     if (req) {
       const { width, height } = this.scale;
       const status = this.add
-        .text(width / 2, height / 2, t('connecting'), { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim })
+        // sous la barre de chargement (centrée à height / 2), sinon le texte est illisible sur la jauge
+        .text(width / 2, height / 2 + 40, t('connecting'), { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim })
         .setOrigin(0.5);
       try {
         this.registry.set('session', await createOnlineSession(req));

@@ -57,6 +57,7 @@
   "squadsLeft": "{value} escouades restantes",
   "room": "Salle {code} · {players} joueur(s)",
   "roomHint": "Partage ce code : {code}",
+  "loading": "Chargement",
   "connecting": "Connexion…",
   "connectFailed": "Connexion impossible — partie solo",
   "roomNotFound": "Salle introuvable — partie solo",

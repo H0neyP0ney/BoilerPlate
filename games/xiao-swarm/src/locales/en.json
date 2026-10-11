@@ -57,6 +57,7 @@
   "squadsLeft": "{value} squads left",
   "room": "Room {code} · {players} player(s)",
   "roomHint": "Share this code: {code}",
+  "loading": "Loading",
   "connecting": "Connecting…",
   "connectFailed": "Can't connect — solo game",
   "roomNotFound": "Room not found — solo game",

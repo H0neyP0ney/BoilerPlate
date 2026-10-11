@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { applyAssets, loadAssets, log, poki, theme, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
-import { ASSETS } from '../assets/manifest';
+import { ASSETS, CORE_ASSETS } from '../assets/manifest';
+import { latePack } from '../assets/latePack';
 import { makeAlienTextures } from '../art/aliens';
 import { registerDefaultSprites } from '../art/catalog';
 import { makePlayerVariants } from '../art/playerVariants';
@@ -28,13 +29,26 @@ import { createOnlineSession, OnlineError, readOnlineRequest } from '../online';
  * la fin du chargement à Poki et lance directement le jeu (pas d'écran titre).
  */
 export class BootScene extends Phaser.Scene {
+  /** Assets chargés ici : tout, ou seulement le paquet 1 (le paquet 2 arrive pendant le premier choix d'upgrade, `assets/latePack.ts`). */
+  private assets = CORE_ASSETS;
+
   constructor() {
     super(SCENES.boot);
   }
 
+  /**
+   * Tout charger d'emblée : en ligne (on peut rejoindre en cours de partie), tests d'URL qui sautent en avant (`?jump`, `?endtest`) et
+   * dev (visionneuses) sauf `?split=1`. Sinon : seulement le paquet 1.
+   */
+  private needsEverything(): boolean {
+    if (readOnlineRequest() || poki.getURLParam('jump') !== undefined || poki.getURLParam('endtest') !== undefined) return true;
+    return DEV_TOOLS && poki.getURLParam('split') === undefined;
+  }
+
   preload(): void {
     for (const s of Object.values(SFX)) this.load.audio(s.key, s.url); // bruitages courts (quelques Ko)
-    if (ASSETS.length === 0) return;
+    this.assets = this.needsEverything() ? ASSETS : CORE_ASSETS;
+    if (this.assets.length === 0) return;
     const { width, height } = this.scale;
     const w = Math.min(420, width * 0.7);
     this.add.text(width / 2, height / 2 - 40, `${t('loading')}...`, { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim }).setOrigin(0.5);
@@ -44,11 +58,12 @@ export class BootScene extends Phaser.Scene {
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) =>
       log.warn(`[assets] introuvable : ${file.src} — visuel procédural conservé`),
     );
-    loadAssets(this, ASSETS);
+    loadAssets(this, this.assets);
   }
 
   create(): void {
-    const applied = applyAssets(this, ASSETS);
+    if (this.assets === ASSETS) latePack.markLoaded();
+    const applied = applyAssets(this, this.assets);
     if (applied.length) log.info('[assets] visuels remplacés :', applied.join(', '));
     if (DEV_TOOLS) {
       // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki.

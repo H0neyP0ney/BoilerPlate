@@ -6,6 +6,7 @@ import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { iceLook } from './IceBlockFx';
+import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
 import { hasComposedRecruit, recruitSpriteId, RECRUIT_STAR } from '../art/recruits';
 import { createGlobeGlitter, type GlobeGlitter } from './GlobeGlitter';
@@ -290,7 +291,7 @@ export class AlienView {
   private prevPhase = 0;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly id: string;
-  private readonly animated: boolean;
+  private animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
   /** Œuf de boss : socle (nid) posé devant son bas. */
   private readonly socle?: Phaser.GameObjects.Sprite;
@@ -315,6 +316,7 @@ export class AlienView {
     // sort d'un trou d'apparition : il monte hors du sol (sprite rogné de 0 à 100 %, `groundCut`) au lieu de surgir en grossissant
     if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
+    latePack.request(scene, this.id); // visuel d'un paquet pas encore chargé : on le demande (dessin procédural d'ici là, `refreshSprite`)
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);
@@ -324,6 +326,13 @@ export class AlienView {
   /** Touché : flash de `duration` s, sauf s'il est déjà en cours ou en repos (le flash n'est jamais prolongé : sous un tir continu l'unité clignote). */
   hit(duration: number): void {
     if (this.flash <= 0 && this.rest <= 0) this.flash = duration;
+  }
+
+  /** Le visuel de l'unité vient d'être remplacé (paquet 2 chargé) : texture, ancrage et animations de la planche. */
+  refreshSprite(): void {
+    const d = sprites.get(this.id);
+    this.body.setTexture(d.texture, d.frame).setOrigin(d.originX ?? 0.5, d.originY ?? 0.5);
+    this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
   }
 
   /** Point d'origine des tirs / de la langue en monde (point de la frame jouée, placé dans la visionneuse), sinon null. */

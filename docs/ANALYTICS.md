@@ -17,6 +17,8 @@ Règles du SDK (https://developers.poki.com/guide/game-events) :
 | Tutoriel | `tutorial/all/start` · `complete` | début · fin du tutoriel entier | `GameScene.onEvent` |
 | Tutoriel | `tutorial/<étape>/start` · `complete` | chaque étape (`move1`, `wave1`…) s'ouvre puis se ferme à la suivante | `GameScene.onEvent` |
 | Rétention | `retention/game-<2,3,5,10>/reached` | début de la N-ième partie (compteur mémorisé d'une session à l'autre) | `GameScene.beginRun`, paliers dans `data/analytics.ts` |
+| Performance | `perf/fps-<0,5…60 par 5>/<N>min` (ou `10+min`) | fin de chaque partie (mort, victoire ; un revive repart d'une nouvelle mesure) : FPS moyen réel et durée jouée, hors pause ; pas en dev, pas sous 5 s de jeu | `GameScene.sendPerf` |
+| Performance | `perf/late-assets/<durée arrondie à 0,5 s>ms` | une fois, paquet 2 des visuels chargé | `assets/latePack.ts` |
 | Progression | `time/<60,120,180,300,420,600>s/reached` | une fois par partie | `GameScene.trackProgress` |
 | Progression | `level/<1-9>/reached` | niveau de vague atteint, une fois par partie | `GameScene.trackProgress` |
 | Boss | `boss/<alien>/start` · `complete` · `fail` | apparition · mort · squad tombée avec ce boss vivant | `GameScene.onEvent` / `endRun` |

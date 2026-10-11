@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
 import { DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
+import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
@@ -165,6 +166,9 @@ export class WorldView {
     readonly localPlayer: PlayerId,
   ) {
     this.arena = new ArenaView(scene, sim.map);
+    // paquet 2 des visuels chargé en cours de partie : les aliens déjà à l'écran passent de leur dessin procédural à leur planche
+    const offLate = latePack.onReady(() => this.aliens.forEach((v) => v.refreshSprite()));
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, offLate);
     this.fx = new Fx(scene);
     this.electric = new ElectricArcs(scene);
     this.shock = new ShockDistort(scene);

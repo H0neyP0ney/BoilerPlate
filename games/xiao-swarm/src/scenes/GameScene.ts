@@ -17,6 +17,7 @@ import { CrowdPanel } from '../dev/crowdPanel';
 import { DifficultyPanel } from '../dev/difficultyPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
+import { latePack } from '../assets/latePack';
 import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { HostSession } from '../net/HostSession';
 import { encodeSnapshot, SNAPSHOT_EVERY, takeSnapshot } from '../net/Protocol';
@@ -55,6 +56,9 @@ export class GameScene extends Phaser.Scene {
   /** Partie qui a commencé par le tutoriel : la première mort offre un revive gratuit, et son onde de choc détruit les aliens (aide à la première expérience). */
   private freeRevive = false;
   private ended = false;
+  /** Analytics de performance : images et temps réel (ms) joués depuis le début de la partie (ou du dernier envoi), partie en cours seulement. */
+  private perfFrames = 0;
+  private perfMs = 0;
   /** Séquence de fin du solo (boss final tombé) : fusée, soldats qui montent dedans, texte de victoire, fondu au noir, nouvelle partie. */
   private ending?: Ending;
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
@@ -84,6 +88,8 @@ export class GameScene extends Phaser.Scene {
     this.revived = false;
     this.freeRevive = false;
     this.ended = false;
+    this.perfFrames = 0;
+    this.perfMs = 0;
     this.ending = undefined;
     this.upgradeOpen = false;
     this.moveLocked = false;
@@ -190,6 +196,10 @@ export class GameScene extends Phaser.Scene {
     // En ligne, le monde ne s'arrête jamais : l'hôte fait tourner la partie de tout le monde.
     const running = this.flow.isPlaying || this.session.online;
     if (running) {
+      if (delta < 1000) {
+        this.perfFrames++; // images réellement jouées (hors pause, choix inclus) ; un arrêt de plus d'1 s (onglet caché) n'est pas compté
+        this.perfMs += delta;
+      }
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.alienTest?.update(dt * this.timeScale);
       this.ending?.update(dt);
@@ -349,6 +359,7 @@ export class GameScene extends Phaser.Scene {
     const squad = this.localSquad;
     this.upgradeOpen = true;
     this.shownOffer = key;
+    latePack.ensure(this); // 1er choix d'upgrade : le paquet 2 des visuels (aliens suivants) se charge pendant que le joueur choisit
     this.scene.stop(SCENES.levelUp);
     this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
   }
@@ -407,7 +418,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Dev : envoie la partie enregistrée au serveur de dev (`docs/bench/runs/`), si elle est assez longue pour compter. */
+  /**
+   * Analytics de fin de partie : FPS moyen (par tranches de 5) et durée jouée (minutes entières, « 10+ » au-delà), pour voir si ça rame chez les joueurs.
+   * Un évènement `perf/fps-<tranche>/<durée>min` ; les compteurs repartent à zéro (un revive reprend une nouvelle mesure). Pas pendant les tests dev.
+   */
+  private sendPerf(): void {
+    const ms = this.perfMs;
+    const frames = this.perfFrames;
+    this.perfFrames = 0;
+    this.perfMs = 0;
+    if (frames < 30 || ms < 5000 || DEV_TOOLS) return;
+    const fps = Math.min(60, Math.round((frames * 1000) / ms / 5) * 5); // plafonné à 60 (écrans 120 Hz)
+    const minutes = Math.floor(ms / 60000);
+    poki.measure('perf', `fps-${fps}`, minutes >= 10 ? '10+min' : `${minutes}min`);
+  }
+
   private saveRun(victory: boolean): void {
+    this.sendPerf(); // appelé à chaque fin de partie (mort, victoire, fin solo)
     const rec = this.recorder;
     this.recorder = null; // une relance coop repart sur un nouvel enregistrement
     if (!rec || rec.samples.length < 10) return;

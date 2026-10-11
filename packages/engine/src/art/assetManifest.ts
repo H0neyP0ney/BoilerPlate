@@ -82,6 +82,18 @@ export function loadAssets(scene: Phaser.Scene, entries: readonly AssetEntry[], 
 }
 
 /**
+ * Charge un lot d'assets APRÈS le démarrage (scène déjà lancée, ex. pendant un choix d'upgrade) puis le déclare au catalogue.
+ * Résout avec les ids appliqués une fois la file du loader vide (un fichier introuvable est ignoré : le visuel procédural reste).
+ */
+export function loadAssetsLater(scene: Phaser.Scene, entries: readonly AssetEntry[], basePath = 'assets/'): Promise<string[]> {
+  return new Promise((resolve) => {
+    scene.load.once('complete', () => resolve(applyAssets(scene, entries)));
+    loadAssets(scene, entries, basePath);
+    scene.load.start();
+  });
+}
+
+/**
  * À appeler dans `create()` après le chargement : crée les animations et
  * déclare les visuels dans le catalogue. Un fichier manquant est ignoré
  * (le visuel procédural par défaut reste utilisé).

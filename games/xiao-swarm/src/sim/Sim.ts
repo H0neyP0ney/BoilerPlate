@@ -11,6 +11,7 @@ import { Combat } from './Combat';
 import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
+import { Turrets } from './Turrets';
 import { Recruits } from './Recruits';
 import { Tutorial } from './Tutorial';
 import { Xp } from './Xp';
@@ -23,6 +24,9 @@ const SAFE_SPAWN_DISTANCE = 700;
 
 /** Distance de spawn des aliens autour d'une squad (hors écran). */
 const SPAWN_DISTANCE = 780;
+/** Les deux premières vagues (envois à 0 s et 3 s de la timeline, avant `EARLY_SPAWN_UNTIL`) apparaissent plus près, juste hors écran (l'écran fait ±640 px × ±360 px à zoom 1, + 60-180 px d'écart tirés dans `spawnNear`). */
+const EARLY_SPAWN_DISTANCE = 610;
+const EARLY_SPAWN_UNTIL = 4;
 
 export interface SimConfig {
   mode: ModeDef;
@@ -95,6 +99,8 @@ export class Sim {
   /** Coffres des boss tués et globes d'upgrade qui en sortent (réservés à leur joueur). */
   readonly upgradeOrbs: UpgradeOrbs;
   readonly powerups: PowerUps;
+  /** Tourelles automatiques du power-up `turrets` (traitées comme des soldats par les aliens). */
+  readonly turrets: Turrets;
   readonly xp: Xp;
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
   readonly scratchSoldiers: SoldierState[] = [];
@@ -119,6 +125,7 @@ export class Sim {
     this.recruits = new Recruits(this);
     this.upgradeOrbs = new UpgradeOrbs(this);
     this.powerups = new PowerUps(this);
+    this.turrets = new Turrets(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
     this.squads.forEach((sq, i) => (sq.slot = i));
@@ -133,14 +140,15 @@ export class Sim {
         // `DIFFICULTY.wavePauseAbove` aliens vivants, la timeline se met en pause.
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
+        const dist = this.waves.time < EARLY_SPAWN_UNTIL ? EARLY_SPAWN_DISTANCE : SPAWN_DISTANCE;
         const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (squads.length - 1);
         if (ALIENS[type].boss) {
-          this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, SPAWN_DISTANCE, playersMul);
+          this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, dist, playersMul);
         } else {
           // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
-          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * share)), SPAWN_DISTANCE);
+          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * share)), dist);
         }
       },
       this.rng,
@@ -174,6 +182,7 @@ export class Sim {
     this.recruits.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
+    this.turrets.clear();
     this.xp.clear();
     this.finalBossDead = false;
     this.ending = false;
@@ -211,6 +220,7 @@ export class Sim {
     this.recruits.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
+    this.turrets.clear();
     this.xp.clear();
     this.choiceT = 0;
     this.choiceDelay = 0;
@@ -449,6 +459,7 @@ export class Sim {
     this.rebuildHashes();
     for (const sq of this.squads) sq.update(dt, inputs.get(sq.owner) ?? NO_INPUT);
     this.horde.update(dt);
+    this.turrets.update(dt);
     this.combat.update(dt);
     this.recruits.update(dt);
     this.upgradeOrbs.update(dt);
@@ -478,6 +489,7 @@ export class Sim {
     for (const a of this.aliens) if (a.alive) this.alienHash.insert(a);
     this.soldierHash.clear();
     for (const sq of this.squads) for (const s of sq.soldiers) if (s.alive) this.soldierHash.insert(s);
+    for (const t of this.turrets.items) if (t.alive) this.soldierHash.insert(t); // les aliens les prennent pour des soldats
   }
 
   // ---------- Dégâts & morts ----------

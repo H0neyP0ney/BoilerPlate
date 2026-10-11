@@ -1,0 +1,9 @@
+{
+  "output": "../public/assets/soldiers/gunner.png",
+  "scale": 0.6,
+  "sheets": [
+    { "name": "idle", "input": "gunner_idle.png", "cols": 4, "rows": 4 },
+    { "name": "walk", "input": "gunner_walk.png", "cols": 4, "rows": 4 },
+    { "name": "death", "input": "gunner_death.png", "cols": 4, "rows": 4 }
+  ]
+}

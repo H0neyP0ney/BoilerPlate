@@ -1,3 +1,4 @@
+import { TURRETS } from '../config';
 /**
  * Classes de soldats (GDD §8). Valeurs de design, à équilibrer.
  * Ajouter une classe = une entrée ici + ses textures dans art/soldiers.ts.
@@ -143,4 +144,25 @@ export const TARGET_MIX: Record<SoldierClassId, number> = {
   sniper: 0.05,
   bruiser: 0.05,
   bomber: 0.05,
+};
+
+/**
+ * Tourelle automatique (power-up `turrets`) : pas une classe de squad (absente de `CLASSES`, jamais recrutée), mais un « soldat » que les aliens ciblent.
+ * Tir : celui du trooper de base, dégâts × `TURRETS.damageMul`, explosif sur une petite zone.
+ */
+export const TURRET_DEF: SoldierClassDef = {
+  id: 'turret' as SoldierClassId,
+  hp: TURRETS.hp,
+  radius: TURRETS.radius,
+  mass: 8,
+  color: 0xa86bff,
+  weapon: {
+    ...CLASSES.trooper.weapon,
+    damage: CLASSES.trooper.weapon.damage * TURRETS.damageMul,
+    range: CLASSES.trooper.weapon.range * TURRETS.rangeMul,
+    projectileSpeed: TURRETS.projectileSpeed,
+    aoe: TURRETS.aoe,
+    texture: 'fx_blaster_orange',
+  },
+  deathBlast: TURRETS.blast,
 };

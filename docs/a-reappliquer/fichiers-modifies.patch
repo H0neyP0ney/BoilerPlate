@@ -1,0 +1,1085 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 0f65cac..828c321 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -15,7 +15,9 @@ répondre, commenter et documenter en français.
+ - `npm run zip` — build + zip Poki
+ - `node tools/slice-sheet.mjs games/xiao-swarm/art-src/<nom>.slice.json` — découpe une planche de sprites
+ 
+-Test en navigateur : `?mode=royale&bots=9`, `?lang=en` ; en dev `window.__game` et le panneau debug (touche `²`/F2).
++Test en navigateur : `?mode=royale&bots=9`, `?lang=en` ; en dev `window.__game` et le panneau debug (touche `²`/F2) avec
++des sliders pour le mouvement de foule (`CROWD` dans `config.ts`, mémorisés dans le navigateur ; `npm run sim:crowd` mesure la réactivité)
++et un bouton / la touche `H` pour afficher les hitboxes (obstacles, unités, ancre, slots).
+ 
+ ## Règles d'architecture (multijoueur battle royale ~10 joueurs prévu)
+ 1. `games/*/src/sim/`, `data/`, `net/`, `config.ts` sont **purs** : pas de Phaser ni DOM, imports depuis
+diff --git a/games/xiao-swarm/ASSETS.md b/games/xiao-swarm/ASSETS.md
+index 47c876a..2ff1455 100644
+--- a/games/xiao-swarm/ASSETS.md
++++ b/games/xiao-swarm/ASSETS.md
+@@ -27,6 +27,23 @@ node tools/slice-sheet.mjs games/xiao-swarm/art-src/gunner.slice.json
+ 
+ Exemple : `art-src/gunner_sheet.png` → `public/assets/soldiers/gunner.png` (8 animations, 31 frames).
+ 
++## Planches déjà en grille (une par animation)
++
++Si chaque animation est une grille régulière (ex. `gunner_idle.png`, `gunner_walk.png`, `gunner_death.png`, 4×4 cases),
++`tools/pack-grids.mjs` les assemble en UNE planche (un sprite n'a qu'une texture) : cases identiques, pieds alignés
++d'une planche à l'autre, réduction finale (`scale`). Il affiche la taille de case et l'ancrage pour le manifeste.
++
++```bash
++node tools/pack-grids.mjs games/xiao-swarm/art-src/gunner.pack.json
++```
++
++Actuel : Gunner = `idle` (16 frames) + `walk` (16) + `die` (16) → `public/assets/soldiers/gunner.png`, 48 cases de 64×74.
++Slime vert = 1 planche 4×4 de 1024 px (cycle de marche) réduite à 64 px → `public/assets/aliens/slime.png` (`art-src/slime.pack.json`) ;
++il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycle, plus lent.
++
++**Ennemis actifs** : seul le slime (`ACTIVE_ALIENS` dans `data/aliens.ts`) ; les vagues des autres sont filtrées.
++**Bordure de carte** : de l'eau animée (texture procédurale `water`) avec une frange d'écume, plus de palmiers.
++
+ ## Conventions
+ 
+ - **Vue** : top-down légèrement inclinée (~60–70°), personnages vus de trois-quarts face.
+@@ -65,5 +82,10 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
+ | `rock_big` `rock_small` | 110×92, 56×46 | ×1 | obstacles (collision fixe, ne pas changer l'emprise) |
+ | `fx_bullet` `fx_bolt_green` `fx_flame` `fx_glow` `fx_dot` `fx_ring` `fx_plus` `hand` | variées | — | effets : PNG isolé (`image`) du même id |
+ 
+-Le sol (sable, herbe, étangs) est procédural et découpé en morceaux ; une texture de sol en tuiles
+-pourra être ajoutée plus tard.
++**Sol** : une texture qui se raccorde (`ground_tile`, `public/assets/ground/ground.webp`, 1024 px — puissance de 2)
++est répétée sur toute la carte par un seul `TileSprite` (`view/ArenaView.ts`, échelle `GROUND_SCALE`). Source :
++`art-src/ground.png` (1254 px) ; pour la régénérer, réduire en gardant le raccord (tuile 3×3 puis recadrage du centre).
++Sans cette texture, le sol procédural (sable, herbe, étangs) sert de repli.
++
++**Obstacles** : aucun pour l'instant (`ponds` / `rocks` / `logs` vides dans `data/maps.ts`) ; la collision et le décor
++sont prêts, il suffit de les remplir.
+diff --git a/games/xiao-swarm/art-src/gunner.slice.json b/games/xiao-swarm/art-src/gunner.slice.json
+deleted file mode 100644
+index f0f1054..0000000
+--- a/games/xiao-swarm/art-src/gunner.slice.json
++++ /dev/null
+@@ -1,80 +0,0 @@
+-{
+-  "input": "gunner_sheet.png",
+-  "output": "../public/assets/soldiers/gunner.png",
+-  "scale": 0.5,
+-  "anims": {
+-    "idle": {
+-      "box": [
+-        290,
+-        68,
+-        875,
+-        240
+-      ],
+-      "frames": 4
+-    },
+-    "shoot": {
+-      "box": [
+-        890,
+-        68,
+-        1536,
+-        250
+-      ],
+-      "frames": 4,
+-      "alphaMin": 200
+-    },
+-    "walk_down": {
+-      "box": [
+-        290,
+-        305,
+-        875,
+-        480
+-      ],
+-      "frames": 4
+-    },
+-    "walk_up": {
+-      "box": [
+-        890,
+-        305,
+-        1536,
+-        480
+-      ],
+-      "frames": 4
+-    },
+-    "walk_left": {
+-      "box": [
+-        270,
+-        545,
+-        875,
+-        715
+-      ],
+-      "frames": 4
+-    },
+-    "walk_right": {
+-      "box": [
+-        890,
+-        545,
+-        1536,
+-        715
+-      ],
+-      "frames": 4
+-    },
+-    "hurt": {
+-      "box": [
+-        20,
+-        790,
+-        385,
+-        960
+-      ],
+-      "frames": 3
+-    },
+-    "die": {
+-      "box": [
+-        390,
+-        790,
+-        1310,
+-        985
+-      ],
+-      "frames": 6
+-    }
+-  }
+-}
+diff --git a/games/xiao-swarm/package.json b/games/xiao-swarm/package.json
+index 76a0d2f..bb039bd 100644
+--- a/games/xiao-swarm/package.json
++++ b/games/xiao-swarm/package.json
+@@ -9,7 +9,8 @@
+     "preview": "vite preview",
+     "zip": "npm run build && node ../../scripts/zip.mjs",
+     "sim": "node scripts/sim-headless.mjs",
+-    "sim:net": "node scripts/net-headless.mjs"
++    "sim:net": "node scripts/net-headless.mjs",
++    "sim:crowd": "node scripts/crowd-headless.mjs"
+   },
+   "dependencies": {
+     "@poki/netlib": "^0.0.20",
+diff --git a/games/xiao-swarm/public/assets/soldiers/gunner.json b/games/xiao-swarm/public/assets/soldiers/gunner.json
+index 57f5a16..dcf66b6 100644
+--- a/games/xiao-swarm/public/assets/soldiers/gunner.json
++++ b/games/xiao-swarm/public/assets/soldiers/gunner.json
+@@ -1,58 +1,22 @@
+ {
+-  "frameWidth": 98,
+-  "frameHeight": 88,
+-  "columns": 6,
+-  "originX": 0.4030612244897959,
+-  "originY": 0.8636363636363636,
++  "frameWidth": 64,
++  "frameHeight": 74,
++  "originX": 0.402,
++  "originY": 0.894,
++  "cols": 4,
++  "frames": 48,
+   "anims": {
+-    "idle": [
+-      0,
+-      1,
+-      2,
+-      3
+-    ],
+-    "shoot": [
+-      6,
+-      7,
+-      8,
+-      9
+-    ],
+-    "walk_down": [
+-      12,
+-      13,
+-      14,
+-      15
+-    ],
+-    "walk_up": [
+-      18,
+-      19,
+-      20,
+-      21
+-    ],
+-    "walk_left": [
+-      24,
+-      25,
+-      26,
+-      27
+-    ],
+-    "walk_right": [
+-      30,
+-      31,
+-      32,
+-      33
+-    ],
+-    "hurt": [
+-      36,
+-      37,
+-      38
+-    ],
+-    "die": [
+-      42,
+-      43,
+-      44,
+-      45,
+-      46,
+-      47
+-    ]
++    "idle": {
++      "first": 0,
++      "count": 16
++    },
++    "walk": {
++      "first": 16,
++      "count": 16
++    },
++    "death": {
++      "first": 32,
++      "count": 16
++    }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/games/xiao-swarm/scripts/net-headless.mjs b/games/xiao-swarm/scripts/net-headless.mjs
+index e122f01..2d8b129 100644
+--- a/games/xiao-swarm/scripts/net-headless.mjs
++++ b/games/xiao-swarm/scripts/net-headless.mjs
+@@ -65,7 +65,7 @@ try {
+   check(maxErr < 60, 'positions des soldats proches (erreur max)', `${maxErr.toFixed(1)} px`);
+   const kinds = {};
+   for (const e of clientEvents) kinds[e.t] = (kinds[e.t] ?? 0) + 1;
+-  check((kinds.beam ?? 0) > 0 && (kinds.alienDied ?? 0) > 0, 'le client reçoit les événements', JSON.stringify(kinds));
++  check((kinds.hit ?? 0) > 0 && (kinds.alienDied ?? 0) > 0, 'le client reçoit les événements', JSON.stringify(kinds));
+ 
+   const snap = encodeSnapshot(takeSnapshot(hs));
+   const back = decodeSnapshot(snap);
+@@ -96,7 +96,7 @@ try {
+   check(!client.sim.squadOf(client.localPlayer).alive, 'le client voit sa squad anéantie');
+   for (let i = 0; i < 90; i++) await tick(client);
+   const revived = client.sim.squadOf(client.localPlayer);
+-  check(revived.alive && revived.size === 4, 'réapparition automatique avec une escouade de départ', `${revived.size} soldats`);
++  check(revived.alive && revived.size >= 4, 'réapparition automatique avec une escouade de départ', `${revived.size} soldats`);
+   check(Math.hypot(revived.center.x - deathAt.x, revived.center.y - deathAt.y) > 150, 'réapparition ailleurs sur la carte', `à ${Math.round(Math.hypot(revived.center.x - deathAt.x, revived.center.y - deathAt.y))} px`);
+ 
+   // 5) Départ du client.
+diff --git a/games/xiao-swarm/src/art/environment.ts b/games/xiao-swarm/src/art/environment.ts
+index 05d118f..2c823ff 100644
+--- a/games/xiao-swarm/src/art/environment.ts
++++ b/games/xiao-swarm/src/art/environment.ts
+@@ -109,7 +109,30 @@ function rock(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+   ctx.stroke();
+ }
+ 
++/** Eau qui se raccorde (128 px) : fond bleu + vaguelettes claires et sombres, dessinées aussi de l'autre côté du bord. */
++function water(ctx: CanvasRenderingContext2D, w: number, h: number): void {
++  ctx.fillStyle = '#2f93d6';
++  ctx.fillRect(0, 0, w, h);
++  const rng = new Rng(11);
++  const wave = (x: number, y: number, len: number, color: string, width: number) => {
++    ctx.strokeStyle = color;
++    ctx.lineWidth = width;
++    ctx.lineCap = 'round';
++    for (const ox of [-w, 0, w]) {
++      for (const oy of [-h, 0, h]) {
++        ctx.beginPath();
++        ctx.moveTo(x + ox, y + oy);
++        ctx.quadraticCurveTo(x + ox + len / 2, y + oy - len * 0.35, x + ox + len, y + oy);
++        ctx.stroke();
++      }
++    }
++  };
++  for (let i = 0; i < 9; i++) wave(rng.range(0, w), rng.range(0, h), rng.range(16, 30), 'rgba(20,90,160,0.45)', 4);
++  for (let i = 0; i < 12; i++) wave(rng.range(0, w), rng.range(0, h), rng.range(14, 28), 'rgba(190,235,255,0.75)', 3);
++}
++
+ export function makeEnvironmentTextures(scene: Phaser.Scene): void {
++  canvasTexture(scene, 'water', 128, 128, water);
+   canvasTexture(scene, 'palm', 160, 172, palm);
+   canvasTexture(scene, 'bush', 112, 78, (ctx) => bush(ctx, false, 1));
+   canvasTexture(scene, 'bush_flowers', 112, 78, (ctx) => bush(ctx, true, 2));
+diff --git a/games/xiao-swarm/src/assets/manifest.ts b/games/xiao-swarm/src/assets/manifest.ts
+index ac77c0b..fcf12a8 100644
+--- a/games/xiao-swarm/src/assets/manifest.ts
++++ b/games/xiao-swarm/src/assets/manifest.ts
+@@ -27,30 +27,48 @@ import { range, type AssetEntry } from '@xiao/engine';
+  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
+  */
+ export const ASSETS: AssetEntry[] = [
+-  // Gunner — découpé depuis art-src/gunner_sheet.png (node tools/slice-sheet.mjs games/xiao-swarm/art-src/gunner.slice.json)
++  // Sol — texture qui se raccorde, répétée sur toute la carte (art-src/ground.png → 1024 px WebP ; voir view/ArenaView.ts).
++  { type: 'image', id: 'ground_tile', url: 'ground/ground.webp' },
++  // Slime vert — art-src/sprite--9px-frames-16-rows-4-cols-4 (1).png réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json.
++  // 16 cases de 64×64 (cycle de marche) ; le dessin regarde vers la GAUCHE ; idle = même cycle, plus lent.
++  {
++    type: 'sheet',
++    url: 'aliens/slime.png',
++    frameWidth: 64,
++    frameHeight: 64,
++    sprites: {
++      alien_slime: {
++        originX: 0.516,
++        originY: 0.948,
++        scale: 0.9,
++        facesLeft: true,
++        anims: {
++          idle: { frames: range(0, 15), fps: 5 },
++          walk: { frames: range(0, 15), fps: 12 },
++        },
++      },
++    },
++  },
++  // Gunner — assemblé depuis art-src/gunner_{idle,walk,death}.png (node tools/pack-grids.mjs games/xiao-swarm/art-src/gunner.pack.json).
++  // 48 cases de 64×74, pieds alignés : idle 0-15, walk 16-31, death 32-47. Personnage tourné vers la droite
++  // (retourné par le jeu pour la gauche) ; l'arme fait partie du dessin.
+   {
+     type: 'sheet',
+     url: 'soldiers/gunner.png',
+-    frameWidth: 98,
+-    frameHeight: 88,
++    frameWidth: 64,
++    frameHeight: 74,
+     sprites: {
+       soldier_gunner: {
+-        originX: 0.403,
+-        originY: 0.864,
+-        scale: 0.8,
++        originX: 0.402,
++        originY: 0.894,
++        scale: 1,
+         anims: {
+-          idle: { frames: range(0, 3), fps: 6 },
+-          shoot: { frames: range(6, 9), fps: 14 },
+-          walk_down: { frames: range(12, 15), fps: 10 },
+-          walk_up: { frames: range(18, 21), fps: 10 },
+-          walk_left: { frames: range(24, 27), fps: 10 },
+-          walk_right: { frames: range(30, 33), fps: 10 },
+-          hurt: { frames: range(36, 38), fps: 12, repeat: 0 },
+-          die: { frames: range(42, 47), fps: 10, repeat: 0 },
++          idle: { frames: range(0, 15), fps: 8 },
++          walk: { frames: range(16, 31), fps: 16 },
++          die: { frames: range(32, 47), fps: 12, repeat: 0 },
+         },
+       },
+       gun_gunner: { hidden: true }, // l'arme est dessinée dans la planche
+-      portrait_gunner: { frame: 0, crop: [0, 0, 98, 52], originX: 0.43, originY: 0.59, scale: 0.9 },
+     },
+   },
+ ];
+diff --git a/games/xiao-swarm/src/config.ts b/games/xiao-swarm/src/config.ts
+index 2f0a5a4..67015de 100644
+--- a/games/xiao-swarm/src/config.ts
++++ b/games/xiao-swarm/src/config.ts
+@@ -9,14 +9,43 @@ export const SAFE_SIZE = 720;
+ export const SQUAD = {
+   startSize: 4,
+   baseMaxSize: 12,
++} as const;
++
++/**
++ * Réglages du mouvement de foule (voir sim/Squad.ts). VALEURS MODIFIABLES : le panneau debug
++ * (touche ² / F2, sliders) les change en direct ; `CROWD_DEFAULTS` est la référence de départ.
++ * Seul l'hôte / le solo simule : en ligne, ce sont les réglages de l'hôte qui comptent.
++ *
++ * Défauts « réactifs » (mesurés avec `node scripts/crowd-headless.mjs`) : 0,23 s pour atteindre 90 % de la vitesse
++ * et 0,23 s pour se reformer à l'arrêt. Anciens réglages : gainMin 4, gainSpread 2, velDamp 10, maxSpeedMul 1.6 (0,43 s / 0,5 s).
++ */
++export const CROWD_DEFAULTS = {
++  /** Vitesse de l'ancre = vitesse max de la squad (px/s). */
+   speed: 210,
+-  /** Distance entre voisins dans la formation. */
++  /** Distance entre voisins dans la formation (px). */
+   spacing: 50,
+-  /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad. */
++  /** L'ancre ne s'éloigne jamais plus que ça du coeur de la squad (px) : plus grand = la squad « tire » plus loin devant. */
+   leash: 70,
+-  /** Temps à l'arrêt avant que le Medic soigne. */
++  /** Laisse en plus par √(nombre de soldats). */
++  leashPerRoot: 6,
++  /** Réactivité individuelle minimale : vitesse voulue = écart au slot × gain (1/s). */
++  gainMin: 8,
++  /** Écart aléatoire de réactivité entre soldats (0 = tous identiques = formation rigide). */
++  gainSpread: 3,
++  /** Vivacité de la vitesse vers la vitesse voulue (1/s) : plus grand = accélère / freine plus sec. */
++  velDamp: 18,
++  /** Vitesse max d'un soldat qui rattrape son slot, en multiple de `speed`. */
++  maxSpeedMul: 1.8,
++  /** Force de la séparation entre soldats (0 = ils se traversent, 1 = repoussés d'un coup). */
++  separation: 0.5,
++  /** Amortissement du knockback (1/s). */
++  knockDamp: 5,
++  /** Temps à l'arrêt avant que le Medic soigne (s). */
+   stillDelay: 0.5,
+-} as const;
++};
++
++export type CrowdKey = keyof typeof CROWD_DEFAULTS;
++export const CROWD: Record<CrowdKey, number> = { ...CROWD_DEFAULTS };
+ 
+ /** Profondeurs : sol < ombres/anneaux < acteurs (triés par y) < barres de vie. */
+ export const DEPTH = {
+diff --git a/games/xiao-swarm/src/data/aliens.ts b/games/xiao-swarm/src/data/aliens.ts
+index 6625e7a..0b16c91 100644
+--- a/games/xiao-swarm/src/data/aliens.ts
++++ b/games/xiao-swarm/src/data/aliens.ts
+@@ -104,7 +104,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
+  * Vagues scriptées sur 5 minutes (GDD §18, §28) : début très doux pour
+  * comprendre le contrôle, voir les tirs, recruter, puis montée progressive.
+  */
+-export const WAVES: WaveEvent<AlienId>[] = [
++export const WAVE_SCRIPT: WaveEvent<AlienId>[] = [
+   { from: 1, to: 30, every: 1.8, type: 'slime', count: 2, label: '1' },
+   { from: 30, to: 300, every: 1.3, type: 'slime', count: 3, label: '2' },
+   { from: 45, to: 300, every: 5, type: 'spider', count: 5, label: '2' },
+@@ -118,5 +118,17 @@ export const WAVES: WaveEvent<AlienId>[] = [
+   { at: 265, type: 'crab', count: 2, label: '6' },
+ ];
+ 
++/**
++ * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
++ * leurs vagues sont retirées. Pour en réactiver un : l'ajouter ici (le script WAVE_SCRIPT le fait réapparaître).
++ */
++export const ACTIVE_ALIENS: AlienId[] = ['slime'];
++
++/** Garde uniquement les vagues des ennemis actifs. */
++export const onlyActive = (waves: WaveEvent<AlienId>[]): WaveEvent<AlienId>[] => waves.filter((w) => ACTIVE_ALIENS.includes(w.type));
++
++/** Vagues jouées : le script complet, filtré sur les ennemis actifs. */
++export const WAVES: WaveEvent<AlienId>[] = onlyActive(WAVE_SCRIPT);
++
+ /** Numéro de vague affiché en fonction du temps. */
+ export const WAVE_MARKS = [0, 30, 75, 130, 170, 220];
+diff --git a/games/xiao-swarm/src/data/classes.ts b/games/xiao-swarm/src/data/classes.ts
+index 0d95858..f5a7fc9 100644
+--- a/games/xiao-swarm/src/data/classes.ts
++++ b/games/xiao-swarm/src/data/classes.ts
+@@ -103,15 +103,18 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
+   },
+ };
+ 
++/**
++ * Classes réellement en jeu pour l'instant : les autres restent définies (données, textures, réseau)
++ * mais ne sont ni dans les squads de départ ni recrutées. Pour en réactiver une : l'ajouter ici et
++ * dans START_SQUADS.
++ */
++export const ACTIVE_CLASSES: SoldierClassId[] = ['gunner'];
++
+ /**
+  * Compositions de départ viables (GDD §7) : randomisation contrainte.
++ * Pour l'instant : 4 Gunners (les autres classes sont désactivées, voir ACTIVE_CLASSES).
+  */
+-export const START_SQUADS: SoldierClassId[][] = [
+-  ['medic', 'gunner', 'flammer', 'gunner'],
+-  ['medic', 'gunner', 'gunner', 'sniper'],
+-  ['medic', 'gunner', 'flammer', 'tank'],
+-  ['medic', 'gunner', 'sniper', 'flammer'],
+-];
++export const START_SQUADS: SoldierClassId[][] = [['gunner', 'gunner', 'gunner', 'gunner']];
+ 
+ /**
+  * Composition "idéale" visée par le recrutement : le type de recrue droppée
+diff --git a/games/xiao-swarm/src/data/maps.ts b/games/xiao-swarm/src/data/maps.ts
+index 59a004f..dd88f8b 100644
+--- a/games/xiao-swarm/src/data/maps.ts
++++ b/games/xiao-swarm/src/data/maps.ts
+@@ -30,56 +30,49 @@ export interface MapDef {
+   seed: number;
+ }
+ 
+-/** Arène solo compacte (GDD §3). */
++/**
++ * Arène solo compacte (GDD §3). Seuls des rochers font obstacle (`ponds` / `logs` restent disponibles dans MapDef).
++ * Un rocher = un cercle de collision (Arena) + un sprite `rock_big` / `rock_small` (ArenaView).
++ */
+ export const JUNGLE_ARENA: MapDef = {
+   id: 'jungle',
+   width: 2400,
+   height: 1800,
+   border: 170,
+   seed: 7,
+-  ponds: [{ x: 560, y: 1080, rx: 190, ry: 130 }],
++  ponds: [],
+   rocks: [
+     { x: 900, y: 560, size: 'big' },
+     { x: 960, y: 600, size: 'small' },
+     { x: 1560, y: 520, size: 'big' },
+     { x: 1500, y: 1250, size: 'big' },
+     { x: 1580, y: 1290, size: 'big' },
+-    { x: 1440, y: 1300, size: 'small' },
+     { x: 1150, y: 1000, size: 'small' },
+     { x: 1900, y: 900, size: 'big' },
+     { x: 700, y: 650, size: 'small' },
+     { x: 1200, y: 1420, size: 'big' },
++    { x: 620, y: 1150, size: 'big' },
++    { x: 1750, y: 1450, size: 'small' },
+   ],
+-  logs: [{ x: 1010, y: 1470 }],
++  logs: [],
+ };
+ 
+ /**
+- * Grande carte battle royale générée depuis une seed : obstacles répartis,
+- * coins dégagés pour les départs.
++ * Grande carte battle royale générée depuis une seed : rochers répartis, coins dégagés pour les départs.
++ * Même seed = même carte chez tous les joueurs (réseau).
+  */
+ export function makeRoyaleMap(seed: number, size = 4800): MapDef {
+   const rng = new Rng(seed);
+   const border = 220;
+   const rocks: RockDef[] = [];
+-  const ponds: PondDef[] = [];
+-  const logs: Point[] = [];
+   const cornerClear = 700;
+-  const inCorner = (x: number, y: number) =>
+-    (x < cornerClear || x > size - cornerClear) && (y < cornerClear || y > size - cornerClear);
+-
+-  for (let i = 0; i < 6; i++) {
+-    const x = rng.range(border + 500, size - border - 500);
+-    const y = rng.range(border + 500, size - border - 500);
+-    if (!inCorner(x, y)) ponds.push({ x, y, rx: rng.range(140, 240), ry: rng.range(100, 160) });
+-  }
++  const inCorner = (x: number, y: number) => (x < cornerClear || x > size - cornerClear) && (y < cornerClear || y > size - cornerClear);
+   for (let i = 0; i < 70; i++) {
+     const x = rng.range(border + 100, size - border - 100);
+     const y = rng.range(border + 100, size - border - 100);
+-    if (inCorner(x, y) || ponds.some((p) => Math.hypot(p.x - x, p.y - y) < p.rx + 120)) continue;
++    if (inCorner(x, y)) continue;
+     rocks.push({ x, y, size: rng.chance(0.55) ? 'big' : 'small' });
+     if (rng.chance(0.3)) rocks.push({ x: x + rng.range(50, 80), y: y + rng.range(20, 50), size: 'small' });
+   }
+-  for (let i = 0; i < 10; i++) logs.push({ x: rng.range(border + 200, size - border - 200), y: rng.range(border + 200, size - border - 200) });
+-
+-  return { id: `royale-${seed}`, width: size, height: size, border, seed, ponds, rocks, logs };
++  return { id: `royale-${seed}`, width: size, height: size, border, seed, ponds: [], rocks, logs: [] };
+ }
+diff --git a/games/xiao-swarm/src/data/modes.ts b/games/xiao-swarm/src/data/modes.ts
+index e96b766..dcc6867 100644
+--- a/games/xiao-swarm/src/data/modes.ts
++++ b/games/xiao-swarm/src/data/modes.ts
+@@ -1,5 +1,5 @@
+ import type { Point, Rng, WaveEvent } from '@xiao/engine/sim';
+-import { WAVES, type AlienId } from './aliens';
++import { onlyActive, WAVE_SCRIPT, WAVES, type AlienId } from './aliens';
+ import { JUNGLE_ARENA, makeRoyaleMap, type MapDef } from './maps';
+ 
+ /**
+@@ -73,10 +73,10 @@ export const ROYALE: ModeDef = {
+ };
+ 
+ /** Vagues du mode versus : celles du solo, mais sans fin, avec un crabe toutes les minutes. */
+-const VERSUS_WAVES: WaveEvent<AlienId>[] = [
+-  ...WAVES.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
++const VERSUS_WAVES: WaveEvent<AlienId>[] = onlyActive([
++  ...WAVE_SCRIPT.map((w) => ('to' in w && w.to === 300 ? { ...w, to: 36000 } : w)),
+   { from: 300, to: 36000, every: 60, type: 'crab', count: 1, label: '6' },
+-];
++]);
+ 
+ /**
+  * PvPvE en ligne (2 joueurs et plus) : la carte du solo, des aliens qui
+diff --git a/games/xiao-swarm/src/net/Mirror.ts b/games/xiao-swarm/src/net/Mirror.ts
+index 682ead8..574e0aa 100644
+--- a/games/xiao-swarm/src/net/Mirror.ts
++++ b/games/xiao-swarm/src/net/Mirror.ts
+@@ -1,5 +1,5 @@
+ import { robustCentroid } from '@xiao/engine/sim';
+-import { SQUAD } from '../config';
++import { CROWD, SQUAD } from '../config';
+ import { ALIENS } from '../data/aliens';
+ import { CLASSES } from '../data/classes';
+ import type { AlienState, RecruitState, SoldierState, Unit } from '../sim/entities';
+@@ -47,7 +47,7 @@ export class Mirror {
+       squad.stats.reset();
+       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
+       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
+-      squad.stillTime = sq.healing ? SQUAD.stillDelay + 1 : 0;
++      squad.stillTime = sq.healing ? CROWD.stillDelay + 1 : 0;
+       squad.soldiers.length = 0;
+       for (const u of sq.soldiers) {
+         seenSoldiers.add(u.id);
+diff --git a/games/xiao-swarm/src/scenes/GameScene.ts b/games/xiao-swarm/src/scenes/GameScene.ts
+index f672226..f5ef7eb 100644
+--- a/games/xiao-swarm/src/scenes/GameScene.ts
++++ b/games/xiao-swarm/src/scenes/GameScene.ts
+@@ -2,12 +2,15 @@ import Phaser from 'phaser';
+ import { clamp, damp, DebugOverlay, MoveInput, poki, RunFlow, storage } from '@xiao/engine';
+ import { SCENES } from '../config';
+ import { WAVE_MARKS } from '../data/aliens';
+-import type { SoldierClassId } from '../data/classes';
++import { ACTIVE_CLASSES, type SoldierClassId } from '../data/classes';
+ import { MODES, type ModeDef } from '../data/modes';
++import { ACTIVE_ALIENS } from '../data/aliens';
++import { addCrowdMenu, loadSavedCrowd } from '../debugCrowd';
+ import { t } from '../i18n';
+ import { LocalSession, type Session } from '../net/Session';
+ import type { Squad } from '../sim/Squad';
+ import type { SimEvent } from '../sim/types';
++import { DebugHitboxes } from '../view/DebugHitboxes';
+ import { WorldView } from '../view/WorldView';
+ import type { GameOverData } from './GameOverScene';
+ 
+@@ -26,6 +29,7 @@ export class GameScene extends Phaser.Scene {
+   private view!: WorldView;
+   private move!: MoveInput;
+   private debug?: DebugOverlay;
++  private hitboxes?: DebugHitboxes;
+   private revived = false;
+   private ended = false;
+   private readonly camTarget = { x: 0, y: 0 };
+@@ -37,6 +41,7 @@ export class GameScene extends Phaser.Scene {
+   create(): void {
+     this.revived = false;
+     this.ended = false;
++    loadSavedCrowd();
+     const online = this.registry.get('session') as Session | undefined;
+     this.registry.remove('session');
+     if (online) {
+@@ -90,6 +95,7 @@ export class GameScene extends Phaser.Scene {
+       this.checkEnd();
+     }
+     this.view.render(this.flow.isPlaying || this.session.online ? this.session.alpha : 1, dt, secs);
++    this.hitboxes?.render(this.flow.isPlaying || this.session.online ? this.session.alpha : 1);
+     this.updateCamera(dt);
+ 
+     const sim = this.session.sim;
+@@ -253,10 +259,18 @@ export class GameScene extends Phaser.Scene {
+       for (const a of sim.aliens) sim.damage(a, 1e6, me);
+     });
+     this.debug.cheat('R', 'drop recruit', () => {
+-      const ids: SoldierClassId[] = ['gunner', 'medic', 'flammer', 'sniper', 'tank'];
+-      sim.recruits.drop(sim.rng.pick(ids), this.localSquad.center.x + 90, this.localSquad.center.y);
++      sim.recruits.drop(sim.rng.pick(ACTIVE_CLASSES), this.localSquad.center.x + 90, this.localSquad.center.y);
+     });
+     this.debug.cheat('T', '+30s', () => sim.waves.update(30));
+-    this.debug.cheat('B', 'spawn crab', () => sim.horde.spawnNear(this.localSquad, 'crab', 1, 420));
++    const hitboxes = new DebugHitboxes(this, sim);
++    this.hitboxes = hitboxes;
++    this.debug.section('Hitboxes');
++    this.debug.toggle('Afficher les hitboxes (H)', { get: () => hitboxes.enabled, set: (on) => hitboxes.setEnabled(on) });
++    this.debug.cheat('H', 'hitboxes', () => {
++      hitboxes.setEnabled(!hitboxes.enabled);
++      this.debug?.syncSliders();
++    });
++    addCrowdMenu(this.debug);
++    this.debug.cheat('B', 'spawn 5 aliens', () => sim.horde.spawnNear(this.localSquad, ACTIVE_ALIENS[0], 5, 420));
+   }
+ }
+diff --git a/games/xiao-swarm/src/sim/Recruits.ts b/games/xiao-swarm/src/sim/Recruits.ts
+index 2c705bf..64ced36 100644
+--- a/games/xiao-swarm/src/sim/Recruits.ts
++++ b/games/xiao-swarm/src/sim/Recruits.ts
+@@ -1,5 +1,5 @@
+ import { clamp } from '@xiao/engine/sim';
+-import { TARGET_MIX, type SoldierClassId } from '../data/classes';
++import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
+ import type { AlienState, RecruitState } from './entities';
+ import type { Sim } from './Sim';
+ import type { Squad } from './Squad';
+@@ -68,7 +68,7 @@ export class Recruits {
+   /** Classe qui comble le mieux l'écart à TARGET_MIX (avec un peu d'aléatoire). */
+   private chooseClass(squad: Squad): SoldierClassId {
+     const n = Math.max(1, squad.size);
+-    const ids = Object.keys(TARGET_MIX) as SoldierClassId[];
++    const ids = ACTIVE_CLASSES;
+     return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'gunner';
+   }
+ 
+diff --git a/games/xiao-swarm/src/sim/Squad.ts b/games/xiao-swarm/src/sim/Squad.ts
+index e8cd9ac..a528145 100644
+--- a/games/xiao-swarm/src/sim/Squad.ts
++++ b/games/xiao-swarm/src/sim/Squad.ts
+@@ -1,5 +1,5 @@
+ import { assignSlots, damp, robustCentroid, Stats, sunflowerSlots, type Point } from '@xiao/engine/sim';
+-import { SQUAD } from '../config';
++import { CROWD, SQUAD } from '../config';
+ import { CLASSES, type SoldierClassId } from '../data/classes';
+ import type { SoldierState } from './entities';
+ import type { Sim } from './Sim';
+@@ -24,6 +24,7 @@ export class Squad {
+   stillTime = 0;
+   kills = 0;
+   private slots: Point[] = [];
++  private slotSpacing: number = CROWD.spacing;
+   private dirty = true;
+   private healFx = 0;
+ 
+@@ -45,7 +46,7 @@ export class Squad {
+   }
+ 
+   get isHealing(): boolean {
+-    return this.stillTime > SQUAD.stillDelay && this.soldiers.some((s) => s.def.heal);
++    return this.stillTime > CROWD.stillDelay && this.soldiers.some((s) => s.def.heal);
+   }
+ 
+   countOf(id: SoldierClassId): number {
+@@ -56,14 +57,14 @@ export class Squad {
+ 
+   /** Taille de la formation, utile pour la caméra et le spawn. */
+   get radius(): number {
+-    return SQUAD.spacing * 0.55 * Math.sqrt(this.soldiers.length + 0.5) + SQUAD.spacing;
++    return CROWD.spacing * 0.55 * Math.sqrt(this.soldiers.length + 0.5) + CROWD.spacing;
+   }
+ 
+   spawn(ids: SoldierClassId[], at: Point): void {
+     this.anchor.x = at.x;
+     this.anchor.y = at.y;
+     this.stillTime = 0;
+-    const slots = sunflowerSlots(ids.length, SQUAD.spacing);
++    const slots = sunflowerSlots(ids.length, CROWD.spacing);
+     ids.forEach((id, i) => this.add(id, { x: at.x + slots[i].x, y: at.y + slots[i].y }));
+     this.updateCenter();
+     this.sim.events.push({ t: 'squadSpawned', owner: this.owner, x: at.x, y: at.y });
+@@ -93,7 +94,7 @@ export class Squad {
+       alive: true,
+       slotX: 0,
+       slotY: 0,
+-      gain: 4 + this.sim.rng.next() * 2,
++      gain: this.sim.rng.next(),
+       cooldown: this.sim.rng.next() * def.weapon.cooldown,
+       retarget: 0,
+       target: null,
+@@ -126,7 +127,7 @@ export class Squad {
+     const my = len > 1 ? input.my / len : input.my;
+     this.moving = len > 0.1;
+     this.stillTime = this.moving ? 0 : this.stillTime + dt;
+-    const speed = SQUAD.speed * this.stats.get('speed');
++    const speed = CROWD.speed * this.stats.get('speed');
+ 
+     // 1. Ancre : réponse immédiate à l'input
+     this.anchor.x += mx * speed * dt;
+@@ -138,31 +139,32 @@ export class Squad {
+     const dx = this.anchor.x - this.center.x;
+     const dy = this.anchor.y - this.center.y;
+     const d = Math.hypot(dx, dy);
+-    const leash = SQUAD.leash + Math.sqrt(n) * 6;
++    const leash = CROWD.leash + Math.sqrt(n) * CROWD.leashPerRoot;
+     if (d > leash) {
+       this.anchor.x = this.center.x + (dx / d) * leash;
+       this.anchor.y = this.center.y + (dy / d) * leash;
+     }
+ 
+-    // 3. Slots (recalculés seulement quand la taille change)
+-    if (this.dirty) this.reassign();
++    // 3. Slots (recalculés quand la taille ou l'espacement change)
++    if (this.dirty || this.slotSpacing !== CROWD.spacing) this.reassign();
+ 
+     // 4. Chaque soldat rejoint son slot avec inertie
+-    const maxSpeed = speed * 1.6;
++    const maxSpeed = speed * CROWD.maxSpeedMul;
+     for (const s of this.soldiers) {
+-      let desiredX = (this.anchor.x + s.slotX - s.x) * s.gain;
+-      let desiredY = (this.anchor.y + s.slotY - s.y) * s.gain;
++      const gain = CROWD.gainMin + s.gain * CROWD.gainSpread;
++      let desiredX = (this.anchor.x + s.slotX - s.x) * gain;
++      let desiredY = (this.anchor.y + s.slotY - s.y) * gain;
+       const l = Math.hypot(desiredX, desiredY);
+       if (l > maxSpeed) {
+         desiredX = (desiredX / l) * maxSpeed;
+         desiredY = (desiredY / l) * maxSpeed;
+       }
+-      s.vx = damp(s.vx, desiredX, 10, dt);
+-      s.vy = damp(s.vy, desiredY, 10, dt);
++      s.vx = damp(s.vx, desiredX, CROWD.velDamp, dt);
++      s.vy = damp(s.vy, desiredY, CROWD.velDamp, dt);
+       s.x += (s.vx + s.kx) * dt;
+       s.y += (s.vy + s.ky) * dt;
+-      s.kx = damp(s.kx, 0, 5, dt);
+-      s.ky = damp(s.ky, 0, 5, dt);
++      s.kx = damp(s.kx, 0, CROWD.knockDamp, dt);
++      s.ky = damp(s.ky, 0, CROWD.knockDamp, dt);
+       if (s.invulnerable > 0) s.invulnerable -= dt;
+     }
+ 
+@@ -177,7 +179,7 @@ export class Squad {
+         const d2 = ddx * ddx + ddy * ddy;
+         if (d2 >= min * min || d2 === 0) continue;
+         const dd = Math.sqrt(d2);
+-        const push = ((min - dd) / dd) * 0.5;
++        const push = ((min - dd) / dd) * CROWD.separation;
+         const wa = b.mass / (a.mass + b.mass);
+         const wb = a.mass / (a.mass + b.mass);
+         a.x -= ddx * push * wa;
+@@ -216,7 +218,8 @@ export class Squad {
+ 
+   private reassign(): void {
+     this.dirty = false;
+-    this.slots = sunflowerSlots(this.soldiers.length, SQUAD.spacing, this.slots);
++    this.slotSpacing = CROWD.spacing;
++    this.slots = sunflowerSlots(this.soldiers.length, CROWD.spacing, this.slots);
+     const rel = this.soldiers.map((s) => ({ x: s.x - this.anchor.x, y: s.y - this.anchor.y }));
+     const assignment = assignSlots(rel, this.slots);
+     this.soldiers.forEach((s, i) => {
+diff --git a/games/xiao-swarm/src/sim/entities.ts b/games/xiao-swarm/src/sim/entities.ts
+index 9b248a6..c6515ac 100644
+--- a/games/xiao-swarm/src/sim/entities.ts
++++ b/games/xiao-swarm/src/sim/entities.ts
+@@ -32,7 +32,7 @@ export interface SoldierState extends Body {
+   /** Slot relatif à l'ancre de la squad. */
+   slotX: number;
+   slotY: number;
+-  /** Réactivité individuelle (formation organique). */
++  /** Aléa de réactivité individuelle (0 → 1), mis à l'échelle par CROWD.gainMin / gainSpread (formation organique). */
+   gain: number;
+   cooldown: number;
+   retarget: number;
+diff --git a/games/xiao-swarm/src/view/ArenaView.ts b/games/xiao-swarm/src/view/ArenaView.ts
+index 572092c..8e88607 100644
+--- a/games/xiao-swarm/src/view/ArenaView.ts
++++ b/games/xiao-swarm/src/view/ArenaView.ts
+@@ -15,26 +15,53 @@ const PRELOAD = 512;
+ /** Au-delà de cette marge, les morceaux sont libérés (mémoire GPU sur mobile). */
+ const UNLOAD = 1024;
+ 
++/** Texture de sol qui se raccorde (assets/manifest.ts) et son échelle d'affichage (1024 px → ~750 px à l'écran). */
++const GROUND_TEXTURE = 'ground_tile';
++const GROUND_SCALE = 0.73;
++
+ /**
+- * Affichage de la carte : sol découpé en morceaux de 2048 px créés/détruits
+- * autour de la caméra (supporte les grandes cartes battle royale), décor haut
+- * (rochers, palmiers) en sprites triés en profondeur.
++ * Affichage de la carte : sol en texture répétée sur la zone jouable (un seul TileSprite, quelle que soit
++ * la taille), entouré d'eau animée (la bordure infranchissable) ; à défaut de texture fournie, repli sur le sol
++ * procédural découpé en morceaux de 2048 px créés/détruits autour de la caméra. Décor haut (obstacles
++ * éventuels) en sprites triés en profondeur.
+  */
+ export class ArenaView {
+   private readonly features: GroundFeature[];
+   private readonly chunks = new Map<string, Phaser.GameObjects.Image>();
++  private readonly tiled: boolean;
+   private first = true;
++  private water?: Phaser.GameObjects.TileSprite;
+ 
+   constructor(
+     private readonly scene: Phaser.Scene,
+     private readonly map: MapDef,
+   ) {
+-    this.features = buildGround(map);
++    this.tiled = scene.textures.exists(GROUND_TEXTURE);
++    if (this.tiled) {
++      // Eau partout, sol seulement dans la zone jouable (bords = `Arena.bounds`), avec une frange d'écume.
++      const b = { x: map.border, y: map.border, w: map.width - 2 * map.border, h: map.height - 2 * map.border };
++      this.water = scene.add.tileSprite(0, 0, map.width, map.height, 'water').setOrigin(0).setDepth(DEPTH.ground - 1);
++      scene.add.tileSprite(b.x, b.y, b.w, b.h, GROUND_TEXTURE).setOrigin(0).setTileScale(GROUND_SCALE).setDepth(DEPTH.ground);
++      scene.add
++        .graphics()
++        .setDepth(DEPTH.ground + 0.5)
++        .lineStyle(16, 0xd8f3ff, 0.22)
++        .strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8)
++        .lineStyle(5, 0xffffff, 0.75)
++        .strokeRect(b.x, b.y, b.w, b.h);
++    }
++    this.features = this.tiled ? [] : buildGround(map);
+     this.addDecor();
+   }
+ 
+   /** À appeler chaque frame avec la zone visible de la caméra. */
+   update(view: Phaser.Geom.Rectangle): void {
++    if (this.water) {
++      // l'eau glisse doucement
++      const t = this.scene.time.now;
++      this.water.setTilePosition(t * 0.012, t * 0.006);
++    }
++    if (this.tiled) return;
+     const x0 = Math.max(0, Math.floor((view.x - PRELOAD) / CHUNK));
+     const y0 = Math.max(0, Math.floor((view.y - PRELOAD) / CHUNK));
+     const x1 = Math.min(Math.ceil(this.map.width / CHUNK) - 1, Math.floor((view.right + PRELOAD) / CHUNK));
+@@ -84,27 +111,26 @@ export class ArenaView {
+     }
+     for (const l of this.map.logs) this.decor(l.x, l.y, 'log', 0.95);
+ 
+-    // Bordure de jungle
+-    const edge = (x: number, y: number) => {
+-      const r = rng.next();
+-      const key = r < 0.35 ? 'palm' : r < 0.7 ? 'bush' : 'bush_flowers';
+-      this.decor(x + rng.range(-25, 25), y + rng.range(-25, 25), key, rng.range(0.85, 1.25), rng.chance(0.5));
+-    };
+-    for (let x = 0; x <= W; x += 95) {
+-      edge(x, B * 0.35);
+-      edge(x, B * 0.8);
+-      edge(x, H - B * 0.25);
+-      edge(x, H - B * 0.7 + 40);
+-    }
+-    for (let y = B; y <= H - B; y += 95) {
+-      edge(B * 0.3, y);
+-      edge(B * 0.75, y);
+-      edge(W - B * 0.3, y);
+-      edge(W - B * 0.75, y);
++    // Bordure : plus de jungle, c'est de l'eau (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
++    if (!this.tiled) {
++      const edge = (x: number, y: number) => {
++        const r = rng.next();
++        const key = r < 0.35 ? 'palm' : r < 0.7 ? 'bush' : 'bush_flowers';
++        this.decor(x + rng.range(-25, 25), y + rng.range(-25, 25), key, rng.range(0.85, 1.25), rng.chance(0.5));
++      };
++      for (let x = 0; x <= W; x += 95) {
++        edge(x, B * 0.35);
++        edge(x, B * 0.8);
++        edge(x, H - B * 0.25);
++        edge(x, H - B * 0.7 + 40);
++      }
++      for (let y = B; y <= H - B; y += 95) {
++        edge(B * 0.3, y);
++        edge(B * 0.75, y);
++        edge(W - B * 0.3, y);
++        edge(W - B * 0.75, y);
++      }
+     }
+-    // quelques buissons fleuris dans l'arène (décor pur, pas d'obstacle)
+-    const n = Math.round(8 * ((W * H) / (2400 * 1800)));
+-    for (let i = 0; i < n; i++) this.decor(rng.range(B + 200, W - B - 200), rng.range(B + 150, H - B - 150), 'bush_flowers', 0.6);
+   }
+ 
+   /** Élément de décor via le catalogue (planche fournie ou dessin procédural). */
+diff --git a/packages/engine/src/debug/DebugOverlay.ts b/packages/engine/src/debug/DebugOverlay.ts
+index ca2f58d..4eebbcb 100644
+--- a/packages/engine/src/debug/DebugOverlay.ts
++++ b/packages/engine/src/debug/DebugOverlay.ts
+@@ -1,17 +1,33 @@
+ import Phaser from 'phaser';
+ 
++export interface SliderOptions {
++  min: number;
++  max: number;
++  step: number;
++  get: () => number;
++  set: (value: number) => void;
++  /** Infobulle (survol du libellé). */
++  hint?: string;
++}
++
+ /**
+- * Panneau de debug (dev uniquement) : FPS + stats libres. Touche ² / ` / F2 pour afficher.
++ * Panneau de debug (dev uniquement) : FPS + stats libres + menu de réglages (sliders, boutons).
++ * Touche ² / ` / F2 pour afficher / masquer le tout.
+  * En build de prod, `DebugOverlay.create` renvoie undefined et tout est tree-shaké.
+  *
+  *   const dbg = DebugOverlay.create(this);
+  *   dbg?.set('enemies', enemies.length);
++ *   dbg?.slider('Vitesse', { min: 50, max: 500, step: 5, get: () => cfg.speed, set: (v) => (cfg.speed = v) });
++ *   dbg?.button('Réinitialiser', () => …);
+  */
+ export class DebugOverlay {
+   private readonly text: Phaser.GameObjects.Text;
+   private readonly stats = new Map<string, string | number>();
+   private readonly cheats: { key: string; label: string }[] = [];
+   private elapsed = 0;
++  private menu?: HTMLDivElement;
++  private menuVisible = false;
++  private readonly syncers: (() => void)[] = [];
+ 
+   static create(scene: Phaser.Scene): DebugOverlay | undefined {
+     return import.meta.env.DEV ? new DebugOverlay(scene) : undefined;
+@@ -29,12 +45,19 @@ export class DebugOverlay {
+       .setScrollFactor(0)
+       .setDepth(1e6)
+       .setVisible(false);
+-    const toggle = () => this.text.setVisible(!this.text.visible);
++    const toggle = () => {
++      this.text.setVisible(!this.text.visible);
++      this.menuVisible = this.text.visible;
++      if (this.menu) this.menu.style.display = this.menuVisible ? 'block' : 'none';
++    };
+     scene.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+       if (e.code === 'Backquote' || e.key === 'F2') toggle();
+     });
+     scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.refresh);
+-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.refresh));
++    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
++      scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.refresh);
++      this.menu?.remove();
++    });
+   }
+ 
+   set(key: string, value: string | number): void {
+@@ -47,6 +70,94 @@ export class DebugOverlay {
+     this.scene.input.keyboard?.on(`keydown-${key}`, fn);
+   }
+ 
++  /** Slider de réglage dans le menu debug (mise à jour en direct). */
++  slider(label: string, o: SliderOptions): void {
++    const row = document.createElement('label');
++    row.style.cssText = 'display:block;margin:0 0 7px';
++    if (o.hint) row.title = o.hint;
++    const head = document.createElement('div');
++    head.style.cssText = 'display:flex;justify-content:space-between;gap:8px';
++    const name = document.createElement('span');
++    name.textContent = label;
++    const value = document.createElement('b');
++    head.append(name, value);
++    const input = document.createElement('input');
++    input.type = 'range';
++    input.min = String(o.min);
++    input.max = String(o.max);
++    input.step = String(o.step);
++    input.style.cssText = 'width:100%;margin:2px 0 0';
++    const decimals = (String(o.step).split('.')[1] ?? '').length;
++    const show = (v: number) => (value.textContent = v.toFixed(decimals));
++    const sync = () => {
++      input.value = String(o.get());
++      show(o.get());
++    };
++    input.addEventListener('input', () => {
++      o.set(Number(input.value));
++      show(Number(input.value));
++    });
++    // Rend le focus au jeu : sinon les flèches déplaceraient le slider au lieu de la squad.
++    input.addEventListener('change', () => input.blur());
++    input.addEventListener('pointerup', () => input.blur());
++    row.append(head, input);
++    this.ensureMenu().append(row);
++    this.syncers.push(sync);
++    sync();
++  }
++
++  /** Bouton dans le menu debug. */
++  button(label: string, fn: () => void): void {
++    const b = document.createElement('button');
++    b.textContent = label;
++    b.style.cssText = 'margin:2px 4px 2px 0;padding:3px 8px;font:inherit;cursor:pointer';
++    b.addEventListener('click', () => {
++      fn();
++      b.blur();
++    });
++    this.ensureMenu().append(b);
++  }
++
++  /** Bouton à bascule (« ☑ label » / « ☐ label ») dans le menu debug. `set` est aussi appelé par `sync`. */
++  toggle(label: string, o: { get: () => boolean; set: (on: boolean) => void }): void {
++    const b = document.createElement('button');
++    b.style.cssText = 'display:block;width:100%;margin:2px 0 6px;padding:4px 8px;font:inherit;text-align:left;cursor:pointer';
++    const show = () => (b.textContent = `${o.get() ? '☑' : '☐'} ${label}`);
++    b.addEventListener('click', () => {
++      o.set(!o.get());
++      show();
++      b.blur();
++    });
++    this.ensureMenu().append(b);
++    this.syncers.push(show);
++    show();
++  }
++
++  /** Titre de section dans le menu debug. */
++  section(title: string): void {
++    const h = document.createElement('div');
++    h.textContent = title;
++    h.style.cssText = 'margin:8px 0 6px;font-weight:bold;color:#ffd166;border-bottom:1px solid #444';
++    this.ensureMenu().append(h);
++  }
++
++  /** Relit les valeurs (après un reset par exemple) et met les sliders à jour. */
++  syncSliders(): void {
++    for (const fn of this.syncers) fn();
++  }
++
++  private ensureMenu(): HTMLDivElement {
++    if (this.menu) return this.menu;
++    const m = document.createElement('div');
++    m.style.cssText =
++      'position:fixed;top:8px;right:8px;z-index:99999;width:260px;max-height:calc(100vh - 16px);overflow:auto;' +
++      'padding:8px 10px;background:rgba(0,0,0,0.78);color:#dfe;font:12px monospace;border-radius:6px;' +
++      `display:${this.menuVisible ? 'block' : 'none'}`;
++    document.body.append(m);
++    this.menu = m;
++    return m;
++  }
++
+   private readonly refresh = (_t: number, delta: number): void => {
+     this.elapsed += delta;
+     if (!this.text.visible || this.elapsed < 250) return;

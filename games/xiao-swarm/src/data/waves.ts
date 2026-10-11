@@ -68,7 +68,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     1: [
       { name: 'Quelques slimes', groups: [{ type: 'slime', count: 3 }] },
       { name: 'Trio', groups: [{ type: 'slime', count: 5 }] },
-      { name: 'Petit groupe', groups: [{ type: 'slime', count: 8 }] },
+      { name: 'Petit groupe', groups: [{ type: 'gling', count: 4 }, { type: 'slime', count: 1 }] },
     ],
     2: [
       { name: 'Essaim rose', groups: [{ type: 'gling', count: 8 }] },

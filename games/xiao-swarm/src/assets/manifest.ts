@@ -567,11 +567,11 @@ export const ASSETS: AssetEntry[] = [
 ];
 
 /**
- * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage. Paquet 2 (`LATE_ASSETS`) : tous les aliens sauf le slime et le gling (seuls
- * présents avant le premier level-up), chargé en tâche de fond pendant le premier choix d'upgrade (`assets/latePack.ts`). En ligne, les deux paquets
+ * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage. Paquet 2 (`LATE_ASSETS`) : tous les aliens sauf le slime, le gling et la Gling Mère (seuls
+ * visibles avant le premier level-up : les deux premiers à l'écran, la Mère dans la timeline), chargé en tâche de fond pendant le premier choix d'upgrade (`assets/latePack.ts`). En ligne, les deux paquets
  * sont chargés d'emblée (on peut rejoindre en cours de partie). Une seule liste `ASSETS` reste la source (la sauvegarde des visionneuses la réécrit).
  */
-const CORE_ALIEN_FILES = ['aliens/slime.png', 'aliens/gling.png'];
+const CORE_ALIEN_FILES = ['aliens/slime.png', 'aliens/gling.png', 'aliens/boss_mother.png']; // la Gling Mère (1er boss) : son icône est dans la timeline dès le départ
 const isLate = (e: AssetEntry): boolean => e.url.startsWith('aliens/') && !CORE_ALIEN_FILES.includes(e.url);
 export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => !isLate(e));
 export const LATE_ASSETS: AssetEntry[] = ASSETS.filter(isLate);

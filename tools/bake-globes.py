@@ -23,6 +23,7 @@ VARIANTS = {
     'heal': (75, 0),  # vert
     'stasis': (165, 0),  # bleu
     'rockets': (350, 0),  # jaune orangé
+    'turrets': (215, 0),  # violet
     'upgrade': (285, 0.3),  # rose clair (globe d'upgrade des œufs de boss)
 }
 

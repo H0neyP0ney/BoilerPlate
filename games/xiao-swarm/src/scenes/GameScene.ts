@@ -17,7 +17,6 @@ import { CrowdPanel } from '../dev/crowdPanel';
 import { DifficultyPanel } from '../dev/difficultyPanel';
 import { addVisualMenu, loadSavedVisual } from '../debugVisual';
 import { t } from '../i18n';
-import { latePack } from '../assets/latePack';
 import { MUSIC, settings, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../settings';
 import { HostSession } from '../net/HostSession';
 import { encodeSnapshot, SNAPSHOT_EVERY, takeSnapshot } from '../net/Protocol';
@@ -359,7 +358,6 @@ export class GameScene extends Phaser.Scene {
     const squad = this.localSquad;
     this.upgradeOpen = true;
     this.shownOffer = key;
-    latePack.ensure(this); // 1er choix d'upgrade : le paquet 2 des visuels (aliens suivants) se charge pendant que le joueur choisit
     this.scene.stop(SCENES.levelUp);
     this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
   }

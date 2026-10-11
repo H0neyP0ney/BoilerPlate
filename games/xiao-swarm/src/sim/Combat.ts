@@ -3,7 +3,7 @@ import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
 import { ALIENS, zombieStats } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
-import type { AlienState, Projectile, SoldierState, Unit } from './entities';
+import type { AlienState, Projectile, SoldierState, TurretState, Unit } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 import type { PlayerId, Team } from './types';
@@ -336,6 +336,35 @@ export class Combat {
     p.texture = ROCKET_TEXTURE;
     p.team = src.team;
     p.owner = src.owner;
+  }
+
+  /** Tir d'une tourelle (power-up `turrets`) : projectile explosif en ligne droite, à la cible anticipée ; dégâts = ceux du trooper de base × `TURRETS.damageMul` × bonus de dégâts de la squad du propriétaire. */
+  turretShot(t: TurretState, target: AlienState): void {
+    const { rng } = this.sim;
+    const weapon = t.def.weapon;
+    const mx = t.x + Math.cos(t.aim) * 22;
+    const my = t.y - 17 + Math.sin(t.aim) * 22;
+    const speed = weapon.projectileSpeed ?? 700;
+    const reach = Math.hypot(target.x - mx, target.y - my) / speed;
+    const lx = target.x + target.vx * reach + rng.range(-6, 6);
+    const ly = target.y - 10 + target.vy * reach + rng.range(-6, 6);
+    const flight = Math.max(0.05, Math.hypot(lx - mx, ly - my) / speed);
+    const owner = this.sim.squadOf(t.owner);
+    const p = this.projectiles.acquire();
+    p.x = p.px = mx;
+    p.y = p.py = my;
+    p.vx = (lx - mx) / flight;
+    p.vy = (ly - my) / flight;
+    p.life = p.maxLife = flight;
+    p.damage = weapon.damage * (owner ? owner.stats.get('damage') : 1);
+    p.pierce = 0;
+    p.flame = false;
+    p.lob = false;
+    p.aoe = weapon.aoe ?? 0;
+    p.knock = 0;
+    p.texture = weapon.texture;
+    p.team = t.team;
+    p.owner = t.owner;
   }
 
   private launchLob(mx: number, my: number, lx: number, ly: number, flight: number, damage: number, aoe: number, texture: string, team: Team, owner: PlayerId): Projectile {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { theme } from '@xiao/engine';
 import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
+import { latePack } from '../assets/latePack';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
@@ -79,6 +80,15 @@ export class LevelUpScene extends Phaser.Scene {
       }
     });
     this.timerBar = this.add.graphics();
+
+    // 1er choix d'upgrade : le paquet 2 des visuels (aliens suivants) se charge une fois les cartes entièrement apparues, pendant que le joueur choisit (l'écran est figé :
+    // le chargement ne saccade pas la partie). Choix très rapide (avant la fin de l'animation) : le chargement part à la fermeture.
+    if (offer.length > 0 && !latePack.ready) {
+      const appeared = 60 + (offer.length - 1) * 90 + 380 + 120; // dernière carte : délai + pop (ms), plus une marge
+      const start = (): void => latePack.ensure(this.game_);
+      this.time.delayedCall(appeared, start);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, start);
+    }
 
     // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
     const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;

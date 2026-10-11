@@ -7,18 +7,22 @@ import type { Squad } from './Squad';
 
 /** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
 const REROLL_FALL_DIST: [number, number] = [50, 100];
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'turrets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
 /**
  * Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. `overheal` : part des PV max qu'il peut ajouter AU-DELÀ du max
- * (0,3 = jusqu'à 130 %) ; ce surplus ne redescend jamais tout seul, seuls les dégâts l'entament.
+ * (0,5 = jusqu'à 150 %) ; ce surplus ne redescend jamais tout seul, seuls les dégâts l'entament.
  */
-export const HEAL_FIELD = { r: 184, ttl: 10, perSec: 0.264, overheal: 0.3 }; // 09/10 : soin et rayon +10 % (0,24 et 167 avant), overheal
+export const HEAL_FIELD = { r: 184, ttl: 10, perSec: 0.264, overheal: 0.5 }; // 09/10 : soin et rayon +10 % (0,24 et 167 avant), overheal ; overheal 0,5 (0,3 avant le 11/10)
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
-const STASIS_FIELD = { r: 382.5, ttl: 8, slow: 0.2 }; // rayon −15 % (450 avant le 08/10)
+const STASIS_FIELD = { r: 382.5, ttl: 8, slow: 0.2 };
+/** Les globes de soin et de stase sont dessinés en ellipse (demi-axes r et r × 0,7, `drawField` de view/PickupViews.ts) : ils agissent exactement sur ce qui est dedans (centre de l'unité). */
+const FIELD_ASPECT = 0.7; // rayon −15 % (450 avant le 08/10)
 const ROCKETS = 30;
+/** Un power-up n'apparaît jamais à moins de ce nombre de px (en plus du rayon) d'une escouade vivante. */
+const SPAWN_CLEARANCE = 50;
 
 /**
  * Power-ups : de temps en temps un petit boost apparaît près d'une squad vivante et disparaît vite si personne ne le prend.
@@ -124,7 +128,7 @@ export class PowerUps {
       if (f.kind !== 'heal') continue;
       for (const sq of this.sim.squads) {
         for (const s of sq.soldiers) {
-          if (!s.alive || (s.x - f.x) ** 2 + (s.y - f.y) ** 2 > (f.r + s.radius) ** 2) continue;
+          if (!s.alive || ((s.x - f.x) / f.r) ** 2 + ((s.y - f.y) / (f.r * FIELD_ASPECT)) ** 2 >= 1) continue; // centre du soldat dans l'ellipse dessinée au sol
           const cap = s.maxHp * (1 + HEAL_FIELD.overheal);
           if (s.hp < cap) s.hp = Math.min(cap, s.hp + s.maxHp * HEAL_FIELD.perSec * dt);
         }
@@ -144,6 +148,7 @@ export class PowerUps {
       const d = rng.range(200, 420);
       const p = { x: sq.center.x + Math.cos(a) * d, y: sq.center.y + Math.sin(a) * d };
       if (!arena.isFree(p, 30)) continue;
+      if (squads.some((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) < o.radius + SPAWN_CLEARANCE)) continue; // jamais sur une escouade (la sienne ou une autre) : au moins 50 px au-delà de son rayon
       const b = arena.bounds;
       if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60) continue;
       this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE });
@@ -172,6 +177,9 @@ export class PowerUps {
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
         break;
+      case 'turrets':
+        this.sim.turrets.spawn(squad.owner, p.x, p.y); // 3 tourelles automatiques à l'endroit du globe
+        break;
       case 'reroll':
         squad.rerolls++; // une relance de plus pour les choix d'upgrade
         break;
@@ -191,7 +199,8 @@ export class PowerUps {
   stasisAt(x: number, y: number): number {
     let k = 1;
     for (const f of this.fields) {
-      if (f.kind === 'stasis' && (x - f.x) ** 2 + (y - f.y) ** 2 < f.r * f.r) k = Math.min(k, STASIS_FIELD.slow);
+      // centre de l'alien (point au sol) dans l'ellipse dessinée au sol, comme l'affichage (et non dans le cercle de rayon r, qui débordait en haut et en bas)
+      if (f.kind === 'stasis' && ((x - f.x) / f.r) ** 2 + ((y - f.y) / (f.r * FIELD_ASPECT)) ** 2 < 1) k = Math.min(k, STASIS_FIELD.slow);
     }
     return k;
   }

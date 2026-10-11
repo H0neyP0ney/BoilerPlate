@@ -3,6 +3,7 @@ import { lerp, sfx, sprites, theme } from '@xiao/engine';
 import { DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
+import { TurretViews } from './TurretViews';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
@@ -111,6 +112,7 @@ export class WorldView {
   readonly fx: Fx;
   /** Arcs électriques : boss électrique (`AlienDef.electric`) et soldats étourdis. */
   private readonly electric: ElectricArcs;
+  private readonly turrets: TurretViews;
   private readonly soldiers = new Map<number, SoldierView>();
   private readonly aliens = new Map<number, AlienView>();
   private readonly recruits = new Map<number, RecruitView>();
@@ -171,6 +173,7 @@ export class WorldView {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, offLate);
     this.fx = new Fx(scene);
     this.electric = new ElectricArcs(scene);
+    this.turrets = new TurretViews(scene, this.fx);
     this.shock = new ShockDistort(scene);
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
@@ -621,6 +624,7 @@ export class WorldView {
       if (a.def.electric && a.alive && this.onScreen(v.rx, v.ry, 120)) this.electric.crackle(v.rx, v.ry - a.radius * 0.8 + alienOffsetY(a.def.id), a.radius * 1.1, 46, 11, dt); // alien électrique (chargeur) : arcs au hasard
     }
     this.prune(this.aliens);
+    this.turrets.update(this.sim.turrets.items, this.localPlayer, dt);
     this.electric.update(dt);
 
     for (const v of this.recruits.values()) v.seen = false;

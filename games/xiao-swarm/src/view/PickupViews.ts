@@ -31,6 +31,7 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   heal: { icon: '💚', color: POWERUP_GREEN }, // vert
   stasis: { icon: '❄️', color: 0x4aa8ff }, // bleu
   rockets: { icon: '🚀', color: 0xffb02a }, // jaune orangé
+  turrets: { icon: '🔫', color: 0xa86bff }, // violet
   reroll: { icon: '🎲', color: UPGRADE_PINK }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
@@ -40,7 +41,7 @@ const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 const MEDIBOT_WIDTH = 46;
 
 /** Sorte de globe (image du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
-const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind);
+const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind);
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;

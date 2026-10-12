@@ -33,7 +33,16 @@ export function makeHudButton(scene: Phaser.Scene, size: number, icon: string, o
   slash.fillStyle(PALETTE.panel, 1).fillRoundedRect(-(len + full - core) / 2, -full / 2, len + full - core, full, full / 2); // contour sombre
   slash.fillStyle(0xfff3d6, 1).fillRoundedRect(-len / 2, -core / 2, len, core, core / 2);
   const hit = scene.add.zone(0, 0, size, size).setInteractive({ useHandCursor: true });
-  hit.on('pointerup', onClick);
+  // un clic ne compte qu'appui + relâchement SUR le bouton : sur mobile, un glissement qui finit (doigt relâché) au-dessus du bouton le déclenchait,
+  // et coupait le son sans que le joueur s'en rende compte (le réglage est mémorisé)
+  let pressed = false;
+  hit.on('pointerdown', () => (pressed = true));
+  hit.on('pointerout', () => (pressed = false));
+  hit.on('pointerup', () => {
+    if (!pressed) return;
+    pressed = false;
+    onClick();
+  });
   const container = scene.add.container(0, 0, [frame, glyph, slash, hit]);
   return { container, slash };
 }

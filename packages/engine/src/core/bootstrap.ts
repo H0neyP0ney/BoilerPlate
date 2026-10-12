@@ -28,6 +28,40 @@ function isTextField(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type);
 }
 
+/**
+ * Son sur mobile et dans les webviews (ex. lien ouvert depuis une appli) : le contexte audio ne démarre qu'après un vrai geste du joueur, et Phaser
+ * abandonne dès le premier essai raté (le `touchstart` d'un glissement n'est pas un geste) ; son `onGameVisible` suspend en plus le contexte à chaque
+ * retour de visibilité. Le jeu se joue au glissement, sans toucher de bouton : on retente donc à CHAQUE geste (toucher relâché, clic, touche) tant
+ * que le contexte n'est pas en marche, et on prévient Phaser (`unlocked`) pour qu'il lance la musique en attente.
+ */
+function keepAudioUnlocked(game: Phaser.Game): void {
+  const sm = game.sound as Phaser.Sound.WebAudioSoundManager & { unlocked: boolean }; // `unlocked` existe dans Phaser mais pas dans ses types
+  if (!sm || !('context' in sm) || !sm.context) return; // pas de Web Audio : rien à débloquer
+  const attempt = (): void => {
+    const ctx = sm.context;
+    if (ctx.state === 'running') {
+      if (sm.locked) sm.unlocked = true; // Phaser émet alors `UNLOCKED` (la musique en attente démarre)
+      return;
+    }
+    void ctx.resume().then(
+      () => {
+        sm.unlocked = true;
+      },
+      () => undefined,
+    );
+    try {
+      // iOS : un son vide joué pendant le geste achève le déblocage
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, 22050);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      /* contexte fermé : rien à faire */
+    }
+  };
+  for (const type of ['touchend', 'pointerup', 'pointerdown', 'mouseup', 'click', 'keydown']) window.addEventListener(type, attempt, { capture: true, passive: true });
+}
+
 export interface BootOptions {
   /** Côté de la safe zone carrée toujours visible (Scale.EXPAND). */
   safeSize?: number;
@@ -69,6 +103,7 @@ export async function bootPokiGame(opts: BootOptions): Promise<Phaser.Game> {
   });
 
   poki.attachGame(game);
+  keepAudioUnlocked(game);
   // Dev : accès console / outils de test (`__game.scene.getScene('Game')`).
   if (DEV_TOOLS) (window as unknown as { __game: Phaser.Game }).__game = game;
   window.focus();

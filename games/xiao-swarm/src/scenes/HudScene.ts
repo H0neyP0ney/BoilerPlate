@@ -71,6 +71,8 @@ export class HudScene extends Phaser.Scene {
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
   private hintLabel!: Phaser.GameObjects.Text;
+  /** Mobile : « Touche pour activer le son » tant que l'audio n'est pas débloqué (iOS ne le débloque qu'avec un TAP, jamais avec un glissement). */
+  private soundHint!: Phaser.GameObjects.Text;
   private latePackAsked = false;
   /** Entrée des barres du haut (timeline) et du bas (XP) : 0 = hors de l'écran, 1 = en place. Cachées tant que le joueur n'a pas commencé, puis elles glissent (Quad.Out). */
   private barsSlide = 0;
@@ -218,6 +220,11 @@ export class HudScene extends Phaser.Scene {
     this.soundBtn = this.makeSoundButton();
     this.musicBtn = this.makeMusicButton();
     this.hint = this.makeHint();
+    this.soundHint = this.add
+      .text(0, 0, t('tapSound'), { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
+      .setOrigin(0, 0.5)
+      .setDepth(ARROW_DEPTH)
+      .setVisible(false);
     // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
     if (DEV_TOOLS && staleDropped.length > 0) {
       const note = this.add
@@ -265,6 +272,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.latePackAsked = true;
       this.time.delayedCall(300, () => latePack.ensure(g));
     }
+    this.updateSoundHint();
     this.hintLabel.setText(s.sim.tutorial?.active ? t('hintTutoDrag') : // tutoriel : « Drag to move » partout, souris comprise (les touches restent dessinées au-dessus)
        device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.updateBarsSlide(g.flow.state !== 'ready' && !!this.timeline); // le glissement attend que les barres existent (paquet 2)
@@ -687,6 +695,14 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
   }
 
+  /** Tant que l'audio est bloqué (mobile), invite à TOUCHER l'écran : un tap (jamais un glissement) le débloque, voir `keepAudioUnlocked` de l'engine. */
+  private updateSoundHint(): void {
+    const ctx = (this.game.sound as { context?: AudioContext }).context;
+    const blocked = device.isTouch && !!ctx && ctx.state !== 'running';
+    this.soundHint.setVisible(blocked);
+    if (blocked) this.soundHint.setAlpha(0.55 + 0.45 * Math.sin(this.time.now / 260));
+  }
+
   private makeHint(): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const label = this.add
@@ -744,6 +760,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const top = device.isTouch ? 70 : 12;
     // haut gauche : son, puis la musique en dessous ; le code de salle se place à droite du bouton son
     this.soundBtn.setPosition(14 + 22, top + 22);
+    this.soundHint?.setPosition(14 + 44 + 12, top + 22);
     this.musicBtn.setPosition(14 + 22, top + 22 + 44 + 8); // la musique juste en dessous du son
     this.roomText.setPosition(14 + 44 + 8 + 10, top + 10);
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite

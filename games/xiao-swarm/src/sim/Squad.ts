@@ -200,9 +200,11 @@ export class Squad {
         return;
     }
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
-    const boost = !forced && !reroll && this.prismBoost; // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois
+    const milestone = choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont déjà prismatiques
+    // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois ; à un niveau 10, 20, 30… il serait gâché : il est gardé pour la relance ou le niveau suivant
+    const boost = !forced && this.prismBoost && (reroll || !milestone);
     if (boost) this.prismBoost = false;
-    const allPrism = !forced && !reroll && (boost || choosing % PRISM_LEVEL_EVERY === 0); // niveaux 10, 20, 30… : les 3 propositions sont prismatiques (pas après une relance)
+    const allPrism = !forced && (boost || (!reroll && milestone)); // sans booster, la relance d'un niveau 10 retombe sur les chances normales
     this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
@@ -251,6 +253,20 @@ export class Squad {
     }
     this.level = level;
     this.xp = 0;
+  }
+
+  /**
+   * Joueur qui rejoint une partie en cours au niveau `level` : un choix d'upgrade par niveau déjà franchi (niveau 1 exclu), pris au hasard
+   * comme en jeu (offre de 3 cartes, prismatique par chance ou aux niveaux 10, 20, 30…), en silence (aucun événement, aucune pause).
+   */
+  catchUpUpgrades(level: number): void {
+    const { rng } = this.sim;
+    for (let l = 1; l < level; l++) {
+      const eligible = UPGRADE_IDS.filter((id) => this.canTake(id));
+      if (eligible.length === 0) break;
+      const id = rng.pick(rng.sample(eligible, OFFER_SIZE));
+      this.applyUpgrade(id, l % PRISM_LEVEL_EVERY === 0 || rng.chance(DIFFICULTY.prismChance)); // choix du niveau l → niveau l + 1
+    }
   }
 
   /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */

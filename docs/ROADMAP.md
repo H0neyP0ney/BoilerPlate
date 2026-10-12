@@ -1,6 +1,6 @@
 # Roadmap — Xiao Swarm Attack & engine
 
-État au 12/10/2026 (version **0.1.91** en ligne, protocole réseau v57 ; code = déploiement). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Multijoueur : [MULTIJOUEUR.md](MULTIJOUEUR.md). Référence design :
+État au 12/10/2026 (version **0.1.91** en ligne, protocole réseau v58 ; code = déploiement). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Multijoueur : [MULTIJOUEUR.md](MULTIJOUEUR.md). Référence design :
 [Xiao_Swarm_Attack_Game_Design.md](Xiao_Swarm_Attack_Game_Design.md), DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
 
 ## Fait
@@ -72,7 +72,7 @@
 
 ## Points d'attention
 
-- **Protocole réseau** (actuel : **v57**, historique des versions dans [MULTIJOUEUR.md](MULTIJOUEUR.md)). Rappel v23 (v20 : ancre, vitesse et `ack` d'input par squad pour la prédiction ; v21 : `id` stable des globes d'XP ; v22 : clignotement des globes dans le bit 7 de la valeur ; v23 : `id` stable des projectiles ; inputs numérotés) : le snapshot porte les murs annoncés du thrower (`walls`), la phase du lurker et l'origine du couloir de charge du rhinocéros (`rushX` / `rushY`), en plus de XP / niveau / propositions / upgrades par squad, temps de choix d'upgrade (`choiceT`), globes d'XP, état des charges, saut du crabe, chaman et bulle ; hôte et client de versions différentes se refusent. Les cartes viennent de la seed et des données : mêmes fichiers `data/` chez tous.
+- **Protocole réseau** (actuel : **v58**, historique des versions dans [MULTIJOUEUR.md](MULTIJOUEUR.md)). Rappel v23 (v20 : ancre, vitesse et `ack` d'input par squad pour la prédiction ; v21 : `id` stable des globes d'XP ; v22 : clignotement des globes dans le bit 7 de la valeur ; v23 : `id` stable des projectiles ; inputs numérotés) : le snapshot porte les murs annoncés du thrower (`walls`), la phase du lurker et l'origine du couloir de charge du rhinocéros (`rushX` / `rushY`), en plus de XP / niveau / propositions / upgrades par squad, temps de choix d'upgrade (`choiceT`), globes d'XP, état des charges, saut du crabe, chaman et bulle ; hôte et client de versions différentes se refusent. Les cartes viennent de la seed et des données : mêmes fichiers `data/` chez tous.
 - **Snapshot binaire** : un champ conditionnel de l'encodeur doit tester l'octet écrit (arrondi, borné), pas la valeur brute, sinon le décodeur se décale et tout le snapshot est faux (cas réel : `rushWind` négatif du rhinocéros). À tester **après** la fin de la capacité, pas seulement pendant. Voir [MULTIJOUEUR.md](MULTIJOUEUR.md).
 - **Projectiles recyclés** (`Pool`) : un champ ajouté à `Projectile` doit être remis à zéro à la libération (`Combat`).
 - **Script de vagues en dev** : le navigateur mémorise le script édité (localStorage) ; après une modification de `data/waves.ts`, faire **Reset** dans le Gestionnaire de vagues.

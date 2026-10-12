@@ -386,8 +386,17 @@ try {
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
     const { DIFFICULTY: D } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
-    const names = [1, 1.43, 1.86, 2.29, 2.71, 3.14, 3.57, 4].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
-    check(names === 'blue > cyan > green > yellow > orange > purple > pink > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > cyan > vert > jaune > orangé > violet > rose > rouge', names); }
+    const names = [1, 1.5, 2, 2.5, 3, 3.5, 4].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    check(names === 'blue > green > yellow > orange > purple > pink > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rose > rouge', names); }
+  // arrivée tardive : upgrades au hasard pour rejoindre le niveau commun, squad à 60 % de l'effectif max des autres (comme un revive)
+  { const lv = hs.sharedLevel;
+    const peak = Math.max(...hs.squads.map((q) => q.peakComposition.length));
+    hs.spawnLate('late1', ['trooper']);
+    const ls = hs.squadOf('late1');
+    const picks = Object.values(ls.picked).reduce((n, v) => n + v, 0);
+    check(lv > 1 && picks === lv - 1 && ls.level === lv && ls.pendingLevels === 0 && !ls.offer, "arrivée tardive : un choix d'upgrade au hasard par niveau franchi, aucun en attente", `niveau ${lv}, ${picks} prises`);
+    check(ls.soldiers.length === Math.min(ls.maxSize, Math.ceil(peak * 0.6)), "arrivée tardive : 60 % de l'effectif max des autres squads", `${ls.soldiers.length} soldats pour un max de ${peak}`);
+    hs.removePlayer('late1'); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);
   for (let i = 0; i < 4; i++) await tick(client);

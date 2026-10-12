@@ -255,7 +255,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     this.hint.setVisible(g.flow.state === 'ready');
-    this.hintLabel.setText(s.sim.tutorial?.active ? (device.isTouch ? t('hintTutoDrag') : t('hintTutoMove', { keys: this.moveKeysText() })) : device.isTouch ? t('hintDrag') : t('hintKeys'));
+    this.hintLabel.setText(s.sim.tutorial?.active ? t('hintTutoDrag') : // tutoriel : « Drag to move » partout, souris comprise (les touches restent dessinées au-dessus)
+       device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.drawXp();
     this.drawBoss();
     // pendant un combat de boss, sa barre de vie (drawBoss) prend la place de la timeline
@@ -636,11 +637,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
 
   private makePauseButton(): Phaser.GameObjects.Container {
     return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
-  }
-
-  /** « WASD » ou « ZQSD » selon le clavier (touches par défaut, jamais celles choisies dans Options) pour le texte du tutoriel. */
-  private moveKeysText(): string {
-    return defaultMoveLabels().join('');
   }
 
   private makeHint(): Phaser.GameObjects.Container {

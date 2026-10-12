@@ -192,7 +192,7 @@ export class PickupViews {
       let img = this.bots.get(f.id);
       if (!img) {
         img = this.scene.add.image(f.x, f.y, key);
-        img.setDepth(DEPTH.fx + 1);
+        img.setDepth(DEPTH.bars + 1.5); // le drone vole : il passe au-dessus des barres de vie et d'effectif de squad (+1), sous les textes flottants (+2)
         this.botScale.set(f.id, { v: 0 });
         this.scene.tweens.add({ targets: this.botScale.get(f.id), v: 1, duration: 320, ease: 'Back.Out' });
         this.bots.set(f.id, img);

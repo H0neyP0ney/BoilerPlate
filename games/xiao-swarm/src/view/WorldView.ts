@@ -7,7 +7,7 @@ import { TurretViews } from './TurretViews';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
-import { tierOfTexture } from '../data/damageTiers';
+import { tierOfTexture, tierScale } from '../data/damageTiers';
 import { TUTORIAL } from '../data/tutorial';
 import { t } from '../i18n';
 import { SFX } from '../settings';
@@ -781,7 +781,8 @@ export class WorldView {
         const rot = snowflake ? (this.scene.time.now / 1000) * 7 + p.id : Math.atan2(p.vy, p.vx);
         img.setVisible(true).setPosition(bx, by).setRotation(rot);
         const rocket = p.texture === ROCKET_TEXTURE;
-        img.setScale(rocket ? FX.rocket.scale : 1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
+        const tier = tierOfTexture(p.texture); // le tir du blaster grossit avec son palier de dégâts (×1,5 au rouge)
+        img.setScale(rocket ? FX.rocket.scale : tier ? tierScale(tier) : 1).setAlpha(1).setBlendMode(Phaser.BlendModes.NORMAL);
         if (rocket) this.fx.rocketSmoke(bx - Math.cos(rot) * 24, by - Math.sin(rot) * 24); // fumée derrière la flamme de la fusée
       }
     }

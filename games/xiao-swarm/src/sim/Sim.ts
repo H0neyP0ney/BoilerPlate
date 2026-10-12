@@ -408,8 +408,19 @@ export class Sim {
    * autres squads vivantes (arrivée en cours de partie, ou réapparition après une mort).
    */
   spawnLate(owner: PlayerId, composition: SoldierClassId[], invulnerable = REVIVE_INVULN): void {
+    const fresh = !this.squadOf(owner);
     const sq = this.addPlayer(owner);
     if (sq.alive) return;
+    if (fresh && this.sharedXp && this.sharedLevel > 1) {
+      // arrivée en cours de partie : upgrades tirées au hasard pour rejoindre le niveau commun, et 60 % de l'effectif max des autres squads (comme un revive)
+      sq.catchUpUpgrades(this.sharedLevel);
+      let peak: SoldierClassId[] = [];
+      for (const o of this.squads) if (o !== sq && o.peakComposition.length > peak.length) peak = o.peakComposition;
+      if (peak.length > 0) {
+        const n = Math.min(sq.maxSize, Math.max(1, Math.ceil(peak.length * DIFFICULTY.reviveSquadFraction)));
+        composition = Array.from({ length: n }, (_, i) => peak[Math.floor((i * peak.length) / n)]);
+      }
+    }
     // coop : on arrive à côté de ses équipiers ; sinon (PvP) à l'écart des autres squads
     const mate = this.mode.pvp ? undefined : this.aliveSquads[0];
     const at = mate ? { x: mate.center.x + 90, y: mate.center.y } : this.randomSpawnPoint();

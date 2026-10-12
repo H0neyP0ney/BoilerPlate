@@ -93,8 +93,8 @@ export class PowerUps {
       this.prismTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
       if (this.prismTimer <= 0) this.prismReady = true;
     }
-    if (!this.sim.tutorial?.active) {
-      // pendant le tutoriel, aucun power-up au hasard : seuls ceux du script apparaissent
+    if (!this.sim.tutorial?.active && !this.sim.ending) {
+      // pendant le tutoriel, aucun power-up au hasard (ni pendant la séquence de fin) : seuls ceux du script apparaissent
       this.timer -= dt;
       if (this.timer <= 0) {
         this.timer = rng.range(DIFFICULTY.powerupEveryMin, Math.max(DIFFICULTY.powerupEveryMin, DIFFICULTY.powerupEveryMax));

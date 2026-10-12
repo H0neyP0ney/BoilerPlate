@@ -11,6 +11,10 @@ export interface ButtonOptions {
   variant?: ButtonVariant;
   width?: number;
   height?: number;
+  /** Remplace la couleur de fond de la variante (ex. bouton « rejouer » vert) ; jamais sur un bouton `rewarded` (Poki : pas de vert). */
+  fill?: number;
+  /** Remplace la couleur du texte de la variante. */
+  textColor?: string;
   onClick: () => void;
 }
 
@@ -30,9 +34,9 @@ export class Button extends Phaser.GameObjects.Container {
     const variant = opts.variant ?? 'primary';
     const width = opts.width ?? 320;
     const height = opts.height ?? 80;
-    const fill = variant === 'primary' ? theme.primary : variant === 'rewarded' ? theme.rewarded : theme.secondary;
+    const fill = (variant !== 'rewarded' ? opts.fill : undefined) ?? (variant === 'primary' ? theme.primary : variant === 'rewarded' ? theme.rewarded : theme.secondary);
     const textColor =
-      variant === 'primary' ? theme.primaryText : variant === 'rewarded' ? theme.rewardedText : theme.secondaryText;
+      (variant !== 'rewarded' ? opts.textColor : undefined) ?? (variant === 'primary' ? theme.primaryText : variant === 'rewarded' ? theme.rewardedText : theme.secondaryText);
 
     const r = Math.min(theme.radius, height / 2);
     const bg = scene.add.graphics();
@@ -60,7 +64,7 @@ export class Button extends Phaser.GameObjects.Container {
       // icône du jeu (texture `REWARDED_ICON`, si elle est chargée) ; sinon la caméra vidéo dessinée par défaut
       const art = scene.textures.exists(REWARDED_ICON) ? scene.add.image(0, 0, REWARDED_ICON) : null;
       const iconSize = height * 0.42;
-      if (art) art.setScale((height * 0.55) / art.height);
+      if (art) art.setScale((height * 0.55) / art.height).setTint(Phaser.Display.Color.HexStringToColor(textColor).color); // icône blanche d'origine, à la couleur du texte du bouton
       const iconWidth = art ? art.displayWidth : iconSize * 1.65;
       const icon = art ?? videoIcon(scene, iconSize);
       const gap = 14;

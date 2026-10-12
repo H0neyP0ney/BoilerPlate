@@ -117,7 +117,7 @@ export class GameScene extends Phaser.Scene {
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
-        tutorial: mode.id === 'survival' && !settings.tutorialDone && !jump && !test, // onboarding scripté à la première partie solo
+        tutorial: mode.id === 'survival' && !settings.tutorialDone && !poki.getURLParam('notuto') && !jump && !test, // onboarding scripté à la première partie solo
       });
       this.alienTest = test
         ? new AlienTest(this, this.session.sim, this.session.localPlayer, test, (back) => {

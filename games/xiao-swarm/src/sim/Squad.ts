@@ -7,6 +7,10 @@ import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { PlayerId, PlayerInput } from './types';
 
+/** Partie qui commence par le tutoriel : les `TUTORIAL_NO_PRISM_LEVELUPS` premiers level up n'ont aucune carte prismatique, le suivant en impose une, `TUTORIAL_PRISM_UPGRADE`. */
+const TUTORIAL_NO_PRISM_LEVELUPS = 2;
+const TUTORIAL_PRISM_UPGRADE: UpgradeId = 'range';
+
 const anchorV = { x: 0, y: 0 };
 
 /**
@@ -202,10 +206,21 @@ export class Squad {
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
     const milestone = choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont déjà prismatiques
     // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois ; à un niveau 10, 20, 30… il serait gâché : il est gardé pour la relance ou le niveau suivant
-    const boost = !forced && this.prismBoost && (reroll || !milestone);
+    // partie qui commence par le tutoriel : jamais de prismatique aux deux premiers level up ; le troisième en impose une (`Range`)
+    const nth = choosing - 1; // n-ième level up de la partie
+    const early = !!this.sim.tutorial && !forced && nth <= TUTORIAL_NO_PRISM_LEVELUPS;
+    const boost = !forced && !early && this.prismBoost && (reroll || !milestone);
     if (boost) this.prismBoost = false;
     const allPrism = !forced && (boost || (!reroll && milestone)); // sans booster, la relance d'un niveau 10 retombe sur les chances normales
-    this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
+    this.offerPrism = offer.map(() => (forced || early ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
+    if (this.sim.tutorial && !forced && !reroll && nth === TUTORIAL_NO_PRISM_LEVELUPS + 1 && (this.picked[TUTORIAL_PRISM_UPGRADE] ?? 0) < UPGRADES[TUTORIAL_PRISM_UPGRADE].maxStacks) {
+      let at = offer.indexOf(TUTORIAL_PRISM_UPGRADE);
+      if (at < 0) {
+        at = Math.floor(this.sim.rng.next() * offer.length);
+        offer[at] = TUTORIAL_PRISM_UPGRADE;
+      }
+      this.offerPrism[at] = true;
+    }
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 

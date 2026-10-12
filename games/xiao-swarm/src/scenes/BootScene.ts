@@ -109,6 +109,12 @@ export class BootScene extends Phaser.Scene {
 
   /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
   private async launch(): Promise<void> {
+    // Police Baloo 2 (`@font-face` d'index.html) : attendue avant de créer le moindre texte, sinon Phaser le mesure avec la police de repli.
+    try {
+      await Promise.race([document.fonts.load('800 16px "Baloo 2"', 'Aa▼é'), new Promise((r) => setTimeout(r, 3000))]);
+    } catch {
+      /* police indisponible : le repli système sert */
+    }
     // Dev : `?viewer` (unités), `?particles`, `?obstacles`, `?misc`, `?bonus` ou `?waves` ouvrent directement la visionneuse correspondante.
     if (DEV_TOOLS && poki.getURLParam('viewer') !== undefined) return void this.go(SCENES.viewer);
     if (DEV_TOOLS && poki.getURLParam('obstacles') !== undefined) return void this.go(SCENES.obstacles);

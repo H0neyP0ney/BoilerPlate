@@ -1,6 +1,6 @@
 import { DEV_TOOLS } from '@xiao/engine';
 import { ALIENS, type AlienId } from './data/aliens';
-import { DEFAULT_WAVE_SCRIPT, WAVE_LEVELS, WAVE_SCRIPT, type WaveConfig, type WaveScript } from './data/waves';
+import { BOSS_LEVEL, DEFAULT_WAVE_SCRIPT, WAVE_LEVELS, WAVE_SCRIPT, type WaveConfig, type WaveScript } from './data/waves';
 import { DEFAULT_WAVE_MODEL, type TargetPoint, type WaveModel } from './data/waveModel';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
@@ -21,7 +21,7 @@ function sanitize(raw: unknown): WaveScript | null {
   const r = raw as Partial<WaveScript> | null;
   if (!r || typeof r !== 'object' || !r.levels || !Array.isArray(r.timeline)) return null;
   const levels: WaveScript['levels'] = {};
-  for (const n of WAVE_LEVELS) {
+  for (const n of [BOSS_LEVEL, ...WAVE_LEVELS]) {
     const list = Array.isArray(r.levels[n]) ? r.levels[n] : [];
     levels[n] = list.map((c): WaveConfig => ({
       name: typeof c?.name === 'string' && c.name ? c.name : undefined,
@@ -31,7 +31,7 @@ function sanitize(raw: unknown): WaveScript | null {
     }));
   }
   const timeline = r.timeline
-    .filter((e) => e && Number.isFinite(e.at) && e.level >= 1 && e.level <= 9)
+    .filter((e) => e && Number.isFinite(e.at) && e.level >= BOSS_LEVEL && e.level <= WAVE_LEVELS.length)
     .map((e) => ({
       at: Math.max(0, e.at),
       level: Math.round(e.level),
@@ -130,7 +130,7 @@ const q = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'
 /** Code à coller dans `DEFAULT_WAVE_SCRIPT` (data/waves.ts). */
 export function waveSnippet(): string {
   const lines: string[] = ['export const DEFAULT_WAVE_SCRIPT: WaveScript = {', '  levels: {'];
-  for (const n of WAVE_LEVELS) {
+  for (const n of [BOSS_LEVEL, ...WAVE_LEVELS]) {
     const configs = WAVE_SCRIPT.levels[n] ?? [];
     lines.push(`    ${n}: [`);
     for (const c of configs) {

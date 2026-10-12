@@ -401,7 +401,7 @@ try {
 
   // ---- rhinos jumeaux (7:30) : charge calquée sur l'Alpha ; le rhino de feu sème des flammes, celui de glace des nuages de gel ; fin de charge = 8 orbes
   {
-    const { WAVE_SCRIPT, DEFAULT_WAVE_SCRIPT } = await vite.ssrLoadModule('/src/data/waves.ts');
+    const { WAVE_SCRIPT, DEFAULT_WAVE_SCRIPT, BOSS_LEVEL } = await vite.ssrLoadModule('/src/data/waves.ts');
     {
       // chargeur (électrique) : sa charge étourdit 1,5 s les soldats touchés ; les rhinos n'étourdissent pas
       const { sim, step: rawStep } = fresh(40);
@@ -420,9 +420,9 @@ try {
       check(R.stun === 1.5 && stunned > R.stun - 0.1 && stunned <= R.stun && ALIENS.charger.electric === true, 'chargeur : sa charge électrique étourdit 1,5 s le soldat touché', `étourdi ${stunned.toFixed(2)} s`);
       check(!ALIENS.boss_rhino.rush.stun && !ALIENS.boss_rhino.electric && !ALIENS.boss_rhino_fire.rush.stun && !ALIENS.boss_rhino_ice.rush.stun, "rhinos : leur charge n'étourdit pas");
     }
-    const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === 9 && e.config === 5);
-    const cfg = DEFAULT_WAVE_SCRIPT.levels[9][4];
-    check(!!entry && entry.at === 450 && cfg.groups.some((g) => g.type === 'boss_rhino_fire') && cfg.groups.some((g) => g.type === 'boss_rhino_ice'), 'rhinos jumeaux : un boss à 7:30 (450 s) avec le rhino de feu et le rhino de glace', `${entry ? entry.at : '—'} s`);
+    const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === BOSS_LEVEL && e.config === 5);
+    const cfg = DEFAULT_WAVE_SCRIPT.levels[BOSS_LEVEL][4];
+    check(!!entry && entry.at === 420 && cfg.groups.some((g) => g.type === 'boss_rhino_fire') && cfg.groups.some((g) => g.type === 'boss_rhino_ice'), 'rhinos jumeaux : un boss à 7:00 (420 s) avec le rhino de feu et le rhino de glace', `${entry ? entry.at : '—'} s`);
     for (const kind of ['fire', 'ice']) {
       const { sim, step: rawStep } = fresh(kind === 'fire' ? 41 : 42);
       const step = (n) => { for (let i = 0; i < n; i++) { sim.aliens = sim.aliens.filter((a) => a.def.boss || a.def.projectile); rawStep(1); } };
@@ -1048,6 +1048,25 @@ try {
     const base = Math.min(...dmgs);
     const crits = dmgs.filter((d) => d > base * (CRIT_MUL - 0.01)).length;
     check(dmgs.length > 100 && crits > 0 && Math.abs(crits / dmgs.length - 0.4) < 0.12, 'roquettes : critiques à la chance de la squad, dégâts × CRIT_MUL', `${crits} critiques sur ${dmgs.length} roquettes (${Math.round((100 * crits) / dmgs.length)} % pour 40 % de chance)`);
+  }
+
+  // ---- fin du jeu (boss final tombé) : plus aucun bonus ni loot au sol
+  {
+    const { sim, step } = fresh(15);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.recruits.drop('trooper', sq.center.x + 80, sq.center.y, undefined, true);
+    sim.powerups.drop('heal', sq.center.x + 90, sq.center.y, true);
+    sim.powerups.drop('reroll', sq.center.x - 90, sq.center.y, true);
+    sim.upgradeOrbs.drop('p1', 'damage', sq.center.x, sq.center.y + 80, 0);
+    sim.xp.orbs.push({ id: sim.ids.get(), x: sq.center.x + 40, y: sq.center.y, xp: 5, vx: 0, vy: 0 });
+    sim.horde.spawnEgg(sq.center.x + 200, sq.center.y);
+    sq.buffs.stim = 5;
+    const before = sim.recruits.items.length + sim.powerups.items.length + sim.upgradeOrbs.items.length + sim.xp.orbs.length;
+    sim.beginEnding();
+    step(30);
+    const after = sim.recruits.items.length + sim.powerups.items.length + sim.powerups.fields.length + sim.upgradeOrbs.items.length + sim.xp.orbs.length;
+    check(before >= 5 && after === 0 && sq.buffs.stim === 0 && !sim.aliens.some((a) => a.alive && a.def.egg), 'fin du jeu : recrues, power-ups, loots, globes d\'upgrade et d\'XP, œufs et bonus actifs effacés', `${before} avant, ${after} après`);
   }
 } finally {
   await vite.close();

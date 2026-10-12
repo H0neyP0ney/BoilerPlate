@@ -1,21 +1,24 @@
 import Phaser from 'phaser';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { DEFAULT_WAVE_MODEL, generateTimeline, simulatePressure, targetAt, type TargetPoint, type WaveModel } from '../data/waveModel';
-import { entryTimes, WAVE_LEVELS, WAVE_SCRIPT, WAVE_SCRIPT_END, type TimelineEntry, type WaveConfig } from '../data/waves';
+import { BOSS_LEVEL, entryTimes, WAVE_LEVELS, WAVE_SCRIPT, WAVE_SCRIPT_END, type TimelineEntry, type WaveConfig } from '../data/waves';
 import { SCENES, VIEW_BG } from '../config';
 import { resetWaves, saveWaves, saveWavesToCode, waveSnippet } from '../debugWaves';
 import { header } from '../dev/devUi';
 
 /**
  * Gestionnaire de vagues (dev uniquement) : écrit le script de vagues du jeu (data/waves.ts).
- *  - 9 niveaux de vague ; chaque niveau a plusieurs configurations (compositions d'aliens), dont une est tirée au hasard
+ *  - des niveaux de vague (+ un niveau « Boss » à part) ; chaque niveau a plusieurs configurations (compositions d'aliens), dont une est tirée au hasard
  *    à chaque envoi de ce niveau ;
  *  - une timeline : à quel moment (s) quel niveau est envoyé, éventuellement en boucle (répéter toutes les X s jusqu'à Y s).
  * Les modifications sont mémorisées dans le navigateur (debugWaves.ts) et jouées telles quelles par le jeu ; « Copier le
  * code » donne le bloc à coller dans DEFAULT_WAVE_SCRIPT. Ouverture : `?waves` dans l'URL, ou bouton du HUD.
  */
 const ALIEN_IDS = Object.keys(ALIENS) as AlienId[];
-const levelColor = (level: number): string => `hsl(${Math.round(120 * (1 - (level - 1) / 8))} 75% 52%)`;
+const levelName = (level: number): string => (level === BOSS_LEVEL ? 'Boss' : `Niveau ${level}`);
+const levelColor = (level: number): string => (level === BOSS_LEVEL ? 'hsl(285 70% 62%)' : `hsl(${Math.round(120 * (1 - (level - 1) / (WAVE_LEVELS.length - 1)))} 75% 52%)`);
+/** Hauteur relative (0-1) de la barre d'une entrée dans la timeline : un boss est toujours au maximum. */
+const levelHeight = (level: number): number => (level === BOSS_LEVEL ? 1 : level / WAVE_LEVELS.length);
 const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const STYLE_INPUT = 'width:62px;padding:2px 3px;font:inherit';
 
@@ -196,7 +199,7 @@ export class WaveEditorScene extends Phaser.Scene {
       field('dpsStart', 'DPS de départ', '4 gunners : 4 × 10 dégâts / 0,32 s ≈ 125', { min: 1, step: 5 }),
       field('growthPerMin', 'Croissance / min', 'Hausse du DPS par minute (upgrades, recrues) : 0,35 = +35 % du DPS de départ par minute', { min: 0, step: 0.05 }),
       field('efficiency', 'Efficacité', "Part du DPS réellement utile (portée, déplacements, overkill) : 0,05 → 1", { min: 0.05, max: 1, step: 0.05 }),
-      field('bossWeight', 'Poids des boss', "Part des PV d'un boss comptée dans la pression (0 → 1) : un gros boss seul est facile à gérer, ses escortes comptent normalement", { min: 0, max: 1, step: 0.05 }),
+      field('bossWeight', 'Poids des boss', "Part des PV d'un boss comptée dans la pression (0 → 1) : un gros boss seul est facile à gérer, ses escortes éventuelles comptent normalement", { min: 0, max: 1, step: 0.05 }),
     );
   }
 
@@ -420,12 +423,12 @@ export class WaveEditorScene extends Phaser.Scene {
         if (t > end) break;
         const bar = el(
           'div',
-          `position:absolute;left:${(t / end) * 100}%;bottom:14px;width:5px;margin-left:-2px;height:${(e.level / 9) * 100}px;` +
+          `position:absolute;left:${(t / end) * 100}%;bottom:14px;width:5px;margin-left:-2px;height:${levelHeight(e.level) * 100}px;` +
             `background:${levelColor(e.level)};border-radius:2px 2px 0 0;opacity:${this.hot < 0 || this.hot === i ? 1 : 0.3};` +
             (this.hot === i ? 'outline:1px solid #fff;z-index:1;' : ''),
         );
-        bar.title = `${clock(t)} (${Math.round(t)} s) : niveau ${e.level}${e.mul !== undefined && e.mul !== 1 ? ` · effectif ×${e.mul}` : ''}`;
-        if (e.mul !== undefined && e.mul !== 1) bar.style.height = `${(e.level / 9) * 100 * e.mul}px`; // barre raccourcie : effectif réduit visible d'un coup d'œil
+        bar.title = `${clock(t)} (${Math.round(t)} s) : ${levelName(e.level).toLowerCase()}${e.mul !== undefined && e.mul !== 1 ? ` · effectif ×${e.mul}` : ''}`;
+        if (e.mul !== undefined && e.mul !== 1) bar.style.height = `${levelHeight(e.level) * 100 * e.mul}px`; // barre raccourcie : effectif réduit visible d'un coup d'œil
         bar.addEventListener('click', (ev) => ev.stopPropagation());
         area.append(bar);
       }
@@ -436,7 +439,7 @@ export class WaveEditorScene extends Phaser.Scene {
       WAVE_SCRIPT.timeline.push({ at, level: this.level });
       this.sortTimeline();
       this.commit();
-      this.say(`Envoi du niveau ${this.level} ajouté à ${clock(at)}.`);
+      this.say(`Envoi : ${levelName(this.level).toLowerCase()} ajouté à ${clock(at)}.`);
       this.renderTimeline();
       this.renderTable();
     });
@@ -485,7 +488,7 @@ export class WaveEditorScene extends Phaser.Scene {
       this.renderTable();
     });
     const level = el('select', 'padding:2px;font:inherit');
-    for (const n of WAVE_LEVELS) level.append(new Option(`Niveau ${n}`, String(n), false, n === e.level));
+    for (const n of [BOSS_LEVEL, ...WAVE_LEVELS]) level.append(new Option(levelName(n), String(n), false, n === e.level));
     level.style.borderLeft = `6px solid ${levelColor(e.level)}`;
     level.addEventListener('change', () => {
       e.level = Number(level.value);
@@ -558,14 +561,14 @@ export class WaveEditorScene extends Phaser.Scene {
 
   private renderLevels(): void {
     this.levelsBox.replaceChildren(
-      ...WAVE_LEVELS.map((n) => {
+      ...[BOSS_LEVEL, ...WAVE_LEVELS].map((n) => {
         const configs = this.configsOf(n);
         const avg = configs.length ? Math.round(configs.reduce((s, c) => s + this.power(c).hp, 0) / configs.length) : 0;
         const b = el(
           'button',
           `padding:4px 10px;font:inherit;cursor:pointer;border:2px solid ${levelColor(n)};border-radius:6px;` +
             `background:${n === this.level ? levelColor(n) : 'transparent'};color:${n === this.level ? '#111' : '#dfe'};text-align:left`,
-          el('b', '', `Niveau ${n}`),
+          el('b', '', levelName(n)),
           el('div', 'font-size:10px;opacity:0.85', `${configs.length} config · ≈ ${avg} PV`),
         );
         b.addEventListener('click', () => {
@@ -592,8 +595,8 @@ export class WaveEditorScene extends Phaser.Scene {
       'div',
       'font-size:12px;color:#ffd166;width:100%',
       configs.length
-        ? `Niveau ${this.level} : ${configs.length} configuration${configs.length > 1 ? 's' : ''}, tirée${configs.length > 1 ? 's' : ''} au hasard (équiprobables).`
-        : `Niveau ${this.level} : aucune configuration — l'envoyer ne ferait rien.`,
+        ? `${levelName(this.level)} : ${configs.length} configuration${configs.length > 1 ? 's' : ''}, tirée${configs.length > 1 ? 's' : ''} au hasard (équiprobables).`
+        : `${levelName(this.level)} : aucune configuration — l'envoyer ne ferait rien.`,
     );
     this.configsBox.replaceChildren(note, ...cards, add);
   }

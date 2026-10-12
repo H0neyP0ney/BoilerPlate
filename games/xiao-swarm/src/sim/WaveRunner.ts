@@ -1,7 +1,7 @@
 import type { Rng } from '@xiao/engine/sim';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { DIFFICULTY } from '../config';
-import { BOSS_REPLAY, entryTimes, scaledCount, type WaveConfig, type WaveScript } from '../data/waves';
+import { BOSS_REPLAY, entryTimes, scaledCount, WAVE_LEVELS, type WaveConfig, type WaveScript } from '../data/waves';
 
 /** Ce que le gestionnaire de vagues a besoin de savoir de la simulation (absent : la timeline avance toujours). */
 /** Réglage d'effectif des vagues rejouées de chaque boss (`DIFFICULTY.bossReplayMul…`). */
@@ -192,9 +192,9 @@ export class WaveRunner {
     const configs = all;
     const config = forced ?? configs[Math.floor(this.rng.next() * configs.length)];
     const groups = config.groups.map((g) => ({ ...g }));
-    if (!forced && level < 9) {
+    if (!forced && level >= 1) {
       // Mélange : un groupe « invité » tiré d'une configuration d'un niveau voisin (plus doux ou plus dur), en petit nombre.
-      const pool = [level - 1, level + 1].flatMap((l) => (l >= 1 && l < 9 ? (this.script.levels?.[l] ?? []).flatMap((c) => c.groups) : []));
+      const pool = [level - 1, level + 1].flatMap((l) => (l >= 1 && l <= WAVE_LEVELS.length ? (this.script.levels?.[l] ?? []).flatMap((c) => c.groups) : []));
       if (pool.length > 0) {
         const guest = pool[Math.floor(this.rng.next() * pool.length)];
         const n = Math.max(1, Math.round(guest.count * 0.4));

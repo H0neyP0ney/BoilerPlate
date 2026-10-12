@@ -41,6 +41,9 @@ const ICE_BAR_COLOR = 0x6fd8ff;
 const SHOOTER_BLAST = 0xa82846;
 const SHOOTER_BLAST_LIGHT = 0xf4b9c8;
 /** Durée (s) avant l'impact pendant laquelle la zone d'une boule ennemie est signalée en rouge. */
+/** File des textes d'upgrades prises d'une squad (seuls concernés) : délai (ms) entre deux départs (le précédent a fini de monter), attente maximale (ms). */
+const SQUAD_TEXT_GAP = 450; // 900 avant : délai réduit de 50 %
+const SQUAD_TEXT_MAX_WAIT = 4000;
 const TELEGRAPH_S = 1; // 0,8 avant le 07/10
 /** Largeur (px) de la flaque `fx_puddle` (art/fx.ts) à l'échelle 1 : sert à caler les flaques de mort sur l'ombre portée. */
 const PUDDLE_TEX_W = 50;
@@ -553,16 +556,38 @@ export class WorldView {
     }
   }
 
+  /** Instant (`scene.time.now`, ms) à partir duquel le prochain texte d'upgrade prise de chaque squad peut partir : ils passent l'un après l'autre. */
+  private readonly squadTextFree = new Map<PlayerId, number>();
+
+  /**
+   * Texte d'upgrade prise de la squad `owner` posé en (`x`, `y`), mis en FILE : s'il en reste un à l'écran (plusieurs upgrades d'affilée),
+   * il attend son tour (`SQUAD_TEXT_GAP` ms entre deux départs, au plus `SQUAD_TEXT_MAX_WAIT` d'attente) au lieu de se superposer. Il part alors du
+   * centre ACTUEL de la squad (même écart qu'à l'événement) et la suit en montant.
+   */
+  private queueSquadText(owner: PlayerId, x: number, y: number, make: (x: number, y: number) => Phaser.GameObjects.Text | Phaser.GameObjects.Container): void {
+    const now = this.scene.time.now;
+    const f0 = this.squadFocus(owner);
+    const dx = f0 ? x - f0.x : 0;
+    const dy = f0 ? y - f0.y : 0;
+    const start = Math.min(Math.max(now, this.squadTextFree.get(owner) ?? 0), now + SQUAD_TEXT_MAX_WAIT);
+    this.squadTextFree.set(owner, start + SQUAD_TEXT_GAP);
+    const fire = (): void => {
+      const f = this.squadFocus(owner);
+      const tx = make(f ? f.x + dx : x, f ? f.y + dy : y);
+      this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs);
+    };
+    if (start - now < 20) fire();
+    else this.scene.time.delayedCall(start - now, fire);
+  }
+
   /** Textes flottants des upgrades prises (`upgradePicked`) : affichés une fois l'écran de choix fermé (la sim n'est plus en pause de choix). */
   private flushPickTexts(): void {
     if (this.sim.choiceT > 0 || this.pickTexts.length === 0) return;
     for (const e of this.pickTexts.splice(0)) {
       const up = UPGRADES[e.id as UpgradeId];
       if (!up) continue;
-      const owner = e.owner;
-      const at = this.squadFocus(owner) ?? e; // la squad a pu bouger pendant l'écran : le texte part de sa position actuelle
-      const tx = this.fx.iconText(at.x, at.y - 70, upgradeIconKey(e.id as UpgradeId), `${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
-      this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
+      const at = this.squadFocus(e.owner) ?? e; // la squad a pu bouger pendant l'écran : le texte part de sa position actuelle
+      this.queueSquadText(e.owner, at.x, at.y - 70, (x, y) => this.fx.iconText(x, y, upgradeIconKey(e.id as UpgradeId), `${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40));
     }
   }
 

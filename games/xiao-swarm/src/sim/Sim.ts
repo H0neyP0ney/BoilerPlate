@@ -241,6 +241,14 @@ export class Sim {
     this.ending = true;
     this.choiceDelay = 0; // pas de choix d'upgrade en attente : la pause figerait la séquence sans écran pour la lever
     this.choiceT = 0;
+    // on finit le jeu : plus aucun bonus ni loot au sol (recrues, globes d'XP et d'upgrade, power-ups, zones, relance, booster, tourelles, œufs de boss) ni bonus actif
+    this.recruits.clear();
+    this.upgradeOrbs.clear();
+    this.powerups.clear();
+    this.turrets.clear();
+    this.xp.clear();
+    for (const a of this.aliens) if (a.def.egg) a.alive = false; // œuf détruit sans ses globes (pas de `killAlien`)
+    for (const sq of this.squads) sq.buffs.stim = 0;
     // soldats libres (les dégâts sont déjà ignorés : `damageSoldier`) : ceux qui étaient gelés (ou empoisonnés, étourdis) sont dégelés, plus personne ne peut l'être
     for (const sq of this.squads) {
       for (const s of sq.soldiers) {

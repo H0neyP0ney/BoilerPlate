@@ -175,13 +175,13 @@ export const DIFFICULTY_DEFAULTS = {
    * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts, chaque stat avec son propre gain
    * (0,15 = +15 % par boss tué, cumulés : ×1,15 puis ×1,3225…, `Sim.escalation*`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
    */
-  bossEscalationHp: 0.1,
+  bossEscalationHp: 0.15,
   /** Escalade des dégâts (contact, tirs, flammes, explosions…) par boss ou mini-boss tué. */
-  bossEscalationDamage: 0.1,
+  bossEscalationDamage: 0.15,
   /** Escalade de la cadence d'attaque (cooldowns écoulés plus vite) par boss ou mini-boss tué. */
-  bossEscalationRate: 0.1,
+  bossEscalationRate: 0.15,
   /** Escalade de la vitesse de déplacement par boss ou mini-boss tué. */
-  bossEscalationSpeed: 0.05,
+  bossEscalationSpeed: 0.07,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).
@@ -337,7 +337,7 @@ export const PALETTE = {
   panel: 0x13233a,
   panelBorder: 0x3fb6e8,
   primary: 0xffc83d,
-  rewarded: 0x7a5cff,
+  rewarded: 0xffa21f, // jaune orangé (jamais vert : règle Poki) ; « Play again » est vert
   allyRing: 0x39c6ff,
   hpAlly: 0x5ee05e,
   hpEnemy: 0xe84a4a,

@@ -27,12 +27,13 @@ void bootPokiGame({
     storage.setNamespace('xiao-swarm');
     i18n.init(settings.lang ?? (poki.getURLParam('lang') || 'en')); // anglais par défaut (pas la langue du navigateur)
     setTheme({
-      font: '"Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      font: '"Baloo 2", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       panel: PALETTE.panel,
       panelBorder: 0x0a1422,
       primary: PALETTE.primary,
       primaryText: '#2a1d2e',
       rewarded: PALETTE.rewarded,
+      rewardedText: '#ffffff',
       secondary: PALETTE.panel,
     });
   },

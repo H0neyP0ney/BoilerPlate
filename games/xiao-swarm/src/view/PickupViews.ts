@@ -17,7 +17,7 @@ const CAPSULE_LIFT = 60; // 52 + 12 (09/10), 60 (10/10)
 /** Décalage en plus (px) quand il ne reste qu'un soldat : la capsule ne cache pas sa barre de vie. */
 const CAPSULE_LIFT_ALONE = 8;
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
-const CAPSULE_SCALE = 0.9;
+const CAPSULE_SCALE = 1.035; // 0,9 × 1,15 (+15 % le 12/10)
 
 
 /**

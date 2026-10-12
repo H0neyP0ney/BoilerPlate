@@ -424,12 +424,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 100,
   },
   /**
-   * Mini-boss jumeaux (7:30), calqués sur le Rhinocéros Alpha : le rhinocéros de FEU laisse une traînée de flammes pendant sa charge puis lance 8 orbes de
+   * Mini-boss jumeaux (7:00), calqués sur le Rhinocéros Alpha : le rhinocéros de FEU laisse une traînée de flammes pendant sa charge puis lance 8 orbes de
    * feu dans toutes les directions ; celui de GLACE laisse des nuages de gel puis 8 orbes de glace. Ils arrivent ensemble (`data/waves.ts`, niveau 9, config 5).
    */
   boss_rhino_fire: {
     id: 'boss_rhino_fire',
-    hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (5:00) et le Giant Crab (10:00)
+    hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (4:30) et le Giant Crab (10:00)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
     mass: 14,
@@ -463,7 +463,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0x7fe3f0,
     hpBarWidth: 100,
   },
-  /** Mini-boss (5:00) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
+  /** Mini-boss (4:30) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
     hp: 19000, // 1500 × 11

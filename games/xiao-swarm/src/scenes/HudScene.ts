@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
 import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
@@ -18,7 +19,9 @@ import { iconCheat, iconCrowd, iconDifficulty, iconLog, makeSquareButton, VIEW_B
 import type { GameScene } from './GameScene';
 
 /** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
-const BOSS_ARROW_COLOR = 0xff3a3a;
+/** Rouge des flèches rouges du HUD (boss, ennemis qui arrivent) : celui des télégraphes d'attaque (`FX.telegraph`, réglable dans la visionneuse de particules). */
+const redArrow = (): number => teleColor('rush');
+const redArrowCss = (): string => `#${redArrow().toString(16).padStart(6, '0')}`;
 /** Profondeur des flèches de signalisation et de leurs textes : au-dessus des barres du haut (boss, timeline, XP). */
 const ARROW_DEPTH = 20;
 /** Taille des flèches de signalisation (1 = gabarit d'origine de « Ally down » ; 0,8 depuis le 12/10 : 20 % plus petites). */
@@ -26,11 +29,11 @@ const ARROW_SIZE = 0.8;
 
 /**
  * Flèche de signalisation commune (boss, œuf / dé / globes d'upgrade, équipier à terre, tutoriel) : disque sombre cerclé de `color`, triangle qui pointe vers (`dirX`, `dirY`),
- * pouls (+20 %) et deux ondes qui partent de la flèche en s'effaçant, pour attirer l'œil. Renvoie le facteur de pouls (à appliquer à l'écart du texte posé dessus).
+ * pouls (+20 %) et deux ondes qui partent de la flèche en s'effaçant, pour attirer l'œil (`animate` = false : ni pouls ni ondes, pour les flèches posées sur une cible à l'écran). Renvoie le facteur de pouls (à appliquer à l'écart du texte posé dessus).
  */
-function drawSignalArrow(g: Phaser.GameObjects.Graphics, px: number, py: number, dirX: number, dirY: number, color: number, back: number, now: number): number {
-  const pulse = 1 + (0.5 + 0.5 * Math.sin(now / 170)) * 0.2;
-  for (let k = 0; k < 2; k++) {
+function drawSignalArrow(g: Phaser.GameObjects.Graphics, px: number, py: number, dirX: number, dirY: number, color: number, back: number, now: number, animate = true): number {
+  const pulse = animate ? 1 + (0.5 + 0.5 * Math.sin(now / 170)) * 0.2 : 1;
+  for (let k = 0; k < (animate ? 2 : 0); k++) {
     const w = (now / 1000 + k * 0.5) % 1;
     g.lineStyle(4 * ARROW_SIZE, color, 0.8 * (1 - w)).strokeCircle(px, py, (35 + 52 * w) * ARROW_SIZE);
   }
@@ -165,8 +168,9 @@ export class HudScene extends Phaser.Scene {
     this.applyDebugMode();
     this.timeline = undefined; // la scène est réutilisée : les barres sont reconstruites (les anciens objets ont été détruits avec elle)
     this.xpFrame = this.xpFill = this.xpLabel = undefined;
+    this.bossFrame = this.bossGhost = this.bossFill = undefined;
     this.reviveLabels = [];
-    if (latePack.ready) this.buildBars();
+    if (latePack.ready) this.buildBars(true); // paquet 2 déjà là (debug, en ligne, ?jump…) : `create` n'est pas encore « actif » (`sys.isActive`)
     else {
       const off = latePack.onReady(() => this.buildBars());
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
@@ -176,7 +180,6 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
     this.bossBar = this.add.graphics(); // bouclier du boss
-    this.bossFrame = this.bossGhost = this.bossFill = undefined;
     this.bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
     this.xpShown = 0; // la scène est réutilisée à chaque partie
     this.xpLevelSeen = 0;
@@ -298,12 +301,18 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     }
   };
 
+  /** Bandeau des boss : centré, monté d'un tiers de demi-écran (`height / 6`) pour dégager la squad. */
+  private placeBossBanner(): void {
+    this.bossBanner?.setPosition(this.scale.width / 2, this.scale.height / 2 - this.scale.height / 6);
+  }
+
   /** Annonce d'un boss (ou de sa défaite) : gros bandeau au centre qui s'efface. */
   private readonly onBoss = (e: SimEvent): void => {
     if (e.t !== 'boss' && e.t !== 'bossDown' && e.t !== 'bossEnrage') return;
     const name = t(`alien_${e.alien}` as 'alien_boss_crab');
     const text = e.t === 'boss' ? `${t(e.kind === 'final' ? 'bossFinal' : 'bossMini')}\n${name}` : e.t === 'bossEnrage' ? t(e.level > 1 ? 'bossEnraged2' : 'bossEnraged', { name }) : t('bossDown', { name });
     this.tweens.killTweensOf(this.bossBanner);
+    this.placeBossBanner(); // boss vivant ou non (« boss tué » arrive quand il n'y en a plus)
     this.bossBanner.setText(text).setColor(e.t === 'boss' ? (e.kind === 'final' ? '#ff3a3a' : '#ff9a4a') : e.t === 'bossEnrage' ? '#ff2a1a' : '#8fff9a').setAlpha(1).setScale(1.3);
     this.tweens.add({ targets: this.bossBanner, scale: 1, duration: 220, ease: 'Back.Out' });
     this.tweens.add({ targets: this.bossBanner, alpha: 0, delay: 2600, duration: 700 });
@@ -358,8 +367,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(fx, sy, slotW, 7, 3);
       if (shieldRatio > 0) this.bossBar.fillStyle(PALETTE.shield, 1).fillRoundedRect(fx + 1.5, sy + 1.5, Math.max(6, (slotW - 3) * shieldRatio), 4, 2);
     }
-    this.bossBanner.setPosition(width / 2, height * 0.3);
-
     // flèche rouge (même gabarit que celle de la zone de réanimation) vers le boss, seulement quand il est hors de l'écran
     const wv = g.cameras.main.worldView;
     const sx = ((boss.x - wv.x) / wv.width) * width;
@@ -372,9 +379,9 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const edge = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
     const px = width / 2 + c * edge;
     const py = height / 2 + s * edge;
-    const pulse = drawSignalArrow(this.bossArrow, px, py, c, s, BOSS_ARROW_COLOR, 0x2a0a0a, this.time.now);
+    const pulse = drawSignalArrow(this.bossArrow, px, py, c, s, redArrow(), 0x2a0a0a, this.time.now);
     // tip « BOSS » au-dessus de la flèche (sous elle quand la flèche est tout en haut), gardé dans l'écran
-    this.placeOverArrow(this.bossTip.setText(t('bossTip')).setScale(1 + (pulse - 1) * 0.5).setVisible(true), px, py, 46 * ARROW_SIZE * pulse);
+    this.placeOverArrow(this.bossTip.setText(t('bossTip')).setColor(redArrowCss()).setScale(1 + (pulse - 1) * 0.5).setVisible(true), px, py, 46 * ARROW_SIZE * pulse);
   }
 
   /**
@@ -513,7 +520,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
         continue;
       }
       if (inside && target.kind === 'incoming') continue; // le point vert est dessiné au sol ; les ennemis déjà à l'écran n'ont plus besoin de flèche
-      const color = target.kind === 'marker' || target.kind === 'powerup' ? 0x5dff84 : target.kind === 'orbs' ? 0x5ac8ff : target.kind === 'incoming' ? 0xff4040 : 0xffe14a;
+      const color = target.kind === 'marker' || target.kind === 'powerup' ? 0x5dff84 : target.kind === 'orbs' ? 0x5ac8ff : target.kind === 'incoming' ? redArrow() : 0xffe14a;
       const back = target.kind === 'marker' || target.kind === 'powerup' ? 0x0a2210 : target.kind === 'orbs' ? 0x0a1c2a : target.kind === 'incoming' ? 0x2a0808 : 0x2a2208;
       let px: number;
       let py: number;
@@ -532,7 +539,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       }
       const c = Math.cos(ang);
       const s = Math.sin(ang);
-      const pulse = drawSignalArrow(a, px, py, c, s, color, back, this.time.now);
+      const pulse = drawSignalArrow(a, px, py, c, s, color, back, this.time.now, !inside); // à l'écran : flèche fixe (elle rebondit seulement), sans pouls ni ondes
       if (target.label && !label) label = { x: px, y: py, gap: 50 * ARROW_SIZE * pulse, text: t(target.label) };
     }
     // bulle de texte au-dessus de la flèche (gardée dans l'écran)
@@ -553,8 +560,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
   }
 
   /** Timeline et barre d'XP (images du paquet 2) : construites dès que le paquet est là ; d'ici là elles n'existent pas (et restent cachées hors de l'écran). */
-  private buildBars(): void {
-    if (this.timeline || !this.sys.isActive()) return;
+  private buildBars(creating = false): void {
+    if (this.timeline || (!creating && !this.sys.isActive())) return; // à l'arrivée tardive du paquet : seulement si la scène tourne encore
     this.timeline = new TimelineHud(this);
     this.xpFrame = this.add.image(0, 0, 'ui_xp_frame');
     this.xpFill = this.add.nineslice(0, 0, 'ui_xp_fill', undefined, 53, 32, XP_ART.fillCap, XP_ART.fillCap).setOrigin(0, 0.5); // 3-slice : capuchons arrondis, milieu étiré
@@ -731,6 +738,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
   }
 
   private readonly layout = (): void => {
+    this.placeBossBanner();
     const { width, height } = this.scale;
     // Décalé sous la pill Poki sur mobile
     const top = device.isTouch ? 70 : 12;

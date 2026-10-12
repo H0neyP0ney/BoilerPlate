@@ -111,7 +111,7 @@ try {
   if (!(a.alive && b.alive)) hs.restart(); // les deux squads doivent être en vie pour mesurer la difficulté à 2 joueurs
   // 3b) Difficulté : un boss n'apparaît qu'une fois, PV × nombre de squads vivantes.
   hs.aliens.length = 0;
-  hs.waves.trigger(9, 1);
+  hs.waves.trigger(0, 1); // niveau 0 = BOSS_LEVEL (Alpha Rhino seul)
   const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
   check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;

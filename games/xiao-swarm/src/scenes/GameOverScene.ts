@@ -20,6 +20,8 @@ export interface GameOverData {
 }
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+/** Vert du bouton « Play again » (les boutons rewarded ne sont jamais verts : règle Poki). */
+const RETRY_GREEN = 0x4cd964;
 
 /**
  * Fin de run. Règles Poki rewarded : "Rejouer" toujours présent, plus grand et au-dessus ;
@@ -76,14 +78,14 @@ export class GameOverScene extends Phaser.Scene {
       this.input.keyboard!.on('keydown-SPACE', () => free.trigger());
       return;
     }
-    const retry = new Button(this, cx, cy + 5 + up, { label: t('retry'), width: 360, height: 88, onClick: () => this.retry() });
+    const retry = new Button(this, cx, cy + 5 + up, { label: t('retry'), fill: RETRY_GREEN, textColor: '#ffffff', width: 360, height: 88, onClick: () => this.retry() }); // « Play again » vert (le bouton rewarded, lui, ne l'est jamais)
 
     if (data.canRevive) {
-      const revive: Button = new Button(this, cx, cy + 115 + up, {
+      const revive: Button = new Button(this, cx, cy + 125 + up, {
         label: t('revive'),
         variant: 'rewarded',
-        width: 340,
-        height: 72,
+        width: 360,
+        height: 88, // même taille que « Play again » (Poki : jamais plus gros que le bouton standard)
         onClick: () => this.revive(revive),
       });
       poki.measure('reward', 'revive', 'visible'); // affiché, puis `interact` au clic (RunFlow.revive)

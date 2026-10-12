@@ -267,7 +267,7 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Rhinocéros jumeaux (mini-boss de 7:30) : la planche du Rhinocéros Alpha recolorée par node tools/hue-shift.mjs (corps seulement : teintes 160-270°) —
+  // Rhinocéros jumeaux (mini-boss de 7:00) : la planche du Rhinocéros Alpha recolorée par node tools/hue-shift.mjs (corps seulement : teintes 160-270°) —
   // feu : +165° (rouge orangé), glace : -12°, désaturé et éclairci (bleu pâle). Mêmes ancrages, échelle et ombre que l'Alpha.
   {
     type: 'sheet',
@@ -491,7 +491,7 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Scarab (mini-boss de 5:00).
+  // Scarab (mini-boss de 4:30).
   // art-src/boss_scarab_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/boss_scarab.pack.json — 9 cases de 138×114, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',

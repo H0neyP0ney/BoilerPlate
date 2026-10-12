@@ -83,7 +83,7 @@ try {
     const full = replayTotal(1);
     const reduced = replayTotal(DIFFICULTY.bossReplayMulGling);
     const ratio = reduced / full;
-    check(DIFFICULTY.bossReplayMulGling === 0.8 && ratio < 0.95 && ratio > 0.7, 'rejeu pendant un boss : effectif × 0,8 (panneau Difficulté ; arrondi, au moins 1 par groupe)', `${full} → ${reduced} aliens en 40 s (×${ratio.toFixed(2)})`);
+    check(DIFFICULTY.bossReplayMulGling < 1 && Math.abs(ratio - DIFFICULTY.bossReplayMulGling) < 0.1, `rejeu pendant un boss : effectif × ${DIFFICULTY.bossReplayMulGling} (réglage du boss, panneau Difficulté ; arrondi, au moins 1 par groupe)`, `${full} → ${reduced} aliens en 40 s (×${ratio.toFixed(2)})`);
   }
 
   // 3) trop d'aliens : plus aucun envoi, curseur figé, reprise sous le seuil bas (hystérésis)

@@ -58,7 +58,7 @@ try {
     if (rec && !recruitStart) recruitStart = { x: rec.x, y: rec.y, hopped: !!rec.hop };
     if (rec && !rec.hop && recruitStart && recruitDist === null) recruitDist = Math.hypot(rec.x - recruitStart.x, rec.y - recruitStart.y); // distance parcourue par le saut
     if (sq.offer && !offerSeen) offerSeen = { offer: [...sq.offer], prism: [...sq.offerPrism], rerolled: sq.rerollOffer() };
-    if (sq.offer) session.chooseUpgrade(1); // le joueur ne suit pas la suggestion (il choisit ce qu'il veut)
+    if (sq.offer) session.chooseUpgrade(0); // le joueur ne suit pas la suggestion (il choisit ce qu'il veut)
   }
 
   check(!sim.tutorial.active && guard < 30 * 400, 'le tutoriel se termine', `${(guard / 30).toFixed(0)} s de jeu`);
@@ -82,6 +82,16 @@ try {
   check(sim.time > 4.5, 'après le tutoriel, le gestionnaire de vagues normal prend le relai', `${sim.time.toFixed(1)} s`);
   check(seenAliens > 0, 'des aliens des vagues normales sont apparus', `${seenAliens} au plus`);
   check(sq.alive, 'la squad n\'est jamais morte pendant le tutoriel');
+  // level up suivants de la partie : le 2e n'a aucune carte prismatique, le 3e en impose une (Range)
+  const nextOffers = [];
+  for (let n = 0; n < 2; n++) {
+    sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
+    if (sq.offer) nextOffers.push({ offer: [...sq.offer], prism: [...sq.offerPrism] });
+    if (sq.offer) session.chooseUpgrade(0);
+    session.advance(1000 / 30, () => {});
+  }
+  check(nextOffers.length === 2 && nextOffers[0].prism.every((p) => !p), 'level up n°2 : aucune carte prismatique', JSON.stringify(nextOffers[0]));
+  check(nextOffers.length === 2 && nextOffers[1].offer.includes('range') && nextOffers[1].prism[nextOffers[1].offer.indexOf('range')] === true, 'level up n°3 : Range prismatique imposée', JSON.stringify(nextOffers[1]));
 } finally {
   await vite.close();
 }

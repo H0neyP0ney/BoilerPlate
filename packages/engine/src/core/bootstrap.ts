@@ -13,6 +13,19 @@ const SCROLL_KEYS = [37, 38, 39, 40, 32, 33, 34, 35, 36];
 export function preventPageScroll(): void {
   window.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
+  // Champ de saisie HTML (outils de dev : nom d'une vague…) : Phaser ne doit ni voir la touche (la squad bougerait) ni la capturer
+  // (son `preventDefault` sur Espace / flèches empêchait de les taper). Enregistré avant Phaser : coupe la propagation avant lui, après le champ.
+  window.addEventListener('keydown', (e) => {
+    if (isTextField(e.target)) e.stopImmediatePropagation();
+  });
+}
+
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'number', 'url', 'email', 'password', 'tel']);
+
+function isTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLTextAreaElement || target.isContentEditable) return true;
+  return target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type);
 }
 
 export interface BootOptions {

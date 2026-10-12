@@ -10,7 +10,7 @@ import type { UpgradeId } from './progression';
  *   2. vague 1 (après une courte pause, flèche rouge « ennemis en approche », arrivée par la gauche) : des glings et 1 slime, sans XP ; le slime lâche
  *      toujours une recrue, À DISTANCE de la squad (flèche + « Get +1 trooper ») ; vague vaincue et recrue ramassée → étape suivante directement ;
  *   3. vague 2 : plus grosse, que de l'XP, assez pour UN level-up ; tous les globes doivent être ramassés (flèche et zone bleues) ;
- *      l'offre de level-up est imposée (damage / speed / fireRate) avec `suggest` mis en avant, mais le joueur choisit ce qu'il veut ;
+ *      l'offre de level-up est imposée (speed / damage / fireRate, damage au centre) avec `suggest` mis en avant, mais le joueur choisit ce qu'il veut ;
  *   4. vague 3 : encore plus grosse, sans XP ; une recrue et un power-up de soin seulement ; puis le tutoriel se termine.
  *
  * Valeurs d'XP : le niveau 1 coûte `xpToNext(1)` = 10 XP (data/progression.ts). Vague 1 : aucune XP (pas de globe) ;
@@ -72,6 +72,6 @@ export const TUTORIAL: TutorialConfig = {
       { type: 'slime', count: 1, xp: 0, powerup: 'heal' },
     ],
   },
-  offer: ['damage', 'speed', 'fireRate'],
+  offer: ['speed', 'damage', 'fireRate'], // damage (la carte recommandée) au centre
   suggest: 'damage',
 };

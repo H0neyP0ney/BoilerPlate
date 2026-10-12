@@ -5,13 +5,14 @@ import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { CardTilt } from '../view/CardTilt';
+import { powerUpIconKey } from '../view/PickupViews';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
 import { CARD, CARD_TEXT_RES, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
 import { t } from '../i18n';
 import type { GameScene } from './GameScene';
 
 /** Largeur (px) du bouton « Relancer ». */
-const REROLL_W = 190;
+const REROLL_W = 230; // 190 avant le 13/10 : bouton plus gros, avec l'icône de dé
 /** Valeur de `pressed` quand le bouton enfoncé est « Relancer » (les cartes utilisent leur indice, -1 = rien). */
 const REROLL_PRESSED = -2;
 
@@ -33,6 +34,9 @@ export interface LevelUpData {
  * fin, la simulation en tire une au hasard. En solo, pas de limite : le jeu attend le choix. Clic / toucher sur une carte (appui
  * ET relâchement dans la fenêtre), ou touches 1 / 2 / 3 du haut du clavier.
  */
+/** Taille de base de la flèche + texte « Claim upgrade » du tutoriel (1,15 = +15 % le 13/10). */
+const SUGGEST_SCALE = 1.15;
+
 export class LevelUpScene extends Phaser.Scene {
   private busy = false;
   private cards: Phaser.GameObjects.Container[] = [];
@@ -103,18 +107,19 @@ export class LevelUpScene extends Phaser.Scene {
 
     // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
     const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;
-    let suggestBox: Phaser.GameObjects.Container | null = null; // flèche + texte : un seul composant qui pulse d'un bloc (origine = pointe de la flèche)
     let suggestLabel: Phaser.GameObjects.Text | null = null;
+    let suggestBottom: Phaser.GameObjects.Container | null = null; // flèche ▲ + texte sous la carte (origine = haut de la flèche)
     if (suggestIdx >= 0) {
-      // texte au-dessus de la flèche : « Claim upgrade » (la flèche montre laquelle)
+      // flèche ▲ + texte « Claim upgrade » sous la carte recommandée
       suggestLabel = this.add
-        .text(0, -50, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
-        .setOrigin(0.5, 1);
-      const arrow = this.add
-        .text(0, 0, '▼', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
-        .setOrigin(0.5, 1);
-      suggestBox = this.add.container(0, 0, [arrow, suggestLabel]);
-      this.tweens.add({ targets: suggestBox, scale: { from: 1, to: 1.3 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+        .text(0, 0, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
+        .setOrigin(0.5, 0);
+      const arrowUp = this.add
+        .text(0, 0, '▲', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
+        .setOrigin(0.5, 0);
+      suggestLabel.setPosition(0, 44);
+      suggestBottom = this.add.container(0, 0, [arrowUp, suggestLabel]).setDepth(30); // flèche vers le haut + texte sous la carte, toujours au premier plan (au-dessus des cartes, de leur inclinaison 3D et de la pluie prismatique)
+      this.tweens.add({ targets: suggestBottom, scale: { from: SUGGEST_SCALE, to: SUGGEST_SCALE * 1.15 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
 
     // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R)
@@ -125,9 +130,19 @@ export class LevelUpScene extends Phaser.Scene {
       const k = REROLL_W / bg.width;
       bg.setScale(k);
       const label = this.add
-        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
+        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
         .setOrigin(0.5)
         .setResolution(CARD_TEXT_RES);
+      // icône de dé avant le texte (même image que le globe de relance), le tout centré sur le bouton
+      const diceKey = powerUpIconKey('reroll');
+      const dice = this.textures.exists(diceKey) ? this.add.image(0, 0, diceKey) : null;
+      if (dice) {
+        dice.setScale((bg.displayHeight * 0.5) / dice.height);
+        const gap = 8;
+        const total = dice.displayWidth + gap + label.width;
+        dice.setPosition(-total / 2 + dice.displayWidth / 2, 0);
+        label.setX(-total / 2 + dice.displayWidth + gap + label.width / 2);
+      }
       const hit = this.add.zone(0, 0, bg.displayWidth, bg.displayHeight).setInteractive({ useHandCursor: true });
       // comme les cartes : il faut appuyer PUIS relâcher sur le bouton, dans cette fenêtre (un clic déjà enfoncé à l'ouverture ne relance rien)
       hit.on('pointerdown', () => (this.pressed = REROLL_PRESSED));
@@ -135,7 +150,7 @@ export class LevelUpScene extends Phaser.Scene {
         if (this.pressed === REROLL_PRESSED) this.reroll();
         this.pressed = -1;
       });
-      rerollBtn = this.add.container(0, 0, [bg, label, hit]);
+      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, hit] : [bg, label, hit]);
     }
 
     const layout = () => {
@@ -158,9 +173,8 @@ export class LevelUpScene extends Phaser.Scene {
         c.setPosition(x, y);
         (c.getData('tilt') as CardTilt | undefined)?.resize(); // la carte change de taille : sa photo et sa lumière ne sont plus valables
         resizeUpgradeCard(c, cw, ch, vertical);
-        if (suggestBox && i === suggestIdx) {
-          // au-dessus de la carte, pointe vers le bas
-          suggestBox.setPosition(x, y - ch / 2 - 8);
+        if (suggestBottom && i === suggestIdx) {
+          suggestBottom.setPosition(x, y + ch / 2 - 22); // 30 px plus près de la carte (la flèche mord un peu sur son bas)
           suggestLabel?.setWordWrapWidth(Math.max(120, cw + 40), true);
         }
         const fx = this.prismFx.get(i);

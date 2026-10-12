@@ -158,5 +158,6 @@
   "restartIn": "New game in {value} s",
   "chooseUpgradeShort": "Pick: 1 / 2 / 3",
   "reroll": "Reroll ({value})",
-  "waitingPlayers": "Waiting for the other players…"
+  "waitingPlayers": "Waiting for the other players…",
+  "allyRerolled": "Ally rerolled"
 }

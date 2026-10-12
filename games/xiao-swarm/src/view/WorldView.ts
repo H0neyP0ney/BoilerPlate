@@ -194,6 +194,8 @@ export class WorldView {
 
   /** Pas de colonne d'arrivée avant cet instant (ms) : départ de partie, réapparition, relance. */
   private quietUntil = 0;
+  /** Upgrades prises dont le texte flottant attend la fermeture de l'écran de choix. */
+  private pickTexts: Extract<SimEvent, { t: 'upgradePicked' }>[] = [];
 
   /** Le point (x, y) est-il dans la vue de la caméra (marge `m` px) ? Sert à ne dessiner / animer que ce qu'on voit. */
   private onScreen(x: number, y: number, m = 0): boolean {
@@ -463,13 +465,9 @@ export class WorldView {
         this.fx.burst(e.x, e.y - 20, col, 30);
         this.fx.ring(e.x, e.y, 120, col);
         this.fx.column(e.x, e.y, col, 150, 700);
-        // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers)
-        const up = UPGRADES[e.id as UpgradeId];
-        if (up) {
-          const tx = this.fx.iconText(e.x, e.y - 70, upgradeIconKey(e.id as UpgradeId), `${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
-          const owner = e.owner;
-          this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
-        }
+        // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers) ; pendant l'écran de choix il attend sa fermeture (`flushPickTexts`), pour qu'on voie ce que chacun a pris
+        this.pickTexts.push(e);
+        this.flushPickTexts();
         break;
       }
       case 'powerup': {
@@ -552,7 +550,21 @@ export class WorldView {
     }
   }
 
+  /** Textes flottants des upgrades prises (`upgradePicked`) : affichés une fois l'écran de choix fermé (la sim n'est plus en pause de choix). */
+  private flushPickTexts(): void {
+    if (this.sim.choiceT > 0 || this.pickTexts.length === 0) return;
+    for (const e of this.pickTexts.splice(0)) {
+      const up = UPGRADES[e.id as UpgradeId];
+      if (!up) continue;
+      const owner = e.owner;
+      const at = this.squadFocus(owner) ?? e; // la squad a pu bouger pendant l'écran : le texte part de sa position actuelle
+      const tx = this.fx.iconText(at.x, at.y - 70, upgradeIconKey(e.id as UpgradeId), `${t(`up_${e.id}` as 'up_damage')}${e.prism ? ' ×2' : ''}`, `#${(e.prism ? 0xfff3a0 : up.color).toString(16).padStart(6, '0')}`, 40);
+      this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // le texte suit la squad qui bouge
+    }
+  }
+
   render(alpha: number, dt: number, time: number): void {
+    this.flushPickTexts();
     this.fireLevelWaves();
     this.shock.update();
     this.syncUnits(alpha, dt, time);

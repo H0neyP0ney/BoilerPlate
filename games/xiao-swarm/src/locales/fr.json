@@ -158,5 +158,6 @@
   "restartIn": "Nouvelle partie dans {value} s",
   "chooseUpgradeShort": "Choisis : 1 / 2 / 3",
   "reroll": "Relancer ({value})",
-  "waitingPlayers": "On attend les autres joueurs…"
+  "waitingPlayers": "On attend les autres joueurs…",
+  "allyRerolled": "Un allié a relancé"
 }

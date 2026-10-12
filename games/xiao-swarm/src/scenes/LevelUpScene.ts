@@ -43,6 +43,10 @@ export class LevelUpScene extends Phaser.Scene {
   private waitText!: Phaser.GameObjects.Text;
   /** Carte (ou « Relancer », `REROLL_PRESSED`) sur laquelle le bouton a été enfoncé DANS cette fenêtre (-1 : aucune). */
   private pressed = -1;
+  /** Temps restant du choix à l'image précédente : une hausse = un équipier a relancé (la jauge repart de zéro pour tous). */
+  private prevLeft = -1;
+  /** Fin (ms, horloge de la scène) de l'affichage « Ally rerolled » à la place de l'attente. */
+  private rerolledUntil = 0;
 
   constructor() {
     super(SCENES.levelUp);
@@ -55,6 +59,8 @@ export class LevelUpScene extends Phaser.Scene {
   create(data: LevelUpData): void {
     this.busy = false;
     this.pressed = -1;
+    this.prevLeft = -1;
+    this.rerolledUntil = 0;
     this.cards = [];
     this.input.on('pointerup', () => (this.pressed = -1)); // relâché ailleurs : l'appui ne compte plus
     this.prismFx = new Map();
@@ -183,6 +189,9 @@ export class LevelUpScene extends Phaser.Scene {
   update(): void {
     if (!this.game_.session.online) return; // solo : pas de limite de temps, le jeu attend le choix du joueur
     const left = Math.max(0, this.game_.session.sim.choiceT);
+    if (this.prevLeft >= 0 && left > this.prevLeft + 0.25 && this.waitText.visible) this.rerolledUntil = this.time.now + 2500; // moi j'ai fini : je vois que la jauge repart à cause d'un équipier
+    this.prevLeft = left;
+    this.waitText.setText(this.time.now < this.rerolledUntil ? t('allyRerolled') : t('waitingPlayers'));
     const k = Math.min(1, left / UPGRADE_CHOICE_TIME);
     const { x, y, w } = this.timerBox;
     const g = this.timerBar;

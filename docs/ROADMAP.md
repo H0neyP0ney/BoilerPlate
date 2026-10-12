@@ -1,6 +1,6 @@
 # Roadmap — Xiao Swarm Attack & engine
 
-État au 12/10/2026 (version **0.1.91** en ligne, protocole réseau v58 ; code = déploiement). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Multijoueur : [MULTIJOUEUR.md](MULTIJOUEUR.md). Référence design :
+État au 12/10/2026 (version **0.1.97** en ligne, protocole réseau v58 ; code = déploiement). Outils de dev : [OUTILS_DEV.md](OUTILS_DEV.md). Multijoueur : [MULTIJOUEUR.md](MULTIJOUEUR.md). Référence design :
 [Xiao_Swarm_Attack_Game_Design.md](Xiao_Swarm_Attack_Game_Design.md), DA : [xiao-swarm-da-ref.png](xiao-swarm-da-ref.png).
 
 ## Fait

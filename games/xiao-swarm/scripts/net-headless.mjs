@@ -266,7 +266,7 @@ try {
   hs.aliens.length = 0;
   hs.horde.spawnAt('slime', a.center.x + 400, a.center.y, 1, true);
   const zb = hs.aliens[0];
-  check(zb.revived && Math.abs(zb.maxHp - 55 * 1.5 * 3) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
+  check(zb.revived && Math.abs(zb.maxHp - ALIENS.slime.hp * ALIENS.shaman.revive.zombie.hpMul) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
   check(hs.map.obstacles.length > 0 && JSON.stringify(client.sim.map.obstacles) === JSON.stringify(hs.map.obstacles), 'carte : mêmes obstacles tirés chez l’hôte et chez le client (même seed)', `${hs.map.obstacles.length} obstacles`);
   hs.horde.spawnAt('lurker', a.center.x + 300, a.center.y);

@@ -435,7 +435,11 @@ try {
       boss.age = 99; boss.hp = boss.maxHp = 1e12; boss.rushCd = 0; boss.rushDx = 0; boss.rushDy = 0;
       sim.fires.length = 0; sim.puddles.length = 0;
       let trailPeak = 0, orbs = 0, charged = false, orbDirs = new Set();
-      for (let t = 0; t < 30 * 6 && !orbs; t++) {
+      // les orbes sont comptés à leur création : un orbe lancé contre un soldat tout proche éclate dès son 1er tick (la charge finit collée à la squad)
+      const launched = [];
+      const realLaunch = sim.horde.launch.bind(sim.horde);
+      sim.horde.launch = (type, x, y, dx, dy) => { launched.push({ type, dir: Math.round(Math.atan2(dy, dx) * 4 / Math.PI) }); return realLaunch(type, x, y, dx, dy); };
+      for (let t = 0; t < 30 * 6 && !launched.length; t++) {
         step(1);
         if (boss.rushT > 0) charged = true;
         trailPeak = Math.max(trailPeak, kind === 'fire' ? sim.fires.length : sim.puddles.filter((p) => p.frost).length);
@@ -443,8 +447,9 @@ try {
         if (o.length) { orbs = o.length; for (const a of o) orbDirs.add(`${Math.round(Math.atan2(a.rushDy, a.rushDx) * 4 / Math.PI)}`); }
       }
       check(charged && trailPeak >= 8, `rhino de ${kind === 'fire' ? 'feu' : 'glace'} : sa charge laisse ${kind === 'fire' ? 'des flammes' : 'des nuages de gel'} au sol`, `${trailPeak} ${kind === 'fire' ? 'flammes' : 'nuages'}`);
-      const types = new Set(sim.aliens.filter((a) => a.def.projectile).map((a) => a.def.id));
-      check(orbs === 8 && orbDirs.size === 8 && types.size === 1 && types.has(kind === 'fire' ? 'fire_orb' : 'ice_orb'), `rhino de ${kind === 'fire' ? 'feu' : 'glace'} : à la fin de la charge, 8 orbes de ${kind === 'fire' ? 'feu' : 'glace'} dans 8 directions`, `${orbs} orbes, ${orbDirs.size} directions`);
+      delete sim.horde.launch;
+      const types = new Set(launched.map((l) => l.type));
+      check(launched.length === 8 && new Set(launched.map((l) => l.dir)).size === 8 && types.size === 1 && types.has(kind === 'fire' ? 'fire_orb' : 'ice_orb'), `rhino de ${kind === 'fire' ? 'feu' : 'glace'} : à la fin de la charge, 8 orbes de ${kind === 'fire' ? 'feu' : 'glace'} dans 8 directions`, `${launched.length} orbes, ${new Set(launched.map((l) => l.dir)).size} directions`);
       if (kind === 'fire') {
         const orb = sim.aliens.find((a) => a.def.id === 'fire_orb');
         sim.fires.length = 0;

@@ -8,7 +8,7 @@ import type { PlayerId } from '../sim/types';
 import { globeKey, loadedKey, starKey } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
 import { soldierOffsetY } from './spriteOffset';
-import { BEAM_PINK, createLootBeam, type LootBeam } from './LootBeam';
+import { BEAM_PINK, BEAM_PRISM, createLootBeam, type LootBeam } from './LootBeam';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
 
@@ -32,6 +32,7 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> 
   stasis: { icon: '❄️', color: 0x4aa8ff }, // bleu
   rockets: { icon: '🚀', color: 0xffb02a }, // jaune orangé
   turrets: { icon: '🔫', color: 0xa86bff }, // violet
+  prism: { icon: '🌈', color: BEAM_PRISM }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
   reroll: { icon: '🎲', color: UPGRADE_PINK }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
@@ -41,7 +42,7 @@ const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 const MEDIBOT_WIDTH = 46;
 
 /** Sorte de globe (image du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
-const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind);
+const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;
@@ -234,21 +235,23 @@ export class PickupViews {
       const y = lerp(pos.py, pos.y, alpha);
       this.powerupShown.set(p.id, { x, y });
       const blink = p.life < 3.5 && Math.sin(time * 18) > 0;
-      if (p.kind === 'reroll') {
+      const loot = p.kind === 'reroll' || p.kind === 'prism'; // loots rares tombés d'un alien : colonne de lumière et saut en cloche
+      if (loot) {
         let beam = this.powerupBeam.get(p.id);
-        if (!beam) this.powerupBeam.set(p.id, (beam = createLootBeam(this.scene, BEAM_PINK, p.id)));
+        if (!beam) this.powerupBeam.set(p.id, (beam = createLootBeam(this.scene, p.kind === 'prism' ? BEAM_PRISM : BEAM_PINK, p.id)));
         const landed = time - born >= RECRUIT.hopTime; // la colonne apparaît quand la relance a fini de retomber
         beam.setVisible(landed);
         if (landed) beam.setPosition(x, y, DEPTH.fx + 1.5, time);
       }
       // loot de relance : saut en cloche à la sortie de l'alien, comme une recrue (le déplacement au sol vient de la simulation)
-      const hk = p.kind === 'reroll' ? (time - born) / RECRUIT.hopTime : 1; // loot de relance : saut en cloche à la sortie de l'alien / de l'œuf
+      const hk = loot ? (time - born) / RECRUIT.hopTime : 1; // loot de relance : saut en cloche à la sortie de l'alien / de l'œuf
       const hop = hk >= 0 && hk < 1 ? 4 * RECRUIT.hopHeight * hk * (1 - hk) : 0;
       const cy = y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(time * 4 + p.id) * 4 - hop;
       box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);
       let glitter = this.powerupGlitter.get(p.id);
       if (!glitter) {
-        const tex = loadedKey(this.scene, starKey(globeKind(p.kind))); // l'étoile de la recrue, à la couleur du power-up (relance : étoile rose des globes d'upgrade)
+        const prism = p.kind === 'prism'; // booster prismatique : étoiles dorées (`star_prism`) ; le dé de relance garde les étoiles roses
+        const tex = loadedKey(this.scene, starKey(prism ? 'prism' : globeKind(p.kind))); // l'étoile de la recrue, à la couleur du power-up (relance : étoile rose des globes d'upgrade)
         const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
         if (made) this.powerupGlitter.set(p.id, (glitter = made));
       }

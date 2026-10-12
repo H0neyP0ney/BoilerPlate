@@ -22,11 +22,49 @@
       }
       #game { width: 100%; height: 100%; }
       canvas { display: block; outline: none; }
+      /* Écran de chargement (repris du template web Solar2D XIAO Games) : fond bleu dégradé radial, logo, barre. Retiré par src/loadingScreen.ts. */
+      html, body { background: #010615; }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        pointer-events: none;
+        background: radial-gradient(circle at 50% 44%, #0d3985 0%, #08265d 22%, #04183c 46%, #020b22 72%, #010615 100%);
+        transition: opacity 0.35s ease;
+      }
+      #boot.done { opacity: 0; }
+      #boot-content {
+        width: min(58vw, 620px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(22px, 4vh, 42px);
+      }
+      #boot-logo { display: block; width: 100%; height: auto; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+      #boot-bar { width: min(72%, 360px); height: 8px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.12); box-shadow: 0 0 14px rgba(85, 207, 255, 0.1); }
+      #boot-fill { width: 0%; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2f7cff, #55cfff); box-shadow: 0 0 12px rgba(85, 207, 255, 0.45); transition: width 0.15s linear; }
+      #boot-status { min-height: 1.4em; color: rgba(255, 255, 255, 0.75); font: bold 18px sans-serif; text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
+      @media screen and (max-width: 768px) {
+        #boot-content { width: min(78vw, 520px); }
+        #boot-bar { width: min(68%, 320px); }
+      }
     </style>
     <!-- SDK Poki : seule requête externe autorisée. Si bloqué (adblock), le jeu doit tourner quand même. -->
     <script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
   </head>
   <body>
+    <div id="boot">
+      <div id="boot-content">
+        <img id="boot-logo" src="./assets/ui/xiao_logo.webp" alt="XIAO Games" draggable="false" />
+        <div id="boot-bar"><div id="boot-fill"></div></div>
+        <div id="boot-status"></div>
+      </div>
+    </div>
     <div id="game"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

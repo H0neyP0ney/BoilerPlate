@@ -24,6 +24,7 @@ VARIANTS = {
     'stasis': (165, 0),  # bleu
     'rockets': (350, 0),  # jaune orangé
     'turrets': (215, 0),  # violet
+    'prism': (0, 0),  # booster prismatique : globe et étoile dorés d'origine (la recrue)
     'upgrade': (285, 0.3),  # rose clair (globe d'upgrade des œufs de boss)
 }
 
@@ -56,7 +57,9 @@ def main() -> None:
     globe = Image.open(os.path.join(SRC, 'globe.webp')).convert('RGBA')
     ring = Image.open(os.path.join(SRC, 'ring.webp')).convert('RGBA')
     star = Image.open(os.path.join(SRC, 'star.webp')).convert('RGBA')
-    for name, (hue, light) in VARIANTS.items():
+    for name, variant in VARIANTS.items():
+        hue, light = variant[0], variant[1]
+        globe_light = variant[2] if len(variant) > 2 else light  # éclaircissement du globe seul (l'étoile garde `light`)
         g_path = os.path.join(OUT, f'globe_{name}.png')
         s_path = os.path.join(OUT, f'star_{name}.png')
         if force or not os.path.exists(g_path):
@@ -65,7 +68,7 @@ def main() -> None:
                 layer = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
                 layer.paste(part, ((SIZE - part.width) // 2, (SIZE - part.height) // 2))
                 canvas = Image.alpha_composite(canvas, layer)
-            recolor(canvas, hue, light).save(g_path)
+            recolor(canvas, hue, globe_light).save(g_path)
             print(g_path)
         if force or not os.path.exists(s_path):
             recolor(star.copy(), hue, light).save(s_path)

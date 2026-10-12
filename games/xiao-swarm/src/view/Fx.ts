@@ -153,6 +153,41 @@ export class Fx {
     }
   }
 
+  /**
+   * Rocher de mur fracassé par une charge : des morceaux partent TRÈS loin (400 à 1000 px) dans le sens (`dirX`, `dirY`) de la charge, en cloche
+   * (hauteur max 90-220 px), en tournant, puis s'effacent. `r` : rayon du rocher (taille des morceaux).
+   */
+  rockDebris(x: number, y: number, dirX: number, dirY: number, r: number): void {
+    const base = Math.atan2(dirY, dirX);
+    const R = Phaser.Math.FloatBetween;
+    for (let i = 0; i < 8; i++) {
+      const ang = base + R(-0.55, 0.55);
+      const dist = R(400, 1000);
+      const peak = R(90, 220);
+      const gx = Math.cos(ang) * dist;
+      const gy = Math.sin(ang) * dist * 0.7; // sol isométrique
+      const big = i < 3;
+      const img = this.scene.add
+        .image(x + R(-r, r) * 0.5, y + R(-r, r) * 0.3, big ? 'fx_rock' : 'fx_rock_small')
+        .setDepth(DEPTH.fx)
+        .setScale(R(0.28, 0.55) * (big ? 1 : 1.6) * (r / 22));
+      const spin = R(-14, 14);
+      const ox = img.x;
+      const oy = img.y;
+      this.scene.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: R(750, 1250),
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          const g = 1 - (1 - p) * (1 - p); // part au sol : vite puis ralentit
+          img.setPosition(ox + gx * g, oy + gy * g - 4 * peak * p * (1 - p)).setRotation(spin * p).setAlpha(p < 0.75 ? 1 : (1 - p) / 0.25);
+        },
+        onComplete: () => img.destroy(),
+      });
+    }
+  }
+
   /** Une bouffée de fumée de roquette en (x, y) (traînée : appelée à chaque frame derrière la fusée). */
   rocketSmoke(x: number, y: number): void {
     const s = FX.rocket.smokeSpread;
@@ -403,13 +438,14 @@ export class Fx {
     this.scene.tweens.add({ targets: img, alpha: 0, delay: s.durationMs * 0.35, duration: s.durationMs * 0.65, ease: 'Sine.In', onComplete: () => img.destroy() });
   }
 
-  ring(x: number, y: number, radius: number, color: number, durationMs = FX.ring.durationMs): Phaser.GameObjects.Image {
+  /** Anneau qui s'étend ; `squash` : rapport hauteur / largeur (par défaut celui du sol isométrique, `FX.ring.squash` : une ellipse ; 1 = un vrai cercle). */
+  ring(x: number, y: number, radius: number, color: number, durationMs = FX.ring.durationMs, squash = FX.ring.squash): Phaser.GameObjects.Image {
     const r = FX.ring;
-    const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(r.startScaleX, r.startScaleY).setAlpha(r.alpha);
+    const img = this.scene.add.image(x, y, 'fx_ring').setTint(color).setDepth(DEPTH.fx).setScale(r.startScaleX, r.startScaleX * squash).setAlpha(r.alpha);
     this.scene.tweens.add({
       targets: img,
       scaleX: (radius * 2) / 128,
-      scaleY: (radius * 2 * r.squash) / 128,
+      scaleY: (radius * 2 * squash) / 128,
       alpha: 0,
       duration: durationMs,
       ease: 'Cubic.Out',

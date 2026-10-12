@@ -41,6 +41,9 @@ export interface SpriteDef {
   offsetX?: number;
   /** Ne pas afficher (ex. arme déjà dessinée dans la planche du soldat). */
   hidden?: boolean;
+  /** Décalage (px, + = droite / bas) de l'OMBRE seule, en plus de `offsetX` / `offsetY` : le sprite, la hitbox et le reste ne bougent pas. Absent = 0. */
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
   /** Animations : nom logique ('idle', 'walk', 'shoot'…) → clé d'animation Phaser. */
   anims?: Record<string, string>;
 }

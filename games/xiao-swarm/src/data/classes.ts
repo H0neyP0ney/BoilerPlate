@@ -1,4 +1,7 @@
 import { TURRETS } from '../config';
+
+/** Tir électrique des tourelles : texture du projectile (`art/fx.ts`) ; son explosion est électrique et sans recul (`Combat.stepProjectile`). */
+export const ELECTRIC_TEXTURE = 'fx_bolt_electric';
 /**
  * Classes de soldats (GDD §8). Valeurs de design, à équilibrer.
  * Ajouter une classe = une entrée ici + ses textures dans art/soldiers.ts.
@@ -36,7 +39,8 @@ export interface SoldierClassDef {
   /** Soin de la squad à l'arrêt (Medic). PV/s par soldat dans le rayon. */
   heal?: { radius: number; perSecond: number };
   /** Explosion à la mort (Flammeur). */
-  deathBlast?: { radius: number; damage: number };
+  /** `knock` : recul des unités touchées (défaut 300) ; `style` : apparence de l'explosion (défaut : flammes). */
+  deathBlast?: { radius: number; damage: number; knock?: number; style?: 'electric' };
   /** Couleur d'identification (HUD, textes). */
   color: number;
 }
@@ -160,9 +164,10 @@ export const TURRET_DEF: SoldierClassDef = {
     ...CLASSES.trooper.weapon,
     damage: CLASSES.trooper.weapon.damage * TURRETS.damageMul,
     range: CLASSES.trooper.weapon.range * TURRETS.rangeMul,
+    cooldown: CLASSES.trooper.weapon.cooldown / TURRETS.fireRateMul,
     projectileSpeed: TURRETS.projectileSpeed,
     aoe: TURRETS.aoe,
-    texture: 'fx_blaster_orange',
+    texture: ELECTRIC_TEXTURE,
   },
-  deathBlast: TURRETS.blast,
+  deathBlast: { ...TURRETS.blast, knock: 0, style: 'electric' }, // sans recul, explosion électrique
 };

@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { log } from '@xiao/engine';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from '../data/progression';
-import { holoCard, recolorCard, recolorSlot } from './cardPixels';
+import { holoCard, holoSlot, recolorCard, recolorSlot } from './cardPixels';
 
 /**
  * Fonds des cartes d'upgrade et slots vides fabriqués à partir de deux images rouges (`ui_card_base`, `ui_slot_empty`) : par upgrade, une
@@ -22,12 +22,12 @@ interface Base {
 }
 interface Item {
   key: string;
-  base: 'card' | 'slot';
+  base: 'card' | 'slot' | 'slotFull';
   paint: (data: Uint8ClampedArray, w: number) => void;
 }
 interface Job {
   scene: Phaser.Scene;
-  bases: Record<'card' | 'slot', Base>;
+  bases: Record<'card' | 'slot' | 'slotFull', Base>;
   queue: Item[];
   timer: number;
   busy: number; // ms passées à peindre
@@ -77,11 +77,12 @@ export function startUpgradeCardTextures(scene: Phaser.Scene): void {
   if (job) return;
   const card = readBase(scene, 'ui_card_base');
   const slot = readBase(scene, 'ui_slot_empty');
-  if (!card || !slot) return;
+  const slotFull = readBase(scene, 'ui_slot_full');
+  if (!card || !slot || !slotFull) return;
   const j: Job = {
     scene,
-    bases: { card, slot },
-    queue: [...UPGRADE_IDS.flatMap((id) => [cardItem(id), slotItem(id)]), { key: 'ui_card_prism', base: 'card', paint: holoCard }],
+    bases: { card, slot, slotFull },
+    queue: [...UPGRADE_IDS.flatMap((id) => [cardItem(id), slotItem(id)]), { key: 'ui_card_prism', base: 'card', paint: holoCard }, { key: 'ui_slot_prism', base: 'slotFull', paint: holoSlot }],
     timer: 0,
     busy: 0,
   };

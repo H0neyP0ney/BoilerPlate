@@ -106,9 +106,18 @@ export class Turrets {
         if (t.cooldown < 0) t.cooldown = 0;
       }
     }
+    this.syncBlockers();
+  }
+
+  /** Les tourelles vivantes bloquent le passage comme un décor (soldats et aliens les contournent) ; remis à jour à chaque tick. */
+  private syncBlockers(): void {
+    const b = this.sim.arena.blockers;
+    b.length = 0;
+    for (const t of this.items) if (t.alive) b.push({ x: t.x, y: t.y, radius: t.radius });
   }
 
   clear(): void {
     this.items.length = 0;
+    this.sim.arena.blockers.length = 0;
   }
 }

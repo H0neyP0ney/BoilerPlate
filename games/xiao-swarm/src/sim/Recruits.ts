@@ -28,7 +28,10 @@ export class Recruits {
     const size = squad.size;
     // petite squad = beaucoup d'aide ; grosse squad = recrutement ralenti
     const { recruitMax, recruitSizeRef, recruitSlope, recruitMin } = DIFFICULTY;
-    const sizeFactor = clamp(recruitMax - (size - recruitSizeRef) * recruitSlope, recruitMin, recruitMax);
+    // la pente est celle du réglage, mais elle s'adoucit pour que le plancher (`recruitMin`) ne soit atteint qu'à la taille MAX de la squad (upgrades Max Squad) : avec un max de 40,
+    // une squad de 22 recrute encore à ~×1 au lieu du plancher ×0,25 atteint dès 17 soldats ; avec le max de base (12) la pente est inchangée
+    const slope = Math.min(recruitSlope, (recruitMax - recruitMin) / Math.max(1, squad.maxSize - recruitSizeRef));
+    const sizeFactor = clamp(recruitMax - (size - recruitSizeRef) * slope, recruitMin, recruitMax);
     if (!this.sim.rng.chance(a.def.recruitChance * sizeFactor * squad.stats.get('recruit'))) return;
     this.drop(this.chooseClass(squad), a.x, a.y, squad.center);
   }

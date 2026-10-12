@@ -20,7 +20,8 @@ export interface GlobeGlitter {
  * d'origine de la recrue, appliqué à TOUS les globes : `texture` est l'étoile dorée de la recrue (`RECRUIT_STAR`) ou l'étoile de la couleur du
  * globe (images `star_<sorte>`, public/assets/globes/ : une par power-up, rose pour les globes d'upgrade ; `art/upgradeOrbs.ts`).
  */
-export function createGlobeGlitter(scene: Phaser.Scene, x: number, y: number, texture: string): GlobeGlitter | null {
+/** `tints` : couleurs tirées au hasard pour chaque étoile (étoiles arc-en-ciel du booster prismatique) ; absent = couleur de l'image. */
+export function createGlobeGlitter(scene: Phaser.Scene, x: number, y: number, texture: string, tints?: number[]): GlobeGlitter | null {
   if (!scene.textures.exists(texture)) return null;
   const f = FX.recruit;
   const r = f.starRadius;
@@ -34,6 +35,7 @@ export function createGlobeGlitter(scene: Phaser.Scene, x: number, y: number, te
       rotate: { start: 0, end: 90 },
       lifespan: { min: f.starLifeMin, max: Math.max(f.starLifeMin, f.starLifeMax) },
       frequency: f.starEvery,
+      ...(tints ? { tint: tints } : {}),
       blendMode: 'ADD',
     })
     .setDepth(DEPTH.actors + y + 1);

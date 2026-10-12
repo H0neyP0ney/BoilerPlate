@@ -12,6 +12,8 @@ const BEAM = { height: 320, wide: 62, core: 20 };
 const FADE_IN = 0.4;
 /** Rose franc de la colonne (le rose clair des globes se perd sur le sol orange en additif). */
 export const BEAM_PINK = 0xff4fcf;
+/** Colonne (et rond au sol) du booster prismatique : doré. */
+export const BEAM_PRISM = 0xffd24a;
 
 /** Texture de la colonne : blanche, opaque en bas, qui s'estompe vers le haut, bords doux. */
 function ensureBeamTexture(scene: Phaser.Scene): void {

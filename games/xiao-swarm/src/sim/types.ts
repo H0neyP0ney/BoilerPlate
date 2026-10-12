@@ -36,7 +36,7 @@ export type SimEvent =
   | { t: 'alienShot'; id: number; alien: AlienId; x: number; y: number }
   /** Onboarding : une étape commence (`phase`, voir `sim/Tutorial.ts`) ; 'done' = fin, le gestionnaire de vagues normal prend le relai. */
   | { t: 'tutorial'; phase: string }
-  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }
+  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric' }
   | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
   | { t: 'tongue'; alien: number; target: number; dur: number }
   | { t: 'gameEnd'; victory: boolean; delay: number }
@@ -55,6 +55,8 @@ export type SimEvent =
   | { t: 'corpseEnd'; id: number; x: number; y: number; revived: boolean }
   | { t: 'rock'; id: number; x: number; y: number; r: number; ttl: number }
   | { t: 'rockEnd'; id: number }
+  /** Un rocher de mur est fracassé par une charge (rhinocéros) : les débris partent loin dans le sens (`dx`, `dy`, unitaire) de la charge. */
+  | { t: 'rockBreak'; id: number; x: number; y: number; r: number; dx: number; dy: number }
   | { t: 'slam'; x: number; y: number; r: number }
   /** Une stalactite du Scarab s'écrase (effet : éclats, petite secousse ; les dégâts sont déjà appliqués). */
   | { t: 'stalactite'; x: number; y: number; r: number }

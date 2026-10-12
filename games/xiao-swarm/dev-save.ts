@@ -164,7 +164,7 @@ function saveObstacle(id: string, code: string): Result {
 
 // --- planches de sprites (assets/manifest.ts)
 
-const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'offsetX', 'offsetY', 'muzzleFlash', 'muzzle', 'anchors', 'muzzles'];
+const MANAGED = ['originX', 'originY', 'scale', 'shadow', 'offsetX', 'offsetY', 'shadowOffsetX', 'shadowOffsetY', 'muzzleFlash', 'muzzle', 'anchors', 'muzzles'];
 const pt = (p: [number, number]): string => `[${fmtNumber(p[0])}, ${fmtNumber(p[1])}]`;
 
 interface SpriteProps {
@@ -174,6 +174,8 @@ interface SpriteProps {
   shadow?: number;
   offsetX?: number;
   offsetY?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
   muzzleFlash?: boolean;
   muzzle?: [number, number];
   anchors?: Record<string, [number, number]>;
@@ -188,6 +190,8 @@ function spriteLines(p: SpriteProps): string[] {
   if (p.shadow !== undefined) out.push(`shadow: ${fmtNumber(p.shadow)},`);
   if (p.offsetX) out.push(`offsetX: ${fmtNumber(p.offsetX)},`);
   if (p.offsetY) out.push(`offsetY: ${fmtNumber(p.offsetY)},`);
+  if (p.shadowOffsetX) out.push(`shadowOffsetX: ${fmtNumber(p.shadowOffsetX)},`);
+  if (p.shadowOffsetY) out.push(`shadowOffsetY: ${fmtNumber(p.shadowOffsetY)},`);
   if (p.muzzleFlash) out.push('muzzleFlash: true,');
   if (p.muzzle) out.push(`muzzle: ${pt(p.muzzle)},`);
   const anchors = Object.entries(p.anchors ?? {});
@@ -238,13 +242,13 @@ const keyOf = (segment: string): string | null => {
 function saveImageEntry(id: string, props: SpriteProps, rel: string, src: string): Result {
   const m = new RegExp(String.raw`\{[^{}\n]*\bid:\s*'${id}'[^{}\n]*\}`).exec(src);
   if (!m) return { ok: false, message: `${id} n'a pas d'entrée de planche dans ${rel} (visuel procédural : rien à enregistrer)` };
-  const inline = ['originX', 'originY', 'scale', 'shadow', 'offsetX', 'offsetY'];
+  const inline = ['originX', 'originY', 'scale', 'shadow', 'offsetX', 'offsetY', 'shadowOffsetX', 'shadowOffsetY'];
   const kept = m[0]
     .slice(1, -1)
     .split(/,\s*(?=\w+\s*:)/)
     .map((s) => s.trim())
     .filter((s) => s && !inline.includes(keyOf(s) ?? ''));
-  const mine = spriteLines({ originX: props.originX, originY: props.originY, scale: props.scale, shadow: props.shadow, offsetX: props.offsetX, offsetY: props.offsetY }).map((l) => l.replace(/,$/, ''));
+  const mine = spriteLines({ originX: props.originX, originY: props.originY, scale: props.scale, shadow: props.shadow, offsetX: props.offsetX, offsetY: props.offsetY, shadowOffsetX: props.shadowOffsetX, shadowOffsetY: props.shadowOffsetY }).map((l) => l.replace(/,$/, ''));
   writeSrc(rel, src, src.slice(0, m.index) + `{ ${[...kept, ...mine].join(', ')} }` + src.slice(m.index + m[0].length));
   return { ok: true, message: `${id} enregistré dans ${rel}` };
 }

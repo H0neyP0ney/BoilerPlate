@@ -4,6 +4,7 @@ import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import { latePack } from '../assets/latePack';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
+import { CardTilt } from '../view/CardTilt';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
 import { CARD, CARD_TEXT_RES, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
 import { t } from '../i18n';
@@ -69,14 +70,14 @@ export class LevelUpScene extends Phaser.Scene {
       .setVisible(offer.length === 0);
     offer.forEach((id, i) => {
       const count = game.localSquad.picked[id] ?? 0; // prises déjà faites (pas celle qu'on s'apprête à prendre)
-      const card = this.makeCard(id, i, count, data.prism[i] === true);
+      const card = this.makeCard(id, i, count, data.prism[i] === true, game.localSquad.prismPicked[id] ?? 0);
       // apparition : chaque carte « pop » (outBack), l'une après l'autre
       card.setScale(0);
       this.tweens.add({ targets: card, scale: 1, duration: 380, delay: 60 + i * 90, ease: 'Back.Out' });
       this.cards.push(card);
       if (data.prism[i] === true) {
         // carte prismatique : pluie de particules RGB qui montent sur toute la carte
-        this.prismFx.set(i, createPrismRain(this));
+        this.prismFx.set(i, createPrismRain(this).setDepth(10)); // au-dessus de la carte, y compris de sa version inclinée en 3D (`CardTilt`, profondeur de la carte + 0,5)
       }
     });
     this.timerBar = this.add.graphics();
@@ -145,6 +146,7 @@ export class LevelUpScene extends Phaser.Scene {
         const x = w / 2 + (i - (n - 1) / 2) * (cw + gap);
         const y = top + ch / 2;
         c.setPosition(x, y);
+        (c.getData('tilt') as CardTilt | undefined)?.resize(); // la carte change de taille : sa photo et sa lumière ne sont plus valables
         resizeUpgradeCard(c, cw, ch, vertical);
         if (suggestBox && i === suggestIdx) {
           // au-dessus de la carte, pointe vers le bas
@@ -164,7 +166,10 @@ export class LevelUpScene extends Phaser.Scene {
     };
     layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, layout);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, layout));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, layout);
+      for (const c of this.cards) (c.getData('tilt') as CardTilt | undefined)?.destroy();
+    });
 
     // Touches de choix et de relance rebindables (Options > Hotkeys), par position physique (`code`) : par défaut 1 / 2 / 3 et R, qui marchent aussi en AZERTY, où les chiffres donnent & é " sans Maj.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
@@ -188,8 +193,8 @@ export class LevelUpScene extends Phaser.Scene {
     g.lineStyle(2, 0xffffff, 0.35).strokeRoundedRect(x - 3, y - 3, w + 6, 16, 8);
   }
 
-  private makeCard(id: UpgradeId, index: number, count: number, prism: boolean): Phaser.GameObjects.Container {
-    const c = buildUpgradeCard(this, id, count, prism);
+  private makeCard(id: UpgradeId, index: number, count: number, prism: boolean, prismCount = 0): Phaser.GameObjects.Container {
+    const c = buildUpgradeCard(this, id, count, prism, prismCount); // prismCount : prises prismatiques déjà faites (carrés arc-en-ciel)
     const hit = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => this.tweens.add({ targets: c, scale: 1.05, duration: 90 }));
     hit.on('pointerout', () => this.tweens.add({ targets: c, scale: 1, duration: 90 }));
@@ -201,6 +206,7 @@ export class LevelUpScene extends Phaser.Scene {
     });
     c.add(hit);
     c.setData('hit', hit);
+    c.setData('tilt', new CardTilt(this, c, hit, prism)); // la carte pivote en 3D vers le curseur (effet carte à collectionner) ; prismatique : sa lumière holographique suit aussi le curseur
     return c;
   }
 

@@ -33,6 +33,8 @@ export class Arena {
   readonly obstacles: Circle[] = [];
   /** Cailloux lancés par les aliens : obstacles temporaires (peu nombreux : parcours direct, sans grille). */
   readonly rocks: (Circle & { id: number; ttl: number })[] = [];
+  /** Obstacles temporaires sans affichage propre (tourelles du power-up `turrets`) : bloquent soldats et aliens comme le décor ; remplis à chaque tick par `Turrets` (hôte) / `Mirror` (client). */
+  readonly blockers: Circle[] = [];
   readonly bounds: { minX: number; minY: number; maxX: number; maxY: number };
 
   private grid: number[][] = [];
@@ -124,6 +126,9 @@ export class Arena {
     for (const o of this.rocks) {
       if (Math.abs(c.x - o.x) < c.radius + o.radius && Math.abs(c.y - o.y) < c.radius + o.radius) pushOutOfCircle(c, o);
     }
+    for (const o of this.blockers) {
+      if (Math.abs(c.x - o.x) < c.radius + o.radius && Math.abs(c.y - o.y) < c.radius + o.radius) pushOutOfCircle(c, o);
+    }
     c.x = clamp(c.x, this.bounds.minX + c.radius, this.bounds.maxX - c.radius);
     c.y = clamp(c.y, this.bounds.minY + c.radius, this.bounds.maxY - c.radius);
   }
@@ -139,8 +144,9 @@ export class Arena {
     if (m <= 0) return;
     const near = this.collect(x, y, radius + m);
     const n = near.length;
-    for (let k = 0; k < n + this.rocks.length; k++) {
-      const o = k < n ? this.obstacles[near[k]] : this.rocks[k - n];
+    const nr = n + this.rocks.length;
+    for (let k = 0; k < nr + this.blockers.length; k++) {
+      const o = k < n ? this.obstacles[near[k]] : k < nr ? this.rocks[k - n] : this.blockers[k - nr];
       const reach = radius + o.radius + m;
       const dx = x - o.x;
       const dy = y - o.y;
@@ -167,6 +173,20 @@ export class Arena {
     }
   }
 
+  /**
+   * Longueur (px, au plus `max`) d'un rayon parti de (`x`, `y`) dans la direction unitaire (`dx`, `dy`) avant de sortir de la carte : les lignes de pics du lurker et du
+   * Giant Crab s'arrêtent au bord (pas de pics dans le vide). Les obstacles, eux, ne les coupent pas.
+   */
+  rayLength(x: number, y: number, dx: number, dy: number, max: number): number {
+    const b = this.bounds;
+    let t = max;
+    if (dx > 1e-6) t = Math.min(t, (b.maxX - x) / dx);
+    else if (dx < -1e-6) t = Math.min(t, (b.minX - x) / dx);
+    if (dy > 1e-6) t = Math.min(t, (b.maxY - y) / dy);
+    else if (dy < -1e-6) t = Math.min(t, (b.minY - y) / dy);
+    return Math.max(0, t);
+  }
+
   isFree(p: Point, radius: number): boolean {
     const b = this.bounds;
     if (p.x < b.minX + radius || p.x > b.maxX - radius || p.y < b.minY + radius || p.y > b.maxY - radius) return false;
@@ -177,6 +197,11 @@ export class Arena {
       if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
     }
     for (const o of this.rocks) {
+      const dx = p.x - o.x;
+      const dy = p.y - o.y;
+      if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
+    }
+    for (const o of this.blockers) {
       const dx = p.x - o.x;
       const dy = p.y - o.y;
       if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;

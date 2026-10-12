@@ -293,8 +293,6 @@ export class AlienView {
   private readonly id: string;
   private animated: boolean;
   readonly body: Phaser.GameObjects.Sprite;
-  /** Œuf de boss : socle (nid) posé devant son bas. */
-  private readonly socle?: Phaser.GameObjects.Sprite;
 
   /** Enragé (ressuscité par un chaman) : flammes rouges qui montent du corps. */
   private zombieFx?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -320,7 +318,6 @@ export class AlienView {
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);
-    if (state.def.egg) this.socle = sprites.add(scene, 'alien_boss_egg_socle', state.x, state.y);
   }
 
   /** Touché : flash de `duration` s, sauf s'il est déjà en cours ou en repos (le flash n'est jamais prolongé : sous un tir continu l'unité clignote). */
@@ -456,11 +453,6 @@ export class AlienView {
     }
 
     this.body.setVisible(!hidden);
-    if (this.socle) {
-      sprites.place(this.socle, 'alien_boss_egg_socle');
-      const sd = sprites.get('alien_boss_egg_socle'); // le nid, dessiné devant, recouvre le bas de l'œuf ; position et échelle propres (visionneuse d'unités : poignées orange de l'œuf)
-      this.socle.setScale(sprites.scaleOf('alien_boss_egg_socle')).setPosition(this.rx + (sd.offsetX ?? 0), this.ry + (sd.offsetY ?? 0)).setDepth(DEPTH.actors + this.ry + 0.5).setVisible(!hidden); // DEVANT l'œuf : le nid entoure son bas
-    }
     // enfouissement : `show` = part du sprite au-dessus du sol, en partant du haut (BURIED). Lurker : s'enfonce (1) jusqu'à n'en laisser
     // dépasser que le haut, semi-enterré (2-4), ressort (5). Scarab : s'enfonce (1), totalement enterré (2), ressort (3). Recyclage : s'enfonce.
     let show = 1;
@@ -519,7 +511,6 @@ export class AlienView {
 
   destroy(): void {
     this.body.destroy();
-    this.socle?.destroy();
     this.zombieFx?.destroy();
   }
 }

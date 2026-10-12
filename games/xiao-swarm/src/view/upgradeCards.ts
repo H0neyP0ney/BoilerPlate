@@ -39,7 +39,7 @@ export const CARD_TEXT_RES = 3;
  * nom, description, slots et « Claim ». `count` = prises DÉJÀ faites (pas celle qu'on s'apprête à prendre ; un prismatique compte pour une prise, d'où un `count` qui peut dépasser le maximum) ; `prism` : bonus doublé, fond holographique.
  * `resizeUpgradeCard` la met à la taille voulue. Partagée par la fenêtre de choix et la visionneuse d'upgrades : un seul dessin.
  */
-export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: number, prism: boolean): Phaser.GameObjects.Container {
+export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: number, prism: boolean, prismCount = 0): Phaser.GameObjects.Container {
   finishUpgradeCardTextures(); // fonds fabriqués en tâche de fond après le lancement : rattrape ceux qui manquent
   const def = UPGRADES[id];
   const c = scene.add.container(0, 0);
@@ -51,7 +51,7 @@ export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: numb
   const desc = scene.add
     .text(0, 0, t(`up_${id}_desc`, { value: def.value * (prism ? 2 : 1) }), { fontFamily: theme.font, fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff', align: 'center' })
     .setOrigin(0.5, 0);
-  const slots = makeSlots(scene, id, def.maxStacks, count);
+  const slots = makeSlots(scene, id, def.maxStacks, count, prismCount);
   for (const txt of [name, claim, desc]) txt.setResolution(CARD_TEXT_RES); // texte rendu en haute résolution puis réduit : net malgré la réduction de la carte
   c.add([bg, icon, desc, slots, name, claim]);
   c.setData({ id, bg, icon, name, claim, desc, slots });
@@ -63,7 +63,7 @@ export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: numb
  * sont pleines, les autres vides (celle qu'on s'apprête à prendre n'est pas comptée). Aucun slot pour une upgrade sans limite (Renfort). Positions en pixels de
  * planche relatifs au centre de la carte (`CARD.slots`) : le conteneur est mis à l'échelle dans `resizeUpgradeCard`.
  */
-function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: number): Phaser.GameObjects.Container {
+function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: number, prismCount = 0): Phaser.GameObjects.Container {
   const box = scene.add.container(0, 0);
   if (max >= 99) return box;
   const S = CARD.slots;
@@ -74,7 +74,7 @@ function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: numbe
     const row = Math.floor(i / perRow);
     const inRow = Math.min(perRow, max - row * perRow);
     const col = i - row * perRow;
-    const img = scene.add.image((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep, i < count ? 'ui_slot_full' : `ui_slot_empty_${id}`);
+    const img = scene.add.image((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep, i < count ? (i < prismCount && scene.textures.exists('ui_slot_prism') ? 'ui_slot_prism' : 'ui_slot_full') : `ui_slot_empty_${id}`);
     img.setScale(S.size / img.width);
     box.add(img);
   }

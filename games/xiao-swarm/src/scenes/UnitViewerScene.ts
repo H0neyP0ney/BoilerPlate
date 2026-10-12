@@ -36,8 +36,6 @@ interface Entry {
   unit: string;
   sprite: Phaser.GameObjects.Sprite;
   gun?: Phaser.GameObjects.Sprite;
-  /** Œuf de boss : socle (nid) dessiné devant son bas. */
-  socle?: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Ellipse;
   /** Hitbox : cercle de collision (`radius` des données) centré au point au sol de l'unité. */
@@ -67,8 +65,6 @@ const GROUPS: { kind: Kind; prefix: string; ids: string[] }[] = [
 ];
 const ZOOMS = [0.5, 1, 1.5, 2, 3, 4];
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
-/** Socle (nid) de l'œuf de boss : visuel à part, réglé (échelle, position) indépendamment de l'œuf. */
-const SOCLE_ID = 'alien_boss_egg_socle';
 
 export class UnitViewerScene extends Phaser.Scene {
   private entries: Entry[] = [];
@@ -96,15 +92,12 @@ export class UnitViewerScene extends Phaser.Scene {
   private shadowSlider!: HTMLInputElement;
   private offsetSlider!: HTMLInputElement;
   private offsetLabel!: HTMLSpanElement;
+  /** Décalage de l'ombre seule (X, Y). */
+  private shadowOffsetInputs = {} as Record<'x' | 'y', { slider: HTMLInputElement; label: HTMLSpanElement }>;
   /** Affiche la hitbox (cercle rouge transparent de rayon `radius`) de l'unité de la vue détaillée. */
   private showHit = true;
   /** Poignées à glisser sur l'unité : hitbox (`radius`), ombre portée et échelle. */
   private handles!: { hit: Phaser.GameObjects.Arc; shadow: Phaser.GameObjects.Arc; scale: Phaser.GameObjects.Arc };
-  /** Œuf de boss : poignées orange du socle (déplacer, échelle), indépendantes de celles de l'œuf. */
-  private socleHandles!: { move: Phaser.GameObjects.Arc; scale: Phaser.GameObjects.Arc };
-  /** Section du panneau (échelle, X, Y du socle), visible seulement quand l'œuf est affiché. */
-  private socleSection!: HTMLDivElement;
-  private socleInputs = {} as Record<'scale' | 'x' | 'y', { slider: HTMLInputElement; label: HTMLSpanElement }>;
   /** Resynchronise les réglettes du panneau Stats (après un changement de `radius` à la poignée). */
   private statSyncs: (() => void)[] = [];
   private shadowLabel!: HTMLSpanElement;
@@ -183,7 +176,6 @@ export class UnitViewerScene extends Phaser.Scene {
     for (const e of this.entries) {
       e.sprite.destroy();
       e.gun?.destroy();
-      e.socle?.destroy();
       e.label.destroy();
       e.shadow.destroy();
       e.hit.destroy();
@@ -268,8 +260,6 @@ ${id}` : id;
     const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
     if (gun && this.isInactive(kind, unit)) gun.setAlpha(INACTIVE_ALPHA); // l'arme d'une classe inactive est transparente comme son soldat
-    const socle = kind === 'alien' && ALIENS[unit as AlienId].egg ? sprites.add(this, 'alien_boss_egg_socle', x, y).setDepth(1) : undefined;
-    if (socle) sprite.setDepth(0);
     const label = this.add
       .text(x, y + 26, this.labelOf(kind, unit, id), { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim, align: 'center' })
       .setOrigin(0.5, 0)
@@ -280,7 +270,6 @@ ${id}` : id;
       unit,
       sprite,
       gun,
-      socle,
       label,
       shadow,
       hit,
@@ -374,13 +363,7 @@ ${id}` : id;
     const [ax, ay] = sprites.anchorFor(e.id, e.playing, sprites.dirOf(e.id, s.flipX));
     if (s.originX !== ax || s.originY !== ay) s.setOrigin(ax, ay);
     s.setPosition(e.x, e.y + e.dy).setScale(sx, sy);
-    e.shadow.setPosition(e.x, e.y + oy);
-    if (e.socle) {
-      // le socle a sa propre échelle et sa propre position (décalages X / Y de son visuel), indépendantes de l'œuf ; il ne suit pas son rebond (idle)
-      const sd = sprites.get(SOCLE_ID);
-      sprites.place(e.socle, SOCLE_ID);
-      e.socle.setPosition(e.x + (sd.offsetX ?? 0), e.y + (sd.offsetY ?? 0)).setScale(sprites.scaleOf(SOCLE_ID));
-    }
+    e.shadow.setPosition(e.x + (sprites.get(e.id).shadowOffsetX ?? 0), e.y + oy + (sprites.get(e.id).shadowOffsetY ?? 0)); // + décalage de l'ombre seule
     const sb = this.shadowBase(e);
     e.shadow.setSize(sb.w, sb.h).setScale(e.floats ? 0.7 : 1, 1).setAlpha(this.isInactive(e.kind, e.unit) ? INACTIVE_ALPHA : SHADOW_ALPHA);
 
@@ -552,30 +535,23 @@ ${id}` : id;
     });
     this.offsetSlider.addEventListener('change', () => this.offsetSlider.blur());
 
-    // --- Socle de l'œuf (échelle + position, indépendants de l'œuf) ---
-    const socleRow = (key: 'scale' | 'x' | 'y', min: number, max: number, step: number, set: (v: number) => void): HTMLElement => {
+    // --- Décalage de l'OMBRE seule (X, Y) : le sprite, la hitbox et le reste ne bougent pas ---
+    for (const key of ['x', 'y'] as const) {
       const slider = document.createElement('input');
       slider.type = 'range';
-      slider.min = String(min);
-      slider.max = String(max);
-      slider.step = String(step);
+      slider.min = '-100';
+      slider.max = '100';
+      slider.step = '0.5';
       slider.style.cssText = 'flex:1;min-width:80px';
       const label = document.createElement('span');
-      label.style.cssText = 'min-width:44px;text-align:right';
-      slider.addEventListener('input', () => set(Number(slider.value)));
+      label.style.cssText = 'min-width:36px;text-align:right';
+      slider.addEventListener('input', () => {
+        const t = this.target;
+        if (t) setPlacement(t.id, key === 'x' ? { shadowOffsetX: Number(slider.value) } : { shadowOffsetY: Number(slider.value) });
+      });
       slider.addEventListener('change', () => slider.blur());
-      this.socleInputs[key] = { slider, label };
-      return line(key === 'scale' ? 'Échelle' : key === 'x' ? 'X' : 'Y', slider, label);
-    };
-    this.socleSection = document.createElement('div');
-    this.socleSection.style.cssText = 'display:none;flex-direction:column;gap:6px';
-    this.socleSection.append(
-      title("Socle (nid de l'œuf)"),
-      note("Réglé séparément de l'œuf : échelle et position (px, depuis le point au sol de l'œuf). Poignées orange sur le socle : centre = déplacer, coin haut droit = échelle. Save enregistre l'œuf et son socle."),
-      socleRow('scale', 0.2, 3, 0.01, (v) => setPlacement(SOCLE_ID, { scale: v })),
-      socleRow('x', -100, 100, 0.5, (v) => setPlacement(SOCLE_ID, { offsetX: v })),
-      socleRow('y', -100, 100, 0.5, (v) => setPlacement(SOCLE_ID, { offsetY: v })),
-    );
+      this.shadowOffsetInputs[key] = { slider, label };
+    }
 
     // --- Frames + canon ---
     this.pauseBox = document.createElement('input');
@@ -639,21 +615,19 @@ ${id}` : id;
     const copy = this.button('Copier le code', () => {
       const t = this.target;
       if (!t) return;
-      const code = placementSnippet(t.id) + (t.socle ? `\n\n// ${SOCLE_ID}\n${placementSnippet(SOCLE_ID)}` : '');
+      const code = placementSnippet(t.id);
       void navigator.clipboard?.writeText(code).catch(() => {});
-      this.info.textContent = `Copié — à coller dans ${t.id}${t.socle ? ` et ${SOCLE_ID}` : ''} de assets/manifest.ts :\n${code}`;
+      this.info.textContent = `Copié — à coller dans ${t.id} de assets/manifest.ts :\n${code}`;
     });
     const save = this.button('Save', () => {
       const t = this.target;
       if (!t) return;
-      const ids = t.socle ? [t.id, SOCLE_ID] : [t.id]; // l'œuf et son socle s'enregistrent ensemble
-      void Promise.all(ids.map((id) => saveSpriteToCode(id))).then((msgs) => (this.info.textContent = msgs.join('\n')));
+      void saveSpriteToCode(t.id).then((msg) => (this.info.textContent = msg));
     });
     const reset = this.button('Reset', () => {
       const t = this.target;
       if (!t) return;
       resetPlacement(t.id);
-      if (t.socle) resetPlacement(SOCLE_ID);
       this.info.textContent = 'Retour à la dernière sauvegarde.';
     });
 
@@ -684,7 +658,10 @@ ${id}` : id;
       title('Décalage Y (sprite + ombre)'),
       note('Descend (+) ou monte (−) le sprite et son ombre ensemble, en px. La hitbox ne bouge pas. Appliqué aussi en jeu.'),
       line(this.offsetSlider, this.offsetLabel),
-      this.socleSection,
+      title("Décalage de l'ombre seule"),
+      note("Déplace seulement l'ombre portée (le sprite et la hitbox ne bougent pas), en px : X (+ = droite) et Y (+ = bas). Appliqué aussi en jeu."),
+      line(this.shadowOffsetInputs.x.slider, this.shadowOffsetInputs.x.label),
+      line(this.shadowOffsetInputs.y.slider, this.shadowOffsetInputs.y.label),
       title('Muzzle flash'),
       note('Coche pour que cette unité tire avec un flash (seul le Trooper en a un). Décoche pour le retirer.'),
       flashRow,
@@ -747,26 +724,6 @@ ${id}` : id;
       const s = Math.min(3, Math.max(0.2, Math.round((scaleStart.s * anchorDist(p, t)) / scaleStart.d * 100) / 100)); // proportionnel à la distance à l'ancrage
       setPlacement(t.id, { scale: s });
     });
-    // poignées orange du socle de l'œuf : centre = déplacer (décalages X / Y du visuel du socle), coin haut droit = échelle du socle
-    const socleHandle = (): Phaser.GameObjects.Arc =>
-      this.add.circle(0, 0, 6, 0xff9a2a, 0.95).setStrokeStyle(2, 0xffffff).setDepth(1004).setInteractive({ draggable: true, useHandCursor: true }).setVisible(false);
-    this.socleHandles = { move: socleHandle(), scale: socleHandle() };
-    this.socleHandles.move.on('drag', (p: Phaser.Input.Pointer) => {
-      const t = this.target;
-      if (!t?.socle) return;
-      setPlacement(SOCLE_ID, { offsetX: Math.round((p.worldX - t.x) * 2) / 2, offsetY: Math.round((p.worldY - t.y) * 2) / 2 }); // au demi-pixel
-    });
-    let socleStart = { d: 1, s: 1 };
-    const socleDist = (p: Phaser.Input.Pointer, t: Entry): number => Math.max(1, Math.hypot(p.worldX - t.socle!.x, p.worldY - t.socle!.y));
-    this.socleHandles.scale.on('dragstart', (p: Phaser.Input.Pointer) => {
-      const t = this.target;
-      if (t?.socle) socleStart = { d: socleDist(p, t), s: sprites.scaleOf(SOCLE_ID) };
-    });
-    this.socleHandles.scale.on('drag', (p: Phaser.Input.Pointer) => {
-      const t = this.target;
-      if (!t?.socle) return;
-      setPlacement(SOCLE_ID, { scale: Math.min(3, Math.max(0.2, Math.round(((socleStart.s * socleDist(p, t)) / socleStart.d) * 100) / 100)) });
-    });
     this.flash = this.add.image(0, 0, 'fx_glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xffd27a).setDepth(1002).setAlpha(0);
     this.cross.setVisible(false);
     this.muzzleDot.setVisible(false);
@@ -810,8 +767,6 @@ ${id}` : id;
     this.cross.setVisible(!!t);
     this.muzzleDot.setVisible(!!t && this.hasFlash());
     for (const h of Object.values(this.handles)) h.setVisible(!!t);
-    for (const h of Object.values(this.socleHandles)) h.setVisible(!!t?.socle);
-    this.socleSection.style.display = t?.socle ? 'flex' : 'none';
     this.flash.setAlpha(0);
     this.setPlaceMuzzle(false);
     if (!t) return;
@@ -887,15 +842,9 @@ ${id}` : id;
     t.shadow.setSize(sb.w, sb.h);
 
     this.handles.hit.setPosition(t.x + r, t.y).setVisible(this.showHit && t.kind !== 'recruit');
-    this.handles.shadow.setPosition(t.x, t.y + (sprites.get(t.id).offsetY ?? 0) + sb.h / 2);
+    this.handles.shadow.setPosition(t.x + (sprites.get(t.id).shadowOffsetX ?? 0), t.y + (sprites.get(t.id).offsetY ?? 0) + (sprites.get(t.id).shadowOffsetY ?? 0) + sb.h / 2);
     const tr = t.sprite.getTopRight();
     this.handles.scale.setPosition(tr.x, tr.y);
-    if (t.socle) {
-      // le socle se règle à part : sa poignée de déplacement est à son centre, celle d'échelle à son coin haut droit
-      this.socleHandles.move.setPosition(t.socle.x, t.socle.y);
-      const st = t.socle.getTopRight();
-      this.socleHandles.scale.setPosition(st.x, st.y);
-    }
 
     // frame affichée
     const idx = this.frameIndex(t);
@@ -940,14 +889,11 @@ ${id}` : id;
     const off = sprites.get(t.id).offsetY ?? 0;
     if (document.activeElement !== this.offsetSlider) this.offsetSlider.value = String(off);
     this.offsetLabel.textContent = `${r3(off)} px`;
-    if (t.socle) {
-      const sd = sprites.get(SOCLE_ID);
-      const vals = { scale: sprites.scaleOf(SOCLE_ID), x: sd.offsetX ?? 0, y: sd.offsetY ?? 0 };
-      for (const k of ['scale', 'x', 'y'] as const) {
-        const { slider, label } = this.socleInputs[k];
-        if (document.activeElement !== slider) slider.value = String(vals[k]);
-        label.textContent = k === 'scale' ? `×${r3(vals[k])}` : `${r3(vals[k])} px`;
-      }
+    for (const key of ['x', 'y'] as const) {
+      const v = (key === 'x' ? sprites.get(t.id).shadowOffsetX : sprites.get(t.id).shadowOffsetY) ?? 0;
+      const { slider, label } = this.shadowOffsetInputs[key];
+      if (document.activeElement !== slider) slider.value = String(v);
+      label.textContent = `${r3(v)} px`;
     }
     const flashOn = !!sprites.get(t.id).muzzleFlash;
     if (this.flashBox.checked !== flashOn) this.flashBox.checked = flashOn;
@@ -1187,7 +1133,6 @@ ${id}` : id;
     this.cross?.setScale(1 / cam.zoom);
     this.muzzleDot?.setScale(1 / cam.zoom);
     if (this.handles) for (const h of Object.values(this.handles)) h.setScale(1 / cam.zoom);
-    if (this.socleHandles) for (const h of Object.values(this.socleHandles)) h.setScale(1 / cam.zoom);
     for (const e of this.entries) {
       e.label.setScale(1 / cam.zoom).setY(e.y + 26 / cam.zoom);
       e.hit.setStrokeStyle(2 / cam.zoom, 0xff2a2a, 0.55); // trait d'épaisseur constante à l'écran

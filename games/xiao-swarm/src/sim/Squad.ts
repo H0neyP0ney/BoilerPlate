@@ -59,6 +59,8 @@ export class Squad {
   offer: UpgradeId[] | null = null;
   /** Pour chaque upgrade proposée : prismatique (bonus doublé) ? */
   offerPrism: boolean[] = [];
+  /** Booster prismatique ramassé (loot) : le prochain tirage d'upgrades de ce joueur est entièrement prismatique (consommé au tirage ; une relance retombe sur les chances normales). */
+  prismBoost = false;
   /** Relances restantes de la partie. */
   rerolls = Math.round(DIFFICULTY.rerolls);
   /** Plus grande taille atteinte par la squad depuis le début de la partie (la réanimation en rend 60 %). */
@@ -69,6 +71,8 @@ export class Squad {
   lastStand = false;
   private pendingLevels = 0;
   readonly picked: Partial<Record<UpgradeId, number>> = {};
+  /** Parmi les prises de `picked`, combien étaient prismatiques (carte d'upgrade : un carré arc-en-ciel par prise prismatique). */
+  readonly prismPicked: Partial<Record<UpgradeId, number>> = {};
   moving = false;
   stillTime = 0;
   kills = 0;
@@ -125,13 +129,14 @@ export class Squad {
     this.lastStand = false;
     this.pendingLevels = 0;
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
+    for (const k of Object.keys(this.prismPicked)) delete this.prismPicked[k as UpgradeId];
     this.kills = 0;
     this.dealt = 0;
     this.stillTime = 0;
     this.dirty = true;
   }
 
-  /** XP nécessaire pour le prochain niveau (XP partagée : × nombre de joueurs). */
+  /** XP nécessaire pour le prochain niveau (XP partagée : seuil × `Sim.xpScale`, qui grandit comme la charge de mobs). */
   get xpNeeded(): number {
     return xpToNext(this.level) * this.sim.xpScale;
   }
@@ -195,7 +200,9 @@ export class Squad {
         return;
     }
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
-    const allPrism = !forced && !reroll && choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont prismatiques (pas après une relance)
+    const boost = !forced && !reroll && this.prismBoost; // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois
+    if (boost) this.prismBoost = false;
+    const allPrism = !forced && !reroll && (boost || choosing % PRISM_LEVEL_EVERY === 0); // niveaux 10, 20, 30… : les 3 propositions sont prismatiques (pas après une relance)
     this.offerPrism = offer.map(() => (forced ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
@@ -229,6 +236,7 @@ export class Squad {
     this.dirty = true;
     this.stats.reset();
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
+    for (const k of Object.keys(this.prismPicked)) delete this.prismPicked[k as UpgradeId];
     this.offer = null;
     this.offerPrism = [];
     this.pendingLevels = 0;
@@ -302,6 +310,7 @@ export class Squad {
     const def = UPGRADES[id];
     const mult = prism ? 2 : 1;
     this.picked[id] = (this.picked[id] ?? 0) + 1;
+    if (prism) this.prismPicked[id] = (this.prismPicked[id] ?? 0) + 1;
     if (def.stat && def.mod) for (let i = 0; i < mult; i++) this.stats.add(def.stat, def.mod);
     if (id === 'hp') {
       // les soldats déjà là gagnent les PV max supplémentaires, et autant de PV courants (50/100 + 20 % → 70/120)

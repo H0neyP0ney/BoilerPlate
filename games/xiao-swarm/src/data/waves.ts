@@ -101,14 +101,14 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     7: [
       { name: 'Rhinocéros', groups: [{ type: 'charger', count: 3 }, { type: 'wall', count: 6 }, { type: 'slime', count: 9 }] },
       { name: 'Embuscade', groups: [{ type: 'lurker', count: 5 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
-      { name: 'Bulle', groups: [{ type: 'bubble', count: 2 }, { type: 'spitter', count: 6 }, { type: 'gling', count: 17 }] },
+      { name: 'Bulle', groups: [{ type: 'bubble', count: 3 }, { type: 'spitter', count: 6 }, { type: 'gling', count: 17 }] },
       { name: 'Barrage', groups: [{ type: 'wall', count: 9 }, { type: 'toad', count: 6 }, { type: 'burner', count: 6 }] },
     ],
     8: [
-      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 3 }, { type: 'bubble', count: 2 }, { type: 'slime', count: 18 }, { type: 'gling', count: 14 }] },
+      { name: 'Chaman et bulle', groups: [{ type: 'shaman', count: 3 }, { type: 'bubble', count: 3 }, { type: 'slime', count: 18 }, { type: 'gling', count: 14 }] },
       { name: 'Nid de lurkers', groups: [{ type: 'lurker', count: 8 }, { type: 'toad', count: 5 }, { type: 'kamikaze', count: 6 }] },
       { name: 'Troupeau', groups: [{ type: 'charger', count: 8 }, { type: 'spitter', count: 8 }, { type: 'kamikaze', count: 11 }] },
-      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 8 }, { type: 'charger', count: 3 }, { type: 'burner', count: 11 }, { type: 'bubble', count: 2 }] },
+      { name: 'Ménagerie', groups: [{ type: 'shaman', count: 8 }, { type: 'charger', count: 3 }, { type: 'burner', count: 11 }, { type: 'bubble', count: 3 }] },
     ],
     9: [
       { name: 'Mini-boss : Alpha Rhino', groups: [{ type: 'boss_rhino', count: 1 }, { type: 'slime', count: 9 }] },

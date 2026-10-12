@@ -18,6 +18,31 @@ import type { GameScene } from './GameScene';
 
 /** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
 const BOSS_ARROW_COLOR = 0xff3a3a;
+/** Profondeur des flèches de signalisation et de leurs textes : au-dessus des barres du haut (boss, timeline, XP). */
+const ARROW_DEPTH = 20;
+/** Taille des flèches de signalisation (1 = gabarit d'origine de « Ally down » ; 0,8 depuis le 12/10 : 20 % plus petites). */
+const ARROW_SIZE = 0.8;
+
+/**
+ * Flèche de signalisation commune (boss, œuf / dé / globes d'upgrade, équipier à terre, tutoriel) : disque sombre cerclé de `color`, triangle qui pointe vers (`dirX`, `dirY`),
+ * pouls (+20 %) et deux ondes qui partent de la flèche en s'effaçant, pour attirer l'œil. Renvoie le facteur de pouls (à appliquer à l'écart du texte posé dessus).
+ */
+function drawSignalArrow(g: Phaser.GameObjects.Graphics, px: number, py: number, dirX: number, dirY: number, color: number, back: number, now: number): number {
+  const pulse = 1 + (0.5 + 0.5 * Math.sin(now / 170)) * 0.2;
+  for (let k = 0; k < 2; k++) {
+    const w = (now / 1000 + k * 0.5) % 1;
+    g.lineStyle(4 * ARROW_SIZE, color, 0.8 * (1 - w)).strokeCircle(px, py, (35 + 52 * w) * ARROW_SIZE);
+  }
+  g.fillStyle(back, 0.8).fillCircle(px, py, 35 * pulse * ARROW_SIZE);
+  g.lineStyle(4 * ARROW_SIZE, color, 1).strokeCircle(px, py, 35 * pulse * ARROW_SIZE);
+  const k = ARROW_SIZE;
+  g.fillStyle(color, 1).fillTriangle(
+    px + dirX * 29 * pulse * k, py + dirY * 29 * pulse * k,
+    px - dirX * 6 * k - dirY * 15 * k, py - dirY * 6 * k + dirX * 15 * k,
+    px - dirX * 6 * k + dirY * 15 * k, py - dirY * 6 * k - dirX * 15 * k,
+  );
+  return pulse;
+}
 
 /** Délai (ms) entre deux touches W A S D de l'aide de déplacement. */
 const KEY_STEP = 300;
@@ -158,18 +183,21 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '15px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 })
       .setOrigin(0.5)
       .setDepth(0.3); // au-dessus de la jauge (0.2)
-    this.bossArrow = this.add.graphics();
+    // flèches de signalisation hors champ : au-dessus de toute l'interface du haut (barre de vie du boss comprise, profondeurs 0 à 0,3)
+    this.bossArrow = this.add.graphics().setDepth(ARROW_DEPTH);
     this.bossTip = this.add
-      .text(0, 0, t('bossTip'), { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ff6a6a', stroke: '#2a0a08', strokeThickness: 5 })
+      .text(0, 0, t('bossTip'), { fontFamily: theme.font, fontSize: '24px', fontStyle: 'bold', color: '#ff6a6a', stroke: '#2a0a08', strokeThickness: 7 })
       .setOrigin(0.5, 1)
+      .setDepth(ARROW_DEPTH + 1)
       .setVisible(false);
-    this.reviveArrow = this.add.graphics();
-    this.orbArrow = this.add.graphics();
+    this.reviveArrow = this.add.graphics().setDepth(ARROW_DEPTH);
+    this.orbArrow = this.add.graphics().setDepth(ARROW_DEPTH);
     // onboarding : flèches vers le point vert / la recrue / le power-up, bulle au-dessus de la flèche, bandeau du haut
-    this.tutorialArrow = this.add.graphics();
+    this.tutorialArrow = this.add.graphics().setDepth(ARROW_DEPTH);
     this.tutorialLabel = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6, padding: { x: 12, y: 6 } }) // fond : rectangle à coins arrondis dessiné dans `tutorialArrow`
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7, padding: { x: 14, y: 7 } }) // fond : rectangle à coins arrondis dessiné dans `tutorialArrow`
       .setOrigin(0.5, 1)
+      .setDepth(ARROW_DEPTH + 1)
       .setVisible(false);
     this.endText = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 9, align: 'center' })
@@ -335,16 +363,9 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const edge = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
     const px = width / 2 + c * edge;
     const py = height / 2 + s * edge;
-    const pulse = 1 + (0.5 + 0.5 * Math.sin(this.time.now / 170)) * 0.14;
-    this.bossArrow.fillStyle(0x2a0a0a, 0.75).fillCircle(px, py, 25 * pulse);
-    this.bossArrow.lineStyle(3, BOSS_ARROW_COLOR, 1).strokeCircle(px, py, 25 * pulse);
-    this.bossArrow.fillStyle(BOSS_ARROW_COLOR, 1).fillTriangle(
-      px + c * 15 + c * 6, py + s * 15 + s * 6,
-      px - c * 4 - s * 11, py - s * 4 + c * 11,
-      px - c * 4 + s * 11, py - s * 4 - c * 11,
-    );
+    const pulse = drawSignalArrow(this.bossArrow, px, py, c, s, BOSS_ARROW_COLOR, 0x2a0a0a, this.time.now);
     // tip « BOSS » au-dessus de la flèche (sous elle quand la flèche est tout en haut), gardé dans l'écran
-    this.placeOverArrow(this.bossTip.setText(t('bossTip')).setVisible(true), px, py, 30 * pulse);
+    this.placeOverArrow(this.bossTip.setText(t('bossTip')).setScale(1 + (pulse - 1) * 0.5).setVisible(true), px, py, 46 * ARROW_SIZE * pulse);
   }
 
   /**
@@ -361,8 +382,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
   }
 
   /**
-   * Flèche rose (même gabarit que celle du boss) au bord de l'écran vers chaque globe d'upgrade du joueur local hors champ : ces globes
-   * n'expirent jamais (`Chests.ts`), la flèche évite de les oublier.
+   * Flèche rose (même gabarit que celle du boss) au bord de l'écran vers chaque globe d'upgrade du joueur local hors champ, chaque œuf de boss
+   * (qui libère des globes d'upgrade) et chaque dé de relance au sol : ces objets n'expirent jamais, la flèche évite de les oublier.
    */
   private drawUpgradeOrbArrows(): void {
     const g = this.game_;
@@ -373,9 +394,15 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const { width, height } = this.scale;
     const wv = g.cameras.main.worldView;
     const m = 46;
-    const pulse = 1 + (0.5 + 0.5 * Math.sin(this.time.now / 170)) * 0.14;
-    for (const o of g.session.sim.upgradeOrbs.items) {
-      if (o.owner !== me.owner) continue;
+    const sim = g.session.sim;
+    const targets: { x: number; y: number; gold?: boolean }[] = [];
+    for (const o of sim.upgradeOrbs.items) if (o.owner === me.owner) targets.push(o);
+    for (const e of sim.aliens) if (e.alive && e.def.egg) targets.push(e); // œuf d'un boss tué
+    for (const p of sim.powerups.items) {
+      if (p.kind === 'reroll') targets.push(p); // dé de relance
+      else if (p.kind === 'prism') targets.push({ x: p.x, y: p.y, gold: true }); // booster prismatique : flèche dorée
+    }
+    for (const o of targets) {
       const sx = ((o.x - wv.x) / wv.width) * width;
       const sy = ((o.y - wv.y) / wv.height) * height;
       if (sx > m && sx < width - m && sy > m && sy < height - m) continue; // à l'écran : pas de flèche
@@ -385,13 +412,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       const edge = Math.min(c !== 0 ? (width / 2 - m) / Math.abs(c) : Infinity, s !== 0 ? (height / 2 - m) / Math.abs(s) : Infinity);
       const px = width / 2 + c * edge;
       const py = height / 2 + s * edge;
-      a.fillStyle(0x2a0a22, 0.75).fillCircle(px, py, 22 * pulse);
-      a.lineStyle(3, UPGRADE_PINK, 1).strokeCircle(px, py, 22 * pulse);
-      a.fillStyle(UPGRADE_PINK, 1).fillTriangle(
-        px + c * 19, py + s * 19,
-        px - c * 4 - s * 10, py - s * 4 + c * 10,
-        px - c * 4 + s * 10, py - s * 4 - c * 10,
-      );
+      if (o.gold) drawSignalArrow(a, px, py, c, s, 0xffd24a, 0x2a2208, this.time.now);
+      else drawSignalArrow(a, px, py, c, s, UPGRADE_PINK, 0x2a0a22, this.time.now);
     }
   }
 
@@ -405,14 +427,17 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     a.clear();
     const me = g.localSquad;
     let shown = 0;
+    const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
     const label = (px: number, py: number, gap: number): void => {
       let txt = this.reviveLabels[shown];
       if (!txt) {
         txt = this.add
-          .text(0, 0, t('allyDown'), { fontFamily: theme.font, fontSize: '18px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 5 })
-          .setOrigin(0.5, 1);
+          .text(0, 0, t('allyDown'), { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
+          .setOrigin(0.5, 1)
+          .setDepth(ARROW_DEPTH + 1);
         this.reviveLabels[shown] = txt;
       }
+      txt.setScale(1 + beat * 0.1); // le texte « bat » avec la flèche
       this.placeOverArrow(txt.setVisible(true), px, py, gap);
       shown++;
     };
@@ -421,7 +446,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const { width, height } = this.scale;
     const cam = g.cameras.main;
     const wv = cam.worldView;
-    const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
     for (const z of g.session.sim.reviveZones) {
       if (z.owner === me.owner) continue;
       const sx = ((z.x - wv.x) / wv.width) * width;
@@ -434,7 +458,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       if (inside) {
         ang = Math.PI / 2; // pointe vers le bas, vers la zone
         px = sx;
-        py = sy - 70 - beat * 14;
+        py = sy - 92 - beat * 24; // rebondit plus haut au-dessus de la zone
       } else {
         ang = Math.atan2(sy - height / 2, sx - width / 2);
         const c = Math.cos(ang);
@@ -445,15 +469,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       }
       const c = Math.cos(ang);
       const s = Math.sin(ang);
-      const pulse = 1 + beat * 0.14;
-      label(px, py, 30 * pulse);
-      a.fillStyle(0x0a2210, 0.75).fillCircle(px, py, 25 * pulse);
-      a.lineStyle(3, 0x5dff84, 1).strokeCircle(px, py, 25 * pulse);
-      a.fillStyle(0x5dff84, 1).fillTriangle(
-        px + c * 15 + c * 6, py + s * 15 + s * 6,
-        px - c * 4 - s * 11, py - s * 4 + c * 11,
-        px - c * 4 + s * 11, py - s * 4 - c * 11,
-      );
+      label(px, py, 46 * ARROW_SIZE * drawSignalArrow(a, px, py, c, s, 0x5dff84, 0x0a2210, this.time.now));
     }
     hideRest();
   }
@@ -496,7 +512,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       if (inside) {
         ang = Math.PI / 2; // pointe vers le bas, vers la cible
         px = sx;
-        py = sy - 70 - beat * 14;
+        py = sy - 92 - beat * 24; // rebondit plus haut au-dessus de la cible
       } else {
         ang = Math.atan2(sy - height / 2, sx - width / 2);
         const c0 = Math.cos(ang);
@@ -507,15 +523,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       }
       const c = Math.cos(ang);
       const s = Math.sin(ang);
-      const pulse = 1 + beat * 0.14;
-      a.fillStyle(back, 0.75).fillCircle(px, py, 25 * pulse);
-      a.lineStyle(3, color, 1).strokeCircle(px, py, 25 * pulse);
-      a.fillStyle(color, 1).fillTriangle(
-        px + c * 15 + c * 6, py + s * 15 + s * 6,
-        px - c * 4 - s * 11, py - s * 4 + c * 11,
-        px - c * 4 + s * 11, py - s * 4 - c * 11,
-      );
-      if (target.label && !label) label = { x: px, y: py, gap: 36 * pulse, text: t(target.label) };
+      const pulse = drawSignalArrow(a, px, py, c, s, color, back, this.time.now);
+      if (target.label && !label) label = { x: px, y: py, gap: 50 * ARROW_SIZE * pulse, text: t(target.label) };
     }
     // bulle de texte au-dessus de la flèche (gardée dans l'écran)
     this.tutorialLabel.setVisible(!!label);

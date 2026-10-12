@@ -29,9 +29,8 @@ import { UPGRADE_IDS } from '../data/progression';
  *   { type: 'image', id: 'rock_big', url: 'decor/rock_big.png', originY: 0.85 },
  */
 export const ASSETS: AssetEntry[] = [
-  // Œuf d'un boss tué et son socle (nid) — art-src/egg_socle.png séparé et réduit de moitié par `node tools/slice-egg.mjs` ; l'œuf est l'alien `boss_egg` (view/UnitViews.ts pose le socle devant son bas).
-  { type: 'image', id: 'alien_boss_egg', url: 'aliens/egg.png', originX: 0.5, originY: 0.82, scale: 0.88, shadow: 41, offsetY: 10 },
-  { type: 'image', id: 'alien_boss_egg_socle', url: 'aliens/egg_socle.png', originX: 0.5, originY: 0.5, scale: 0.76, offsetY: 12.5 },
+  // Œuf d'un boss tué (l'œuf est l'alien `boss_egg`) — art-src/egg.png rogné par `node tools/slice-egg.mjs` (taille d'origine).
+  { type: 'image', id: 'alien_boss_egg', url: 'aliens/egg.png', originX: 0.5, originY: 0.82, scale: 0.64, shadow: 37, offsetY: 23, shadowOffsetY: 4 },
   // Obstacles volcaniques — art-src/obstacle_N.png convertis en WebP. Échelle, ancrage et hitbox : data/obstacles.ts.
   // Taches sombres posées sous les obstacles pour les fondre dans le sol — art-src/tache_N.png réduits de moitié (WebP).
   ...[1, 2, 3, 4].map((n): AssetEntry => ({ type: 'image', id: `tache_${n}`, url: `decor/tache_${n}.webp` })),
@@ -73,7 +72,7 @@ export const ASSETS: AssetEntry[] = [
   // Freezebot (drone qui plane au centre du globe de stase) — art-src/freezebot.png réduit par `node tools/slice-freezebot.mjs` ; affiché par view/PickupViews.ts.
   { type: 'image', id: 'fx_freezebot', url: 'fx/freezebot.png' },
   // Icônes des power-ups — art-src/powerups.png découpé par `node tools/slice-powerup-icons.mjs` ; affichées par view/PickupViews.ts (globe au sol, texte flottant).
-  ...(['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll'] as const).map((k): AssetEntry => ({ type: 'image', id: `powerup_icon_${k}`, url: `ui/powerups/${k}.png` })),
+  ...(['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'prism'] as const).map((k): AssetEntry => ({ type: 'image', id: `powerup_icon_${k}`, url: `ui/powerups/${k}.png` })),
   // Timeline des vagues + « Next boss » — art-src/timeline_next_boss.png découpé par `node tools/slice-timeline-ui.mjs` ; affichés par view/TimelineHud.ts (mesures dans TIMELINE_ART).
   ...(['frame', 'fill', 'arrow', 'tick_off', 'tick_on', 'ring'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_tl_${n}`, url: `ui/timeline/${n}.png` })),
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.

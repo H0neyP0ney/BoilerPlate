@@ -27,7 +27,7 @@ import { HEAL_FIELD } from '../sim/PowerUps';
 import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, powerUpIconKey, RECRUIT_COLOR } from './PickupViews';
 import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
-import { alienOffsetY, soldierOffsetY } from './spriteOffset';
+import { alienOffsetY, alienShadowDx, alienShadowDy, soldierOffsetY, soldierShadowDx, soldierShadowDy } from './spriteOffset';
 
 /** Couleurs d'anneau des autres joueurs (battle royale) ; le joueur local est toujours bleu. */
 export const RIVAL_COLORS = [0xff5a5a, 0xffb938, 0xc77dff, 0x7dff9a, 0xff7ad9, 0xffffff, 0x3de0c0, 0xff8a3a, 0x9aa0ff];
@@ -343,7 +343,7 @@ export class WorldView {
         this.corpseImgs.delete(e.id);
         if (e.revived) {
           img?.destroy();
-          this.fx.ring(e.x, e.y, 70, 0xffe14a);
+          this.fx.ring(e.x, e.y, 70, 0xffe14a, undefined, 1); // anneau jaune de la résurrection : un vrai cercle (squash 1), pas l'ellipse du sol
           this.fx.gloop(e.x, e.y - 8, 0xffd84a, 0xfff6c0, 0.9);
         } else if (img) {
           this.scene.tweens.add({ targets: img, alpha: 0, duration: 400, onComplete: () => img.destroy() });
@@ -353,6 +353,14 @@ export class WorldView {
       case 'rock':
         // l'image du caillou est créée / retirée par `syncRocks` (qui suit la liste de la simulation) ; ici, seulement la poussière
         if (nearCam(e.x, e.y)) this.fx.burst(e.x, e.y, 0x8a7d74, 8);
+        break;
+      case 'rockBreak':
+        // charge qui fracasse un rocher de mur : poussière et débris projetés très loin dans le sens de la charge (l'image du rocher disparaît via `syncRocks`)
+        if (nearCam(e.x, e.y)) {
+          this.fx.burst(e.x, e.y, 0xb0a090, 10);
+          this.fx.dust(e.x, e.y, e.r);
+          this.fx.rockDebris(e.x, e.y, e.dx, e.dy, e.r);
+        }
         break;
       case 'capture': {
         const v = this.aliens.get(e.alien);
@@ -387,6 +395,15 @@ export class WorldView {
         break;
       }
       case 'explosion':
+        if (e.style === 'electric') {
+          // tir / mort d'une tourelle : petite décharge électrique discrète (2 ou 3 arcs bleus, quelques étincelles), sans anneau, flammes ni secousse
+          if (nearCam(e.x, e.y)) {
+            for (let i = 0; i < 2 + (e.r >= 80 ? 2 : 0); i++) this.electric.spawn(e.x, e.y - 8, e.r * 0.8, 18 + e.r * 0.3);
+            this.fx.burst(e.x, e.y - 8, 0xbfeaff, e.r >= 80 ? 6 : 2);
+            if (e.r >= 80) sfx.play(this.scene, SFX.blast.key, SFX.blast); // le tir courant est silencieux (rafale) : seule la mort fait du bruit
+          }
+          break;
+        }
         if (e.style === 'spit') {
           // crachat du cracheur : éclaboussure verte (son nuage ralentissant, violet, est dessiné par drawOverlay)
           this.fx.gloop(e.x, e.y, 0x62d04a, 0xe6ffd0, e.r / 50);
@@ -407,8 +424,8 @@ export class WorldView {
           this.fx.ring(e.x, e.y, e.r, SHOOTER_BLAST);
           break;
         }
-        // pas de secousse pour les petites explosions (grenades, roquettes), sinon l'écran tremble en permanence ; 95 = le kamikaze y est
-        this.fx.explosion(e.x, e.y, e.r, e.r >= 95 && nearCam(e.x, e.y));
+        // pas de secousse pour les petites explosions (grenades, roquettes) ni celle du kamikaze (rayon 95, retirée le 11/10), sinon l'écran tremble en permanence ; le Flammeur (120), le crabe… secouent
+        this.fx.explosion(e.x, e.y, e.r, e.r > 95 && nearCam(e.x, e.y));
         if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`
         break;
       case 'cleave':
@@ -1017,7 +1034,7 @@ export class WorldView {
       const out = v.outOfGround;
       if (out <= 0.01) continue;
       const w = shadowWidth(v.state.def.id);
-      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx, v.ry + alienOffsetY(v.state.def.id), w, w * (0.9 / 2.1));
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx + alienShadowDx(v.state.def.id), v.ry + alienOffsetY(v.state.def.id) + alienShadowDy(v.state.def.id), w, w * (0.9 / 2.1)); // + décalage de l'ombre seule
     }
     // Dernier rempart (upgrade) : aura rouge qui pulse sous chaque soldat dès qu'il manque un soldat, plus intense quand il en manque davantage
     for (const sq of this.sim.squads) {
@@ -1104,9 +1121,10 @@ export class WorldView {
         const hw = L.width / 2;
         const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
           [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(a.x + cos * u - sin * w, a.y + sin * u + cos * w));
-        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(L.length, hw), true);
-        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(L.length * k, hw * k), true);
-        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(L.length, hw), true);
+        const len = this.sim.arena.rayLength(a.x, a.y, cos, sin, L.length); // la ligne s'arrête au bord de la carte
+        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(len, hw), true);
+        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(len * k, hw * k), true);
+        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(len, hw), true);
       }
     }
     // Giant Crab : couronne de pics, les lignes rouges de chaque direction se remplissent pendant le télégraphe
@@ -1122,9 +1140,10 @@ export class WorldView {
         const sin = Math.sin(ang);
         const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
           [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(a.x + cos * u - sin * w, a.y + sin * u + cos * w));
-        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(R.length, hw), true);
-        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(R.length * k, hw * k), true);
-        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(R.length, hw), true);
+        const len = this.sim.arena.rayLength(a.x, a.y, cos, sin, R.length); // chaque ligne s'arrête au bord de la carte
+        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(len, hw), true);
+        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(len * k, hw * k), true);
+        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(len, hw), true);
       }
     }
     // Scarab : trou sous lui qui se creuse puis se rebouche, et trou d'arrivée DERRIÈRE la squad qui se forme (zone rouge qui se remplit) avant sa sortie
@@ -1251,7 +1270,7 @@ export class WorldView {
       const r = v.state.radius;
       const sr = sprites.get(`soldier_${v.state.def.id}`).shadow ?? r; // rayon de l'ombre, indépendant du rayon de collision
       const oy = soldierOffsetY(v.state.def.id);
-      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx, v.ry + oy, sr * 2.2, sr);
+      g.fillStyle(0x2a1d2e, SHADOW_ALPHA).fillEllipse(v.rx + soldierShadowDx(v.state.def.id), v.ry + oy + soldierShadowDy(v.state.def.id), sr * 2.2, sr);
       g.lineStyle(3, v.ringColor, 0.9).strokeEllipse(v.rx, v.ry + oy, r * 2.6, r * 1.3); // cercle d'équipe (bleu pour le joueur local) : centré sous le sprite décalé
     }
 
@@ -1352,7 +1371,8 @@ export class WorldView {
         const sin = Math.sin(ang);
         const bin = Math.round((((ang % Math.PI) + Math.PI) % Math.PI) / (Math.PI / SPIKE_BINS)) % SPIKE_BINS; // direction de la rangée, à un demi-tour près
         const key = `fx_spike3_${bin}`;
-        for (let d = 18, col = 0; d <= front; d += step, col++) {
+        const limit = Math.min(front, this.sim.arena.rayLength(a.x, a.y, cos, sin, L.length)); // pas de pics hors de la carte : la ligne est coupée au bord
+        for (let d = 18, col = 0; d <= limit; d += step, col++) {
           const rise = Math.min(1, (front - d) / 70 + 0.25); // la pointe sort du sol quand le front passe
           const off = col % 2 ? 4 : -4; // quinconce d'une colonne à l'autre
           let img = this.spikeSprites[n];

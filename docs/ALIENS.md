@@ -18,7 +18,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 | `shaman` | `frost` (nuages de glace), `revive` (3 résurrections puis 30 s de repos), `deathSpawn` (5 araignées à sa mort) |
 | `wall` (bâtisseur) | `wall` (murs de rochers) |
 | `lurker` | `lurk` (s'enterre, ligne de pics ; évite la hitbox d'un autre lurker enterré (70 px de marge, 20 px au bout de 0,8 s : `LURKER_SPACING`, `LURKER_PATIENCE`)) |
-| `bubble` | `capture` (avale un soldat), `dash`, `floats`, `maxPerWave` 1 |
+| `bubble` | `capture` (avale un soldat), `dash`, `floats`, `maxPerWave` 3 (1 avant le 12/10 ; 3 dans les vagues de bulles des niveaux 7 et 8) |
 | `burner` | `trail` (flaques de feu) |
 | `iceballer` | `ice` (orbe de glace), `maxPerWave` 2, `revivable` |
 | `ice_orb` / `fire_orb` | `projectile` (alien-projectile destructible), `fire_orb` : `trail` de flammes |
@@ -27,7 +27,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 | `boss_rhino` (2:00) | `rush` (charge), `oneShot` |
 | `boss_scarab` (5:00) | `burrow` (s'enterre, ressort sur la squad), `stalactites` (pluie), `shield`, `oneShot` |
 | `boss_gling` (Gling Mère) | `swarm` (22 araignées toutes les 4 s), `oneShot` |
-| `boss_rhino_fire` / `boss_rhino_ice` (7:30) | `rush` + `rush.trail` (feu / gel) + `rush.burst` (8 orbes), `oneShot` |
+| `boss_rhino_fire` / `boss_rhino_ice` (7:30) | `rush` + `rush.trail` (feu / gel) + `rush.burst` (8 orbes), `oneShot` ; **chacun laisse son œuf** (le clear screen du premier épargne l'autre, l'escalade ne compte qu'une fois) |
 | `boss_crab` (10:00, final) | `leap` (saut écrasant), `spikeRing` (8 lignes de pics à la réception du saut), `lob` (3 boules rouges + 5 araignées enragées par boule), `oneShot` |
 
 ## Catalogue des capacités
@@ -42,7 +42,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 - ✅ `target` : `nearest`, `specialist`, `center` (le boss final vise le centre de la squad, il n'a pas de soldat ciblé).
 
 ### Charges et sauts
-- ✅ `rush` : charge télégraphiée (zone rouge, puis fonce en ligne). 🔧 `rush.trail` (traînée de feu ou de gel), `rush.burst` (orbes en étoile à la fin).
+- ✅ `rush` : charge télégraphiée (zone rouge, puis fonce en ligne) ; **elle fracasse les rochers de mur** du Wall sur son chemin (`Horde.smashRocks`, débris projetés très loin par la vue : événement `rockBreak`). 🔧 `rush.trail` (traînée de feu ou de gel), `rush.burst` (orbes en étoile à la fin).
 - ✅ `leap` : saut écrasant (tout soldat sous la zone meurt). 🔧 `height` : arc visuel du sprite.
 - ✅ `burrow` : s'enterre, intouchable sous terre, ressort sur la squad (Scarab).
 
@@ -53,13 +53,13 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 - ✅ `projectile` : alien-projectile (`ice_orb`, `fire_orb`), 500 PV, la squad peut le détruire.
 - ✅ `wall` : murs de rochers qui gênent la fuite.
 - ✅ `stalactites` : pluie de zones télégraphées (Scarab).
-- ✅ `frost` : nuages de glace autour de la squad, gèlent au contact (chaman).
+- ✅ `frost` : nuages de glace autour de la squad, gèlent au contact (chaman) ; jamais hors de la carte (angles retentés, `Sim.addPuddle` recadre).
 - 💤 `cloud` : nuage violet ralentissant posé sur la squad (cracheur, désactivé ; ligne de rétablissement en commentaire dans `aliens.ts`).
 - ✅ `trail` : flaques de flammes au sol (brûleur, `fire_orb`).
 
 ### Lignes de pics
-- ✅ `lurk` : enterré, vise puis lance une ligne de pics (lurker).
-- ✅ `spikeRing` : 8 lignes de pics en étoile (crabe), le télégraphe tourne de 22,5° avant le lâcher (`turn`).
+- ✅ `lurk` : enterré, vise puis lance une ligne de pics (lurker) ; la ligne s'arrête au bord de la carte (`Arena.rayLength`).
+- ✅ `spikeRing` : 8 lignes de pics en étoile (crabe), le télégraphe tourne de 22,5° avant le lâcher (`turn`) ; chaque ligne s'arrête au bord de la carte.
 
 ### Contrôle des soldats
 - ✅ Gel (`ice`, `frost`, `rush.trail` frost) : état `SoldierState.frozen`, brisé par les coups alliés.

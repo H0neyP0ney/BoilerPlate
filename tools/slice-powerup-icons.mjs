@@ -55,7 +55,10 @@ function crop(box, factor, pad = 2) {
   return out;
 }
 
+// Icône de la relance : art-src/dice_reroll.png (dé fourni, réduit à 72 px de haut et copié dans ui/powerups/reroll.png) remplace celle de la planche : on ne l'écrase pas.
+const CUSTOM_ICONS = new Set(fs.existsSync(path.join(root, 'games/xiao-swarm/art-src/dice_reroll.png')) ? ['reroll'] : []);
 KINDS.forEach((kinds, row) => kinds.forEach((kind, col) => {
+  if (CUSTOM_ICONS.has(kind)) return;
   fs.writeFileSync(path.join(outDir, `${kind}.png`), PNG.sync.write(crop(bounds(col, row), EXPORT)));
 }));
 console.log(`6 icônes dans ${path.relative(root, outDir)}`);

@@ -281,7 +281,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   charger: {
     id: 'charger',
     hp: 665, // avant : 300 (×1.5 intégré le 09/10) ; ×3
-    speed: 87.5, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
+    speed: 200, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
     radius: 39,
     mass: 5,
     damage: 20,
@@ -379,7 +379,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    maxPerWave: 1, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris
+    maxPerWave: 3, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris ; 3 depuis le 12/10 (les vagues de bulles en ont 3 : niveaux 7 et 8)
     capture: { dps: 30 }, // digestion : 25 → 50 → 40 (−20 %, 07/10)
     xp: 12,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)

@@ -89,6 +89,17 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
 - Toute nouvelle donnée visible chez un client : `Protocol.ts` + `Mirror` ; incrémenter `PROTOCOL_VERSION` si le format change.
 - Un onglet hôte en arrière-plan est gelé par le navigateur : toute la partie s'arrête.
 
+## Protocole v52 → v57 (11-12/10)
+
+- **v53** : liste `turrets` du snapshot (tourelles automatiques : `id`, propriétaire, position, PV, durée restante, visée) ; power-up `turrets` ajouté en fin de liste.
+- **v54** : texture du tir électrique des tourelles (`fx_bolt_electric`, en tête de la liste `TEXTURES`).
+- **v55** : power-up / loot `prism` (booster prismatique), ajouté en fin de liste des power-ups.
+- **v56** : 8 paliers de couleur du tir (cyan et rose) : la liste des textures de `DAMAGE_TIERS` change.
+- **v57** : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (≤ 10 prises : tient dans 4 bits) ; le quartet bas garde le nombre de prises.
+- Hors protocole (événements JSON) : `rockBreak` (rocher de mur fracassé par une charge : débris côté client), `explosion` de style `electric`.
+- **Obstacles sans affichage propre** (`Arena.blockers`, les tourelles) : remplis chez l'hôte par `Turrets`, chez le client par `Mirror`, pour que la squad prédite les contourne comme l'hôte.
+- **XP et mobs à plusieurs** : seuil d'XP (`Sim.xpScale`) et charge de mobs suivent `1 + DIFFICULTY.extraPlayerAliens × (joueurs − 1)` ; les joueurs à terre comptent (la squad quittée, non).
+
 ## Tests automatiques du netcode
 - `npm run sim:net` : hôte + client en mémoire (jonction en cours de partie, cohérence, coop, XP partagée, rhino, zones de réanimation, fin / relance…).
 - `npm run sim:predict -- 4` : prédiction avec latence simulée (4 ticks par sens ≈ 270 ms d'aller-retour) : réactivité, erreur de prédiction,

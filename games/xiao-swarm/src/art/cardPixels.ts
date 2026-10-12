@@ -72,18 +72,12 @@ export function recolorCard(data: Uint8ClampedArray, w: number, color: number): 
   }
 }
 
-/** Mélange `c` vers le blanc de `a` (0 à 1). */
-function whiten(data: Uint8ClampedArray, i: number, a: number): void {
-  for (let c = 0; c < 3; c++) data[i + c] = Math.round(data[i + c] + (255 - data[i + c]) * a);
-}
-
 /**
- * Carte prismatique « hologramme » : l'arc-en-ciel se déroule en diagonale sur le corps et les voyants (teinte selon x + y), des bandes de
- * lumière brillante le traversent, un voile irisé léger passe sur le cadre d'acier et quelques étincelles en croix parsèment le corps.
- * La plaque dorée reste intacte. Graine fixe : le résultat est le même à chaque lancement.
+ * Carte prismatique « hologramme » : l'arc-en-ciel se déroule en diagonale sur le corps et les voyants (teinte selon x + y) et un voile irisé
+ * léger passe sur le cadre d'acier. La plaque dorée reste intacte. Les bandes de lumière blanche et les étincelles en croix ne sont plus dans
+ * la texture : elles sont dessinées dynamiquement, au rythme du curseur (`view/HoloLight.ts`, `view/CardTilt.ts`).
  */
 export function holoCard(data: Uint8ClampedArray, w: number): void {
-  const h = data.length / 4 / w;
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] === 0) continue;
     const p = i >> 2;
@@ -92,45 +86,59 @@ export function holoCard(data: Uint8ClampedArray, w: number): void {
     const plate = inPlate(xo, yo);
     const [hh, s, l] = rgb2hsl(data[i], data[i + 1], data[i + 2]);
     const hue = (xo * 0.42 + yo * 0.3) % 360; // arc-en-ciel en diagonale
-    const band = Math.pow(Math.max(0, Math.sin((xo + yo * 1.4) / 46)), 8); // bandes de lumière brillante
     if (isRed(hh, s, l, plate)) {
-      const [r, g, b] = hsl2rgb(hue, 0.78, Math.min(0.9, l * 1.15 + band * 0.32));
+      const [r, g, b] = hsl2rgb(hue, 0.78, Math.min(0.9, l * 1.15));
       data[i] = Math.round(r);
       data[i + 1] = Math.round(g);
       data[i + 2] = Math.round(b);
     } else if (!plate && s < 0.6) {
       // cadre d'acier : voile irisé (mélange « écran » avec l'arc-en-ciel, léger)
       const [r, g, b] = hsl2rgb(hue + 40, 0.9, 0.62);
-      const k = 0.16 + band * 0.18;
+      const k = 0.2;
       for (const [c, v] of [[0, r], [1, g], [2, b]] as const) data[i + c] = Math.round(255 - ((255 - data[i + c]) * (255 - v * k)) / 255);
     }
   }
-  // étincelles : petites croix blanches, graine fixe (mêmes tirages que l'outil d'origine)
-  let seed = 12345;
-  const rnd = (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  for (let n = 0; n < 16; n++) {
-    const cx = Math.round(70 + rnd() * 320);
-    const cy = Math.round(80 + rnd() * 400);
-    const len = 8 + rnd() * 10;
-    // boîte de la croix dans la carte réduite (+1 px de marge)
-    const x0 = Math.max(0, Math.floor((cx - len - BOX_X) * EXPORT) - 1);
-    const x1 = Math.min(w - 1, Math.ceil((cx + len - BOX_X) * EXPORT) + 1);
-    const y0 = Math.max(0, Math.floor((cy - len) * EXPORT) - 1);
-    const y1 = Math.min(h - 1, Math.ceil((cy + len) * EXPORT) + 1);
-    for (let y = y0; y <= y1; y++)
-      for (let x = x0; x <= x1; x++) {
-        const i = (y * w + x) * 4;
-        if (data[i + 3] === 0) continue;
-        const dx = toSheetX(x) - cx;
-        const dy = toSheetY(y) - cy;
-        // bras horizontal et vertical (1 px d'épaisseur dans la planche, donc ~0,6 px ici) puis cœur lumineux
-        const armH = Math.abs(dx) < len ? (1 - Math.abs(dx) / len) ** 1.5 * Math.max(0, 1 - Math.abs(dy) * EXPORT * 1.2) : 0;
-        const armV = Math.abs(dy) < len ? (1 - Math.abs(dy) / len) ** 1.5 * Math.max(0, 1 - Math.abs(dx) * EXPORT * 1.2) : 0;
-        if (armH > 0) whiten(data, i, armH);
-        if (armV > 0) whiten(data, i, armV);
-        const core = Math.max(0, 1 - Math.hypot(dx, dy) / 3);
-        if (core > 0) whiten(data, i, core);
-      }
+}
+
+/**
+ * Carré prismatique d'une carte d'upgrade (prise prismatique) : le slot plein d'origine (`ui_slot_full`) repeint par un dégradé à quatre coins (rose en haut à gauche,
+ * jaune en haut à droite, bleu en bas à gauche, vert en bas à droite), en gardant son relief (la luminosité du pixel d'origine) et son contour.
+ */
+const SLOT_CORNERS = { tl: [255, 40, 170], tr: [255, 225, 0], bl: [20, 120, 255], br: [20, 225, 80] } as const;
+export function holoSlot(data: Uint8ClampedArray, w: number): void {
+  const h = data.length / 4 / w;
+  // boîte du slot (le dégradé couvre le carré, pas l'image entière)
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for (let p = 0; p < w * h; p++) {
+    if (data[p * 4 + 3] === 0) continue;
+    const x = p % w;
+    const y = Math.floor(p / w);
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  const bw = Math.max(1, x1 - x0);
+  const bh = Math.max(1, y1 - y0);
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue;
+    const p = i >> 2;
+    const u = Math.min(1, Math.max(0, ((p % w) - x0) / bw));
+    const v = Math.min(1, Math.max(0, (Math.floor(p / w) - y0) / bh));
+    const [, , lo] = rgb2hsl(data[i], data[i + 1], data[i + 2]);
+    const mix = [0, 1, 2].map((c) => {
+      const top = SLOT_CORNERS.tl[c] * (1 - u) + SLOT_CORNERS.tr[c] * u;
+      const bottom = SLOT_CORNERS.bl[c] * (1 - u) + SLOT_CORNERS.br[c] * u;
+      return top * (1 - v) + bottom * v;
+    });
+    // couleurs pastel mais nettes : saturation 0,8, clarté plus haute (0,6 à 0,72), avec un peu du relief d'origine (creux un peu plus sombres, reflets un peu plus clairs)
+    const [h] = rgb2hsl(mix[0], mix[1], mix[2]);
+    const [r, g, b] = hsl2rgb(h, 0.8, Math.min(0.72, Math.max(0.6, 0.66 + (lo - 0.5) * 0.3)));
+    // le contour noir d'origine (pixels très sombres du slot) est conservé : on ne colorie que l'intérieur, avec un petit fondu au bord
+    const t = Math.min(1, Math.max(0, (lo - 0.08) / 0.2));
+    data[i] = Math.round(data[i] * (1 - t) + r * t);
+    data[i + 1] = Math.round(data[i + 1] * (1 - t) + g * t);
+    data[i + 2] = Math.round(data[i + 2] * (1 - t) + b * t);
   }
 }
 

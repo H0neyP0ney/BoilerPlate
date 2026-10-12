@@ -15,7 +15,7 @@ const GLOBE = 160;
 const ICON_SCALE = 0.7;
 
 /** Sortes de globes au sol : une image de globe et une d'étoile chacune (`globe_<sorte>`, `star_<sorte>`). */
-export const GLOBE_KINDS = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'turrets', 'upgrade'] as const; // la relance (loot) prend le globe `upgrade`
+export const GLOBE_KINDS = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'turrets', 'prism', 'upgrade'] as const; // la relance (loot) prend le globe `upgrade`
 export type GlobeKind = (typeof GLOBE_KINDS)[number];
 
 /** Image du globe d'une sorte (power-up ou `upgrade`). */

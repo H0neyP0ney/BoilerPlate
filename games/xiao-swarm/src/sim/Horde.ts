@@ -537,6 +537,7 @@ export class Horde {
           gy = a.rushDy;
           speed = r.speed;
           this.rushHit(a);
+          this.smashRocks(a, r.speed * dt); // les rochers de mur sur son chemin volent en éclats
           if (r.trail) {
             a.trailCd -= dt;
             if (a.trailCd <= 0) {
@@ -593,10 +594,18 @@ export class Horde {
             let edge = sq.radius;
             for (const s of sq.soldiers) if (s.alive && !s.capturedBy && !s.frozen) edge = Math.max(edge, Math.hypot(s.x - sq.center.x, s.y - sq.center.y) + s.radius);
             const start = rng.range(0, Math.PI * 2);
+            const bounds = this.sim.arena.bounds;
             for (let i = 0; i < F.count; i++) {
-              const ang = start + (i / F.count) * Math.PI * 2 + rng.range(-0.3, 0.3); // 3 nuages d'un coup, répartis tout autour
+              // 3 nuages d'un coup, répartis tout autour ; jamais hors de la carte : si le point tombe dans le vide (squad au bord), on retente d'autres angles
               const d = edge + F.radius + rng.range(F.gap[0], F.gap[1]);
-              this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true);
+              let ang = start + (i / F.count) * Math.PI * 2 + rng.range(-0.3, 0.3);
+              for (let tries = 0; tries < 8; tries++) {
+                const px = sq.center.x + Math.cos(ang) * d;
+                const py = sq.center.y + Math.sin(ang) * d;
+                if (px >= bounds.minX + F.radius && px <= bounds.maxX - F.radius && py >= bounds.minY + F.radius && py <= bounds.maxY - F.radius) break;
+                ang = rng.range(0, Math.PI * 2);
+              }
+              this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true); // (addPuddle recadre en dernier recours)
             }
             a.cloudCd = F.every * rng.range(0.9, 1.15);
           } else a.cloudCd = 0.5;
@@ -907,7 +916,7 @@ export class Horde {
         const sin = Math.sin(ang);
         const along = dx * cos + dy * sin;
         const across = Math.abs(-dx * sin + dy * cos);
-        if (along > prevF && along <= curF && across <= R.width / 2 + s.radius * 0.6) {
+        if (along > prevF && along <= Math.min(curF, this.sim.arena.rayLength(a.x, a.y, cos, sin, R.length)) && across <= R.width / 2 + s.radius * 0.6) { // la ligne s'arrête au bord de la carte
           this.sim.damageSoldier(s, R.damage * power);
           break; // une seule fois par passage de front
         }
@@ -1033,6 +1042,7 @@ export class Horde {
         const curF = (1 - Math.max(0, a.lurkT) / L.sweep) * L.length;
         const cos = Math.cos(a.spikeAng);
         const sin = Math.sin(a.spikeAng);
+        const reach = Math.min(curF, arena.rayLength(a.x, a.y, cos, sin, L.length)); // la ligne s'arrête au bord de la carte
         const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg;
         for (const s of soldierHash.query(a.x, a.y, L.length + 40, this.scratchS)) {
           if (!s.alive) continue;
@@ -1040,7 +1050,7 @@ export class Horde {
           const dy = s.y - a.y;
           const along = dx * cos + dy * sin;
           const across = Math.abs(-dx * sin + dy * cos);
-          if (along > prevF && along <= curF && across <= L.width / 2 + s.radius * 0.6) this.sim.damageSoldier(s, L.damage * power);
+          if (along > prevF && along <= reach && across <= L.width / 2 + s.radius * 0.6) this.sim.damageSoldier(s, L.damage * power);
         }
         if (a.lurkT <= 0) {
           a.lurkPhase = 2;
@@ -1305,6 +1315,20 @@ export class Horde {
   }
 
   /** Rhinocéros jumeaux : flamme (`fire`) ou nuage de gel (`frost`) laissé au sol pendant la charge. */
+  /**
+   * Charge (rhinocéros, jumeaux…) : les rochers de mur (Wall) à portée du corps ou sur le pas à venir sont fracassés et leurs débris partent loin dans le sens de la charge
+   * (`Sim.breakRock`). `step` : distance (px) que l'alien parcourt pendant ce tick.
+   */
+  private smashRocks(a: AlienState, step: number): void {
+    const rocks = this.sim.arena.rocks;
+    for (let i = rocks.length - 1; i >= 0; i--) {
+      const k = rocks[i];
+      const reach = a.radius + k.radius + step + 6;
+      if (Math.abs(k.x - a.x) > reach || Math.abs(k.y - a.y) > reach || (k.x - a.x) ** 2 + (k.y - a.y) ** 2 > reach * reach) continue;
+      this.sim.breakRock(k.id, a.rushDx, a.rushDy);
+    }
+  }
+
   private rushTrail(a: AlienState, T: NonNullable<NonNullable<AlienState['def']['rush']>['trail']>): void {
     if (T.kind === 'fire') this.sim.addFire(a.x, a.y + 4, T.radius, T.ttl, T.dps * a.escDmg);
     else this.sim.addPuddle(a.x, a.y + 4, T.radius, T.ttl, 1, true);

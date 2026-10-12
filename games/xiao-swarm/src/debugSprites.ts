@@ -34,6 +34,9 @@ export interface Placement {
   offsetY?: number;
   /** Décalage horizontal (px, positif = vers la droite), pour les éléments posés à part d'une unité (socle de l'œuf). */
   offsetX?: number;
+  /** Décalage de l'ombre seule (px, + = droite / bas), en plus de offsetX / offsetY. */
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
 }
 
 let overrides: Record<string, Placement> = {};
@@ -42,7 +45,7 @@ const base = new Map<string, Placement>();
 
 const read = (id: string): Placement => {
   const d = sprites.get(id);
-  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, muzzleFlash: d.muzzleFlash, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale, offsetY: d.offsetY, offsetX: d.offsetX };
+  return { originX: d.originX, originY: d.originY, muzzle: d.muzzle, muzzleFlash: d.muzzleFlash, anchors: d.anchors, muzzles: d.muzzles, shadow: d.shadow, scale: d.scale, offsetY: d.offsetY, offsetX: d.offsetX, shadowOffsetX: d.shadowOffsetX, shadowOffsetY: d.shadowOffsetY };
 };
 
 function persist(): void {
@@ -171,7 +174,7 @@ function commitMuzzles(id: string, anim: string, list: (Point | null)[]): void {
 /** Save : écrit le placement de l'unité (ancrage, échelle, ombre, bouche du canon) dans son entrée de assets/manifest.ts. */
 export async function saveSpriteToCode(id: string): Promise<string> {
   const d = sprites.get(id);
-  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, offsetY: d.offsetY, offsetX: d.offsetX, muzzleFlash: d.muzzleFlash, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
+  const props = { originX: d.originX, originY: d.originY, scale: d.scale, shadow: d.shadow, offsetY: d.offsetY, offsetX: d.offsetX, shadowOffsetX: d.shadowOffsetX, shadowOffsetY: d.shadowOffsetY, muzzleFlash: d.muzzleFlash, muzzle: d.muzzle, anchors: d.anchors, muzzles: d.muzzles };
   const msg = await saveToCode('sprite', { id, props });
   if (msg.startsWith('✔')) {
     base.set(id, read(id)); // « Reset » ramène maintenant à cette sauvegarde
@@ -192,6 +195,8 @@ export function placementSnippet(id: string): string {
   if (d.shadow !== undefined) lines.push(`shadow: ${n(d.shadow)},`);
   if (d.offsetX) lines.push(`offsetX: ${n(d.offsetX)},`);
   if (d.offsetY) lines.push(`offsetY: ${n(d.offsetY)},`);
+  if (d.shadowOffsetX) lines.push(`shadowOffsetX: ${n(d.shadowOffsetX)},`);
+  if (d.shadowOffsetY) lines.push(`shadowOffsetY: ${n(d.shadowOffsetY)},`);
   const anchors = Object.entries(d.anchors ?? {});
   if (anchors.length) lines.push(`anchors: { ${anchors.map(([k, v]) => `'${k}': ${pt(v)}`).join(', ')} },`);
   if (d.muzzleFlash) lines.push('muzzleFlash: true,');

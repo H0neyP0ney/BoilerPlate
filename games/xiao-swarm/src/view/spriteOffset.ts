@@ -7,3 +7,9 @@ import { sprites } from '@xiao/engine';
  */
 export const alienOffsetY = (id: string): number => sprites.get(`alien_${id}`).offsetY ?? 0;
 export const soldierOffsetY = (cls: string): number => sprites.get(`soldier_${cls}`).offsetY ?? 0;
+
+/** Décalage de l'OMBRE seule (px, + = droite / bas), en plus de `offsetX` / `offsetY` : `shadowOffsetX` / `shadowOffsetY` du placement (visionneuse d'unités : « Décalage de l'ombre seule »). */
+export const alienShadowDx = (id: string): number => sprites.get(`alien_${id}`).shadowOffsetX ?? 0;
+export const alienShadowDy = (id: string): number => sprites.get(`alien_${id}`).shadowOffsetY ?? 0;
+export const soldierShadowDx = (cls: string): number => sprites.get(`soldier_${cls}`).shadowOffsetX ?? 0;
+export const soldierShadowDy = (cls: string): number => sprites.get(`soldier_${cls}`).shadowOffsetY ?? 0;

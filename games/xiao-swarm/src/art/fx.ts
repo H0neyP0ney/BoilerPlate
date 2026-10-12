@@ -104,7 +104,7 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.fill();
   });
   // Tir de blaster : traînée qui s'éclaircit vers la tête, cœur blanc. Dessiné pointant à droite (tête à droite).
-  // Une texture par palier de dégâts (data/damageTiers.ts) : bleu d'origine, puis vert, jaune, orangé, violet, rouge.
+  // Une texture par palier de dégâts (data/damageTiers.ts) : bleu d'origine, puis cyan, vert, jaune, orangé, violet, rose, rouge.
   for (const tier of DAMAGE_TIERS) {
     const [gr, gg, gb] = tier.glow;
     const [hr, hg, hb] = tier.head;
@@ -134,6 +134,37 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.beginPath();
     ctx.ellipse(10, 5, 10, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
+  });
+  // Bande de lumière blanche des cartes prismatiques (`view/HoloLight.ts`) : barre verticale douce (opaque au centre, transparente sur les côtés), inclinée à l'affichage
+  canvasTexture(scene, 'fx_holo_band', 64, 256, (ctx, w, h) => {
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.5, 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+  // Tir électrique des tourelles : éclair en zigzag pointant à droite, halo bleu et cœur blanc
+  canvasTexture(scene, 'fx_bolt_electric', 32, 16, (ctx) => {
+    const zig: [number, number][] = [[1, 8], [7, 4], [12, 11], [18, 5], [24, 10], [31, 8]];
+    const path = (): void => {
+      ctx.beginPath();
+      zig.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    };
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(79,200,255,0.18)';
+    ctx.lineWidth = 5;
+    path();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(79,200,255,0.85)';
+    ctx.lineWidth = 2;
+    path();
+    ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    path();
+    ctx.stroke();
   });
   canvasTexture(scene, 'fx_rocket', 34, 14, (ctx) => {
     // fusée du power-up, pointe vers la DROITE (tournée selon sa vitesse) : ailerons, corps clair, bande, ogive rouge, tuyère

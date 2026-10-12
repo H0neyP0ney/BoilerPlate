@@ -126,33 +126,35 @@ export const XP_ORB_POP = 0.3;
  */
 export const XP_SLIDE = { speed: 600, speedJitter: [0.55, 1.15] as const, spread: 0.7, friction: 7, hopHeight: 30, hopTime: 0.45 };
 
-/** Multiplicateur de dégâts d'un coup critique (la chance de critique vient de la stat `crit` de la squad, en %, 0 de base). */
-export const CRIT_MUL = 2;
+/** Multiplicateur de dégâts d'un coup critique (la chance de critique vient de la stat `crit` de la squad, en %, 0 de base) : ×3 depuis le 12/10 (×2 avant : une prise de Critique rapportait ~3 fois moins qu'une prise de Damage ; ×3 → +10 % de dégâts moyens par prise de 5 points de chance, ×1,5 à 5 prises, proche de Damage). */
+export const CRIT_MUL = 2.5; // 3 le 12/10 puis 2,5 (×2 à l'origine)
 
 /** Chance de critique maximale (%) : plafond appliqué même avec les upgrades prismatiques (double bonus). */
-export const CRIT_MAX = 30;
+export const CRIT_MAX = 100; // plus de plafond depuis le 12/10 (100 % = limite naturelle : tout tir est déjà critique) ; 30 puis 40 avant
 /** Stimpack : multiplicateurs de vitesse de déplacement (+25 %) et de cadence de tir (+50 %) ; durée : `DIFFICULTY.stimTime`. */
 export const STIM_SPEED = 1.25;
 export const STIM_FIRE = 1.5;
 /** Power-ups : durée de vie au sol (s) ; fréquence, premier et nombre max : `DIFFICULTY.powerup*`. */
 /**
- * Power-up « tourelles » : 3 tourelles automatiques posées autour du globe ramassé. Elles sont traitées comme des soldats par les aliens (cibles, dégâts de zone, mêlée),
- * tirent sur l'alien le plus proche des projectiles explosifs (dégâts = tir du trooper de base × `damageMul`, ×le bonus de dégâts de la squad) et explosent à leur mort
+ * Power-up « tourelles » : une tourelle automatique posée sur le globe ramassé (obstacle pour soldats et aliens). Elles sont traitées comme des soldats par les aliens (cibles, dégâts de zone, mêlée),
+ * tirent sur l'alien le plus proche des projectiles explosifs (dégâts = tir du trooper de base × `damageMul`, cadence × `fireRateMul`, portée × `rangeMul`, ×le bonus de dégâts de la squad) et explosent à leur mort
  * (`blast`) ; elles disparaissent sans explosion au bout de `life` s.
  */
 export const TURRETS = {
-  count: 3,
+  count: 1, // 3 avant le 11/10 : une seule tourelle, qui bloque le passage comme un décor (`Arena.blockers`)
   hp: 200,
   life: 20,
-  /** Dégâts du tir = dégâts du trooper de base × ce facteur (cadence et portée : celles du trooper). */
-  damageMul: 0.5,
-  rangeMul: 1,
+  /** Dégâts du tir = dégâts du trooper de base × ce facteur. */
+  damageMul: 0.4, // 0,5 avant le 11/10 (−20 %)
+  rangeMul: 1.2, // +20 %
+  /** Cadence du trooper × ce facteur (+50 %). */
+  fireRateMul: 1.5,
   /** Rayon (px) de l'explosion de chaque tir. */
   aoe: 40,
   projectileSpeed: 700,
   radius: 16,
   /** Distance (px) du globe où chaque tourelle est posée. */
-  spread: 46,
+  spread: 28, // 46 avant : tourelles resserrées
   /** Explosion à la mort d'une tourelle. */
   blast: { radius: 95, damage: 60 },
 };
@@ -220,6 +222,13 @@ export const DIFFICULTY_DEFAULTS = {
    */
   rerollLootFirst: 90,
   rerollLootEvery: 110,
+  /**
+   * Booster prismatique (loot arc-en-ciel, encore plus rare que la relance) : le premier à `prismLootFirst` s, puis un toutes les ~`prismLootEvery` s (± 20 %, plus vite avec
+   * plusieurs squads vivantes), sorti du prochain alien tué comme la relance ; il n'expire jamais. Ramassé : le prochain level-up du joueur propose 3 cartes prismatiques
+   * (sauf s'il relance : tirage normal). Environ 2 par partie de 10 min.
+   */
+  prismLootFirst: 210,
+  prismLootEvery: 280,
   /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
   rocketIdleRange: 1000,
   /** Durée du stimpack (s). */
@@ -236,10 +245,10 @@ export const DIFFICULTY_DEFAULTS = {
   recruitMax: 1.8,
   /** Recrues : taille de squad à partir de laquelle le facteur commence à baisser. */
   recruitSizeRef: 4,
-  /** Recrues : perte de facteur par soldat au-delà de `recruitSizeRef`. */
+  /** Recrues : perte de facteur par soldat au-delà de `recruitSizeRef` (au plus : la pente s'adoucit pour que `recruitMin` ne soit atteint qu'à la taille max de la squad, voir `Recruits.maybeDrop`). */
   recruitSlope: 0.12,
   /** Recrues : plancher du facteur (grosse squad). */
-  recruitMin: 0.25,
+  recruitMin: 0.15, // 0,25 avant le 12/10
   /** Rayon d'attraction de base (px) de TOUS les objets au sol (globes d'XP, recrues, power-ups, globes d'upgrade), avant la stat `magnet` (upgrade). */
   magnetRadius: 110,
   /** Coût d'XP de chaque niveau × cette valeur (courbe `xpToNext`) ; sans effet pendant le tutoriel (le niveau 1 doit rester à 10 XP). */

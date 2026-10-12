@@ -151,7 +151,7 @@ try {
     const hp0 = s.hp;
     sim.horde.freezeSoldier(s);
     let t = 0;
-    while (s.frozen > 0 && t < 30 * 30) { step(1); t++; }
+    while (s.frozen > 0 && t < 30 * 30) { clearAliens(sim); step(1); t++; } // la timeline envoie des vagues (les 2 premières tout près) : aucun alien ne doit blesser le soldat
     check(s.frozen === 0, 'gel : ses alliés tirent sur la glace et le libèrent', `${(t / 30).toFixed(1)} s`);
     check(s.hp === hp0, 'gel : les tirs alliés ne le blessent pas', `${hp0} → ${s.hp}`);
   }
@@ -477,11 +477,11 @@ try {
     f.age = i.age = 99;
     sim.damage(f, 1e12, 'p1');
     const eggsOf = () => sim.aliens.filter((a) => a.alive && a.def.egg);
-    check(i.alive && eggsOf().length === 0 && sim.bossKills === 0, 'rhinos jumeaux : tuer le premier épargne l’autre, ni œuf ni escalade : le boss n’est pas fini', `${eggsOf().length} œuf, ${sim.bossKills} boss tués`);
+    check(i.alive && eggsOf().length === 1 && Math.hypot(eggsOf()[0].x - f.x, eggsOf()[0].y - f.y) < 40 && sim.bossKills === 0, 'rhinos jumeaux : le premier tué laisse son œuf, sans escalade : le boss n’est pas fini', `${eggsOf().length} œuf, ${sim.bossKills} boss tué(s)`);
     i.x = sq.center.x - 350; i.y = sq.center.y + 120;
     sim.damage(i, 1e12, 'p1');
-    const c = eggsOf()[0];
-    check(eggsOf().length === 1 && Math.hypot(c.x - i.x, c.y - i.y) < 40 && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : l’œuf (PV exacts de `boss_egg`) apparaît sur le dernier jumeau tué (escalade ×1,1, une seule fois)', `${eggsOf().length} œuf, ${sim.bossKills} boss tué`);
+    const c = eggsOf().find((e) => Math.hypot(e.x - i.x, e.y - i.y) < 40);
+    check(eggsOf().length === 2 && !!c && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : chaque rhino laisse son œuf (PV exacts de `boss_egg`) ; l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œufs, ${sim.bossKills} boss tué(s)`);
   }
 
   // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)
@@ -724,7 +724,7 @@ try {
     prisoner.capturedBy = bubble.id;
     for (const a of sim.aliens) a.age = 99; // sortis de leur trou d'apparition (sinon invulnérables)
     sim.damage(boss, 1e9, 'p1');
-    const others = sim.aliens.filter((a) => a !== boss && a !== other);
+    const others = sim.aliens.filter((a) => a !== boss && a !== other && !a.def.egg); // (l'œuf que laisse le boss n'est pas un survivant)
     check(!boss.alive && others.every((a) => !a.alive), 'boss tué : tous les autres aliens meurent avec lui', `${others.filter((a) => a.alive).length} survivant(s)`);
     check(other.alive, 'boss tué : un autre boss encore en vie est épargné');
     const xp = sim.xp.orbs.reduce((n, o) => n + o.value, 0);
@@ -734,10 +734,10 @@ try {
     check(prisoner.capturedBy === 0 && bubble.captive === null, 'boss tué : la bulle morte avec lui libère son prisonnier');
     check(!sim.powerups.items.some((p) => p.kind === 'magnet'), 'boss tué : plus d’aimant garanti');
     const eggs = () => sim.aliens.filter((a) => a.alive && a.def.egg);
-    check(eggs().length === 0, 'boss tué avec un autre boss encore en vie : pas d’œuf tant que le combat de boss n’est pas fini', `${eggs().length} œuf(s)`);
+    check(eggs().length === 1, 'boss tué avec un autre boss encore en vie : il laisse quand même son œuf', `${eggs().length} œuf(s)`);
     other.age = 99;
     sim.damage(other, 1e12, 'p1');
-    check(eggs().length === 1 && Math.hypot(eggs()[0].x - other.x, eggs()[0].y - other.y) < 40, 'boss tué (le dernier) : un œuf apparaît sur son cadavre', `${eggs().length} œuf(s)`);
+    check(eggs().length === 2 && eggs().some((e) => Math.hypot(e.x - other.x, e.y - other.y) < 40), 'boss tué (le dernier) : un second œuf apparaît sur son cadavre', `${eggs().length} œuf(s)`);
   }
 
   // ---- œuf de boss : 1000 PV à détruire, 2 globes d'upgrade PAR JOUEUR, réservés à leur joueur ; globe ramassé = une upgrade au hasard
@@ -857,9 +857,13 @@ try {
     const sq = sim.squadOf('p1');
     sim.powerups.drop('turrets', sq.center.x + 30, sq.center.y, true);
     step(40);
-    check(sim.turrets.items.length === TURRETS.count, 'power-up tourelles ramassé : 3 tourelles posées', `${sim.turrets.items.length} tourelle(s)`);
+    check(sim.turrets.items.length === TURRETS.count, 'power-up tourelles ramassé : la tourelle est posée', `${sim.turrets.items.length} tourelle(s)`);
     const t0 = sim.turrets.items[0];
     check(t0 && t0.hp === 200 && t0.maxHp === 200, 'chaque tourelle a 200 PV', `${t0?.hp}`);
+    // la tourelle bloque le passage comme un décor : un cercle posé dessus est repoussé, et ce n'est pas libre
+    const probe = { x: t0.x + 4, y: t0.y, radius: 14 };
+    sim.arena.constrain(probe);
+    check(Math.hypot(probe.x - t0.x, probe.y - t0.y) >= t0.radius + 14 - 0.5 && !sim.arena.isFree({ x: t0.x, y: t0.y }, 10), 'la tourelle bloque soldats et aliens comme un décor', `distance ${Math.hypot(probe.x - t0.x, probe.y - t0.y).toFixed(1)} px`);
     // un slime lointain : les tourelles tirent dessus, il meurt
     clearAliens(sim);
     const cx = t0.x;
@@ -886,7 +890,9 @@ try {
     g.hp = g.maxHp = 400;
     tt.invulnerable = 0;
     sim.damageSoldier(tt, 1e6, null);
-    step(3);
+    step(1);
+    check(Math.hypot(g.kx, g.ky) < 1, 'l’explosion d’une tourelle ne repousse pas les aliens', `recul ${Math.hypot(g.kx, g.ky).toFixed(1)}`);
+    step(2);
     check(g.hp < 400, 'une tourelle détruite explose et blesse les aliens autour', `PV ${Math.round(g.hp)}/400`);
     // durée de vie : 20 s puis disparition sans explosion
     clearAliens(sim);
@@ -895,6 +901,124 @@ try {
       step(1);
     }
     check(sim.turrets.items.length === 0, 'les tourelles disparaissent au bout de 20 s', `${sim.turrets.items.length} restante(s) (avant : ${alive0})`);
+  }
+
+  // ---- la charge du rhinocéros fracasse les rochers de mur (débris envoyés dans le sens de la charge)
+  {
+    const { sim, step } = fresh(9);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const cx = sq.center.x, cy = sq.center.y;
+    sim.arena.rocks.length = 0;
+    for (let i = -3; i <= 3; i++) sim.addRock(cx + 250, cy + i * 40, 22, 30);
+    sim.horde.spawnAt('charger', cx + 700, cy, 1, false, true);
+    const a = sim.aliens[sim.aliens.length - 1];
+    a.rushCd = 0;
+    a.target = sq.soldiers[0];
+    for (let i = 0; i < 30 * 6; i++) {
+      sim.choiceT = 0;
+      step(1);
+    }
+    check(sim.arena.rocks.length < 7, 'la charge du rhinocéros fracasse les rochers du mur', `${sim.arena.rocks.length} / 7 rochers restants`);
+  }
+
+  // ---- booster prismatique : le prochain level-up propose 3 cartes prismatiques, une relance retombe sur les chances normales
+  {
+    const { sim, step } = fresh(77);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const p = sim.powerups.drop('prism', sq.center.x + 20, sq.center.y, true);
+    p.hop = undefined;
+    p.age = undefined;
+    step(40);
+    check(sq.prismBoost === true, 'booster prismatique ramassé : le prochain tirage est marqué prismatique', `prismBoost ${sq.prismBoost}`);
+    sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
+    step(60);
+    check(!!sq.offer && sq.offerPrism.length === 3 && sq.offerPrism.every(Boolean), 'le level-up suivant propose 3 cartes prismatiques', sq.offerPrism.join('/'));
+    check(sq.prismBoost === false, 'le booster est consommé par ce tirage');
+    sq.rerolls = 5;
+    let normal = 0;
+    for (let i = 0; i < 12; i++) { sq.rerollOffer(); if (!sq.offerPrism.every(Boolean)) normal++; }
+    check(normal >= 11, 'après une relance : retour aux chances normales de prismatique', `${normal} / 12 tirages non entièrement prismatiques`);
+  }
+
+  // ---- recrues : le facteur de drop descend jusqu'au plancher à la taille MAX de la squad (pas à 17 soldats pour tout le monde)
+  {
+    const drops = (maxSquadBonus, size) => {
+      const { sim } = fresh(5);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sq.stats.add('maxSquad', { flat: maxSquadBonus });
+      while (sq.soldiers.length < size) sq.recruit('trooper', { x: sq.center.x, y: sq.center.y });
+      sim.horde.spawnAt('slime', sq.center.x + 900, sq.center.y, 1, false, true);
+      const a = sim.aliens[sim.aliens.length - 1];
+      let n = 0;
+      for (let k = 0; k < 20000; k++) {
+        const before = sim.recruits.items.length;
+        sim.recruits.maybeDrop(a, sq);
+        if (sim.recruits.items.length > before) n++;
+        sim.recruits.items.length = 0;
+      }
+      return n;
+    };
+    const base = drops(0, 22); // max 12, 22 soldats (déjà plus que le max : plancher)
+    const big = drops(28, 22); // max 40, 22 soldats
+    const small = drops(0, 12); // max 12, 12 soldats : pente d'origine inchangée
+    check(big > base * 3 && small > base * 2, 'recrues : à 22 soldats, un max de 40 recrute ~4 fois plus qu’un max de 12 (plancher) ; 12/12 inchangé', `22/12 → ${base}, 22/40 → ${big}, 12/12 → ${small} (sur 20000 morts)`);
+  }
+
+  // ---- chaman : ses nuages de glace ne tombent jamais hors de la carte (squad collée au coin)
+  {
+    const { sim, step } = fresh(12);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const b = sim.arena.bounds;
+    const dx = b.minX + 60 - sq.center.x, dy = b.minY + 60 - sq.center.y; // squad dans le coin haut gauche, collée au bord
+    for (const s of sq.soldiers) { s.x += dx; s.y += dy; s.px = s.x; s.py = s.y; }
+    sq.center.x += dx; sq.center.y += dy;
+    let out = 0, total = 0;
+    for (let k = 0; k < 12; k++) {
+      sim.horde.spawnAt('shaman', sq.center.x + 250, sq.center.y + 250, 1, false, true);
+      const sh = sim.aliens[sim.aliens.length - 1];
+      sh.cloudCd = 0;
+      sh.target = sq.soldiers[0];
+      for (let i = 0; i < 6; i++) {
+        sim.choiceT = 0;
+        step(1);
+        for (const p of sim.puddles) { total++; if (p.x - p.r < b.minX - 0.5 || p.y - p.r < b.minY - 0.5 || p.x + p.r > b.maxX + 0.5 || p.y + p.r > b.maxY + 0.5) out++; }
+      }
+      sim.aliens.length = 0;
+    }
+    check(total > 0 && out === 0, 'chaman : ses nuages de glace restent dans la carte, même squad collée au coin', `${out} hors carte sur ${total} mesures`);
+  }
+
+  // ---- pics du lurker / du Giant Crab : la ligne s'arrête au bord de la carte
+  {
+    const { sim } = fresh(3);
+    const b = sim.arena.bounds;
+    const cx = b.minX + 100, cy = (b.minY + b.maxY) / 2;
+    const toEdge = sim.arena.rayLength(cx, cy, -1, 0, 760); // vers le bord gauche, à 100 px
+    const inward = sim.arena.rayLength(cx, cy, 1, 0, 760); // vers l'intérieur : longueur complète
+    const diag = sim.arena.rayLength(b.minX + 50, b.minY + 50, -Math.SQRT1_2, -Math.SQRT1_2, 760); // coin : ~71 px
+    check(Math.abs(toEdge - 100) < 0.01 && inward === 760 && diag < 80, 'pics : la ligne est coupée au bord de la carte', `vers le bord ${toEdge.toFixed(0)} px, vers l’intérieur ${inward}, coin ${diag.toFixed(0)}`);
+  }
+
+  // ---- les roquettes du power-up peuvent faire un critique (dégâts × CRIT_MUL, chance de la squad, plafonnée à CRIT_MAX)
+  {
+    const { CRIT_MUL } = await vite.ssrLoadModule('/src/config.ts');
+    const { sim, step } = fresh(14);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sq.stats.add('crit', { flat: 40 }); // 40 % de chance
+    const dmgs = [];
+    for (let k = 0; k < 8; k++) sim.combat.barrage(sq, 30);
+    for (let i = 0; i < 400; i++) {
+      step(1);
+      for (const p of sim.combat.projectiles.active) if (p.aoe > 0 && p.texture === 'fx_rocket' && p.life > p.maxLife - 0.034) dmgs.push(p.damage); // tout juste tirée (les projectiles sont recyclés : on les compte à leur naissance)
+    }
+    const base = Math.min(...dmgs);
+    const crits = dmgs.filter((d) => d > base * (CRIT_MUL - 0.01)).length;
+    check(dmgs.length > 100 && crits > 0 && Math.abs(crits / dmgs.length - 0.4) < 0.12, 'roquettes : critiques à la chance de la squad, dégâts × CRIT_MUL', `${crits} critiques sur ${dmgs.length} roquettes (${Math.round((100 * crits) / dmgs.length)} % pour 40 % de chance)`);
   }
 } finally {
   await vite.close();

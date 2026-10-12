@@ -110,7 +110,7 @@ export class Sim {
   /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric'; poison?: number }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
   private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number }[] = [];
@@ -133,19 +133,19 @@ export class Sim {
     this.waves = new WaveRunner(
       config.mode.waves,
       (type, count) => {
-        // Difficulté dynamique : chaque joueur vivant en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75, 1 seul vivant =
-        // retour à ×1). Un boss, lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de
-        // squads avant le 08/10).
+        // Difficulté dynamique : chaque joueur de la partie en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75). Les joueurs
+        // à terre comptent aussi (on peut les réanimer : la charge ne retombe pas quand un équipier tombe) ; ceux qui ont quitté la partie, non. Un boss,
+        // lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de squads avant le 08/10).
         // Plafond d'aliens à l'apparition appliqué par type dans Horde.spawnNear (`ModeDef.maxAliens`, réserve pour les costauds) ; au-delà de
         // `DIFFICULTY.wavePauseAbove` aliens vivants, la timeline se met en pause.
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
         const dist = this.waves.time < EARLY_SPAWN_UNTIL ? EARLY_SPAWN_DISTANCE : SPAWN_DISTANCE;
-        const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (squads.length - 1);
+        const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (this.squads.length - 1); // tous les joueurs de la partie, vivants ou non
         if (ALIENS[type].boss) {
           this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, dist, playersMul);
         } else {
-          // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads vivantes
+          // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads VIVANTES (seules à pouvoir en être entourées)
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
           for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * share)), dist);
@@ -276,9 +276,15 @@ export class Sim {
     return this.config.online === true;
   }
 
-  /** Multiplicateur du seuil de niveau (XP partagée : × nombre de joueurs ; `DIFFICULTY.xpCostMul`, sauf pendant le tutoriel). */
+  /**
+   * Multiplicateur du seuil de niveau (`DIFFICULTY.xpCostMul`, sauf pendant le tutoriel). XP partagée : le seuil grandit comme la charge de mobs
+   * (`1 + DIFFICULTY.extraPlayerAliens × (joueurs − 1)`, le même facteur que les vagues) et non comme le nombre de joueurs : l'XP produite
+   * grandit avec les mobs, donc le rythme des level-ups sur la timeline reste celui du solo, quel que soit le nombre de joueurs. Compte tous les joueurs
+   * de la partie (pas seulement les vivants) pour que la barre ne saute pas quand quelqu'un tombe ou revient.
+   */
   get xpScale(): number {
-    return (this.sharedXp ? Math.max(1, this.squads.length) : 1) * (this.tutorial?.active ? 1 : DIFFICULTY.xpCostMul);
+    const players = this.sharedXp ? Math.max(1, this.squads.length) : 1;
+    return (1 + DIFFICULTY.extraPlayerAliens * (players - 1)) * (this.tutorial?.active ? 1 : DIFFICULTY.xpCostMul);
   }
 
   /** XP gagnée par `from` versée dans la barre commune ; un niveau franchi = tous montent. */
@@ -621,6 +627,16 @@ export class Sim {
     return this.wallSpots(x, y, angle, length, rockR).every((p) => this.arena.isFree(p, rockR));
   }
 
+  /** Fracasse le rocher `id` (charge d'un alien) : il disparaît (collision et affichage, qui suit la liste) et ses débris partent dans le sens (`dx`, `dy`). */
+  breakRock(id: number, dx: number, dy: number): void {
+    const i = this.arena.rocks.findIndex((k) => k.id === id);
+    if (i < 0) return;
+    const k = this.arena.rocks[i];
+    this.arena.rocks.splice(i, 1);
+    const len = Math.hypot(dx, dy) || 1;
+    this.events.push({ t: 'rockBreak', id, x: k.x, y: k.y, r: k.radius, dx: dx / len, dy: dy / len });
+  }
+
   /** Rocher au sol (élément d'un mur) : obstacle pendant `ttl` secondes. */
   addRock(x: number, y: number, radius: number, ttl: number): void {
     const rock = { id: this.ids.get(), x, y, radius, ttl };
@@ -679,6 +695,10 @@ export class Sim {
 
   /** Flaque de crachat : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s. */
   addPuddle(x: number, y: number, r: number, ttl: number, slow: number, frost = false): void {
+    // jamais hors de la carte (une squad au bord : le chaman, le rhinocéros de glace… posaient des nuages dans le vide) : le centre reste dans l'arène
+    const b = this.arena.bounds;
+    x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
+    y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
     this.puddles.push(frost ? { id: this.ids.get(), x, y, r, ttl, slow: 1, frost } : { id: this.ids.get(), x, y, r, ttl, slow });
     if (this.puddles.length > 40) this.puddles.shift();
   }
@@ -799,7 +819,7 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
-  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0): void {
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric', poison = 0): void {
     this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison });
   }
 
@@ -825,7 +845,7 @@ export class Sim {
       if (k) k.kills++;
     }
     const blast = s.def.deathBlast;
-    if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: 300 });
+    if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: blast.knock ?? 300, style: blast.style });
   }
 
   /** (`dirX`, `dirY`) : sens du coup fatal (les globes d'XP y sont expulsés). */
@@ -841,10 +861,10 @@ export class Sim {
       const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
       this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss encore en vie est épargné
+      if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre de CHAQUE boss tué (rhinos jumeaux : un œuf par rhino ; le boss final, lui, gagne la partie)
       if (last) {
-        this.bossKills++; // escalade : les aliens suivants sont plus forts
+        this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
         this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
-        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre (le boss final, lui, gagne la partie)
       }
     }
     this.releaseCaptive(a);

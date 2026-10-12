@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { applyAssets, loadAssets, log, poki, theme, DEV_TOOLS } from '@xiao/engine';
-import { PALETTE, SCENES } from '../config';
+import { applyAssets, loadAssets, log, poki, DEV_TOOLS } from '@xiao/engine';
+import { SCENES } from '../config';
 import { ASSETS, CORE_ASSETS } from '../assets/manifest';
 import { latePack } from '../assets/latePack';
 import { makeAlienTextures } from '../art/aliens';
@@ -23,6 +23,7 @@ import { makeRecruitTextures } from '../art/recruits';
 import { t } from '../i18n';
 import { SFX } from '../settings';
 import { createOnlineSession, OnlineError, readOnlineRequest } from '../online';
+import { hideLoadingScreen, setLoadProgress, setLoadStatus } from '../loadingScreen';
 
 /**
  * Chargement : planches de sprites du manifeste (avec barre de progression),
@@ -50,12 +51,8 @@ export class BootScene extends Phaser.Scene {
     for (const s of Object.values(SFX)) this.load.audio(s.key, s.url); // bruitages courts (quelques Ko)
     this.assets = this.needsEverything() ? ASSETS : CORE_ASSETS;
     if (this.assets.length === 0) return;
-    const { width, height } = this.scale;
-    const w = Math.min(420, width * 0.7);
-    this.add.text(width / 2, height / 2 - 40, `${t('loading')}...`, { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim }).setOrigin(0.5);
-    this.add.rectangle(width / 2, height / 2, w, 16, PALETTE.panel).setOrigin(0.5);
-    const fill = this.add.rectangle(width / 2 - w / 2, height / 2, 0, 16, PALETTE.primary).setOrigin(0, 0.5);
-    this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => (fill.width = w * p));
+    // écran de chargement : celui de la page HTML (logo XIAO Games, fond bleu dégradé, barre), piloté ici (`loadingScreen.ts`)
+    this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => setLoadProgress(p));
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) =>
       log.warn(`[assets] introuvable : ${file.src} — visuel procédural conservé`),
     );
@@ -96,31 +93,33 @@ export class BootScene extends Phaser.Scene {
   /** Partie en ligne si l'URL le demande (?net=host / join / auto), sinon solo. Repli solo en cas d'échec. */
   private async launch(): Promise<void> {
     // Dev : `?viewer` (unités), `?particles`, `?obstacles`, `?misc`, `?bonus` ou `?waves` ouvrent directement la visionneuse correspondante.
-    if (DEV_TOOLS && poki.getURLParam('viewer') !== undefined) return void this.scene.start(SCENES.viewer);
-    if (DEV_TOOLS && poki.getURLParam('obstacles') !== undefined) return void this.scene.start(SCENES.obstacles);
-    if (DEV_TOOLS && poki.getURLParam('particles') !== undefined) return void this.scene.start(SCENES.particles);
-    if (DEV_TOOLS && poki.getURLParam('misc') !== undefined) return void this.scene.start(SCENES.misc);
-    if (DEV_TOOLS && poki.getURLParam('bonus') !== undefined) return void this.scene.start(SCENES.bonus);
-    if (DEV_TOOLS && poki.getURLParam('upgrades') !== undefined) return void this.scene.start(SCENES.upgrades);
-    if (DEV_TOOLS && poki.getURLParam('waves') !== undefined) return void this.scene.start(SCENES.waves);
-    if (DEV_TOOLS && poki.getURLParam('mapedit') !== undefined) return void this.scene.start(SCENES.mapEditor);
+    if (DEV_TOOLS && poki.getURLParam('viewer') !== undefined) return void this.go(SCENES.viewer);
+    if (DEV_TOOLS && poki.getURLParam('obstacles') !== undefined) return void this.go(SCENES.obstacles);
+    if (DEV_TOOLS && poki.getURLParam('particles') !== undefined) return void this.go(SCENES.particles);
+    if (DEV_TOOLS && poki.getURLParam('misc') !== undefined) return void this.go(SCENES.misc);
+    if (DEV_TOOLS && poki.getURLParam('bonus') !== undefined) return void this.go(SCENES.bonus);
+    if (DEV_TOOLS && poki.getURLParam('upgrades') !== undefined) return void this.go(SCENES.upgrades);
+    if (DEV_TOOLS && poki.getURLParam('waves') !== undefined) return void this.go(SCENES.waves);
+    if (DEV_TOOLS && poki.getURLParam('mapedit') !== undefined) return void this.go(SCENES.mapEditor);
     const req = readOnlineRequest();
     if (req) {
-      const { width, height } = this.scale;
-      const status = this.add
-        // sous la barre de chargement (centrée à height / 2), sinon le texte est illisible sur la jauge
-        .text(width / 2, height / 2 + 40, t('connecting'), { fontFamily: theme.font, fontSize: '28px', color: PALETTE.textDim })
-        .setOrigin(0.5);
+      setLoadStatus(t('connecting')); // sous la barre de l'écran de chargement HTML
       try {
         this.registry.set('session', await createOnlineSession(req));
       } catch (e) {
         log.warn('[online]', e);
         const reason = e instanceof OnlineError ? e.reason : 'failed';
         const key = reason === 'not-found' ? 'roomNotFound' : reason === 'full' ? 'roomFull' : reason === 'version' ? 'versionMismatch' : 'connectFailed';
-        status.setText(t(key));
+        setLoadStatus(t(key));
         await new Promise((resolve) => setTimeout(resolve, 2200));
       }
     }
-    this.scene.start(SCENES.game);
+    this.go(SCENES.game);
+  }
+
+  /** Lance la scène suivante et retire l'écran de chargement (fondu). */
+  private go(key: string): void {
+    hideLoadingScreen();
+    this.scene.start(key);
   }
 }

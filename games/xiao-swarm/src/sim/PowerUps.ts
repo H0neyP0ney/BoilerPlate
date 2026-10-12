@@ -7,15 +7,15 @@ import type { Squad } from './Squad';
 
 /** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
 const REROLL_FALL_DIST: [number, number] = [50, 100];
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'turrets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // le power-up `turrets` (tourelles automatiques) est DÉSACTIVÉ depuis le 11/10 (pas assez satisfaisant) : son code reste, pour le réactiver il suffit de l'ajouter ici // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
 /**
  * Globe de soin : rayon, durée (s) et part des PV max rendue par seconde. `overheal` : part des PV max qu'il peut ajouter AU-DELÀ du max
- * (0,5 = jusqu'à 150 %) ; ce surplus ne redescend jamais tout seul, seuls les dégâts l'entament.
+ * (1 = jusqu'à 200 %) ; ce surplus ne redescend jamais tout seul, seuls les dégâts l'entament.
  */
-export const HEAL_FIELD = { r: 184, ttl: 10, perSec: 0.264, overheal: 0.5 }; // 09/10 : soin et rayon +10 % (0,24 et 167 avant), overheal ; overheal 0,5 (0,3 avant le 11/10)
+export const HEAL_FIELD = { r: 184, ttl: 10, perSec: 0.264, overheal: 1 }; // 09/10 : soin et rayon +10 % (0,24 et 167 avant), overheal ; overheal 1 = jusqu'à 200 % des PV max (0,3 avant le 11/10, 0,5 le 11/10)
 /** Globe de stase : rayon, durée (s) et facteur de vitesse des aliens dedans. */
 const STASIS_FIELD = { r: 382.5, ttl: 8, slow: 0.2 };
 /** Les globes de soin et de stase sont dessinés en ellipse (demi-axes r et r × 0,7, `drawField` de view/PickupViews.ts) : ils agissent exactement sur ce qui est dedans (centre de l'unité). */
@@ -38,6 +38,9 @@ export class PowerUps {
   /** Relance (loot) : compte à rebours (s) avant la prochaine, puis `rerollReady` = elle sortira de l'alien tué suivant. */
   private rerollTimer: number = DIFFICULTY.rerollLootFirst;
   private rerollReady = false;
+  /** Booster prismatique (loot) : même mécanique que la relance, en plus rare. */
+  private prismTimer: number = DIFFICULTY.prismLootFirst;
+  private prismReady = false;
 
   constructor(private readonly sim: Sim) {}
 
@@ -54,12 +57,19 @@ export class PowerUps {
    * alien invoqué / ressuscité, ni pour l'œuf d'un boss.
    */
   maybeDropReroll(a: AlienState, killer: Squad | undefined): void {
-    if (!this.rerollReady || this.sim.tutorial?.active || a.noRecruit || a.def.egg) return;
+    if ((!this.rerollReady && !this.prismReady) || this.sim.tutorial?.active || a.noRecruit || a.def.egg) return;
     const squad = killer ?? this.sim.nearestSquad(a.x, a.y);
     if (!squad) return;
-    this.rerollReady = false;
-    this.rerollTimer = this.nextRerollDelay();
-    const p = this.drop('reroll', a.x, a.y, true); // forcé : la relance n'expire jamais
+    // le booster prismatique (le plus rare) passe avant la relance quand les deux sont prêts ; un seul loot par alien tué
+    const kind: PowerUpKind = this.prismReady ? 'prism' : 'reroll';
+    if (kind === 'prism') {
+      this.prismReady = false;
+      this.prismTimer = DIFFICULTY.prismLootEvery * this.sim.rng.range(0.8, 1.2);
+    } else {
+      this.rerollReady = false;
+      this.rerollTimer = this.nextRerollDelay();
+    }
+    const p = this.drop(kind, a.x, a.y, true); // forcé : ces loots n'expirent jamais
     p.age = 0; // imprenable la première seconde, comme les globes d'upgrade
     const rng = new Rng((p.id * 2654435761) >>> 0); // propre au loot : ne décale pas la séquence aléatoire de la simulation
     const ang = rng.range(0, Math.PI * 2);
@@ -78,6 +88,10 @@ export class PowerUps {
       // plus il y a de squads vivantes, plus le compte à rebours est rapide : à peu près autant de relances par joueur
       this.rerollTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
       if (this.rerollTimer <= 0) this.rerollReady = true;
+    }
+    if (!this.sim.tutorial?.active && !this.prismReady) {
+      this.prismTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
+      if (this.prismTimer <= 0) this.prismReady = true;
     }
     if (!this.sim.tutorial?.active) {
       // pendant le tutoriel, aucun power-up au hasard : seuls ceux du script apparaissent
@@ -180,6 +194,9 @@ export class PowerUps {
       case 'turrets':
         this.sim.turrets.spawn(squad.owner, p.x, p.y); // 3 tourelles automatiques à l'endroit du globe
         break;
+      case 'prism':
+        squad.prismBoost = true; // le prochain level-up de ce joueur propose 3 cartes prismatiques (pas après une relance)
+        break;
       case 'reroll':
         squad.rerolls++; // une relance de plus pour les choix d'upgrade
         break;
@@ -211,5 +228,7 @@ export class PowerUps {
     this.timer = DIFFICULTY.powerupFirst;
     this.rerollTimer = DIFFICULTY.rerollLootFirst;
     this.rerollReady = false;
+    this.prismTimer = DIFFICULTY.prismLootFirst;
+    this.prismReady = false;
   }
 }

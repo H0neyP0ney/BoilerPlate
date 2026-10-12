@@ -113,7 +113,10 @@ export class Mirror {
       squad.rerolls = sq.rerolls;
       squad.buffs.stim = sq.stim;
       squad.lastStand = sq.lastStand;
-      UPGRADE_IDS.forEach((id, i) => (squad.picked[id] = sq.picked[i]));
+      UPGRADE_IDS.forEach((id, i) => {
+        squad.picked[id] = sq.picked[i];
+        squad.prismPicked[id] = sq.prismPicked[i];
+      });
       squad.stats.reset();
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
@@ -182,6 +185,8 @@ export class Mirror {
       o.facing = Math.cos(t.aim) >= 0 ? 1 : -1;
       sim.turrets.items.push(o);
     }
+    sim.arena.blockers.length = 0; // elles bloquent le passage (la squad prédite les contourne comme chez l'hôte)
+    for (const t of sim.turrets.items) sim.arena.blockers.push({ x: t.x, y: t.y, radius: t.radius });
 
     sim.reviveZones.length = 0;
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });

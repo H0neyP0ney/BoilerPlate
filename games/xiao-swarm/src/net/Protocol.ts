@@ -1,6 +1,6 @@
 import { ORB_BLINK_TIME, REVIVE_TIME } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
-import { CLASSES, type SoldierClassId } from '../data/classes';
+import { CLASSES, ELECTRIC_TEXTURE, type SoldierClassId } from '../data/classes';
 import { DAMAGE_TIERS } from '../data/damageTiers';
 import { UPGRADE_IDS } from '../data/progression';
 import type { PowerUpKind } from '../sim/entities';
@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 53; // 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 57; // 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -89,6 +89,8 @@ export interface SquadSnap {
   /** Upgrades prismatiques (mêmes indices que `offer`). */
   offerPrism: boolean[];
   picked: number[];
+  /** Prises prismatiques par upgrade (mêmes indices que `picked`) : quartet haut de l'octet `picked` (10 prises au plus). */
+  prismPicked: number[];
   /** Relances d'upgrade restantes. */
   rerolls: number;
   /** Power-ups actifs : secondes restantes de stimpack et d'aimant à XP. */
@@ -215,14 +217,14 @@ export interface Snapshot {
 const CLASS_IDS = Object.keys(CLASSES) as SoldierClassId[];
 const ALIEN_IDS = Object.keys(ALIENS) as AlienId[];
 const TEXTURES = [
-  ...new Set([ROCKET_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
+  ...new Set([ROCKET_TEXTURE, ELECTRIC_TEXTURE, ...Object.values(CLASSES).map((c) => c.weapon.texture), ...DAMAGE_TIERS.map((t) => t.texture), ...Object.values(ALIENS).flatMap((a) => (a.lob ? [a.lob.texture] : a.spray ? [a.spray.texture] : []))]),
 ];
 
 const SNAPSHOT_TAG = 0x53;
 /** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (jungle 3802, royale 4800). */
 const POS_SCALE = 4;
 const TWO_PI = Math.PI * 2;
-const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'turrets'];
+const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'turrets', 'prism'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
@@ -252,6 +254,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       offer: sq.offer ? sq.offer.map((id) => UPGRADE_IDS.indexOf(id)) : [],
       offerPrism: sq.offer ? sq.offerPrism.slice() : [],
       picked: UPGRADE_IDS.map((id) => sq.picked[id] ?? 0),
+      prismPicked: UPGRADE_IDS.map((id) => sq.prismPicked[id] ?? 0),
       rerolls: sq.rerolls,
       stim: Math.max(0, sq.buffs.stim),
       soldiers: sq.soldiers.map((s) => ({
@@ -470,7 +473,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u16(Math.min(65535, Math.round(sq.xp * 10)));
     w.u8(sq.offer.length);
     sq.offer.forEach((i, k) => w.u8(i | (sq.offerPrism[k] ? 128 : 0)));
-    for (const c of sq.picked) w.u8(Math.min(255, c));
+    sq.picked.forEach((c, k) => w.u8(Math.min(15, c) | (Math.min(15, sq.prismPicked[k] ?? 0) << 4))); // prises (bas) | prises prismatiques (haut)
     w.u8(Math.min(255, Math.max(0, sq.rerolls)));
     w.u8(Math.min(255, Math.round(sq.stim * 10)));
     w.u16(sq.soldiers.length);
@@ -704,7 +707,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), maxSize: r.u8(), healing: false, lastStand: false, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], rerolls: 0, stim: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), maxSize: r.u8(), healing: false, lastStand: false, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], prismPicked: [], rerolls: 0, stim: 0, soldiers: [] };
       const flags = r.u8();
       sq.healing = (flags & 1) !== 0;
       sq.lastStand = (flags & 2) !== 0;
@@ -716,7 +719,11 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         sq.offer.push(v & 127);
         sq.offerPrism.push((v & 128) !== 0);
       }
-      for (let k = 0; k < UPGRADE_IDS.length; k++) sq.picked.push(r.u8());
+      for (let k = 0; k < UPGRADE_IDS.length; k++) {
+        const v = r.u8();
+        sq.picked.push(v & 15);
+        sq.prismPicked.push(v >> 4);
+      }
       sq.rerolls = r.u8();
       sq.stim = r.u8() / 10;
       const n = r.u16();

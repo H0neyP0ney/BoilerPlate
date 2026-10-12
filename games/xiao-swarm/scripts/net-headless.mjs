@@ -142,8 +142,8 @@ try {
   await lag(client);
   const orbClient = client.sim.xp.orbs.find((o) => o.id === orbId);
   check(!!orbClient && orbClient.life < 5, 'globe en fin de vie : le clignotement est transmis au client', orbClient ? `life ${orbClient.life}` : 'globe introuvable');
-  // XP partagée (coop) : une seule barre, seuil × nombre de joueurs ; un niveau = tous les joueurs montent et choisissent
-  check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 2 joueurs)', `${a.xpNeeded}`);
+  // XP partagée (coop) : une seule barre, seuil × (1 + 0,75 × (joueurs − 1)) comme la charge de mobs ; un niveau = tous les joueurs montent et choisissent
+  check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 1,75)', `${a.xpNeeded}`);
   // remise à plat : un niveau déjà en cours (XP ramassée plus haut) fausserait la chronologie mesurée ci-dessous
   for (let i = 0; i < 400 && (hs.choiceT > 0 || hs.choiceDelay > 0 || hs.squads.some((sq) => sq.offer)); i++) {
     for (const sq of hs.squads) if (sq.offer) hs.chooseUpgrade(sq.owner, 0);
@@ -386,8 +386,8 @@ try {
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
     const { DIFFICULTY: D } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
-    const names = [1, 1.3, 1.6, 1.9, 2.2, 2.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
-    check(names === 'blue > green > yellow > orange > purple > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rouge', names); }
+    const names = [1, 1.43, 1.86, 2.29, 2.71, 3.14, 3.57, 4].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    check(names === 'blue > cyan > green > yellow > orange > purple > pink > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > cyan > vert > jaune > orangé > violet > rose > rouge', names); }
   hs.combat.projectiles.releaseAll();
   a.gainXp(a.xpNeeded - a.xp + 0.01);
   for (let i = 0; i < 4; i++) await tick(client);
@@ -464,6 +464,7 @@ try {
   await lag(client);
   const cj = client.sim.aliens.find((x) => x.id === jumper.id);
   check(jumper.leapT > 0 && !!cj && cj.leapT > 0 && Math.hypot(cj.leapX - jumper.leapX, cj.leapY - jumper.leapY) < 1, 'crabe : saut lancé, point d’impact reflété chez le client', `impact (${jumper.leapX.toFixed(0)}, ${jumper.leapY.toFixed(0)})`);
+  while (a.soldiers.filter((x) => x.alive).length < 3) a.recruit('trooper', { x: a.center.x, y: a.center.y }); // les 2 premières vagues apparaissent tout près : la squad a pu perdre des soldats, mais ne doit pas être anéantie par le saut (sinon 2 zones de réanimation)
   const victim = a.soldiers.find((x) => x.alive);
   for (let i = 0; i < 90 && jumper.leapT > 0 && victim.alive; i++) {
     resolveChoices(); // une montée de niveau en route mettrait le saut en pause

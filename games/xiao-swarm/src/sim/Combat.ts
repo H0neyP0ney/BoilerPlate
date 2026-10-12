@@ -1,7 +1,7 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
 import { ALIENS, zombieStats } from '../data/aliens';
-import type { WeaponDef } from '../data/classes';
+import { ELECTRIC_TEXTURE, type WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, TurretState, Unit } from './entities';
 import type { Sim } from './Sim';
@@ -87,7 +87,7 @@ export class Combat {
       // upgrades Esprit d'équipe (+x % de dégâts par soldat vivant) et Dernier rempart (+x % par soldat manquant sous la taille max) : s'ajoutent aux bonus de Damage
       const stand = squad.stats.get('lastStand');
       squad.lastStand = stand > 0 && squad.missing > 0;
-      const damageMul = squad.stats.get('damage') + squad.stats.get('teamSpirit') * squad.soldiers.length + stand * squad.missing; // bonus additifs (Damage, Esprit d'équipe, Dernier rempart)
+      const damageMul = this.damageMulOf(squad);
       for (const s of squad.soldiers) {
         if (s.capturedBy || s.frozen > 0 || s.stun > 0) continue; // avalé par une bulle, gelé ou étourdi : ne tire plus
         const weapon = s.def.weapon;
@@ -122,6 +122,11 @@ export class Combat {
     }
     this.updateBarrages(dt);
     this.updateProjectiles(dt);
+  }
+
+  /** Multiplicateur de dégâts d'un tir de la squad : bonus additifs de Damage, Esprit d'équipe (par soldat vivant) et Dernier rempart (par soldat manquant) ; aussi celui de la rafale de roquettes. */
+  private damageMulOf(squad: Squad): number {
+    return squad.stats.get('damage') + squad.stats.get('teamSpirit') * squad.soldiers.length + squad.stats.get('lastStand') * squad.missing;
   }
 
   /** Tirage de critique (stat `crit` de la squad) : aucun tirage de `rng` tant que la chance est nulle. */
@@ -327,7 +332,9 @@ export class Combat {
     p.vx = (lx - mx) / flight;
     p.vy = (ly - my) / flight;
     p.life = p.maxLife = flight;
-    p.damage = 20 * squad.stats.get('damage');
+    // comme les tirs : Damage + Esprit d'équipe + Dernier rempart, et chance de critique de la squad (dégâts × `CRIT_MUL` ; le chiffre de critique sort à l'explosion)
+    p.crit = this.rollCrit(Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
+    p.damage = 20 * this.damageMulOf(squad) * (p.crit ? CRIT_MUL : 1);
     p.pierce = 0;
     p.flame = false;
     p.lob = false;
@@ -408,7 +415,8 @@ export class Combat {
           p.y += p.vy * (dt + p.life);
           // crachat (et toute boule à flaque) : pas de recul ; les autres boules repoussent comme avant
           const spit = p.puddle > 0 || p.texture === 'fx_spit';
-          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
+          const elec = p.texture === ELECTRIC_TEXTURE; // tir de tourelle : explosion électrique, sans recul
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit || elec ? 0 : 300, elec ? 'electric' : spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
           if (p.spawn > 0) this.sim.horde.spawnEnragedRing('spider', p.x, p.y, p.spawn);
@@ -432,8 +440,9 @@ export class Combat {
         for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
           if (!this.sim.horde.targetable(a) || !this.overlaps(p, a, hitR)) continue; // dans son trou ou sous terre : la balle passe au-dessus
           if (p.aoe > 0) {
-            // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris)
-            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300);
+            // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris) ; tir de tourelle : explosion électrique, sans recul
+            const elec = p.texture === ELECTRIC_TEXTURE;
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, elec ? 0 : 300, elec ? 'electric' : undefined);
             return true;
           }
           this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
@@ -446,7 +455,8 @@ export class Combat {
         for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
           if (s.frozen <= 0 || !this.sim.allied(p.owner, s) || !this.overlaps(p, s, hitR)) continue;
           if (p.aoe > 0) {
-            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, 300); // roquette : elle explose (la glace compte 1 coup)
+            const elec = p.texture === ELECTRIC_TEXTURE;
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, elec ? 0 : 300, elec ? 'electric' : undefined); // roquette : elle explose (la glace compte 1 coup)
             return true;
           }
           this.sim.damage(s, p.damage, p.owner);

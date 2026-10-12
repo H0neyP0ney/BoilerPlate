@@ -19,6 +19,12 @@ export const iconDifficulty: Icon = (g) => {
   g.fillRect(-3.5, 9, 1.6, 4).fillRect(-0.8, 9, 1.6, 4).fillRect(1.9, 9, 1.6, 4);
 };
 
+/** Console de log : un cadre avec trois lignes de texte. */
+export const iconLog: Icon = (g) => {
+  g.lineStyle(2, 0x9fd3ff, 1).strokeRoundedRect(-12, -12, 24, 24, 3);
+  g.fillStyle(0x9fd3ff, 1).fillRect(-8, -7, 12, 2.4).fillRect(-8, -1.2, 16, 2.4).fillRect(-8, 4.6, 9, 2.4);
+};
+
 /** Triche : un éclair. */
 export const iconCheat: Icon = (g) => {
   g.fillStyle(0xffd166, 1).fillTriangle(4, -14, -7, 3, 1, 3).fillTriangle(-4, 14, 7, -3, -1, -3).fillRect(-3, -3, 6, 6);

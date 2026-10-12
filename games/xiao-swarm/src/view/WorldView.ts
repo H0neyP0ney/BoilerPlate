@@ -107,6 +107,9 @@ interface Tracer {
  *
  * En réseau côté client, la même vue lira un état reconstruit depuis les snapshots.
  */
+/** Pendant les premières secondes de la partie (s de jeu), les aliens ont toujours leur animation d'apparition, même dans la fenêtre `quietUntil`. */
+const FIRST_WAVES_EMERGE = 4;
+
 export class WorldView {
   readonly arena: ArenaView;
   readonly fx: Fx;
@@ -640,7 +643,9 @@ export class WorldView {
     for (const a of this.sim.aliens) {
       let v = this.aliens.get(a.id);
       if (!v) {
-        v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil); // départ de partie / arrivée d'un client : pas de trou
+        // trou d'apparition, sauf pour les aliens déjà là au départ / à l'arrivée d'un client (fenêtre `quietUntil`). Les toutes premières secondes de la partie en sont exclues : les
+        // événements de création de la squad ne sont lus qu'au premier tick (donc au premier input), et la vague 1 (à 0 s) n'avait alors pas son animation de désenfouissage.
+        v = new AlienView(this.scene, a, this.scene.time.now > this.quietUntil || this.sim.waves.time < FIRST_WAVES_EMERGE);
         v.onPop = (x, y, r) => {
           if (this.onScreen(x, y, 120)) this.fx.dust(x, y, r); // poussière seulement si c'est à l'écran
         };

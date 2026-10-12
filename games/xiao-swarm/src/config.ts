@@ -46,6 +46,8 @@ export const MELEE_REACH = 10;
 export const FREEZE = { hp: 50, invuln: 0.5 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;
+/** Vague en embuscade (chance : `DIFFICULTY.ambushChance`) : le groupe sort du sol à `ahead` px DEVANT la squad (dans son sens de course ; direction au hasard si elle est immobile), dispersé de ±`spread` px, avec l'animation d'apparition habituelle. */
+export const AMBUSH = { ahead: 330, spread: 60 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -199,6 +201,8 @@ export const DIFFICULTY_DEFAULTS = {
   /** Plafond d'aliens à l'apparition par joueur vivant (survie). */
   maxAliensPerPlayer: 150, // 100 × 1,5 (l'ancien `alienCountMul` est intégré aux effectifs des vagues et à ce plafond, 09/10)
   // ---- vagues (`WaveRunner`)
+  /** Chance qu'une vague (hors boss et vagues rejouées) soit une embuscade : ses aliens sortent du sol juste devant la squad (`AMBUSH`, `Horde.spawnAhead`). 0 = jamais. */
+  ambushChance: 0.1,
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,

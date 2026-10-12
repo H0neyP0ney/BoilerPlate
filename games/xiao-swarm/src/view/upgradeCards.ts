@@ -3,6 +3,7 @@ import { theme } from '@xiao/engine';
 import { UPGRADES, type UpgradeId } from '../data/progression';
 import { t } from '../i18n';
 import { upgradeIconKey } from './upgradeIcons';
+import { latePack } from '../assets/latePack';
 import { finishUpgradeCardTextures } from '../art/cardTextures';
 
 /**
@@ -46,6 +47,18 @@ export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: numb
   const bg = scene.add.image(0, 0, cardTexture(id, prism)); // prismatique : fond holographique
   // nom en haut ; icône ; description ; compteur ; « Claim » sur la plaque dorée
   const icon = scene.add.image(0, 0, upgradeIconKey(id));
+  if (!scene.textures.exists(upgradeIconKey(id))) {
+    // icônes dans le paquet 2, pas encore arrivé (premier level-up très rapide) : invisible, puis mise en place à son arrivée à la même taille d'affichage
+    icon.setVisible(false);
+    const off = latePack.onReady(() => {
+      off();
+      if (!icon.scene || !scene.textures.exists(upgradeIconKey(id))) return;
+      const shown = icon.displayWidth; // taille d'affichage fixée par `resizeUpgradeCard` pour la texture de repli
+      icon.setTexture(upgradeIconKey(id));
+      icon.setScale(shown / Math.max(icon.width, icon.height)).setVisible(true);
+    });
+    icon.once(Phaser.GameObjects.Events.DESTROY, off);
+  }
   const name = scene.add.text(0, 0, t(`up_${id}`), { fontFamily: theme.font, fontStyle: 'bold', color: prism ? '#fff3a0' : '#ffffff', align: 'center' }).setOrigin(0.5);
   const claim = scene.add.text(0, 0, t('claim'), { fontFamily: theme.font, fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5); // sur la plaque dorée : le « bouton » de la carte
   const desc = scene.add

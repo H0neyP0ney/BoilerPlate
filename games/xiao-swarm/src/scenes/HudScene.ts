@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { device, music, sfx, theme, DEV_TOOLS } from '@xiao/engine';
+import { latePack } from '../assets/latePack';
+import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
 import { defaultMoveLabels } from '../hotkeys';
@@ -9,11 +10,11 @@ import type { SimEvent } from '../sim/types';
 import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
 import { BAR_GHOST_SPEED, ghostHit, type BarGhost } from '../view/WorldView';
 import { HUD_ART, makeHudButton } from '../view/HudButtons';
-import { TimelineHud } from '../view/TimelineHud';
+import { TimelineHud, timelineBottom } from '../view/TimelineHud';
 import { UPGRADE_PINK } from '../view/GlobeGlitter';
 import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
-import { iconCheat, iconCrowd, iconDifficulty, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
+import { iconCheat, iconCrowd, iconDifficulty, iconLog, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 
 /** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
@@ -67,6 +68,11 @@ export class HudScene extends Phaser.Scene {
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
   private hintLabel!: Phaser.GameObjects.Text;
+  private latePackAsked = false;
+  /** Entrée des barres du haut (timeline) et du bas (XP) : 0 = hors de l'écran, 1 = en place. Cachées tant que le joueur n'a pas commencé, puis elles glissent (Quad.Out). */
+  private barsSlide = 0;
+  private barsShown = false;
+  private barsTween?: Phaser.Tweens.Tween;
   private roomText!: Phaser.GameObjects.Text;
   private debugBtn?: Phaser.GameObjects.Container;
   /** Boutons des visionneuses de dev (unités, particules, obstacles, divers), dans l'ordre d'affichage. */
@@ -83,11 +89,11 @@ export class HudScene extends Phaser.Scene {
   private alienText!: Phaser.GameObjects.Text;
   private alienShown = -1;
   /** Timeline des vagues et « Next boss » (haut centre). */
-  private timeline!: TimelineHud;
+  private timeline?: TimelineHud; // timeline et barre d'XP : images du paquet 2, construites à son arrivée (`buildBars`)
   /** Barre d'XP en bas de l'écran (hors ligne). */
-  private xpFrame!: Phaser.GameObjects.Image;
-  private xpFill!: Phaser.GameObjects.NineSlice;
-  private xpLabel!: Phaser.GameObjects.Text;
+  private xpFrame?: Phaser.GameObjects.Image;
+  private xpFill?: Phaser.GameObjects.NineSlice;
+  private xpLabel?: Phaser.GameObjects.Text;
   /** Part d'XP affichée (rattrape la vraie en ~0,2 s), niveau vu pour animer le passage de niveau (la jauge finit de se remplir puis repart de 0). */
   private xpShown = 0;
   private xpLevelSeen = 0;
@@ -96,9 +102,9 @@ export class HudScene extends Phaser.Scene {
   private bossBanner!: Phaser.GameObjects.Text;
   private bossBar!: Phaser.GameObjects.Graphics;
   /** Barre de vie du boss : cadre, part blanche (la vie d'avant le coup, qui rejoint la rouge) puis jauge rouge ; état de la part blanche. */
-  private bossFrame!: Phaser.GameObjects.Image;
-  private bossGhost!: Phaser.GameObjects.NineSlice;
-  private bossFill!: Phaser.GameObjects.NineSlice;
+  private bossFrame?: Phaser.GameObjects.Image; // images du paquet 2 : construites avec les barres (`buildBars`)
+  private bossGhost?: Phaser.GameObjects.NineSlice;
+  private bossFill?: Phaser.GameObjects.NineSlice;
   private bossGhostState: BarGhost & { id: number } = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
   private bossName!: Phaser.GameObjects.Text;
   private tutorialArrow!: Phaser.GameObjects.Graphics;
@@ -152,29 +158,25 @@ export class HudScene extends Phaser.Scene {
         makeSquareButton(this, iconCrowd, () => this.game_.toggleCrowdPanel()),
         makeSquareButton(this, iconCheat, () => this.game_.toggleCheatPanel()),
         makeSquareButton(this, iconDifficulty, () => this.game_.toggleDifficultyPanel()),
+        makeSquareButton(this, iconLog, () => toggleDevLog()), // console de log en jeu (aussi F4)
       ];
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene), VIEW_BORDER));
     }
     this.applyDebugMode();
-    this.timeline = new TimelineHud(this);
-    this.reviveLabels = []; // la scène est réutilisée : les anciens textes ont été détruits avec elle
-    this.xpFrame = this.add.image(0, 0, 'ui_xp_frame');
-    this.xpFill = this.add.nineslice(0, 0, 'ui_xp_fill', undefined, 53, 32, XP_ART.fillCap, XP_ART.fillCap).setOrigin(0, 0.5); // 3-slice : capuchons arrondis, milieu étiré
-    this.xpFill.setDepth(this.xpFrame.depth + 0.1);
-    this.xpLabel = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
-      .setOrigin(0.5, 1); // « Niv. X » centré au-dessus de la jauge
+    this.timeline = undefined; // la scène est réutilisée : les barres sont reconstruites (les anciens objets ont été détruits avec elle)
+    this.xpFrame = this.xpFill = this.xpLabel = undefined;
+    this.reviveLabels = [];
+    if (latePack.ready) this.buildBars();
+    else {
+      const off = latePack.onReady(() => this.buildBars());
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    }
     this.bossBanner = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '44px', fontStyle: 'bold', color: '#ff6a4a', stroke: '#2a0a08', strokeThickness: 8, align: 'center' })
       .setOrigin(0.5)
       .setAlpha(0);
     this.bossBar = this.add.graphics(); // bouclier du boss
-    this.bossFrame = this.add.image(0, 0, 'ui_boss_frame').setVisible(false);
-    this.bossGhost = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL).setVisible(false);
-    this.bossFill = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setVisible(false);
-    this.bossFrame.setDepth(0);
-    this.bossGhost.setDepth(0.1);
-    this.bossFill.setDepth(0.2);
+    this.bossFrame = this.bossGhost = this.bossFill = undefined;
     this.bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
     this.xpShown = 0; // la scène est réutilisée à chaque partie
     this.xpLevelSeen = 0;
@@ -255,12 +257,18 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     this.hint.setVisible(g.flow.state === 'ready');
+    if (!this.latePackAsked && g.flow.state === 'ready') {
+      // paquet 2 des visuels : chargé dès que le joueur est sur la scène de jeu avec l'indice des commandes affiché (pas pendant l'écran de choix d'upgrade)
+      this.latePackAsked = true;
+      this.time.delayedCall(300, () => latePack.ensure(g));
+    }
     this.hintLabel.setText(s.sim.tutorial?.active ? t('hintTutoDrag') : // tutoriel : « Drag to move » partout, souris comprise (les touches restent dessinées au-dessus)
        device.isTouch ? t('hintDrag') : t('hintKeys'));
+    this.updateBarsSlide(g.flow.state !== 'ready' && !!this.timeline); // le glissement attend que les barres existent (paquet 2)
     this.drawXp();
     this.drawBoss();
     // pendant un combat de boss, sa barre de vie (drawBoss) prend la place de la timeline
-    this.timeline.update(this.game_.session.sim, this.endText.visible || !!this.game_.session.sim.tutorial?.active || this.game_.session.sim.aliens.some((a) => a.alive && !!a.def.boss));
+    this.timeline?.update(this.game_.session.sim, this.endText.visible || !!this.game_.session.sim.tutorial?.active || this.game_.session.sim.aliens.some((a) => a.alive && !!a.def.boss), -(1 - this.barsSlide) * (timelineBottom(this.scale.width) + 20));
     this.drawReviveArrow();
     this.drawUpgradeOrbArrows();
     this.drawTutorial();
@@ -309,10 +317,10 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.bossArrow.clear();
     this.bossTip.setVisible(false);
     this.bossName.setVisible(!!boss);
-    this.bossFrame.setVisible(!!boss);
-    this.bossGhost.setVisible(false);
-    this.bossFill.setVisible(!!boss);
-    if (!boss) return;
+    this.bossFrame?.setVisible(!!boss);
+    this.bossGhost?.setVisible(false);
+    this.bossFill?.setVisible(!!boss);
+    if (!boss || !this.bossFrame || !this.bossGhost || !this.bossFill) return;
     const { width, height } = this.scale;
     const w = Math.min(364, width - 60); // grosse barre (520 × 0,7), à la place de la timeline (en haut, centrée)
     const k = w / BOSS_ART.W;
@@ -544,15 +552,48 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return !tut?.active || tut.phase === 'wave2';
   }
 
+  /** Timeline et barre d'XP (images du paquet 2) : construites dès que le paquet est là ; d'ici là elles n'existent pas (et restent cachées hors de l'écran). */
+  private buildBars(): void {
+    if (this.timeline || !this.sys.isActive()) return;
+    this.timeline = new TimelineHud(this);
+    this.xpFrame = this.add.image(0, 0, 'ui_xp_frame');
+    this.xpFill = this.add.nineslice(0, 0, 'ui_xp_fill', undefined, 53, 32, XP_ART.fillCap, XP_ART.fillCap).setOrigin(0, 0.5); // 3-slice : capuchons arrondis, milieu étiré
+    this.xpFill.setDepth(this.xpFrame.depth + 0.1);
+    this.xpLabel = this.add
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
+      .setOrigin(0.5, 1); // « Niv. X » centré au-dessus de la jauge
+    this.bossFrame = this.add.image(0, 0, 'ui_boss_frame').setVisible(false);
+    this.bossGhost = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL).setVisible(false);
+    this.bossFill = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setVisible(false);
+    this.bossFrame.setDepth(0);
+    this.bossGhost.setDepth(0.1);
+    this.bossFill.setDepth(0.2);
+  }
+
+  /** Au début de la partie les barres sont hors de l'écran ; au premier input du joueur (`playing`) elles glissent à leur place (Quad.Out) ; au retour à l'attente (relance) elles repartent cachées. */
+  private updateBarsSlide(playing: boolean): void {
+    if (playing === this.barsShown) return;
+    this.barsShown = playing;
+    this.barsTween?.stop();
+    if (!playing) {
+      this.barsSlide = 0;
+      return;
+    }
+    const state = { v: this.barsSlide };
+    this.barsTween = this.tweens.add({ targets: state, v: 1, duration: 700, ease: 'Quad.Out', onUpdate: () => (this.barsSlide = state.v), onComplete: () => (this.barsSlide = 1) });
+  }
+
   /** Jauge d'XP de la squad locale : niveau à gauche, barre qui se remplit jusqu'à la prochaine upgrade. */
   private drawXp(): void {
     const squad = this.game_.localSquad;
     const on = this.game_.session.sim.xpEnabled && !!squad && this.xpShownInTutorial(); // masquée pendant l'onboarding, sauf à l'étape de collecte des globes
+    if (!this.xpFrame || !this.xpFill || !this.xpLabel) return;
     this.xpFrame.setVisible(on);
     this.xpFill.setVisible(on);
     this.xpLabel.setVisible(on);
     if (!on) return;
-    const { x, y, w, k } = xpBarLayout(this.scale.width, this.scale.height); // tout en bas de l'écran
+    const { x, y: y0, w, k } = xpBarLayout(this.scale.width, this.scale.height); // tout en bas de l'écran
+    const y = y0 + (1 - this.barsSlide) * ((XP_ART.H + 40) * k + 40); // glissement d'entrée : sous le bord bas de l'écran tant que barsSlide < 1
     // progression lissée (rapide : ~0,2 s pour rattraper la vraie) ; au passage de niveau, la jauge finit de se remplir puis repart de zéro
     const target = Math.min(1, squad.xp / squad.xpNeeded);
     if (squad.level !== this.xpLevelSeen) {

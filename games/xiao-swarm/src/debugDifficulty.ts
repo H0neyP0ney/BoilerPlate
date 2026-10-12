@@ -46,6 +46,7 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
   {
     title: 'Vagues',
     specs: [
+      { key: 'ambushChance', label: 'Chance de vague en embuscade', min: 0, max: 1, step: 0.01, hint: "Chance qu'une vague (hors boss et vagues rejouées) sorte du sol juste devant la squad, dans son sens de course" },
       { key: 'wavePauseAbove', label: 'Pause au-delà de (aliens)', min: 20, max: 600, step: 5, hint: "La timeline se met en pause au-delà de ce nombre d'aliens vivants (tous joueurs)" },
       { key: 'waveResumeAt', label: 'Reprise à (aliens)', min: 0, max: 600, step: 5, hint: "La timeline en pause reprend quand il reste ce nombre d'aliens ou moins" },
       { key: 'bossReplayMulGling', label: 'Vagues rejouées : Gling Mère ×', min: 0, max: 3, step: 0.05, hint: "Pendant le combat de ce boss, chaque vague rejouée a son effectif (colonne de la timeline) × cette valeur : nombre de chaque groupe hors boss, arrondi, au moins 1" },

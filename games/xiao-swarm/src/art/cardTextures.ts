@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { log } from '@xiao/engine';
+import { devLog, log } from '@xiao/engine';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from '../data/progression';
 import { holoCard, holoSlot, recolorCard, recolorSlot } from './cardPixels';
 
@@ -66,6 +66,7 @@ function step(j: Job): void {
   const next = j.queue.shift();
   if (!next) return;
   if (!j.scene.textures.exists(next.key)) paintItem(j, next);
+  if (j.queue.length === 0) devLog(`cartes : fonds et slots fabriqués (${Math.round(j.busy)} ms de calcul)`);
   if (j.queue.length === 0) log.info(`[cartes] fonds et slots d'upgrade fabriqués (${Math.round(j.busy)} ms de calcul)`);
 }
 
@@ -98,7 +99,10 @@ export function startUpgradeCardTextures(scene: Phaser.Scene): void {
 export function finishUpgradeCardTextures(): void {
   if (!job) return;
   window.clearTimeout(job.timer);
+  const left = job.queue.length;
+  const t0 = performance.now();
   while (job.queue.length > 0) step(job);
+  if (left > 0) devLog(`cartes : RATTRAPAGE de ${left} textures en ${Math.round(performance.now() - t0)} ms`, 'warn');
 }
 
 /** Dev : refait le fond et le slot d'une upgrade avec sa couleur courante (`UPGRADES[id].color`). */

@@ -52,7 +52,7 @@ export class WaveRunner {
 
   constructor(
     private readonly script: WaveScript,
-    private readonly spawn: (type: AlienId, count: number) => void,
+    private readonly spawn: (type: AlienId, count: number, ambush?: boolean) => void,
     private readonly rng: Rng,
     private readonly hooks?: WaveRunnerHooks,
   ) {
@@ -207,7 +207,9 @@ export class WaveRunner {
       const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
       if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
-    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul));
+    // embuscade : tirée une fois par vague (toujours, pour que le rng avance pareil), jamais pour une configuration forcée (boss, panneau Triche) ni un rejeu pendant un boss
+    const ambush = this.rng.next() < DIFFICULTY.ambushChance && !forced && !this._replaying;
+    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul), ambush && !ALIENS[g.type].boss);
     return { ...config, groups };
   }
 }

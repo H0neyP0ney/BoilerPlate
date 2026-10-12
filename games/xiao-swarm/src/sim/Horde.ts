@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
 import { ALIENS, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -79,6 +79,29 @@ export class Horde {
       const made = this.create(def, p.x, p.y, 1, false, hpMul);
       this.sim.aliens.push(made);
       this.announce(made);
+    }
+  }
+
+  /**
+   * Vague en embuscade : `count` aliens sortent du sol (animation d'apparition habituelle) à `AMBUSH.ahead` px devant la squad, dans son sens de course
+   * (`Squad.vel` ; direction au hasard si elle est presque immobile), dispersés de ±`AMBUSH.spread` px. Un point occupé par le décor est rapproché de la squad.
+   */
+  spawnAhead(squad: Squad, type: AlienId, count: number): void {
+    const { rng, arena } = this.sim;
+    const def = ALIENS[type];
+    const c = squad.center;
+    const speed = Math.hypot(squad.vel.x, squad.vel.y);
+    const a = speed > 20 ? Math.atan2(squad.vel.y, squad.vel.x) : rng.range(0, Math.PI * 2);
+    let d = AMBUSH.ahead + rng.range(-30, 30);
+    let origin = { x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d };
+    for (let tries = 0; tries < 8 && !arena.isFree(origin, def.radius + 10); tries++) {
+      d = AMBUSH.ahead * (1 - 0.08 * (tries + 1));
+      origin = { x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d };
+    }
+    for (let i = 0; i < count && this.canSpawn(type); i++) {
+      const p = { x: origin.x + rng.range(-AMBUSH.spread, AMBUSH.spread), y: origin.y + rng.range(-AMBUSH.spread, AMBUSH.spread), radius: def.radius };
+      arena.constrain(p);
+      this.sim.aliens.push(this.create(def, p.x, p.y, 1, false));
     }
   }
 

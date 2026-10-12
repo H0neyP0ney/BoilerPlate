@@ -511,6 +511,29 @@ try {
     check(hit(sc, 2) === 0 && !sim.horde.targetable(sc) && sim.horde.targetable(lu), 'enterré : Scarab totalement enterré, intouchable et jamais visé');
   }
 
+  // ---- vague en embuscade : sort du sol devant la squad, dans son sens de course
+  {
+    const run = (chance) => {
+      const { sim } = fresh(40);
+      if (sim.tutorial) sim.tutorial = null;
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sq.vel.x = 200;
+      sq.vel.y = 0; // elle court vers l'est
+      const saved = DIFFICULTY.ambushChance;
+      DIFFICULTY.ambushChance = chance;
+      sim.waves.trigger(3);
+      DIFFICULTY.ambushChance = saved;
+      return { sq, aliens: sim.aliens.filter((a) => a.alive && !a.def.boss) };
+    };
+    const yes = run(1);
+    const ahead = yes.aliens.filter((a) => a.x - yes.sq.center.x > 150 && Math.hypot(a.x - yes.sq.center.x, a.y - yes.sq.center.y) < 520);
+    check(yes.aliens.length > 0 && ahead.length === yes.aliens.length && yes.aliens.every((a) => a.age < 0.1), 'embuscade : la vague sort du sol juste devant la squad (dans son sens de course)', `${ahead.length}/${yes.aliens.length} aliens à ≈330 px devant`);
+    const no = run(0);
+    const far = no.aliens.filter((a) => Math.hypot(a.x - no.sq.center.x, a.y - no.sq.center.y) > 600).length;
+    check(no.aliens.length > 0 && far === no.aliens.length, 'embuscade : chance à 0, la vague apparaît hors écran comme avant', `${far}/${no.aliens.length} aliens à plus de 600 px`);
+  }
+
   // ---- aimant (power-up) : aspire globes d'XP, recrues et power-ups de TOUTE la carte
   {
     const { sim, step } = fresh(18);
@@ -531,7 +554,8 @@ try {
     const size0 = sq.soldiers.length;
     step(30 * 6);
     const gotXp = sq.xp + sq.level * 1e6 > xp0;
-    check(dist > 1500 && sim.xp.orbs.length === 0 && gotXp && sq.soldiers.length > size0 && sq.buffs.stim > 0, 'aimant : aspire globes, recrues et power-ups de toute la carte', `objets à ${dist.toFixed(0)} px ; restent ${sim.xp.orbs.length} globe(s), ${sim.recruits.items.length} recrue(s), ${sim.powerups.items.length} power-up(s)`);
+    const farLeft = sim.xp.orbs.filter((o) => Math.hypot(o.x - far.x, o.y - far.y) < 200).length; // seul le globe lointain compte : les aliens des vagues tués pendant les 6 s en laissent d'autres près de la squad
+    check(dist > 1500 && farLeft === 0 && gotXp && sq.soldiers.length > size0 && sq.buffs.stim > 0, 'aimant : aspire globes, recrues et power-ups de toute la carte', `objets à ${dist.toFixed(0)} px ; restent ${farLeft} globe(s) au loin, ${sim.recruits.items.length} recrue(s), ${sim.powerups.items.length} power-up(s)`);
   }
 
   // ---- relance : un loot rare lâché par un alien tué (pas un power-up tiré au hasard), environ 5 par partie de 10 minutes

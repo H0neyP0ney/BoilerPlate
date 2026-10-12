@@ -115,8 +115,8 @@ export class TimelineHud {
     if (!on) for (const tk of this.ticks) tk.setVisible(false);
   }
 
-  /** `hidden` : écran de fin ou onboarding (rien n'est affiché). */
-  update(sim: Sim, hidden: boolean): void {
+  /** `hidden` : écran de fin ou onboarding (rien n'est affiché). `offsetY` : décalage vertical de toute la timeline (px ; négatif = vers le haut, hors de l'écran : glissement d'entrée). */
+  update(sim: Sim, hidden: boolean, offsetY = 0): void {
     const cursor = sim.waves.cursor; // position dans la timeline des vagues (suspendue / rejouée pendant un boss) : c'est elle qui mène au prochain boss
     const next = nextBoss(sim.mode.waves, cursor);
     if (!next || hidden) return this.setVisible(false);
@@ -125,7 +125,7 @@ export class TimelineHud {
     const u = timelineScale(width);
     const k = u / ART.EXPORT; // échelle d'affichage des images exportées
     const x0 = (width - ART.frameW * u) / 2; // coin haut gauche du cadre : l'ensemble (barre, capsule, disque) est centré
-    const y0 = hudTop() + 2;
+    const y0 = hudTop() + 2 + offsetY;
     const slotL = x0 + ART.slot.x0 * u;
     const slotW = (ART.slot.x1 - ART.slot.x0) * u;
     const slotCy = y0 + ART.slot.cy * u;

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { theme } from '@xiao/engine';
-import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
+import { devLog, theme } from '@xiao/engine';
 import { latePack } from '../assets/latePack';
+import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { CardTilt } from '../view/CardTilt';
@@ -66,6 +66,19 @@ export class LevelUpScene extends Phaser.Scene {
     this.prismFx = new Map();
     const game = this.game_;
     const offer = data.offer ?? [];
+    if (!latePack.ready) {
+      // tout l'écran de choix (carte, slots, titre, relance, étoile) est dans le paquet 2 : level-up avant son arrivée (réseau lent) → on attend, jeu en pause, puis on rouvre
+      latePack.ensure(game);
+      this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x05101c, 0.5).setOrigin(0);
+      this.add
+        .text(this.scale.width / 2, this.scale.height / 2, t('loading'), { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6 })
+        .setOrigin(0.5);
+
+      const off = latePack.onReady(() => this.scene.restart(data));
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+      return;
+    }
+    devLog(`choix d'upgrade : ouverture (${offer.length} cartes)`);
 
     const dim = this.add.rectangle(0, 0, 10, 10, 0x05101c, 0.5).setOrigin(0).setAlpha(0);
     this.tweens.add({ targets: dim, alpha: 1, duration: 160 });
@@ -87,15 +100,6 @@ export class LevelUpScene extends Phaser.Scene {
       }
     });
     this.timerBar = this.add.graphics();
-
-    // 1er choix d'upgrade : le paquet 2 des visuels (aliens suivants) se charge une fois les cartes entièrement apparues, pendant que le joueur choisit (l'écran est figé :
-    // le chargement ne saccade pas la partie). Choix très rapide (avant la fin de l'animation) : le chargement part à la fermeture.
-    if (offer.length > 0 && !latePack.ready) {
-      const appeared = 60 + (offer.length - 1) * 90 + 380 + 120; // dernière carte : délai + pop (ms), plus une marge
-      const start = (): void => latePack.ensure(this.game_);
-      this.time.delayedCall(appeared, start);
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, start);
-    }
 
     // onboarding : flèche verte (qui pulse) sur la carte recommandée, plus un petit mot « Recommended »
     const suggestIdx = data.suggest ? offer.indexOf(data.suggest) : -1;

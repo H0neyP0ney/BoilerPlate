@@ -35,3 +35,4 @@ export { loadAssets, loadAssetsLater, applyAssets, range, type AssetEntry, type 
 
 // Debug
 export { DebugOverlay } from './debug/DebugOverlay';
+export { devLog, toggleDevLog } from './debug/DevLog';

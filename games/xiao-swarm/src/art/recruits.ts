@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { canvasTexture, sprites } from '@xiao/engine';
 import { PLAYER_HUE_SHIFT } from '../config';
 import { FX } from '../fxParams';
-import { shiftBlues } from './playerVariants';
+import { ensurePlayerSlot, madePlayerSlots, registerSlotMaker, shiftBlues } from './playerHue';
 
 /**
  * Recrue « bonus +1 » assemblée à partir de pièces fournies (art-src/bonus_recrue → public/assets/recruit, déclarées dans
@@ -26,9 +26,10 @@ const ORIGIN_Y = 0.5 + 51 / SIZE;
 
 const composed = new Set<string>();
 
-/** Id de visuel d'une recrue pour un emplacement de joueur (tête recolorée comme ses soldats ; repli : la recrue bleue d'origine). */
+/** Id de visuel d'une recrue pour un emplacement de joueur (tête recolorée comme ses soldats, fabriquée à la première demande ; repli : la recrue bleue d'origine). */
 export function recruitSpriteId(cls: string, slot: number): string {
   const s = slot % PLAYER_HUE_SHIFT.length;
+  if (s > 0) ensurePlayerSlot(s);
   return s > 0 && sprites.has(`recruit_${cls}#s${s}`) ? `recruit_${cls}#s${s}` : `recruit_${cls}`;
 }
 
@@ -52,8 +53,15 @@ export function hasComposedRecruit(_scene: Phaser.Scene, cls: string): boolean {
   return composed.has(`recruit_${cls}`);
 }
 
-/** Crée (ou redessine, `FX.recruit` modifié) les textures des recrues composées. */
+/** Crée (ou redessine, `FX.recruit` modifié) les textures des recrues composées : celles du joueur 0 et des emplacements déjà fabriqués. */
 export function makeRecruitTextures(scene: Phaser.Scene): void {
+  for (const slot of [0, ...madePlayerSlots()]) paintRecruits(scene, slot);
+}
+
+/** Fabrique les recrues d'un emplacement de joueur (appelé à la première demande, `playerHue.ts`). */
+registerSlotMaker((scene, slot) => paintRecruits(scene, slot));
+
+function paintRecruits(scene: Phaser.Scene, slot: number): void {
   const img = (key: string): HTMLImageElement | null =>
     scene.textures.exists(key) ? (scene.textures.get(key).getSourceImage() as HTMLImageElement) : null;
   const globe = img('recruit_part_globe');
@@ -64,7 +72,6 @@ export function makeRecruitTextures(scene: Phaser.Scene): void {
   for (const [cls, headKey] of Object.entries(HEADS)) {
     const head0 = img(headKey);
     if (!head0) continue;
-    for (let slot = 0; slot < PLAYER_HUE_SHIFT.length; slot++) {
     const head = recolorHead(head0, slot);
     const key = slot === 0 ? `recruit_${cls}` : `recruit_${cls}#s${slot}`;
     const paint = (ctx: CanvasRenderingContext2D): void => {
@@ -87,11 +94,11 @@ export function makeRecruitTextures(scene: Phaser.Scene): void {
       paint(tex.getContext());
       tex.refresh();
     } else {
+      if (scene.textures.exists(key)) scene.textures.remove(key); // recrue procédurale déjà là (pièces arrivées avec le paquet 2) : `canvasTexture` ignorerait la clé
       canvasTexture(scene, key, SIZE, SIZE, (ctx) => paint(ctx));
       composed.add(key);
     }
     // Défini avant registerDefaultSprites : ces réglages (ancrage, échelle) sont gardés.
     sprites.define(key, { texture: key, originX: 0.5, originY: ORIGIN_Y, scale: r.displayScale * (GLOBE / 160) });
-    }
   }
 }

@@ -484,7 +484,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0xbe5527, // couleur principale de son sprite (éclats et flaque de mort)
     hpBarWidth: 140,
   },
-  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4 s pour faire apparaître 22 araignées (`spider`) en 1,07 s. */
+  /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4 s pour faire apparaître 19 araignées (`spider`) en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
     hp: 5700, // 600 × 11 (600 = +30 % de 500)
@@ -495,7 +495,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
-    swarm: { every: 4, duration: 1.07, count: 22, spawn: 'spider' },
+    swarm: { every: 4, duration: 1.07, count: 19, spawn: 'spider' },
     boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)

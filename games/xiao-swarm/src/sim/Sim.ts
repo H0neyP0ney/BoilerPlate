@@ -132,7 +132,7 @@ export class Sim {
     this.tutorial = config.tutorial ? new Tutorial(this) : null;
     this.waves = new WaveRunner(
       config.mode.waves,
-      (type, count) => {
+      (type, count, ambush) => {
         // Difficulté dynamique : chaque joueur de la partie en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75). Les joueurs
         // à terre comptent aussi (on peut les réanimer : la charge ne retombe pas quand un équipier tombe) ; ceux qui ont quitté la partie, non. Un boss,
         // lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de squads avant le 08/10).
@@ -148,7 +148,11 @@ export class Sim {
           // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads VIVANTES (seules à pouvoir en être entourées)
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
-          for (const sq of squads) this.horde.spawnNear(sq, type, Math.min(cap, Math.round(count * share)), dist);
+          for (const sq of squads) {
+            const n = Math.min(cap, Math.round(count * share));
+            if (ambush) this.horde.spawnAhead(sq, type, n); // vague en embuscade : sort du sol devant la squad
+            else this.horde.spawnNear(sq, type, n, dist);
+          }
         }
       },
       this.rng,

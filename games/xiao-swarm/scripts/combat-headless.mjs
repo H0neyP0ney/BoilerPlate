@@ -472,7 +472,7 @@ try {
         check(!orb.alive && sq.soldiers.some((o) => o.frozen > 0), 'orbe de glace des rhinos : comme d’habitude, il gèle le soldat touché', `${sq.soldiers.filter((o) => o.frozen > 0).length} soldat(s) gelé(s)`);
       }
     }
-    // deux boss tués : le premier est un alien comme les autres (ni œuf, ni clear screen, ni escalade) ; le dernier laisse l'œuf, scalpe les autres aliens et déclenche l'escalade
+    // deux boss tués : le premier est un alien comme les autres (ni œuf, ni clear screen, ni escalade) ; le dernier laisse l'œuf, clear screen (les autres aliens meurent) et déclenche l'escalade
     const { sim } = fresh(43);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
@@ -487,7 +487,7 @@ try {
     i.x = sq.center.x - 350; i.y = sq.center.y + 120;
     sim.damage(i, 1e12, 'p1');
     const c = eggsOf().find((e) => Math.hypot(e.x - i.x, e.y - i.y) < 40);
-    check(eggsOf().length === 1 && !!c && !sl.alive && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : le dernier tué laisse l’œuf (PV exacts de `boss_egg`), scalpe les autres aliens, et l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
+    check(eggsOf().length === 1 && !!c && !sl.alive && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : le dernier tué laisse l’œuf (PV exacts de `boss_egg`), clear screen (les autres aliens meurent), et l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
   }
 
   // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)

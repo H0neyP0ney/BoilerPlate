@@ -6,6 +6,7 @@ import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { CardTilt } from '../view/CardTilt';
 import { powerUpIconKey } from '../view/PickupViews';
+import { playSfx } from '../playSfx';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
 import { CARD, CARD_TEXT_RES, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards';
 import { t } from '../i18n';
@@ -61,6 +62,7 @@ export class LevelUpScene extends Phaser.Scene {
   }
 
   create(data: LevelUpData): void {
+    playSfx(this, 'ui_open');
     this.busy = false;
     this.pressed = -1;
     this.prevLeft = -1;
@@ -223,7 +225,10 @@ export class LevelUpScene extends Phaser.Scene {
   private makeCard(id: UpgradeId, index: number, count: number, prism: boolean, prismCount = 0): Phaser.GameObjects.Container {
     const c = buildUpgradeCard(this, id, count, prism, prismCount); // prismCount : prises prismatiques déjà faites (carrés arc-en-ciel)
     const hit = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true });
-    hit.on('pointerover', () => this.tweens.add({ targets: c, scale: 1.05, duration: 90 }));
+    hit.on('pointerover', () => {
+      playSfx(this, 'ui_hover');
+      this.tweens.add({ targets: c, scale: 1.05, duration: 90 });
+    });
     hit.on('pointerout', () => this.tweens.add({ targets: c, scale: 1, duration: 90 }));
     // il faut APPUYER puis relâcher sur la carte : un bouton déjà enfoncé quand la fenêtre s'ouvre (tir à la souris) ne choisit rien
     hit.on('pointerdown', () => (this.pressed = index));
@@ -241,6 +246,7 @@ export class LevelUpScene extends Phaser.Scene {
   private reroll(): void {
     if (this.busy) return;
     this.busy = true;
+    playSfx(this, 'ui_reroll');
     this.game_.rerollUpgrade();
   }
 

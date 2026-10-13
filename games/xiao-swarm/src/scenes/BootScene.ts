@@ -124,6 +124,7 @@ export class BootScene extends Phaser.Scene {
     if (DEV_TOOLS && poki.getURLParam('upgrades') !== undefined) return void this.go(SCENES.upgrades);
     if (DEV_TOOLS && poki.getURLParam('waves') !== undefined) return void this.go(SCENES.waves);
     if (DEV_TOOLS && poki.getURLParam('mapedit') !== undefined) return void this.go(SCENES.mapEditor);
+    if (DEV_TOOLS && poki.getURLParam('sounds') !== undefined) return void this.go(SCENES.sounds);
     const req = readOnlineRequest();
     if (req) {
       setLoadStatus(t('connecting')); // sous la barre de l'écran de chargement HTML

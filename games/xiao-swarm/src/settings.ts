@@ -40,12 +40,61 @@ export const MUSIC_MAX_GAIN = 1 / 6;
  */
 export const MUSIC = { key: 'music', url: ['assets/audio/music.mp3'] }; // mp3 seul : lu par tous les navigateurs (l'ogg a été retiré, 1,1 Mo de moins dans le zip)
 /** Bruitages (public/assets/audio, chargés avec les visuels) : même principe OGG + MP3 de secours. */
+/** Un bruitage synthétisé : `public/assets/audio/sfx/<nom>.mp3`, joué par `playSfx` (`src/playSfx.ts`). */
+function sfxDef(name: string, volume: number, opts: { detune?: number; minGapMs?: number; maxVoices?: number } = {}) {
+  return { key: `sfx_${name}`, url: [`assets/audio/sfx/${name}.mp3`], volume, ...opts };
+}
+
 export const SFX = {
-  /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx` de l'engine). */
+  /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx.play`). */
   blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
   /** Explosion (grenade, kamikaze, boules des aliens, onde…) : superposition max 3 voix, chaque nouvelle voix plus discrète ; hauteur variable. */
   blast: { key: 'sfx_blast', url: ['assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
+  // ----- sons de remplacement synthétisés (`tools/gen-sfx.py`, voir `docs/SONS.md`) : un fichier par son dans `public/assets/audio/sfx/<nom>.mp3`, à écraser par de vrais sons -----
+  // interface
+  ui_click: sfxDef('ui_click', 0.5, { minGapMs: 40 }),
+  ui_hover: sfxDef('ui_hover', 0.3, { minGapMs: 60 }),
+  ui_open: sfxDef('ui_open', 0.5),
+  ui_claim: sfxDef('ui_claim', 0.6),
+  ui_claim_prism: sfxDef('ui_claim_prism', 0.7),
+  ui_reroll: sfxDef('ui_reroll', 0.55),
+  levelup: sfxDef('levelup', 0.7),
+  defeat: sfxDef('defeat', 0.7),
+  victory: sfxDef('victory', 0.7),
+  // ramassages
+  xp: sfxDef('xp', 0.3, { detune: 120, minGapMs: 35, maxVoices: 4 }),
+  recruit: sfxDef('recruit', 0.6, { minGapMs: 80 }),
+  pu_stim: sfxDef('pu_stim', 0.6),
+  pu_magnet: sfxDef('pu_magnet', 0.6),
+  pu_heal: sfxDef('pu_heal', 0.55),
+  pu_stasis: sfxDef('pu_stasis', 0.6),
+  pu_rockets: sfxDef('pu_rockets', 0.6),
+  pu_reroll: sfxDef('pu_reroll', 0.6),
+  pu_prism: sfxDef('pu_prism', 0.7),
+  egg_break: sfxDef('egg_break', 0.6),
+  // combat
+  alien_die_s: sfxDef('alien_die_s', 0.3, { detune: 200, minGapMs: 40, maxVoices: 4 }),
+  alien_die_m: sfxDef('alien_die_m', 0.4, { detune: 150, minGapMs: 60, maxVoices: 3 }),
+  alien_die_l: sfxDef('alien_die_l', 0.6, { detune: 100, minGapMs: 100, maxVoices: 2 }),
+  soldier_die: sfxDef('soldier_die', 0.5, { minGapMs: 80, maxVoices: 3 }),
+  crit: sfxDef('crit', 0.35, { detune: 100, minGapMs: 60, maxVoices: 2 }),
+  alien_shot: sfxDef('alien_shot', 0.35, { detune: 150, minGapMs: 80, maxVoices: 2 }),
+  tongue: sfxDef('tongue', 0.45, { detune: 100, minGapMs: 80, maxVoices: 2 }),
+  fuse: sfxDef('fuse', 0.45, { minGapMs: 120, maxVoices: 2 }),
+  cleave: sfxDef('cleave', 0.4, { detune: 100, minGapMs: 100, maxVoices: 2 }),
+  stalactite: sfxDef('stalactite', 0.45, { detune: 150, minGapMs: 80, maxVoices: 3 }),
+  freeze: sfxDef('freeze', 0.5, { minGapMs: 80, maxVoices: 2 }),
+  thaw: sfxDef('thaw', 0.45, { detune: 150, minGapMs: 80, maxVoices: 2 }),
+  capture: sfxDef('capture', 0.45, { minGapMs: 120, maxVoices: 2 }),
+  release: sfxDef('release', 0.45, { minGapMs: 100, maxVoices: 2 }),
+  rock_break: sfxDef('rock_break', 0.5, { detune: 150, minGapMs: 100, maxVoices: 2 }),
+  heal: sfxDef('heal', 0.3, { detune: 100, minGapMs: 150, maxVoices: 2 }),
+  // boss
+  boss_arrive: sfxDef('boss_arrive', 0.8),
+  boss_down: sfxDef('boss_down', 0.8),
+  boss_enrage: sfxDef('boss_enrage', 0.7),
 };
+export type SfxId = keyof typeof SFX;
 
 export const settings = {
   /** L'onboarding scripté (voir `sim/Tutorial.ts`) a déjà été terminé : les parties suivantes commencent directement par les vagues normales. */

@@ -23,6 +23,8 @@ export interface ButtonOptions {
  * La variante `rewarded` ajoute l'icône vidéo exigée par Poki (couleur non verte via le thème).
  */
 export class Button extends Phaser.GameObjects.Container {
+  /** Appelé à chaque clic validé d'un bouton (le jeu y joue son bruitage de clic) : `scene` = la scène du bouton. */
+  static clickHook: ((scene: Phaser.Scene) => void) | null = null;
   private readonly onClick: () => void;
   private enabled = true;
   /** Bouton enfoncé SUR ce bouton : le clic ne compte qu'à l'appui puis au relâchement dessus (un clic déjà enfoncé quand l'écran s'ouvre ne déclenche rien). */
@@ -100,6 +102,7 @@ export class Button extends Phaser.GameObjects.Container {
   trigger(): void {
     if (!this.enabled) return;
     this.setScale(1);
+    Button.clickHook?.(this.scene);
     this.onClick();
   }
 

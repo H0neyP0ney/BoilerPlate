@@ -4,3 +4,6 @@ poki-build
 *.zip
 .DS_Store
 .env.deploy
+
+# sources .wav des bruitages synthétisés (régénérables : python tools/gen-sfx.py)
+games/xiao-swarm/art-src/audio/sfx/

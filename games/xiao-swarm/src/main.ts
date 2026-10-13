@@ -1,4 +1,5 @@
-import { bootPokiGame, poki, setTheme, storage, DEV_TOOLS } from '@xiao/engine';
+import { bootPokiGame, Button, poki, setTheme, storage, DEV_TOOLS } from '@xiao/engine';
+import { playSfx } from './playSfx';
 import { PALETTE, SAFE_SIZE } from './config';
 import { i18n } from './i18n';
 import { settings } from './settings';
@@ -17,14 +18,16 @@ import { MapEditorScene } from './scenes/MapEditorScene';
 import { ObstacleEditorScene } from './scenes/ObstacleEditorScene';
 import { ParticleViewerScene } from './scenes/ParticleViewerScene';
 import { WaveEditorScene } from './scenes/WaveEditorScene';
+import { SoundTestScene } from './scenes/SoundTestScene';
 import { UnitViewerScene } from './scenes/UnitViewerScene';
 
 void bootPokiGame({
   safeSize: SAFE_SIZE,
   backgroundColor: PALETTE.bgDark,
-  scenes: [BootScene, GameScene, HudScene, EndingScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(DEV_TOOLS ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene] : [])],
+  scenes: [BootScene, GameScene, HudScene, EndingScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(DEV_TOOLS ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene, SoundTestScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
+    Button.clickHook = (scene) => playSfx(scene, 'ui_click'); // clic de tous les boutons des menus
     i18n.init(settings.lang ?? (poki.getURLParam('lang') || 'en')); // anglais par défaut (pas la langue du navigateur)
     setTheme({
       font: '"Baloo 2", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',

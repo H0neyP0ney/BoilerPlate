@@ -11,6 +11,7 @@ import { tierOfTexture, tierScale } from '../data/damageTiers';
 import { TUTORIAL } from '../data/tutorial';
 import { t } from '../i18n';
 import { SFX } from '../settings';
+import { playPowerUpSfx, playSfx } from '../playSfx';
 import { UPGRADES, type UpgradeId } from '../data/progression';
 import type { Projectile } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
@@ -202,6 +203,8 @@ export class WorldView {
   private quietUntil = 0;
   /** Upgrades prises dont le texte flottant attend la fermeture de l'écran de choix. */
   private pickTexts: Extract<SimEvent, { t: 'upgradePicked' }>[] = [];
+  /** Dernière position de chaque globe d'XP vu : à sa disparition, près de ma squad, on joue le bip de ramassage. */
+  private readonly orbLast = new Map<number, { x: number; y: number }>();
 
   /** Le point (x, y) est-il dans la vue de la caméra (marge `m` px) ? Sert à ne dessiner / animer que ce qu'on voit. */
   private onScreen(x: number, y: number, m = 0): boolean {
@@ -233,7 +236,10 @@ export class WorldView {
         break;
       }
       case 'crit':
-        if (nearCam(e.x, e.y)) this.fx.crit(e.x, e.y, e.dmg);
+        if (nearCam(e.x, e.y)) {
+          this.fx.crit(e.x, e.y, e.dmg);
+          playSfx(this.scene, 'crit');
+        }
         break;
       case 'beam':
         this.tracers.push({ ...e, life: 0.12 });
@@ -247,6 +253,7 @@ export class WorldView {
           break;
         }
         const def = ALIENS[e.alien];
+        if (nearCam(e.x, e.y)) playSfx(this.scene, def.egg ? 'egg_break' : def.boss || def.hp >= BIG_KILL_HP ? 'alien_die_l' : def.hp >= 100 ? 'alien_die_m' : 'alien_die_s');
         const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
         const oyA = alienOffsetY(e.alien); // restes posés sous le sprite décalé
         this.fx.burst(e.x, e.y + oyA - def.radius * 0.6, goo, e.alien === 'boss_crab' ? 40 : 10);
@@ -272,6 +279,7 @@ export class WorldView {
         break;
       }
       case 'soldierDied': {
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'soldier_die');
         this.corpse(e.id, e.cls, e.x, e.y, this.sim.squadOf(e.owner)?.slot ?? 0);
         this.fx.death(e.x, e.y + soldierOffsetY(e.cls), CLASSES[e.cls].color);
         if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(FX.shake.deathMs, FX.shake.deathAmount);
@@ -289,6 +297,7 @@ export class WorldView {
         }
         break;
       case 'alienShot': {
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'alien_shot');
         // shooter, spitter (et crabe) : flash teinté à la bouche du canon, les boules en cloche en partent visuellement
         if (!sprites.get(`alien_${e.alien}`)?.muzzleFlash || !nearCam(e.x, e.y)) {
           // pas de bouche posée : la boule part du point au sol ; si le sprite est décalé en Y, elle part visuellement de lui
@@ -326,6 +335,7 @@ export class WorldView {
         break;
       }
       case 'fuse': {
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'fuse');
         const id = `alien_${e.alien}`;
         const img = sprites.add(this.scene, id, e.x, e.y + alienOffsetY(e.alien)).setDepth(DEPTH.actors + e.y);
         sprites.place(img, id);
@@ -368,31 +378,40 @@ export class WorldView {
           this.fx.burst(e.x, e.y, 0xb0a090, 10);
           this.fx.dust(e.x, e.y, e.r);
           this.fx.rockDebris(e.x, e.y, e.dx, e.dy, e.r);
+          playSfx(this.scene, 'rock_break');
         }
         break;
       case 'capture': {
         const v = this.aliens.get(e.alien);
         if (v) this.fx.ring(v.rx, v.ry, 60, 0x8fe0ff);
+        if (v && nearCam(v.rx, v.ry)) playSfx(this.scene, 'capture');
         break;
       }
       case 'freeze':
         // la boucle de glace éclate : onde et éclats bleus sur la zone gelée
         this.fx.ring(e.x, e.y, e.r * 1.6, 0xbfeaff);
         this.fx.burst(e.x, e.y - 14, 0x9fe0ff, 24);
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'freeze');
         break;
       case 'thaw':
         // un soldat sort de la glace (dégelé, ou mort dedans) : elle vole en éclats
         {
           const oyS = soldierOffsetY(this.sim.squads.flatMap((q) => q.soldiers).find((q) => q.id === e.soldier)?.def.id ?? ''); // glaçon centré sur le sprite décalé
-          if (this.onScreen(e.x, e.y, 120)) this.fx.iceShards(e.x, e.y + oyS - 8, FX.ice.breakMul);
+          if (this.onScreen(e.x, e.y, 120)) {
+            this.fx.iceShards(e.x, e.y + oyS - 8, FX.ice.breakMul);
+            playSfx(this.scene, 'thaw');
+          }
           this.fx.ring(e.x, e.y + oyS, 60, 0xbfeaff);
         }
         break;
       case 'release':
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'release');
         this.fx.ring(e.x, e.y, 80, 0xffffff);
         this.fx.burst(e.x, e.y - 14, 0x8fe0ff, 16);
         break;
       case 'tongue': {
+        const tm = this.aliens.get(e.alien)?.muzzlePoint();
+        if (tm && nearCam(tm.x, tm.y)) playSfx(this.scene, 'tongue');
         this.tongues.push({ alien: e.alien, target: e.target, t: e.dur, dur: e.dur });
         // fx (pas de flash de tir) à l'origine de la langue : petite gerbe rose à la bouche, dessinée par le point de la planche
         const mouth = this.aliens.get(e.alien)?.muzzlePoint();
@@ -438,21 +457,29 @@ export class WorldView {
         break;
       case 'cleave':
         // mêlée en zone (chargeur) : anneau discret, sans secousse (il y en a beaucoup)
-        if (nearCam(e.x, e.y)) this.fx.ring(e.x, e.y, e.r, 0xff6a6a, 160);
+        if (nearCam(e.x, e.y)) {
+          this.fx.ring(e.x, e.y, e.r, 0xff6a6a, 160);
+          playSfx(this.scene, 'cleave');
+        }
         break;
       case 'stalactite':
         if (!nearCam(e.x, e.y)) break;
         this.fx.burst(e.x, e.y - 10, 0x9fb6c8, 16); // éclats de glace / roche
+        playSfx(this.scene, 'stalactite');
         this.fx.ring(e.x, e.y, e.r, 0xc8e0f0);
         this.scene.cameras.main.shake(FX.shake.slamMs * 0.5, FX.shake.slamAmount * 0.5);
         break;
       case 'slam':
         this.fx.ring(e.x, e.y, e.r, 0xff6a6a);
-        if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(FX.shake.slamMs, FX.shake.slamAmount);
+        if (nearCam(e.x, e.y)) {
+          this.scene.cameras.main.shake(FX.shake.slamMs, FX.shake.slamAmount);
+          playSfx(this.scene, 'cleave');
+        }
         break;
       case 'recruited':
         // le halo d'arrivée (colonne) est créé avec le nouveau soldat et le suit ; ici, éclat et texte
         this.fx.gain(e.x, e.y, CLASSES[e.cls].color);
+        if (nearCam(e.x, e.y)) playSfx(this.scene, 'recruit');
         if (e.owner === this.localPlayer) {
           const tx = this.fx.text(e.x, e.y - 100, t('recruit', { name: t(`class_${e.cls}`) }), '#ffe066', 26);
           const owner = e.owner; // copié : l'événement ne doit pas être relu à chaque image
@@ -471,6 +498,7 @@ export class WorldView {
         this.fx.burst(e.x, e.y - 20, col, 30);
         this.fx.ring(e.x, e.y, 120, col);
         this.fx.column(e.x, e.y, col, 150, 700);
+        if (e.owner === this.localPlayer) playSfx(this.scene, e.prism ? 'ui_claim_prism' : 'ui_claim'); // mon choix (pas ceux des équipiers)
         // texte flottant sur l'escouade : nom de l'upgrade prise (aussi pour les équipiers) ; pendant l'écran de choix il attend sa fermeture (`flushPickTexts`), pour qu'on voie ce que chacun a pris
         this.pickTexts.push(e);
         this.flushPickTexts();
@@ -481,6 +509,7 @@ export class WorldView {
         if (!info) break;
         this.fx.ring(e.x, e.y, 110, info.color);
         this.fx.burst(e.x, e.y - 14, info.color, 22);
+        if (e.owner === this.localPlayer || nearCam(e.x, e.y)) playPowerUpSfx(this.scene, e.kind);
         const label = t(`pu_${e.kind}` as 'pu_stim');
         const iconKey = powerUpIconKey(e.kind as Parameters<typeof powerUpIconKey>[0]);
         const tx = this.scene.textures.exists(iconKey) ? this.fx.iconText(e.x, e.y - 46, iconKey, label, '#ffffff', 22) : this.fx.text(e.x, e.y - 46, `${info.icon} ${label}`, '#ffffff', 22);
@@ -489,7 +518,10 @@ export class WorldView {
         break;
       }
       case 'heal':
-        if (nearCam(e.x, e.y)) this.fx.heal(e.x, e.y);
+        if (nearCam(e.x, e.y)) {
+          this.fx.heal(e.x, e.y);
+          playSfx(this.scene, 'heal');
+        }
         break;
       case 'squadSpawned':
         this.quietUntil = this.scene.time.now + 1000; // plus d'onde à l'apparition d'une squad (retirée le 11/10)
@@ -551,6 +583,7 @@ export class WorldView {
     }
     this.shock.start(w.x, w.y, UPGRADE_REPEL.radius, ms, FX.levelWave.waves, FX.levelWave.gapMs, FX.ring.squash, follow);
     if (w.level > 0) {
+      if (owner === this.localPlayer) playSfx(this.scene, 'levelup');
       const tx = this.fx.levelUpText(w.x, w.y);
       if (follow) this.fx.follow(tx, follow, FX.text.holdMs + FX.text.fadeMs); // « LEVEL UP! » suit la squad qui bouge, comme les autres textes
     }
@@ -899,8 +932,19 @@ export class WorldView {
     for (const o of orbs) {
       seen.add(o.id);
       if (!this.orbBorn.has(o.id)) this.orbBorn.set(o.id, time);
+      this.orbLast.set(o.id, { x: o.x, y: o.y });
     }
-    if (this.orbBorn.size > seen.size) for (const id of this.orbBorn.keys()) if (!seen.has(id)) this.orbBorn.delete(id);
+    if (this.orbBorn.size > seen.size) {
+      const me = this.squadFocus(this.localPlayer);
+      for (const id of this.orbBorn.keys()) {
+        if (seen.has(id)) continue;
+        this.orbBorn.delete(id);
+        const last = this.orbLast.get(id);
+        this.orbLast.delete(id);
+        // globe disparu près de ma squad = ramassé (un globe expiré est loin) : bip d'XP
+        if (me && last && Math.hypot(last.x - me.x, last.y - me.y) < 220) playSfx(this.scene, 'xp');
+      }
+    }
     for (let i = 0; i < this.orbImgs.length; i++) {
       const img = this.orbImgs[i];
       const o = orbs[i];

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE } from '../config';
+import { playSfx } from '../playSfx';
 
 /** Ids des images de `art-src/bouton pause sound musique.png` (découpées par `node tools/slice-hud-buttons.mjs`, déclarées dans `assets/manifest.ts`). */
 export const HUD_ART = { button: 'ui_hud_button', pause: 'ui_hud_pause', sound: 'ui_hud_sound', music: 'ui_hud_music' } as const;
@@ -41,6 +42,7 @@ export function makeHudButton(scene: Phaser.Scene, size: number, icon: string, o
   hit.on('pointerup', () => {
     if (!pressed) return;
     pressed = false;
+    playSfx(scene, 'ui_click');
     onClick();
   });
   const container = scene.add.container(0, 0, [frame, glyph, slash, hit]);

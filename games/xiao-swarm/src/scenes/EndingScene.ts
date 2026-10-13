@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { theme } from '@xiao/engine';
 import { SCENES } from '../config';
 import { t } from '../i18n';
+import { playSfx } from '../playSfx';
 
 /**
  * Fin de partie (boss final tombé, solo) : une fois la fusée partie, « Congratulations! » / « You beat the game! » en blanc au milieu de l'écran,
@@ -13,6 +14,7 @@ export class EndingScene extends Phaser.Scene {
   }
 
   create(data: { onDone: () => void }): void {
+    playSfx(this, 'victory');
     const { width, height } = this.scale;
     const style = { fontFamily: theme.font, fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', align: 'center' } as const;
     const title = this.add.text(width / 2, height / 2 - 34, t('endingTitle'), { ...style, fontSize: '68px', strokeThickness: 10 }).setOrigin(0.5).setAlpha(0);

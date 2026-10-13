@@ -26,7 +26,7 @@ Pendant l'onboarding : pas de power-up au hasard, pas de vagues normales, et **l
 
 - Automatique à la **première partie solo** (`settings.tutorialDone` faux), jamais en ligne ni en royale / versus.
 - À la fin, `settings.tutorialDone` passe à vrai (mémorisé dans le navigateur) ; chaque étape envoie `poki.measure('onboarding', étape, 'complete')`.
-- **Rejouer** : bouton « Replay tutorial » du menu Options (plus de paramètre d'URL).
+- **Rejouer** : bouton « Replay tutorial » du menu Options, **seulement quand le jeu est lancé en debug** (`DEV_TOOLS` : `?debug=1` ou dev ; le joueur normal ne le voit pas, 13/10).
 
 ## Test
 

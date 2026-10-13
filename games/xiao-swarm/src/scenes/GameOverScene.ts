@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Button, poki, storage, theme } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import { t } from '../i18n';
+import { playSfx } from '../playSfx';
 import { buildScoreboard, scoreboardHeight, type ScoreRow } from '../view/Scoreboard';
 import type { GameScene } from './GameScene';
 
@@ -35,6 +36,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(data: GameOverData): void {
+    playSfx(this, 'defeat');
     this.busy = false;
     const { width, height } = this.scale;
     const cx = width / 2;

@@ -93,14 +93,16 @@ export class OptionsScene extends Phaser.Scene {
     const hotkeysBtn = device.isTouch
       ? undefined
       : new Button(this, 0, 0, { label: t('hotkeys'), variant: 'secondary', width: 340, height: 56, onClick: () => this.scene.restart({ resumeGame: this.resumeGame, page: 'hotkeys' }) });
-    // Rejouer le tutoriel (et donc la première expérience) : après confirmation, la partie en cours est quittée et une nouvelle démarre avec le tutoriel.
-    const tutorialBtn = new Button(this, 0, 0, {
-      label: t('replayTutorial'),
-      variant: 'secondary',
-      width: 340,
-      height: 56,
-      onClick: () => this.confirmReplayTutorial(),
-    });
+    // Rejouer le tutoriel (et donc la première expérience) : seulement quand le jeu est lancé en debug (`DEV_TOOLS`) ; après confirmation, la partie en cours est quittée et une nouvelle démarre avec le tutoriel.
+    const tutorialBtn = DEV_TOOLS
+      ? new Button(this, 0, 0, {
+          label: t('replayTutorial'),
+          variant: 'secondary',
+          width: 340,
+          height: 56,
+          onClick: () => this.confirmReplayTutorial(),
+        })
+      : undefined;
     // Langue : bascule anglais / français (mémorisée) ; la scène se redessine dans la nouvelle langue
     const langBtn: Button = new Button(this, 0, 0, {
       label: `${t('language')} : ${LANG_NAMES[(i18n.lang as Lang) in LANG_NAMES ? (i18n.lang as Lang) : 'en']}`,
@@ -119,7 +121,7 @@ export class OptionsScene extends Phaser.Scene {
     const layout = () => {
       const { width: w, height: h } = this.scale;
       const pw = Math.min(520, w - 32);
-      const ph = (debugBtn ? 610 : 540) + (hotkeysBtn ? 70 : 0);
+      const ph = (debugBtn ? 610 : tutorialBtn ? 540 : 470) + (hotkeysBtn ? 70 : 0);
       const cx = w / 2;
       const top = h / 2 - ph / 2;
       dim.setSize(w, h);
@@ -138,9 +140,12 @@ export class OptionsScene extends Phaser.Scene {
         hotkeysBtn.setPosition(cx, by);
         by += 70;
       }
-      tutorialBtn.setPosition(cx, by);
-      langBtn.setPosition(cx, by + 70);
-      debugBtn?.setPosition(cx, by + 140);
+      if (tutorialBtn) {
+        tutorialBtn.setPosition(cx, by);
+        by += 70;
+      }
+      langBtn.setPosition(cx, by);
+      debugBtn?.setPosition(cx, by + 70);
       close.setPosition(cx, top + ph - 52);
     };
     layout();

@@ -370,5 +370,6 @@ export const SCENES = {
   upgrades: 'Upgrades',
   waves: 'Waves',
   mapEditor: 'MapEditor',
+  sounds: 'Sounds',
   gameOver: 'GameOver',
 } as const;

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playSfx } from '../playSfx';
 import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
 import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
@@ -26,6 +27,12 @@ const redArrowCss = (): string => `#${redArrow().toString(16).padStart(6, '0')}`
 const ARROW_DEPTH = 20;
 /** Taille des flèches de signalisation (1 = gabarit d'origine de « Ally down » ; 0,8 depuis le 12/10 : 20 % plus petites). */
 const ARROW_SIZE = 0.8;
+/** Réglage fin du centrage du triangle dans la pastille (px à ARROW_SIZE 1, le long de la flèche) : + = vers la pointe, − = vers l'arrière ; 0 = centré sur sa longueur. */
+/** Hauteur (px) réservée au titre du boss au-dessus de sa barre de vie. */
+const BOSS_NAME_H = 30;
+const ARROW_CENTER_OFFSET = 5;
+/** Épaisseur (px à ARROW_SIZE 1) du contour noir du triangle ; la moitié dépasse du remplissage. */
+const ARROW_OUTLINE = 6;
 
 /**
  * Flèche de signalisation commune (boss, œuf / dé / globes d'upgrade, équipier à terre, tutoriel) : disque sombre cerclé de `color`, triangle qui pointe vers (`dirX`, `dirY`),
@@ -40,11 +47,15 @@ function drawSignalArrow(g: Phaser.GameObjects.Graphics, px: number, py: number,
   g.fillStyle(back, 0.8).fillCircle(px, py, 35 * pulse * ARROW_SIZE);
   g.lineStyle(4 * ARROW_SIZE, color, 1).strokeCircle(px, py, 35 * pulse * ARROW_SIZE);
   const k = ARROW_SIZE;
-  g.fillStyle(color, 1).fillTriangle(
-    px + dirX * 29 * pulse * k, py + dirY * 29 * pulse * k,
-    px - dirX * 6 * k - dirY * 15 * k, py - dirY * 6 * k + dirX * 15 * k,
-    px - dirX * 6 * k + dirY * 15 * k, py - dirY * 6 * k - dirX * 15 * k,
-  );
+  // triangle CENTRÉ dans la pastille : sa pointe est à +29 (× pouls), sa base à −6 ; on décale tout de la moitié de sa longueur le long de la flèche
+  const mid = ((29 * pulse - 6) / 2 - ARROW_CENTER_OFFSET) * k;
+  const cx = px - dirX * mid;
+  const cy = py - dirY * mid;
+  const tip: [number, number] = [cx + dirX * 29 * pulse * k, cy + dirY * 29 * pulse * k];
+  const left: [number, number] = [cx - dirX * 6 * k - dirY * 15 * k, cy - dirY * 6 * k + dirX * 15 * k];
+  const right: [number, number] = [cx - dirX * 6 * k + dirY * 15 * k, cy - dirY * 6 * k - dirX * 15 * k];
+  g.lineStyle(ARROW_OUTLINE * k, 0x000000, 1).strokeTriangle(...tip, ...left, ...right); // contour noir (tracé d'abord : seule sa moitié extérieure reste visible)
+  g.fillStyle(color, 1).fillTriangle(...tip, ...left, ...right);
   return pulse;
 }
 
@@ -103,7 +114,6 @@ export class HudScene extends Phaser.Scene {
   private xpWrap = false;
   /** Boss : bandeau d'annonce, barre de vie en haut et flèche vers le boss hors écran. */
   private bossBanner!: Phaser.GameObjects.Text;
-  private bossBar!: Phaser.GameObjects.Graphics;
   /** Barre de vie du boss : cadre, part blanche (la vie d'avant le coup, qui rejoint la rouge) puis jauge rouge ; état de la part blanche. */
   private bossFrame?: Phaser.GameObjects.Image; // images du paquet 2 : construites avec les barres (`buildBars`)
   private bossGhost?: Phaser.GameObjects.NineSlice;
@@ -179,15 +189,14 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '44px', fontStyle: 'bold', color: '#ff6a4a', stroke: '#2a0a08', strokeThickness: 8, align: 'center' })
       .setOrigin(0.5)
       .setAlpha(0);
-    this.bossBar = this.add.graphics(); // bouclier du boss
     this.bossGhostState = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
     this.xpShown = 0; // la scène est réutilisée à chaque partie
     this.xpLevelSeen = 0;
     this.xpWrap = false;
     this.bossName = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '15px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 })
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffc83d', stroke: '#13233a', strokeThickness: 5 }) // jaune (celui du bouton principal)
       .setOrigin(0.5)
-      .setDepth(0.3); // au-dessus de la jauge (0.2)
+      .setDepth(0.3); // titre du boss, au-dessus de sa barre de vie
     // flèches de signalisation hors champ : au-dessus de toute l'interface du haut (barre de vie du boss comprise, profondeurs 0 à 0,3)
     this.bossArrow = this.add.graphics().setDepth(ARROW_DEPTH);
     this.bossTip = this.add
@@ -311,6 +320,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     if (e.t !== 'boss' && e.t !== 'bossDown' && e.t !== 'bossEnrage') return;
     const name = t(`alien_${e.alien}` as 'alien_boss_crab');
     const text = e.t === 'boss' ? `${t(e.kind === 'final' ? 'bossFinal' : 'bossMini')}\n${name}` : e.t === 'bossEnrage' ? t(e.level > 1 ? 'bossEnraged2' : 'bossEnraged', { name }) : t('bossDown', { name });
+    playSfx(this, e.t === 'boss' ? 'boss_arrive' : e.t === 'bossEnrage' ? 'boss_enrage' : 'boss_down');
     this.tweens.killTweensOf(this.bossBanner);
     this.placeBossBanner(); // boss vivant ou non (« boss tué » arrive quand il n'y en a plus)
     this.bossBanner.setText(text).setColor(e.t === 'boss' ? (e.kind === 'final' ? '#ff3a3a' : '#ff9a4a') : e.t === 'bossEnrage' ? '#ff2a1a' : '#8fff9a').setAlpha(1).setScale(1.3);
@@ -322,7 +332,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
   private drawBoss(): void {
     const g = this.game_;
     const boss = g.session.sim.aliens.find((a) => a.alive && a.def.boss);
-    this.bossBar.clear();
     this.bossArrow.clear();
     this.bossTip.setVisible(false);
     this.bossName.setVisible(!!boss);
@@ -334,9 +343,9 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const w = Math.min(364, width - 60); // grosse barre (520 × 0,7), à la place de la timeline (en haut, centrée)
     const k = w / BOSS_ART.W;
     const cx = width / 2;
-    const top = hudTop() + 2;
+    const top = hudTop() + 2 + BOSS_NAME_H; // la barre descend d'une ligne : le titre du boss est au-dessus
     this.bossFrame.setPosition(cx, top + (BOSS_ART.H / 2) * k).setScale(k);
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, top + BOSS_ART.slotCy * k); // nom du boss au centre de la jauge
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, hudTop() + 2 + BOSS_NAME_H / 2); // titre du boss AU-DESSUS de sa barre de vie
     // jauges 3-slice dans la zone sombre : la part blanche reste sur la vie d'avant le coup (BAR_GHOST_HOLD s) puis rejoint la rouge, comme sur les barres de vie des aliens
     const ratio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
     const st = this.bossGhostState;
@@ -360,13 +369,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       place(this.bossGhost, st.ghost);
       this.bossGhost.setVisible(true);
     }
-    if (boss.maxShield > 0) {
-      // bouclier du boss : fine barre bleue sous le cadre
-      const shieldRatio = Math.max(0, boss.shield / boss.maxShield);
-      const sy = top + BOSS_ART.bottom * k;
-      this.bossBar.fillStyle(0x0a1422, 0.8).fillRoundedRect(fx, sy, slotW, 7, 3);
-      if (shieldRatio > 0) this.bossBar.fillStyle(PALETTE.shield, 1).fillRoundedRect(fx + 1.5, sy + 1.5, Math.max(6, (slotW - 3) * shieldRatio), 4, 2);
-    }
+    // pas de barre de bouclier sous la grosse barre de vie (13/10) : le bouclier du boss reste visible au-dessus du boss lui-même
     // flèche rouge (même gabarit que celle de la zone de réanimation) vers le boss, seulement quand il est hors de l'écran
     const wv = g.cameras.main.worldView;
     const sx = ((boss.x - wv.x) / wv.width) * width;

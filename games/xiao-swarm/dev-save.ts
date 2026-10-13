@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -366,6 +367,8 @@ function handle(target: string, data: any): Result {
       return saveNames(data as Record<string, Record<string, string>>);
     case 'waves':
       return replaceDeclaration('data/waves.ts', /export const DEFAULT_WAVE_SCRIPT: WaveScript = \{/, String(data.code), 'Script de vagues');
+    case 'sfxtuning':
+      return replaceDeclaration('data/sfxTuning.ts', /export const SFX_TUNING: Record<string, SfxTuning> = \{/, String(data.code), 'Réglages des bruitages');
     case 'mapzones':
       return replaceDeclaration('data/mapZones.ts', /export const DEFAULT_MAP_ZONES: MapZoneConfig = \{/, String(data.code), 'Zones de la carte');
     case 'obstacle':
@@ -388,6 +391,76 @@ export function devSave(): Plugin {
     name: 'xiao-dev-save',
     apply: 'serve',
     configureServer(server) {
+      // Les mp3 de `public/assets/audio` sont servis depuis le disque À CHAQUE requête : un fichier déposé pendant que le serveur tourne (nouvelle variante de son,
+      // page `?sounds`) est servi tout de suite, sans redémarrer (Vite ne relit pas toujours la liste des fichiers publics).
+      server.middlewares.use('/assets/audio', (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? '').split('?')[0]).replace(/^\/+/, '');
+        const file = path.join(SRC, '..', 'public', 'assets', 'audio', rel);
+        if (!/^[A-Za-z0-9_\-/]+\.mp3$/.test(rel) || !fs.existsSync(file)) return next();
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(fs.readFileSync(file));
+      });
+      // Dépôt d'un fichier son depuis la page `?sounds` : POST /__dev/sfx-upload?id=<son>&name=<variante>&ext=<ext> (corps = octets du fichier). Écrit
+      // `<nom>--<variante>.mp3` à côté du son (mp3 : copié tel quel ; autre format : converti en mp3 mono 64 kbit/s par ffmpeg s'il est installé).
+      server.middlewares.use('/__dev/sfx-upload', (req, res) => {
+        const send = (out: Result): void => {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(out));
+        };
+        if (req.method !== 'POST') return send({ ok: false, message: 'POST attendu' });
+        const q = new URL(req.url ?? '', 'http://x').searchParams;
+        const id = q.get('id') ?? '';
+        const name = q.get('name') ?? '';
+        const ext = (q.get('ext') ?? '').toLowerCase();
+        const fresh = q.get('new') === '1'; // nouveau son : écrit `<id>.mp3` (refusé s'il existe déjà) au lieu de `<id>--<variante>.mp3`
+        if (!/^[a-z0-9_]+$/.test(id) || !(fresh || /^[A-Za-z0-9_-]{1,32}$/.test(name)) || !/^(mp3|wav|ogg|m4a|flac|aac)$/.test(ext)) return send({ ok: false, message: 'Nom de son, de variante ou format invalide' });
+        const chunks: Buffer[] = [];
+        let size = 0;
+        req.on('data', (c: Buffer) => {
+          size += c.length;
+          if (size <= 8 * 1024 * 1024) chunks.push(c);
+        });
+        req.on('end', () => {
+          if (size > 8 * 1024 * 1024) return send({ ok: false, message: 'Fichier trop gros (8 Mo maximum)' });
+          const audioDir = path.join(SRC, '..', 'public', 'assets', 'audio');
+          const dir = id === 'blaster' || id === 'blast' ? audioDir : path.join(audioDir, 'sfx');
+          fs.mkdirSync(dir, { recursive: true });
+          const file = fresh ? `${id}.mp3` : `${id}--${name}.mp3`;
+          const out = path.join(dir, file);
+          if (fresh && fs.existsSync(out)) return send({ ok: false, message: `${file} existe déjà : choisis un autre nom` });
+          const data = Buffer.concat(chunks);
+          if (ext === 'mp3') {
+            fs.writeFileSync(out, data);
+            return send({ ok: true, message: `${file} ajouté` });
+          }
+          const tmp = path.join(dir, `.upload-${Date.now()}.${ext}`);
+          fs.writeFileSync(tmp, data);
+          const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', tmp, '-ac', '1', '-b:a', '64k', out], { encoding: 'utf8' });
+          fs.rmSync(tmp, { force: true });
+          if (r.status !== 0) return send({ ok: false, message: `Conversion impossible (ffmpeg absent ou fichier illisible) : fournis un .mp3. ${(r.stderr ?? '').slice(0, 120)}` });
+          send({ ok: true, message: `${file} ajouté (converti en mp3 mono)` });
+        });
+      });
+      // Liste des variantes de bruitage présentes sur le disque : { <nom>: [variantes] } (fichiers `<nom>--<variante>.mp3` de public/assets/audio[/sfx])
+      server.middlewares.use('/__dev/sfx-list', (_req, res) => {
+        const out: Record<string, string[]> = {};
+        const pub = path.join(SRC, '..', 'public', 'assets', 'audio');
+        for (const dir of [pub, path.join(pub, 'sfx')]) {
+          let files: string[] = [];
+          try {
+            files = fs.readdirSync(dir);
+          } catch {
+            continue;
+          }
+          for (const f of files) {
+            const m = /^([a-z0-9_]+)--([A-Za-z0-9_-]+)\.mp3$/.exec(f);
+            if (m) (out[m[1]] ??= []).push(m[2]);
+          }
+        }
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(out));
+      });
       server.middlewares.use('/__dev/save', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;

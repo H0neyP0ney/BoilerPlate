@@ -1,3 +1,4 @@
+import { SFX_TUNING } from './data/sfxTuning';
 import { clamp, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
 import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
 import { i18n, LANGS, type Lang } from './i18n';
@@ -40,16 +41,29 @@ export const MUSIC_MAX_GAIN = 1 / 6;
  */
 export const MUSIC = { key: 'music', url: ['assets/audio/music.mp3'] }; // mp3 seul : lu par tous les navigateurs (l'ogg a été retiré, 1,1 Mo de moins dans le zip)
 /** Bruitages (public/assets/audio, chargés avec les visuels) : même principe OGG + MP3 de secours. */
-/** Un bruitage synthétisé : `public/assets/audio/sfx/<nom>.mp3`, joué par `playSfx` (`src/playSfx.ts`). */
-function sfxDef(name: string, volume: number, opts: { detune?: number; minGapMs?: number; maxVoices?: number } = {}) {
-  return { key: `sfx_${name}`, url: [`assets/audio/sfx/${name}.mp3`], volume, ...opts };
+/** Adresse du fichier d'une variante : `<base sans .mp3>--<variante>.mp3` (variante vide = le fichier de base). */
+export const sfxVariantUrl = (baseUrl: string, variant: string): string => (variant ? baseUrl.replace(/\.mp3$/, `--${variant}.mp3`) : baseUrl);
+
+/** Un bruitage : `public/assets/audio/...`, réglé par `SFX_TUNING` (`data/sfxTuning.ts`, curseurs de la page `?sounds`) ; `volume` et `opts` ne servent que si le son n'y figure pas encore. */
+function sfxDef(name: string, volume: number, opts: { detune?: number; minGapMs?: number; maxVoices?: number } = {}, url = `assets/audio/sfx/${name}.mp3`) {
+  const t = SFX_TUNING[name];
+  return {
+    key: `sfx_${name}`,
+    baseUrl: url, // fichier de base ; la variante choisie (`variant`) est `<base sans .mp3>--<variante>.mp3`
+    variant: t?.variant ?? '',
+    url: [sfxVariantUrl(url, t?.variant ?? '')],
+    volume: t?.volume ?? volume,
+    detune: t ? t.detune : opts.detune,
+    minGapMs: t ? t.minGapMs : opts.minGapMs,
+    maxVoices: t ? (t.maxVoices > 0 ? t.maxVoices : undefined) : opts.maxVoices, // 0 = pas de limite
+  };
 }
 
 export const SFX = {
   /** Tir du Trooper : volume de base, variation de hauteur (cents), délai minimal entre deux tirs entendus et nombre maximal de tirs superposés (rafales d'escouade : voir `sfx.play`). */
-  blaster: { key: 'sfx_blaster', url: ['assets/audio/blaster.mp3'], volume: 0.35, detune: 120, minGapMs: 60, maxVoices: 2 },
+  blaster: sfxDef('blaster', 0.35, { detune: 120, minGapMs: 60, maxVoices: 2 }, 'assets/audio/blaster.mp3'),
   /** Explosion (grenade, kamikaze, boules des aliens, onde…) : superposition max 3 voix, chaque nouvelle voix plus discrète ; hauteur variable. */
-  blast: { key: 'sfx_blast', url: ['assets/audio/blast.mp3'], volume: 0.5, detune: 250, minGapMs: 90, maxVoices: 3 },
+  blast: sfxDef('blast', 0.5, { detune: 250, minGapMs: 90, maxVoices: 3 }, 'assets/audio/blast.mp3'),
   // ----- sons de remplacement synthétisés (`tools/gen-sfx.py`, voir `docs/SONS.md`) : un fichier par son dans `public/assets/audio/sfx/<nom>.mp3`, à écraser par de vrais sons -----
   // interface
   ui_click: sfxDef('ui_click', 0.5, { minGapMs: 40 }),
@@ -95,6 +109,10 @@ export const SFX = {
   boss_enrage: sfxDef('boss_enrage', 0.7),
 };
 export type SfxId = keyof typeof SFX;
+
+// Sons ajoutés depuis la page `?sounds` (bouton « Nouveau son ») : présents dans `SFX_TUNING` mais pas dans le catalogue ci-dessus ; ils rejoignent `SFX` (non branchés au jeu :
+// pour les jouer, appeler `playSfx(scene, '<nom>')` depuis la vue, voir docs/SONS.md).
+for (const name of Object.keys(SFX_TUNING)) if (!(name in SFX)) (SFX as Record<string, unknown>)[name] = sfxDef(name, 0.5);
 
 export const settings = {
   /** L'onboarding scripté (voir `sim/Tutorial.ts`) a déjà été terminé : les parties suivantes commencent directement par les vagues normales. */

@@ -10,6 +10,7 @@ import { loadFxOverrides } from '../debugFx';
 import { loadObstacleOverrides } from '../debugObstacles';
 import { loadSpriteOverrides } from '../debugSprites';
 import { loadWaveOverrides } from '../debugWaves';
+import { loadSfxOverrides, reloadChangedVariants } from '../debugSfx';
 import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
 import { loadStatOverrides } from '../debugStats';
@@ -81,6 +82,8 @@ export class BootScene extends Phaser.Scene {
       loadFxOverrides();
       loadObstacleOverrides();
       loadWaveOverrides();
+      loadSfxOverrides();
+      reloadChangedVariants(this); // variante de son choisie dans la page ?sounds
       loadMapZoneOverrides();
       loadNameOverrides();
     }

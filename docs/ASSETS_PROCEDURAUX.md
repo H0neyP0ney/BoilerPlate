@@ -65,7 +65,7 @@ Le dessin existe encore comme repli si le fichier manque, mais le jeu affiche la
 
 Liste des principales (pas de texture : les remplacer par des images demande du code).
 
-- **Unités** (`view/WorldView.ts`) : cercle d'équipe sous chaque soldat (couleur du joueur), barres de vie des soldats et des aliens, barre bleue de bouclier, barre bleue du glaçon, aura rouge de Dernier rempart, ombres portées.
+- **Unités** (`view/WorldView.ts`) : cercle d'équipe sous chaque soldat (couleur du joueur), barres de vie des soldats et des aliens, barre bleue de bouclier, barre bleue du glaçon, ombres portées (l'aura rouge de Dernier rempart a été retirée le 13/10).
 - **Capsule d'effectif** « 14/14 » au-dessus de la squad (`view/PickupViews.ts`).
 - **Télégraphes** des attaques d'aliens : zones rouges de charge, de saut, de pics, de stalactites, murs en jaune (`view/telegraph.ts`, `view/WorldView.ts`).
 - **Au sol** : globes de soin et de stase (dômes, `drawField`), ronds sous les globes au sol (`drawPickupSpot`), zones de réanimation en coop.

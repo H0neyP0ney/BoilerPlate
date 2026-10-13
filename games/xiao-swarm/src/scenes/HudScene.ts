@@ -29,7 +29,9 @@ const ARROW_DEPTH = 20;
 const ARROW_SIZE = 0.8;
 /** Réglage fin du centrage du triangle dans la pastille (px à ARROW_SIZE 1, le long de la flèche) : + = vers la pointe, − = vers l'arrière ; 0 = centré sur sa longueur. */
 /** Hauteur (px) réservée au titre du boss au-dessus de sa barre de vie. */
-const BOSS_NAME_H = 30;
+const BOSS_NAME_H = 22; // 30 avant le 13/10 : le titre est plus près de la barre
+/** Décalage vertical (px, + = vers le bas) du titre dans cette zone : le texte se pose juste au-dessus du cadre de la barre. */
+const BOSS_NAME_DY = 9; // 4 puis +5 px : le titre se rapproche encore de la barre
 const ARROW_CENTER_OFFSET = 5;
 /** Épaisseur (px à ARROW_SIZE 1) du contour noir du triangle ; la moitié dépasse du remplissage. */
 const ARROW_OUTLINE = 6;
@@ -345,7 +347,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const cx = width / 2;
     const top = hudTop() + 2 + BOSS_NAME_H; // la barre descend d'une ligne : le titre du boss est au-dessus
     this.bossFrame.setPosition(cx, top + (BOSS_ART.H / 2) * k).setScale(k);
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, hudTop() + 2 + BOSS_NAME_H / 2); // titre du boss AU-DESSUS de sa barre de vie
+    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, hudTop() + 2 + BOSS_NAME_H / 2 + BOSS_NAME_DY); // titre du boss AU-DESSUS de sa barre de vie
     // jauges 3-slice dans la zone sombre : la part blanche reste sur la vie d'avant le coup (BAR_GHOST_HOLD s) puis rejoint la rouge, comme sur les barres de vie des aliens
     const ratio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
     const st = this.bossGhostState;
@@ -754,7 +756,9 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     // boutons de dev en bas à gauche, en colonne (le premier tout en bas, les suivants au-dessus)
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];
-    devBtns.forEach((b, i) => b.setPosition(14 + 22, bottomY - i * (44 + 8)));
+    // la colonne passe à la suivante (vers la droite) quand elle atteindrait les boutons de son / musique du haut (écran bas)
+    const rows = Math.max(1, Math.floor((bottomY - (top + 22 + 44 + 8 + 44)) / (44 + 8)) + 1);
+    devBtns.forEach((b, i) => b.setPosition(14 + 22 + Math.floor(i / rows) * (44 + 8), bottomY - (i % rows) * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
     this.respawnText.setPosition(width / 2, height * 0.22);

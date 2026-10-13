@@ -5,6 +5,7 @@ import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { CardTilt } from '../view/CardTilt';
+import { createButtonShine } from '../view/ButtonShine';
 import { powerUpIconKey } from '../view/PickupViews';
 import { playSfx } from '../playSfx';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
@@ -13,7 +14,9 @@ import { t } from '../i18n';
 import type { GameScene } from './GameScene';
 
 /** Largeur (px) du bouton « Relancer ». */
-const REROLL_W = 230; // 190 avant le 13/10 : bouton plus gros, avec l'icône de dé
+const REROLL_W = 253; // 190 avant le 13/10, 230 puis +10 % : bouton plus gros, avec l'icône de dé
+/** Hauteur de l'icône de dé en part de la hauteur du fond : 0,5 × 0,9 ÷ 1,1 (fond +10 %, icône −10 % en taille réelle par rapport à avant). */
+const REROLL_ICON = (0.5 * 0.9) / 1.1;
 /** Valeur de `pressed` quand le bouton enfoncé est « Relancer » (les cartes utilisent leur indice, -1 = rien). */
 const REROLL_PRESSED = -2;
 
@@ -98,11 +101,11 @@ export class LevelUpScene extends Phaser.Scene {
       const card = this.makeCard(id, i, count, data.prism[i] === true, game.localSquad.prismPicked[id] ?? 0);
       // apparition : chaque carte « pop » (outBack), l'une après l'autre
       card.setScale(0);
-      this.tweens.add({ targets: card, scale: 1, duration: 380, delay: 60 + i * 90, ease: 'Back.Out' });
+      this.tweens.add({ targets: card, scale: 1, duration: 380, delay: 60 + i * 90, ease: 'Back.Out', onComplete: () => this.prismFx.get(i)?.start() }); // la pluie prismatique ne part qu'une fois la carte entièrement apparue
       this.cards.push(card);
       if (data.prism[i] === true) {
         // carte prismatique : pluie de particules RGB qui montent sur toute la carte
-        this.prismFx.set(i, createPrismRain(this).setDepth(10)); // au-dessus de la carte, y compris de sa version inclinée en 3D (`CardTilt`, profondeur de la carte + 0,5)
+        this.prismFx.set(i, createPrismRain(this).setDepth(10).stop()); // arrêtée jusqu'à la fin de l'apparition de la carte (onComplete ci-dessus) // au-dessus de la carte, y compris de sa version inclinée en 3D (`CardTilt`, profondeur de la carte + 0,5)
       }
     });
     this.timerBar = this.add.graphics();
@@ -139,7 +142,7 @@ export class LevelUpScene extends Phaser.Scene {
       const diceKey = powerUpIconKey('reroll');
       const dice = this.textures.exists(diceKey) ? this.add.image(0, 0, diceKey) : null;
       if (dice) {
-        dice.setScale((bg.displayHeight * 0.5) / dice.height);
+        dice.setScale((bg.displayHeight * REROLL_ICON) / dice.height);
         const gap = 8;
         const total = dice.displayWidth + gap + label.width;
         dice.setPosition(-total / 2 + dice.displayWidth / 2, 0);
@@ -152,7 +155,8 @@ export class LevelUpScene extends Phaser.Scene {
         if (this.pressed === REROLL_PRESSED) this.reroll();
         this.pressed = -1;
       });
-      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, hit] : [bg, label, hit]);
+      const shine = createButtonShine(this, 'ui_reroll', k); // reflet blanc qui traverse le bouton de gauche à droite toutes les 3 s
+      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, shine, hit] : [bg, label, shine, hit]);
     }
 
     const layout = () => {

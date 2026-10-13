@@ -82,6 +82,13 @@ export const iconMap: Icon = (g) => {
   g.fillStyle(0xff8a4a, 1).fillCircle(6, 6, 3.5);
 };
 
+/** Sons : un haut-parleur (cône + deux ondes). */
+export const iconSounds: Icon = (g) => {
+  g.fillStyle(0x7fe0a0, 1).fillRect(-12, -5, 6, 10).fillTriangle(-6, -5, 2, -12, 2, 12).fillTriangle(-6, 5, -6, -5, 2, 12);
+  g.lineStyle(2.5, 0x7fe0a0, 1).beginPath().arc(2, 0, 7, -0.9, 0.9).strokePath();
+  g.lineStyle(2.5, 0x7fe0a0, 1).beginPath().arc(2, 0, 12, -0.9, 0.9).strokePath();
+};
+
 /** Les visionneuses, dans l'ordre d'affichage des boutons du HUD. */
 export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.viewer, icon: iconUnit, label: 'Unités' },
@@ -92,6 +99,7 @@ export const VIEWER_BUTTONS: { scene: string; icon: Icon; label: string }[] = [
   { scene: SCENES.upgrades, icon: iconUpgrades, label: 'Upgrades' },
   { scene: SCENES.waves, icon: iconWaves, label: 'Vagues' },
   { scene: SCENES.mapEditor, icon: iconMap, label: 'Carte' },
+  { scene: SCENES.sounds, icon: iconSounds, label: 'Sons' },
 ];
 
 /** Contour vert des boutons qui ouvrent une vue plein écran (visionneuses), par opposition aux panneaux par-dessus le jeu. */

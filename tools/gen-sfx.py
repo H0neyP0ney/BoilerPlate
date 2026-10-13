@@ -199,6 +199,15 @@ def levelup():
 
 
 def xp():
+    """Ramassage d'XP (très fréquent) : un bruitage de collecte SANS note — un petit souffle de bruit filtré, bref, plus un micro-tick."""
+    puff = decay(bp(noise(0.07, 301), 1600, 5200), 0.014) * 0.8  # le « pfit » aigu
+    body = decay(bp(noise(0.06, 302), 600, 1500), 0.011) * 0.45  # un peu de corps, qui s'éteint plus vite
+    tick = decay(hp(noise(0.012, 303), 4500), 0.002) * 0.35
+    return mix(puff, body, tick)
+
+
+def xp_note():
+    """Ancien ramassage d'XP, avec une note (variante `xp--note`, pour comparer)."""
     return decay(sine(sweep(900, 1500, 0.07, 1.4), 0.07), 0.03) * 0.8
 
 
@@ -369,7 +378,7 @@ def victory():
 
 SOUNDS = {
     'ui_click': ui_click, 'ui_hover': ui_hover, 'ui_open': ui_open, 'ui_claim': ui_claim, 'ui_claim_prism': ui_claim_prism, 'ui_reroll': ui_reroll,
-    'levelup': levelup, 'xp': xp, 'recruit': recruit,
+    'levelup': levelup, 'xp': xp, 'xp--note': xp_note, 'recruit': recruit,
     'pu_stim': pu_stim, 'pu_magnet': pu_magnet, 'pu_heal': pu_heal, 'pu_stasis': pu_stasis, 'pu_rockets': pu_rockets, 'pu_reroll': pu_reroll, 'pu_prism': pu_prism,
     'egg_break': egg_break, 'alien_die_s': alien_die_s, 'alien_die_m': alien_die_m, 'alien_die_l': alien_die_l, 'soldier_die': soldier_die, 'crit': crit,
     'boss_arrive': boss_arrive, 'boss_down': boss_down, 'boss_enrage': boss_enrage,

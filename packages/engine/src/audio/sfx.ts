@@ -29,19 +29,32 @@ const voices = new Map<string, number[]>();
 /** Part de volume retirée à une nouvelle instance par voix déjà active (elles se superposent sans s'additionner). */
 const DUCK_PER_VOICE = 0.12;
 
+/** Compteurs par son (outils de dev : page `?sounds`) : lectures effectives, et demandes ignorées par la limite de cadence ou de voix. */
+const counters = new Map<string, { played: number; limited: number }>();
+const counter = (key: string): { played: number; limited: number } => {
+  let c = counters.get(key);
+  if (!c) counters.set(key, (c = { played: 0, limited: 0 }));
+  return c;
+};
+
 export const sfx = {
   play(scene: Phaser.Scene, key: string, opts: SfxOptions = {}): void {
-    if (master <= 0 || !scene.cache.audio.exists(key)) return;
+    if (master <= 0 || (opts.volume ?? 1) <= 0 || !scene.cache.audio.exists(key)) return; // volume général ou volume de CE son à 0 : coupé (rien n'est créé, aucune voix ni cadence consommée)
     const now = performance.now();
-    if (now - (lastPlayed.get(key) ?? -Infinity) < (opts.minGapMs ?? 0)) return;
+    if (now - (lastPlayed.get(key) ?? -Infinity) < (opts.minGapMs ?? 0)) {
+      counter(key).limited++;
+      return;
+    }
     // voix encore actives (les terminées sont retirées)
     const active = (voices.get(key) ?? []).filter((end) => end > now);
     voices.set(key, active);
     const max = opts.maxVoices ?? Infinity;
     let duck = 1;
     if (Number.isFinite(max)) {
-      if (active.length >= max) return;
-      if (Math.random() > 1 - (active.length / max) ** 2) return; // plus ça joue déjà, moins on en ajoute
+      if (active.length >= max || Math.random() > 1 - (active.length / max) ** 2) {
+        counter(key).limited++; // plus ça joue déjà, moins on en ajoute
+        return;
+      }
       duck = Math.max(0.3, 1 - DUCK_PER_VOICE * active.length);
     }
     lastPlayed.set(key, now);
@@ -49,7 +62,17 @@ export const sfx = {
     const sound = scene.sound.add(key, { volume: (opts.volume ?? 1) * master * duck, detune: d ? (Math.random() * 2 - 1) * d : 0 });
     sound.once('complete', () => sound.destroy()); // le son temporaire se libère tout seul
     sound.play();
+    counter(key).played++;
     active.push(now + (sound.duration || 0.3) * 1000);
+  },
+
+  /** Compteurs de lecture par son depuis le lancement (ou le dernier `resetStats`). */
+  stats(): ReadonlyMap<string, { played: number; limited: number }> {
+    return counters;
+  },
+
+  resetStats(): void {
+    counters.clear();
   },
 
   /** Volume général des bruitages (0 → 1). */

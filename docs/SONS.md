@@ -6,11 +6,25 @@ Le jeu a **un fichier mp3 par bruitage** dans `games/xiao-swarm/public/assets/au
 
 1. Exporter le nouveau son en **mp3 mono** (44,1 kHz, 64 kbit/s suffisent), le plus **court** possible (les ramassages et les morts d'alien jouent très souvent).
 2. L'enregistrer sous le **même nom** dans `public/assets/audio/sfx/` (ex. `levelup.mp3`).
-3. Ouvrir `http://localhost:5173/?sounds` (ou le jeu déployé avec `?debug=1&sounds`) : un bouton par son, avec **quand il joue**. F5 après chaque remplacement.
-4. Régler son volume de base, sa variation de hauteur (`detune`, en cents), son délai minimal entre deux lectures (`minGapMs`) et son nombre de voix simultanées (`maxVoices`) dans `SFX` de `games/xiao-swarm/src/settings.ts`. Les sons très fréquents (`xp`, `alien_die_s`, tirs) doivent avoir un `minGapMs` et un `maxVoices` bas pour ne pas saturer.
+3. Ouvrir `http://localhost:5173/?sounds` (ou le bouton haut-parleur vert des boutons de debug du jeu, ou le jeu déployé avec `?debug=1&sounds`) : un bouton par son, avec **quand il joue**. F5 après chaque remplacement.
+4. Régler le son dans la page `?sounds` (appliqué tout de suite dans le jeu, mémorisé dans le navigateur ; **Save** l'écrit dans `src/data/sfxTuning.ts`, **Reset** revient à cette sauvegarde ; Save marche en dev seulement) : **volume de base** (curseur), **variation de hauteur** (`detune`, cents), **écart minimal** entre deux lectures (`minGapMs`), **voix** simultanées (`maxVoices`, 0 = illimité), et un compteur « ×joué (−ignoré) » depuis le début de la partie pour repérer les sons qui reviennent trop. Pour le reste (variation de hauteur `detune` en cents, délai minimal entre deux lectures `minGapMs`, nombre de voix simultanées `maxVoices`) : `SFX` de `games/xiao-swarm/src/settings.ts`. Les sons très fréquents (`xp`, `alien_die_s`, tirs) doivent avoir un `minGapMs` et un `maxVoices` bas pour ne pas saturer.
 5. Les sources `.wav` des sons synthétisés sont dans `art-src/audio/sfx/` (non versionnées, régénérables) ; `python tools/gen-sfx.py <nom>` régénère un son synthétisé (attention : cela **écrase** ton remplacement).
 
+## Variantes : tester plusieurs versions d'un même son
+
+Chaque son de la page `?sounds` a une **liste déroulante** : `base` (le fichier `<nom>.mp3`) et toutes ses **variantes**. C'est **toi qui choisis** laquelle est active dans le jeu (rien n'est tiré au hasard) : tu peux changer pour comparer, et revenir au son validé avec Reset ou en rechoisissant `base`.
+
+- Une variante = un fichier `<nom>--<variante>.mp3` dans le même dossier, par exemple `levelup--v2.mp3` ou `xp--note.mp3`. Dépose le fichier (même pendant que `npm run dev` tourne) puis rouvre la page : il apparaît dans la liste.
+- Le choix est mémorisé dans le navigateur ; **Save** l'écrit dans `data/sfxTuning.ts` (`variant` : la variante active, `variants` : la liste connue, utile aussi sur le jeu déployé avec `?debug=1`).
+- Exemple fourni : `xp` (bruitage de collecte sans note, la base) et `xp--note` (l'ancien « bip » à une note).
+- **Bouton « ＋ » à droite de la liste** : choisis un fichier son de ton ordinateur (mp3, wav, ogg, m4a, flac…), donne-lui un nom : il est copié dans le dossier sous la forme `<nom>--<variante>.mp3` (converti en mp3 mono par ffmpeg s'il n'est pas déjà en mp3), devient la variante active et se joue tout de suite. Dev (`npm run dev`) seulement.
+- Pour livrer le jeu, garde dans `public/assets/audio/sfx/` seulement les variantes que tu veux conserver (chaque fichier est dans le build).
+
 ## Ajouter un son
+
+**Depuis la page `?sounds`** : le bouton « ＋ Nouveau son » (en haut) prend un fichier son, lui donne un nom (minuscules, chiffres, `_`) et l'ajoute au catalogue dans un groupe « Ajoutés (non branchés au jeu) » ; Save l'enregistre dans `data/sfxTuning.ts`. Il ne se jouera dans le jeu qu'une fois branché dans le code (étape 3 ci-dessous).
+
+**À la main** :
 
 1. Déposer `public/assets/audio/sfx/<nom>.mp3`.
 2. Déclarer `<nom>: sfxDef('<nom>', volume, { detune, minGapMs, maxVoices })` dans `SFX` (`settings.ts`) : il est alors chargé avec le paquet 2 de visuels.

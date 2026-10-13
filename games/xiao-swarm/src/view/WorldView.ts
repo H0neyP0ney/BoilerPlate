@@ -1123,19 +1123,7 @@ export class WorldView {
       const w = shadowWidth(v.state.def.id);
       g.fillStyle(0x2a1d2e, SHADOW_ALPHA * out).fillEllipse(v.rx + alienShadowDx(v.state.def.id), v.ry + alienOffsetY(v.state.def.id) + alienShadowDy(v.state.def.id), w, w * (0.9 / 2.1)); // + décalage de l'ombre seule
     }
-    // Dernier rempart (upgrade) : aura rouge qui pulse sous chaque soldat dès qu'il manque un soldat, plus intense quand il en manque davantage
-    for (const sq of this.sim.squads) {
-      if (!sq.lastStand || sq.maxSize <= 0) continue;
-      const k = Math.min(1, sq.missing / sq.maxSize); // part de la squad perdue
-      const pulse = 0.5 + Math.sin(time * 6) * 0.5;
-      for (const s of sq.soldiers) {
-        const v = this.soldiers.get(s.id);
-        if (!v || !this.onScreen(v.rx, v.ry, 60)) continue;
-        const oy = soldierOffsetY(s.def.id); // suit le décalage du sprite et de l'ombre
-        g.fillStyle(UPGRADES.lastStand.color, (0.05 + pulse * 0.05) + k * 0.2).fillEllipse(v.rx, v.ry + oy, 58, 26);
-        g.lineStyle(2, UPGRADES.lastStand.color, (0.15 + pulse * 0.15) + k * 0.5).strokeEllipse(v.rx, v.ry + oy, 58, 26);
-      }
-    }
+    // Dernier rempart (upgrade) : plus d'aura rouge au sol (retirée le 13/10) ; son bonus de dégâts reste actif (`Combat.update`)
     for (const sq of this.sim.squads) {
       if (!sq.isHealing) continue;
       for (const s of sq.soldiers) {

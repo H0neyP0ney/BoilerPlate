@@ -196,7 +196,7 @@ export class HudScene extends Phaser.Scene {
     this.xpLevelSeen = 0;
     this.xpWrap = false;
     this.bossName = this.add
-      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffc83d', stroke: '#13233a', strokeThickness: 5 }) // jaune (celui du bouton principal)
+      .text(0, 0, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffc83d', stroke: '#000000', strokeThickness: 5 }) // jaune, contour noir (celui du bouton principal)
       .setOrigin(0.5)
       .setDepth(0.3); // titre du boss, au-dessus de sa barre de vie
     // flèches de signalisation hors champ : au-dessus de toute l'interface du haut (barre de vie du boss comprise, profondeurs 0 à 0,3)

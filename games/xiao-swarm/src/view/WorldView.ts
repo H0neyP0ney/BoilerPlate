@@ -884,8 +884,9 @@ export class WorldView {
     for (const k of this.sim.arena.rocks) {
       live.add(k.id);
       if (this.rockImgs.has(k.id)) continue;
-      const img = this.scene.add.image(k.x, k.y, 'fx_rock').setOrigin(0.5, 0.6).setDepth(DEPTH.actors + k.y);
-      const target = (k.radius * 2.1) / 48;
+      const tex = this.scene.textures.exists('fx_wall_rock') ? 'fx_wall_rock' : 'fx_rock';
+      const img = this.scene.add.image(k.x, k.y, tex).setOrigin(0.5, 0.62).setDepth(DEPTH.actors + k.y);
+      const target = (k.radius * 2) / img.width; // largeur du rocher = diamètre de la hitbox
       img.setScale(target * 0.4);
       this.scene.tweens.add({ targets: img, scale: target, duration: 160, ease: 'Back.Out' });
       this.rockImgs.set(k.id, img);

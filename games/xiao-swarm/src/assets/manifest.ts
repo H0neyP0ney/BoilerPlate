@@ -67,6 +67,8 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'ui_levelup_title', url: 'ui/levelup_title.png' },
   // Icônes des upgrades — art-src/icon_upgrade.png découpé par `node tools/slice-upgrade-icons.mjs` ; affichées par view/upgradeIcons.ts (cartes, texte flottant, visionneuse).
   ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `upgrade_icon_${id}`, url: `ui/upgrades/${id}.png` })),
+  // Rocher des murs du lanceur de cailloux (`wall`) — art-src/wall.png rogné (131 × 117) et réduit à 96 px de large ; affiché par WorldView.syncRocks à la largeur de la hitbox (2 × rayon).
+  { type: 'image', id: 'fx_wall_rock', url: 'fx/wall_rock.png' },
   // Projectile du Rocket barrage (pointe vers la droite) — fusée de art-src/powerups.png tournée par `node tools/slice-powerup-icons.mjs` ; remplace la fusée procédurale `fx_rocket` (art/fx.ts).
   { type: 'image', id: 'fx_rocket_png', url: 'fx/rocket.png' },
   // Freezebot (drone qui plane au centre du globe de stase) — art-src/freezebot.png réduit par `node tools/slice-freezebot.mjs` ; affiché par view/PickupViews.ts.

@@ -880,14 +880,18 @@ export class Sim {
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.egg) this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
     if (a.def.boss) {
-      // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul compte (escalade, bandeau) et laisse l'œuf
+      // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul fait un clear screen, laisse l'œuf, compte pour l'escalade et le bandeau.
+      // Le premier tombé (`firstTwin`) est un alien comme les autres (ses drops normaux, aucun effet de fin de boss) ; son jumeau continue le combat.
       const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
+      const firstTwin = !!a.def.boss.twin && this.aliens.some((o) => o !== a && o.alive && o.def.boss?.twin);
       if (a.def.boss.kind === 'final') this.finalBossDead = true;
-      this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss encore en vie est épargné
-      if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre de CHAQUE boss tué (rhinos jumeaux : un œuf par rhino ; le boss final, lui, gagne la partie)
-      if (last) {
-        this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
-        this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
+      if (!firstTwin) {
+        this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
+        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (last) {
+          this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
+          this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
+        }
       }
     }
     this.releaseCaptive(a);

@@ -23,7 +23,7 @@
   "tutoTakeUpgrade": "Claim upgrade",
   "tutoMove": "Move here",
   "tutoPowerup": "Take power-up",
-  "hintKeys": "Drag to move",
+  "hintKeys": "Move your squad",
   "wave": "Wave {value}",
   "kills": "{value} kills",
   "squad": "Squad {value}/{max}",

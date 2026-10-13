@@ -74,6 +74,9 @@ export class Xp {
         this.orbs.splice(i, 1);
         continue;
       }
+      // le globe sort d'abord (saut + glissade, `XP_SLIDE.hopTime`) : ni attraction ni ramassage tant qu'il n'est pas retombé, sinon, avec un grand rayon d'aimant,
+      // il serait avalé dans le tick de sa création sans qu'on le voie apparaître (sauf aspiré par le power-up aimant : `caught`)
+      if (!o.caught && LIFETIME - o.life < XP_SLIDE.hopTime) continue;
       // soldat le plus proche dans le rayon d'attraction (celui de sa squad : stat `magnet`)
       let best: { x: number; y: number; owner: string } | undefined;
       let bestD = Infinity;

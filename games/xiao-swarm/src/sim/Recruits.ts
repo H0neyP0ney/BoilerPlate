@@ -45,12 +45,13 @@ export class Recruits {
     }
     if (toward) {
       const d = Math.hypot(toward.x - x, toward.y - y);
-      if (d > 40) {
-        const rng = new Rng((r.id * 2654435761) >>> 0); // propre à la recrue : ne décale pas la séquence aléatoire de la simulation
-        const ang = Math.atan2(toward.y - y, toward.x - x) + rng.range(-RECRUIT.hopSpread, RECRUIT.hopSpread);
-        const dist = Math.min(rng.range(RECRUIT.hopDist[0], RECRUIT.hopDist[1]), d); // jamais au-delà de la squad
-        r.hop = { vx: (Math.cos(ang) * dist) / RECRUIT.hopTime, vy: (Math.sin(ang) * dist) / RECRUIT.hopTime, t: RECRUIT.hopTime };
-      }
+      const rng = new Rng((r.id * 2654435761) >>> 0); // propre à la recrue : ne décale pas la séquence aléatoire de la simulation
+      // tuée à moins de 40 px du centre de la squad (grand rayon d'aimant) : elle saute quand même, dans une direction au hasard, au lieu d'être ramassée
+      // sur place sans qu'on la voie tomber ; sinon vers la squad
+      const near = d <= 40;
+      const ang = near ? rng.range(0, Math.PI * 2) : Math.atan2(toward.y - y, toward.x - x) + rng.range(-RECRUIT.hopSpread, RECRUIT.hopSpread);
+      const dist = near ? rng.range(RECRUIT.hopDist[0], RECRUIT.hopDist[1]) * 0.6 : Math.min(rng.range(RECRUIT.hopDist[0], RECRUIT.hopDist[1]), d); // jamais au-delà de la squad
+      r.hop = { vx: (Math.cos(ang) * dist) / RECRUIT.hopTime, vy: (Math.sin(ang) * dist) / RECRUIT.hopTime, t: RECRUIT.hopTime };
     }
     this.items.push(r);
     this.sim.metrics.recDropped++;

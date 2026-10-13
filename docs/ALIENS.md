@@ -27,7 +27,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 | `boss_rhino` (2:00) | `rush` (charge), `oneShot` |
 | `boss_scarab` (4:30) | `burrow` (s'enterre, ressort sur la squad), `stalactites` (pluie), `shield`, `oneShot` |
 | `boss_gling` (Gling Mère) | `swarm` (19 araignées toutes les 4 s), `oneShot` |
-| `boss_rhino_fire` / `boss_rhino_ice` (7:00) | `rush` + `rush.trail` (feu / gel) + `rush.burst` (8 orbes), `oneShot` ; **chacun laisse son œuf** (le clear screen du premier épargne l'autre, l'escalade ne compte qu'une fois) |
+| `boss_rhino_fire` / `boss_rhino_ice` (7:00) | `rush` + `rush.trail` (feu / gel) + `rush.burst` (8 orbes), `oneShot` ; **le premier tombé est un alien comme les autres** (`boss.twin` : ni clear screen, ni œuf, ni escalade) ; **seul le dernier** fait le clear screen, laisse l'œuf et déclenche l'escalade (une fois) |
 | `boss_crab` (10:00, final) | `leap` (saut écrasant), `spikeRing` (8 lignes de pics à la réception du saut), `lob` (3 boules rouges + 5 araignées enragées par boule), `oneShot` |
 
 ## Catalogue des capacités

@@ -93,8 +93,6 @@ export const CAPTIVE_VULN = 3.6;
  * (au centre, moins au bord) pendant `duration` s. Déplacement direct : les aliens lourds sont repoussés comme les légers.
  */
 export const UPGRADE_REPEL = { radius: 640, speed: 460, duration: 0.9, reach: 0.6 };
-/** Tous les `PRISM_LEVEL_EVERY` niveaux (10, 20, 30…), les 3 upgrades proposées sont prismatiques ; une relance les retire au sort (`DIFFICULTY.prismChance`). */
-export const PRISM_LEVEL_EVERY = 10;
 /** Montée de niveau : le jeu se met en pause et chaque joueur a ce temps (s) pour choisir son upgrade ; sinon, choix au hasard. */
 export const UPGRADE_CHOICE_TIME = 5;
 /** Montée de niveau : délai (s) de jeu normal entre la montée (onde de choc, texte « LEVEL UP! ») et la pause qui ouvre l'écran des cartes. */
@@ -229,10 +227,10 @@ export const DIFFICULTY_DEFAULTS = {
   /**
    * Booster prismatique (loot arc-en-ciel, encore plus rare que la relance) : le premier à `prismLootFirst` s, puis un toutes les ~`prismLootEvery` s (± 20 %, plus vite avec
    * plusieurs squads vivantes), sorti du prochain alien tué comme la relance ; il n'expire jamais. Ramassé : le prochain level-up du joueur propose 3 cartes prismatiques
-   * (sauf s'il relance : tirage normal). Environ 2 par partie de 10 min.
+   * (sauf s'il relance : tirage normal). Environ 3 à 4 par partie de 10 min (seule source de panneaux tout prismatiques).
    */
-  prismLootFirst: 210,
-  prismLootEvery: 280,
+  prismLootFirst: 140, // 210 avant le 13/10 (+50 % de boosters : délais ÷ 1,5)
+  prismLootEvery: 160, // 280 avant le 13/10 (187 pendant quelques heures)
   /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
   rocketIdleRange: 1000,
   /** Durée du stimpack (s). */

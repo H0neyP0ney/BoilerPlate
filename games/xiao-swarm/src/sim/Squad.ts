@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, PRISM_LEVEL_EVERY, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
@@ -190,7 +190,7 @@ export class Squad {
     return true;
   }
 
-  /** `reroll` : relance du joueur (niveaux 10, 20, 30… compris : les prismatiques y sont retirées au sort, plus garanties). */
+  /** `reroll` : relance du joueur (les prismatiques sont retirées au sort). */
   private rollOffer(avoid: readonly UpgradeId[] = [], reroll = false): void {
     let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
     const fresh = eligible.filter((id) => !avoid.includes(id));
@@ -204,14 +204,13 @@ export class Squad {
         return;
     }
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
-    const milestone = choosing % PRISM_LEVEL_EVERY === 0; // niveaux 10, 20, 30… : les 3 propositions sont déjà prismatiques
-    // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois ; à un niveau 10, 20, 30… il serait gâché : il est gardé pour la relance ou le niveau suivant
+    // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois (plus de niveaux 10, 20, 30… tout prismatiques depuis le 13/10)
     // partie qui commence par le tutoriel : jamais de prismatique aux deux premiers level up ; le troisième en impose une (`Range`)
     const nth = choosing - 1; // n-ième level up de la partie
     const early = !!this.sim.tutorial && !forced && nth <= TUTORIAL_NO_PRISM_LEVELUPS;
-    const boost = !forced && !early && this.prismBoost && (reroll || !milestone);
+    const boost = !forced && !early && this.prismBoost;
     if (boost) this.prismBoost = false;
-    const allPrism = !forced && (boost || (!reroll && milestone)); // sans booster, la relance d'un niveau 10 retombe sur les chances normales
+    const allPrism = !forced && boost; // une relance retombe sur les chances normales (le booster a déjà été consommé par le tirage d'origine)
     this.offerPrism = offer.map(() => (forced || early ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
     if (this.sim.tutorial && !forced && !reroll && nth === TUTORIAL_NO_PRISM_LEVELUPS + 1 && (this.picked[TUTORIAL_PRISM_UPGRADE] ?? 0) < UPGRADES[TUTORIAL_PRISM_UPGRADE].maxStacks) {
       let at = offer.indexOf(TUTORIAL_PRISM_UPGRADE);
@@ -272,7 +271,7 @@ export class Squad {
 
   /**
    * Joueur qui rejoint une partie en cours au niveau `level` : un choix d'upgrade par niveau déjà franchi (niveau 1 exclu), pris au hasard
-   * comme en jeu (offre de 3 cartes, prismatique par chance ou aux niveaux 10, 20, 30…), en silence (aucun événement, aucune pause).
+   * comme en jeu (offre de 3 cartes, prismatique par chance), en silence (aucun événement, aucune pause).
    */
   catchUpUpgrades(level: number): void {
     const { rng } = this.sim;
@@ -280,7 +279,7 @@ export class Squad {
       const eligible = UPGRADE_IDS.filter((id) => this.canTake(id));
       if (eligible.length === 0) break;
       const id = rng.pick(rng.sample(eligible, OFFER_SIZE));
-      this.applyUpgrade(id, l % PRISM_LEVEL_EVERY === 0 || rng.chance(DIFFICULTY.prismChance)); // choix du niveau l → niveau l + 1
+      this.applyUpgrade(id, rng.chance(DIFFICULTY.prismChance)); // choix du niveau l → niveau l + 1
     }
   }
 

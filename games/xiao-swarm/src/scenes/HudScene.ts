@@ -273,7 +273,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.time.delayedCall(300, () => latePack.ensure(g));
     }
     this.updateSoundHint();
-    this.hintLabel.setText(s.sim.tutorial?.active ? t('hintTutoDrag') : // tutoriel : « Drag to move » partout, souris comprise (les touches restent dessinées au-dessus)
+    this.hintLabel.setText(s.sim.tutorial?.active && device.isTouch ? t('hintTutoDrag') : // tutoriel mobile : « Drag to move » ; sur ordinateur, « Move your squad » sous les touches (tutoriel compris)
        device.isTouch ? t('hintDrag') : t('hintKeys'));
     this.updateBarsSlide(g.flow.state !== 'ready' && !!this.timeline); // le glissement attend que les barres existent (paquet 2)
     this.drawXp();

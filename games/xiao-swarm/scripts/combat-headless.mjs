@@ -472,21 +472,22 @@ try {
         check(!orb.alive && sq.soldiers.some((o) => o.frozen > 0), 'orbe de glace des rhinos : comme d’habitude, il gèle le soldat touché', `${sq.soldiers.filter((o) => o.frozen > 0).length} soldat(s) gelé(s)`);
       }
     }
-    // deux boss tués : l'autre jumeau est épargné par le clear screen du premier, un seul œuf (sur le dernier tué)
+    // deux boss tués : le premier est un alien comme les autres (ni œuf, ni clear screen, ni escalade) ; le dernier laisse l'œuf, scalpe les autres aliens et déclenche l'escalade
     const { sim } = fresh(43);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     sim.horde.spawnAt('boss_rhino_fire', sq.center.x + 400, sq.center.y, 1, false);
     sim.horde.spawnAt('boss_rhino_ice', sq.center.x - 400, sq.center.y, 1, false);
-    const [f, i] = sim.aliens;
-    f.age = i.age = 99;
-    sim.damage(f, 1e12, 'p1');
+    sim.horde.spawnAt('slime', sq.center.x, sq.center.y + 300, 1, false);
+    const [f, i, sl] = sim.aliens;
+    f.age = i.age = sl.age = 99;
     const eggsOf = () => sim.aliens.filter((a) => a.alive && a.def.egg);
-    check(i.alive && eggsOf().length === 1 && Math.hypot(eggsOf()[0].x - f.x, eggsOf()[0].y - f.y) < 40 && sim.bossKills === 0, 'rhinos jumeaux : le premier tué laisse son œuf, sans escalade : le boss n’est pas fini', `${eggsOf().length} œuf, ${sim.bossKills} boss tué(s)`);
+    sim.damage(f, 1e12, 'p1');
+    check(i.alive && sl.alive && eggsOf().length === 0 && sim.bossKills === 0, 'rhinos jumeaux : le premier tué est un alien comme les autres : ni œuf, ni clear screen, ni escalade', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
     i.x = sq.center.x - 350; i.y = sq.center.y + 120;
     sim.damage(i, 1e12, 'p1');
     const c = eggsOf().find((e) => Math.hypot(e.x - i.x, e.y - i.y) < 40);
-    check(eggsOf().length === 2 && !!c && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : chaque rhino laisse son œuf (PV exacts de `boss_egg`) ; l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œufs, ${sim.bossKills} boss tué(s)`);
+    check(eggsOf().length === 1 && !!c && !sl.alive && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : le dernier tué laisse l’œuf (PV exacts de `boss_egg`), scalpe les autres aliens, et l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
   }
 
   // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)
@@ -600,36 +601,19 @@ try {
     check(sim.powerups.items.length === 0 && sq.rerolls === before + 1, 'relance : ramassée une fois le délai écoulé', `${sim.powerups.items.length} au sol, +${sq.rerolls - before}`);
   }
 
-  // ---- upgrades : aux niveaux 10, 20, 30… les 3 propositions sont prismatiques
+  // ---- upgrades : plus de niveaux 10, 20, 30… tout prismatiques (seul le booster prismatique garantit un panneau entier)
   {
     const { sim } = fresh(19);
     const sq = sim.squadOf('p1');
-    const allPrismAt = [];
-    let mixedAt10 = false;
-    for (let guard = 0; guard < 200 && sq.level < 21; guard++) {
+    let allPrism = 0;
+    for (let guard = 0; guard < 400 && sq.level < 41; guard++) {
       sq.gainXp(sq.xpNeeded - sq.xp + 0.01); // un niveau
       while (sq.offer) {
-        const choosing = sq.level; // un seul niveau en attente à la fois ici
-        if (sq.offerPrism.length === 3 && sq.offerPrism.every(Boolean)) allPrismAt.push(choosing);
-        else if (choosing % 10 === 0) mixedAt10 = true;
+        if (sq.offerPrism.length === 3 && sq.offerPrism.every(Boolean)) allPrism++;
         sim.chooseUpgrade('p1', 0);
       }
     }
-    check(allPrismAt.includes(10) && allPrismAt.includes(20) && !mixedAt10, 'upgrades : 3 propositions prismatiques aux niveaux 10 et 20', `tout prismatique aux niveaux ${allPrismAt.join(', ') || 'aucun'}`);
-    // relance au niveau 30 : les prismatiques sont retirées au sort (5 % chacune), plus garanties
-    while (sq.level < 29) {
-      sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
-      while (sq.offer) sim.chooseUpgrade('p1', 0);
-    }
-    sq.rerolls = 50;
-    sq.gainXp(sq.xpNeeded - sq.xp + 0.01);
-    const before = sq.offerPrism.every(Boolean);
-    let allAfter = 0;
-    for (let i = 0; i < 20 && sq.offer; i++) {
-      sim.rerollUpgrade('p1');
-      if (sq.offerPrism.every(Boolean)) allAfter++;
-    }
-    check(sq.level === 30 && before && allAfter === 0, 'upgrades : une relance au niveau 30 retire les prismatiques au sort', `niveau ${sq.level}, ${allAfter} relance(s) sur 20 encore toutes prismatiques`);
+    check(sq.level >= 40 && allPrism === 0, 'upgrades : aucun panneau tout prismatique aux niveaux 10, 20, 30, 40 (sans booster)', `niveau ${sq.level}, ${allPrism} panneau(x) tout prismatique(s)`);
   }
 
   // ---- objet au sol attrapé (attiré) : il ne disparaît plus et ne clignote plus
@@ -1067,6 +1051,24 @@ try {
     step(30);
     const after = sim.recruits.items.length + sim.powerups.items.length + sim.powerups.fields.length + sim.upgradeOrbs.items.length + sim.xp.orbs.length;
     check(before >= 5 && after === 0 && sq.buffs.stim === 0 && !sim.aliens.some((a) => a.alive && a.def.egg), 'fin du jeu : recrues, power-ups, loots, globes d\'upgrade et d\'XP, œufs et bonus actifs effacés', `${before} avant, ${after} après`);
+  }
+
+  // ---- grand rayon d'aimant : un globe d'XP ou une recrue lâchés dans le rayon de ramassage ne sont pas avalés au tick de leur création
+  {
+    const { sim, step } = fresh(16);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sq.stats.add('magnet', { flat: 4 }); // aimant énorme : le rayon de ramassage couvre toute la squad
+    const before = sim.xp.orbs.length;
+    sim.horde.spawnAt('slime', sq.center.x, sq.center.y, 1, false);
+    const alien = sim.aliens.find((a) => a.alive);
+    sim.xp.drop(alien, 6, sq);
+    const orbs = sim.xp.orbs.length - before;
+    const rec = sim.recruits.drop('trooper', sq.center.x + 10, sq.center.y, sq.center);
+    step(6); // 0,2 s
+    const stillOrbs = sim.xp.orbs.length - before;
+    check(orbs > 0 && stillOrbs === orbs, 'aimant énorme : les globes d\'XP lâchés dans le rayon sont encore là 0,2 s après (ils sortent avant d\'être ramassés)', `${stillOrbs}/${orbs} globe(s)`);
+    check(!!rec.hop && sim.recruits.items.includes(rec), 'aimant énorme : une recrue lâchée à moins de 40 px de la squad saute au lieu d\'être ramassée sur place');
   }
 } finally {
   await vite.close();

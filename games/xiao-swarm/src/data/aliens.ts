@@ -103,7 +103,8 @@ export interface AlienDef {
   /** Visuel : petits arcs électriques qui crépitent au hasard autour de lui (affichage seulement, `view/ElectricFx.ts` ; chargeur). */
   electric?: boolean;
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
-  boss?: { kind: 'mini' | 'final' };
+  /** `twin` : boss jumeau (rhinos feu / glace) : le premier tombé est un alien comme les autres (ni clear screen, ni œuf, ni escalade) ; seul le dernier compte. */
+  boss?: { kind: 'mini' | 'final'; twin?: boolean };
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
   /**
@@ -438,7 +439,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     oneShot: true,
     rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 31.2 }, burst: { orb: 'fire_orb', count: 8 } },
-    boss: { kind: 'mini' },
+    boss: { kind: 'mini', twin: true },
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xff5a1a,
@@ -456,7 +457,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     oneShot: true,
     rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
-    boss: { kind: 'mini' },
+    boss: { kind: 'mini', twin: true },
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0x7fd8ff,

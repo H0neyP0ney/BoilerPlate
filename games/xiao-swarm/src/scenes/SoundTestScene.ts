@@ -2,25 +2,25 @@ import Phaser from 'phaser';
 import { sfx } from '@xiao/engine';
 import { SCENES } from '../config';
 import { SFX_INFO as BASE_INFO, type SfxInfo } from '../sfxInfo';
-import { addNewSfx, ensureSfxLoaded, refreshSfxVariants, reloadChangedVariants, uploadSfxVariant, resetSfxTuning, saveSfxTuningToCode, selectSfxVariant, setSfxField, sfxTuning, type SfxField } from '../debugSfx';
+import { addNewSfx, ensureSfxLoaded, refreshSfxVariants, reloadChangedVariants, uploadSfxVariant, resetSfxTuning, saveSfxTuningToCode, selectSfxVariant, setSfxField, sfxTuning } from '../debugSfx';
 import { SFX, type SfxId } from '../settings';
 
 /**
  * Page de test des bruitages (dev / `?debug=1`, ouverte par `?sounds`) : un bouton par son, avec QUAND il joue dans le jeu.
  * Pour remplacer un son : écraser `public/assets/audio/sfx/<nom>.mp3` puis recharger la page (F5). Voir `docs/SONS.md`.
- * Par son : un curseur de volume de base et trois champs (variation de hauteur, délai minimal entre deux lectures, voix simultanées ; 0 = illimité) réglés DANS le jeu
+ * Par son, sur deux lignes : curseurs de volume, de hauteur de base (cents) et de vitesse ; puis trois champs (variation de hauteur au hasard, délai minimal entre deux lectures, voix simultanées ; 0 = illimité) réglés DANS le jeu
  * (mémorisés dans le navigateur) ; Save les écrit dans `data/sfxTuning.ts`, Reset revient à cette sauvegarde. Compteur « joué / ignoré » : combien de fois chaque son
  * a été joué (ou refusé par sa limite) depuis le début de la partie : à lire après avoir joué, pour repérer les sons qui reviennent trop.
  * **Variantes** : chaque son a une liste déroulante. `<nom>.mp3` est la base ; tout fichier `<nom>--<variante>.mp3` du même dossier devient un choix (liste complétée
  * à l'ouverture en dev). Le choix est celui joué dans le jeu ; Save le garde dans le code, Reset revient au son validé.
  */
 /** Colonnes de la page (mêmes largeurs pour l'en-tête et chaque ligne) : son, volume, valeur, hauteur, écart, voix, variante, compteur, description. */
-const COLUMNS = '190px 150px 40px 72px 72px 56px 168px 84px minmax(220px, 1fr)';
-const COLUMN_TITLES = ['Son', 'Volume', '', 'Hauteur ±', 'Écart ms', 'Voix', 'Variante', 'Joué (−ignoré)', 'Quand'];
+const COLUMNS = '190px 150px 40px 150px 56px 150px 44px 168px 84px';
+const COLUMN_TITLES = ['Son', 'Volume', '', 'Hauteur (cents)', '', 'Vitesse', '', 'Variante', 'Joué (−ignoré)'];
 
 export class SoundTestScene extends Phaser.Scene {
   private root?: HTMLDivElement;
-  private readonly controls = new Map<SfxId, { volume: HTMLInputElement; value: HTMLSpanElement; fields: Record<Exclude<SfxField, 'volume'>, HTMLInputElement>; count: HTMLSpanElement; variant: HTMLSelectElement; play: HTMLButtonElement; when: HTMLSpanElement; info: string }>();
+  private readonly controls = new Map<SfxId, { volume: HTMLInputElement; value: HTMLSpanElement; fields: Record<'detune' | 'minGapMs' | 'maxVoices', HTMLInputElement>; sliders: Record<'pitch' | 'rate', { input: HTMLInputElement; value: HTMLSpanElement }>; count: HTMLSpanElement; variant: HTMLSelectElement; play: HTMLButtonElement; when: HTMLSpanElement; info: string }>();
   private timer?: Phaser.Time.TimerEvent;
   private status!: HTMLSpanElement;
   /** Sons dont le chargement à l'ouverture est terminé (réussi ou non) : seuls ceux-là peuvent être déclarés « introuvables ». */
@@ -104,8 +104,13 @@ export class SoundTestScene extends Phaser.Scene {
       h.style.cssText = 'margin:18px 0 6px;color:#ffc83d';
       root.append(h);
       for (const s of INFO.filter((i) => i.group === g)) {
+        const block = document.createElement('div');
+        block.style.cssText = 'margin:3px 0 10px;padding-bottom:6px;border-bottom:1px solid #16293f';
         const row = document.createElement('div');
-        row.style.cssText = `display:grid;grid-template-columns:${COLUMNS};gap:10px;align-items:center;margin:3px 0`;
+        row.style.cssText = `display:grid;grid-template-columns:${COLUMNS};gap:10px;align-items:center`;
+        const row2 = document.createElement('div');
+        row2.style.cssText = 'display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:4px 0 0 200px';
+        block.append(row, row2);
         const loaded = this.cache.audio.exists(SFX[s.id].key);
         const play = this.button(`▶ ${s.id}`, () => this.play(s.id));
         play.style.textAlign = 'left';
@@ -129,28 +134,59 @@ export class SoundTestScene extends Phaser.Scene {
           value.textContent = sfxTuning(s.id).volume.toFixed(2);
         });
         slider.addEventListener('change', () => this.play(s.id)); // on relâche le curseur : on entend le nouveau volume
-        const field = (key: Exclude<SfxField, 'volume'>, title: string): HTMLInputElement => {
+        const field = (key: 'detune' | 'minGapMs' | 'maxVoices', label: string, title: string): HTMLInputElement => {
           const lab = document.createElement('label');
           lab.title = title;
-          lab.style.cssText = 'display:block';
+          lab.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:12px;opacity:0.9';
+          lab.append(label);
           const input = document.createElement('input');
           input.type = 'number';
           input.min = '0';
           input.value = String(t[key]);
-          input.style.cssText = 'width:100%;box-sizing:border-box;background:#13233a;color:#dfe;border:1px solid #3a5a7a;border-radius:4px;padding:2px 4px;font:inherit';
+          input.style.cssText = 'width:64px;box-sizing:border-box;background:#13233a;color:#dfe;border:1px solid #3a5a7a;border-radius:4px;padding:2px 4px;font:inherit';
           input.addEventListener('change', () => {
             setSfxField(s.id, key, Number(input.value));
             input.value = String(sfxTuning(s.id)[key]);
           });
           lab.append(input);
-          row.append(lab);
+          row2.append(lab);
           return input;
         };
+        // curseur d'un réglage signé / décimal (hauteur de base, vitesse) : même principe que le volume ; on entend le résultat au relâchement
+        const tuneSlider = (key: 'pitch' | 'rate', min: number, max: number, step: number, show: (v: number) => string, title: string): { input: HTMLInputElement; value: HTMLSpanElement } => {
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.min = String(min);
+          input.max = String(max);
+          input.step = String(step);
+          input.value = String(t[key]);
+          input.title = title;
+          input.style.cssText = 'width:100%;margin:0';
+          const val = document.createElement('span');
+          val.style.cssText = 'text-align:right;font-variant-numeric:tabular-nums;font-size:12px';
+          val.textContent = show(t[key]);
+          input.addEventListener('input', () => {
+            setSfxField(s.id, key, Number(input.value));
+            val.textContent = show(sfxTuning(s.id)[key]);
+          });
+          input.addEventListener('change', () => this.play(s.id));
+          input.addEventListener('dblclick', () => {
+            input.value = String(key === 'pitch' ? 0 : 1); // double-clic : valeur neutre
+            input.dispatchEvent(new Event('input'));
+            this.play(s.id);
+          });
+          row.append(input, val);
+          return { input, value: val };
+        };
         row.append(slider, value);
+        const sliders = {
+          pitch: tuneSlider('pitch', -1200, 1200, 10, (v) => `${v > 0 ? '+' : ''}${v}`, 'Hauteur de base (cents, − = plus grave, + = plus aigu ; 1200 = une octave). Double-clic : 0'),
+          rate: tuneSlider('rate', 0.25, 3, 0.01, (v) => `×${v.toFixed(2)}`, 'Vitesse de lecture (1 = normale ; change aussi la hauteur). Double-clic : 1'),
+        };
         const fields = {
-          detune: field('detune', 'Variation de hauteur au hasard (± cents) : évite l’effet mitraillette'),
-          minGapMs: field('minGapMs', 'Délai minimal (ms) entre deux lectures de ce son'),
-          maxVoices: field('maxVoices', 'Voix simultanées maximum (0 = illimité)'),
+          detune: field('detune', 'Variation ±', 'Variation de hauteur au hasard (± cents) : évite l’effet mitraillette'),
+          minGapMs: field('minGapMs', 'Écart ms', 'Délai minimal (ms) entre deux lectures de ce son'),
+          maxVoices: field('maxVoices', 'Voix', 'Voix simultanées maximum (0 = illimité)'),
         };
         const variant = document.createElement('select');
         variant.title = 'Son joué dans le jeu : la base ou une variante (fichier <nom>--<variante>.mp3)';
@@ -202,11 +238,12 @@ export class SoundTestScene extends Phaser.Scene {
         const when = document.createElement('span');
         when.textContent = loaded ? s.when : `${s.when} — chargement…`;
         when.style.opacity = '0.8';
-        this.controls.set(s.id, { volume: slider, value, fields, count, variant, play, when, info: s.when });
+        this.controls.set(s.id, { volume: slider, value, fields, sliders, count, variant, play, when, info: s.when });
         this.fillVariants(s.id);
         row.prepend(play);
-        row.append(when);
-        root.append(row);
+        when.style.fontSize = '12px';
+        row2.append(when);
+        root.append(block);
       }
     }
     document.body.append(root);
@@ -268,6 +305,10 @@ export class SoundTestScene extends Phaser.Scene {
       c.volume.value = String(t.volume);
       c.value.textContent = t.volume.toFixed(2);
       c.fields.detune.value = String(t.detune);
+      c.sliders.pitch.input.value = String(t.pitch);
+      c.sliders.pitch.value.textContent = `${t.pitch > 0 ? '+' : ''}${t.pitch}`;
+      c.sliders.rate.input.value = String(t.rate);
+      c.sliders.rate.value.textContent = `×${t.rate.toFixed(2)}`;
       c.fields.minGapMs.value = String(t.minGapMs);
       c.fields.maxVoices.value = String(t.maxVoices);
       this.fillVariants(id);

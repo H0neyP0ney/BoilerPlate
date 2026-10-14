@@ -45,7 +45,7 @@ export const MUSIC = { key: 'music', url: ['assets/audio/music.mp3'] }; // mp3 s
 export const sfxVariantUrl = (baseUrl: string, variant: string): string => (variant ? baseUrl.replace(/\.mp3$/, `--${variant}.mp3`) : baseUrl);
 
 /** Un bruitage : `public/assets/audio/...`, réglé par `SFX_TUNING` (`data/sfxTuning.ts`, curseurs de la page `?sounds`) ; `volume` et `opts` ne servent que si le son n'y figure pas encore. */
-function sfxDef(name: string, volume: number, opts: { detune?: number; minGapMs?: number; maxVoices?: number } = {}, url = `assets/audio/sfx/${name}.mp3`) {
+function sfxDef(name: string, volume: number, opts: { detune?: number; pitch?: number; rate?: number; minGapMs?: number; maxVoices?: number } = {}, url = `assets/audio/sfx/${name}.mp3`) {
   const t = SFX_TUNING[name];
   return {
     key: `sfx_${name}`,
@@ -54,6 +54,8 @@ function sfxDef(name: string, volume: number, opts: { detune?: number; minGapMs?
     url: [sfxVariantUrl(url, t?.variant ?? '')],
     volume: t?.volume ?? volume,
     detune: t ? t.detune : opts.detune,
+    pitch: t ? t.pitch : opts.pitch,
+    rate: t ? t.rate : opts.rate,
     minGapMs: t ? t.minGapMs : opts.minGapMs,
     maxVoices: t ? (t.maxVoices > 0 ? t.maxVoices : undefined) : opts.maxVoices, // 0 = pas de limite
   };

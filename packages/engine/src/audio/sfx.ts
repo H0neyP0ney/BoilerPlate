@@ -5,6 +5,10 @@ export interface SfxOptions {
   volume?: number;
   /** Variation aléatoire de hauteur (cents, ±) : évite l'effet « mitraillette » d'un son toujours identique. */
   detune?: number;
+  /** Hauteur de base (cents, signé : − = plus grave, + = plus aigu), ajoutée à la variation aléatoire. */
+  pitch?: number;
+  /** Vitesse de lecture (1 = normale ; 2 = deux fois plus vite et une octave plus haut). */
+  rate?: number;
   /** Délai minimal (ms) entre deux lectures de ce son : les demandes trop rapprochées sont ignorées. */
   minGapMs?: number;
   /**
@@ -59,11 +63,11 @@ export const sfx = {
     }
     lastPlayed.set(key, now);
     const d = opts.detune ?? 0;
-    const sound = scene.sound.add(key, { volume: (opts.volume ?? 1) * master * duck, detune: d ? (Math.random() * 2 - 1) * d : 0 });
+    const sound = scene.sound.add(key, { volume: (opts.volume ?? 1) * master * duck, detune: (opts.pitch ?? 0) + (d ? (Math.random() * 2 - 1) * d : 0), rate: opts.rate ?? 1 });
     sound.once('complete', () => sound.destroy()); // le son temporaire se libère tout seul
     sound.play();
     counter(key).played++;
-    active.push(now + (sound.duration || 0.3) * 1000);
+    active.push(now + ((sound.duration || 0.3) / (opts.rate ?? 1)) * 1000);
   },
 
   /** Compteurs de lecture par son depuis le lancement (ou le dernier `resetStats`). */

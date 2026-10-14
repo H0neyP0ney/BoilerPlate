@@ -9,9 +9,9 @@ import { SFX, sfxVariantUrl, type SfxId } from './settings';
 const STORAGE_KEY = 'xiao-debug-sfx-tuning';
 
 /** Champs numériques réglables d'un son. */
-export type SfxField = 'volume' | 'detune' | 'minGapMs' | 'maxVoices';
+export type SfxField = 'volume' | 'detune' | 'pitch' | 'rate' | 'minGapMs' | 'maxVoices';
 
-type Def = { key: string; url: string[]; baseUrl: string; variant: string; volume: number; detune?: number; minGapMs?: number; maxVoices?: number };
+type Def = { key: string; url: string[]; baseUrl: string; variant: string; volume: number; detune?: number; pitch?: number; rate?: number; minGapMs?: number; maxVoices?: number };
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const ids = (): SfxId[] => Object.keys(SFX) as SfxId[];
@@ -29,13 +29,15 @@ const loaded: Record<string, string> = Object.fromEntries(Object.entries(SFX_TUN
 /** Réglage actuel d'un son (celui qu'utilise le jeu). */
 export function sfxTuning(id: SfxId): SfxTuning {
   const d = def(id);
-  return { volume: d.volume, detune: d.detune ?? 0, minGapMs: d.minGapMs ?? 0, maxVoices: d.maxVoices ?? 0, variant: d.variant, variants: [...(known[id] ?? [])] };
+  return { volume: d.volume, detune: d.detune ?? 0, pitch: d.pitch ?? 0, rate: d.rate ?? 1, minGapMs: d.minGapMs ?? 0, maxVoices: d.maxVoices ?? 0, variant: d.variant, variants: [...(known[id] ?? [])] };
 }
 
 function apply(id: SfxId, t: Partial<Record<SfxField, number>> & { variant?: string }): void {
   const d = def(id);
   if (t.volume !== undefined) d.volume = clamp(t.volume, 0, 1);
   if (t.detune !== undefined) d.detune = clamp(Math.round(t.detune), 0, 1200);
+  if (t.pitch !== undefined) d.pitch = clamp(Math.round(t.pitch), -1200, 1200);
+  if (t.rate !== undefined) d.rate = clamp(Math.round(t.rate * 100) / 100, 0.25, 4);
   if (t.minGapMs !== undefined) d.minGapMs = clamp(Math.round(t.minGapMs), 0, 5000);
   if (t.maxVoices !== undefined) d.maxVoices = t.maxVoices > 0 ? clamp(Math.round(t.maxVoices), 1, 16) : undefined; // 0 = pas de limite
   if (t.variant !== undefined && validVariant(t.variant)) {
@@ -191,7 +193,7 @@ const q = (s: string): string => `'${s.replace(/'/g, "\\'")}'`;
 export async function saveSfxTuningToCode(): Promise<string> {
   const lines = ids().map((id) => {
     const t = sfxTuning(id);
-    return `  ${id}: { volume: ${Math.round(t.volume * 100) / 100}, detune: ${t.detune}, minGapMs: ${t.minGapMs}, maxVoices: ${t.maxVoices}, variant: ${q(t.variant)}, variants: [${t.variants.map(q).join(', ')}] },`;
+    return `  ${id}: { volume: ${Math.round(t.volume * 100) / 100}, detune: ${t.detune}, pitch: ${t.pitch}, rate: ${t.rate}, minGapMs: ${t.minGapMs}, maxVoices: ${t.maxVoices}, variant: ${q(t.variant)}, variants: [${t.variants.map(q).join(', ')}] },`;
   });
   const code = `export const SFX_TUNING: Record<string, SfxTuning> = {\n${lines.join('\n')}\n};`;
   const msg = await saveToCode('sfxtuning', { code });

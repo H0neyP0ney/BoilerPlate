@@ -138,13 +138,25 @@ export class Arena {
    * Plus on approche de la hitbox (t : 0 au bord de la zone, 1 au contact), plus la part de vitesse dirigée vers le
    * décor est retirée ; une fraction (wallNudge) est reversée en glissade tangentielle, du côté où l'unité allait déjà,
    * et une poussée douce (wallPush) éloigne du bord. La hitbox dure (`constrain`) reste le filet de sécurité.
+   * `noBoost` (soldats et ancre de la squad) : la glissade et la poussée de tous les cercles à portée sont sommées puis plafonnées à celles du plus fort, et la vitesse finale ne dépasse jamais la vitesse d'entrée :
+   * un mur de rochers qui se chevauchent (5 à 10 cercles) faisait sinon filer les soldats le long du mur (vitesse × 2).
+   * Les aliens gardent le comportement d'origine.
    */
-  steer(x: number, y: number, radius: number, v: Point): void {
+  steer(x: number, y: number, radius: number, v: Point, noBoost = false): void {
     const m = CROWD.wallMargin;
     if (m <= 0) return;
+    const inSpeed = Math.hypot(v.x, v.y);
     const near = this.collect(x, y, radius + m);
     const n = near.length;
     const nr = n + this.rocks.length;
+    // glissade et poussée des cercles s'ACCUMULAIENT (un mur de rochers qui se chevauchent = 5 à 10 cercles à portée : vitesse × 2 le long d'un long mur) : on les somme
+    // puis on plafonne au plus fort d'un seul cercle ; seul le retrait de la vitesse vers le décor reste cumulatif (une projection : elle ne peut pas accélérer)
+    let nudgeX = 0;
+    let nudgeY = 0;
+    let nudgeMax = 0;
+    let pushX = 0;
+    let pushY = 0;
+    let pushMax = 0;
     for (let k = 0; k < nr + this.blockers.length; k++) {
       const o = k < n ? this.obstacles[near[k]] : k < nr ? this.rocks[k - n] : this.blockers[k - nr];
       const reach = radius + o.radius + m;
@@ -165,11 +177,40 @@ export class Arena {
         const ty = nx;
         const side = v.x * tx + v.y * ty;
         const sign = side !== 0 ? Math.sign(side) : (Math.round(o.x + o.y) & 1) === 0 ? 1 : -1; // pile de face : côté stable
-        v.x += tx * sign * inward * t * CROWD.wallNudge;
-        v.y += ty * sign * inward * t * CROWD.wallNudge;
+        const nudge = inward * t * CROWD.wallNudge;
+        if (noBoost) {
+          nudgeX += tx * sign * nudge;
+          nudgeY += ty * sign * nudge;
+          if (nudge > nudgeMax) nudgeMax = nudge;
+        } else {
+          v.x += tx * sign * nudge;
+          v.y += ty * sign * nudge;
+        }
       }
-      v.x += nx * CROWD.wallPush * t * t;
-      v.y += ny * CROWD.wallPush * t * t;
+      const push = CROWD.wallPush * t * t;
+      if (noBoost) {
+        pushX += nx * push;
+        pushY += ny * push;
+        if (push > pushMax) pushMax = push;
+      } else {
+        v.x += nx * push;
+        v.y += ny * push;
+      }
+    }
+    if (!noBoost) return; // aliens : comportement d'origine
+    const nudgeLen = Math.hypot(nudgeX, nudgeY);
+    const nudgeK = nudgeLen > nudgeMax && nudgeLen > 0 ? nudgeMax / nudgeLen : 1;
+    const pushLen = Math.hypot(pushX, pushY);
+    const pushK = pushLen > pushMax && pushLen > 0 ? pushMax / pushLen : 1;
+    v.x += nudgeX * nudgeK + pushX * pushK;
+    v.y += nudgeY * nudgeK + pushY * pushK;
+    // la glissade dévie le mouvement, elle ne l'accélère jamais : vitesse finale ≤ vitesse d'entrée (ou la poussée douce d'un mur, pour une unité quasi immobile).
+    // Sans ça, `wallNudge` (×1,5 de la vitesse « dans le mur » rendue en tangente) faisait filer les soldats le long des longs murs de rochers.
+    const cap = Math.max(inSpeed, CROWD.wallPush);
+    const out = Math.hypot(v.x, v.y);
+    if (out > cap) {
+      v.x *= cap / out;
+      v.y *= cap / out;
     }
   }
 

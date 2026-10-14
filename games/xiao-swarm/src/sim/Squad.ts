@@ -25,7 +25,7 @@ export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number,
   }
   anchorV.x = mx * speed;
   anchorV.y = my * speed;
-  arena.steer(anchor.x, anchor.y, anchor.radius, anchorV);
+  arena.steer(anchor.x, anchor.y, anchor.radius, anchorV, true); // true : la glissade le long d'un mur ne peut pas accélérer l'ancre
   anchor.x += anchorV.x * dt;
   anchor.y += anchorV.y * dt;
   arena.constrain(anchor);
@@ -595,7 +595,7 @@ export class Squad {
       s.vy = damp(s.vy, desiredY, CROWD.velDamp, dt);
       this.steerV.x = s.vx;
       this.steerV.y = s.vy;
-      this.sim.arena.steer(s.x, s.y, s.radius, this.steerV);
+      this.sim.arena.steer(s.x, s.y, s.radius, this.steerV, true); // true : la glissade le long d'un mur ne peut pas accélérer le soldat
       s.vx = this.steerV.x;
       s.vy = this.steerV.y;
       s.x += (s.vx + s.kx) * dt;

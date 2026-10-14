@@ -705,7 +705,7 @@ export class Horde {
       a.vy = damp(a.vy, desiredY, 8, dt);
       this.steerV.x = a.vx;
       this.steerV.y = a.vy;
-      arena.steer(a.x, a.y, a.radius, this.steerV);
+      arena.steer(a.x, a.y, a.radius, this.steerV, true);
       a.vx = this.steerV.x;
       a.vy = this.steerV.y;
       a.x += (a.vx + a.kx) * dt + sx * 0.5;
@@ -1033,7 +1033,7 @@ export class Horde {
         a.vy = damp(a.vy, ty * speed, 8, dt);
         this.steerV.x = a.vx;
         this.steerV.y = a.vy;
-        arena.steer(a.x, a.y, a.radius, this.steerV);
+        arena.steer(a.x, a.y, a.radius, this.steerV, true);
         a.vx = this.steerV.x;
         a.vy = this.steerV.y;
         break;

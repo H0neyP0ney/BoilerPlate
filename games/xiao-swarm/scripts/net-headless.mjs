@@ -42,6 +42,10 @@ try {
     hub.pump();
     await new Promise((r) => setImmediate(r));
   };
+  // la partie peut s'être terminée en route (écran de fin : monde figé, puis relance) selon la trajectoire des aliens : les scénarios qui suivent veulent un monde qui tourne
+  const ensureRunning = async (client) => {
+    for (let guard = 0; host.endTicks > 0 && guard < 600; guard++) await tick(client);
+  };
 
   // 1) L'hôte joue seul 5 s, puis un client rejoint EN COURS de partie.
   host.setLocalInput(1, 0);
@@ -411,9 +415,11 @@ try {
   check(a.offer === null, 'le choix applique l’upgrade');
 
   // 3e bis) Recrue en trop (escouade pleine) : soin en zone — le ramasseur à 100 %, ses voisins proches à 50 %, les lointains pas du tout.
+  await ensureRunning(client);
   hs.aliens.length = 0;
   while (a.soldiers.length < 3) a.recruit('trooper', { x: a.center.x, y: a.center.y }); // le scénario a pu décimer l'escouade : il faut 3 soldats
   const [m0, m1, m2] = a.soldiers;
+  for (const m of [m0, m1, m2]) m.stun = m.frozen = m.capturedBy = 0; // pas étourdi / gelé / avalé par un alien du scénario précédent : il ne ramasserait pas la recrue
   const gap = a.maxSize - a.size;
   a.stats.add('maxSquad', { flat: -gap }); // escouade pleine
   const towardCenter = m0.x < hs.map.width / 2 ? 1 : -1; // vers le centre de la carte : un bord ramènerait le soldat « lointain » près des autres
@@ -432,6 +438,7 @@ try {
   for (const [s, x] of parked) s.x = x;
 
   // 3f) Onde de choc : repousse même un alien lourd, à chaque montée de niveau.
+  await ensureRunning(client);
   hs.aliens.length = 0;
   hs.combat.clear(); // roquettes du power-up encore en vol (la pause de choix a étalé la rafale)
   resolveChoices();
@@ -443,6 +450,7 @@ try {
   const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
   resolveChoices(); // plus de choix en attente
   for (let round = 0; round < 3; round++) {
+    await ensureRunning(client); // une partie finie au tour précédent : on attend la relance
     heavy.x = heavy.px = a.center.x - 300; // chaque tour repart à portée de l'onde (sinon les tours précédents l'ont déjà poussé hors de portée)
     heavy.y = heavy.py = a.center.y;
     a.gainXp(a.xpNeeded - a.xp + 0.01);
@@ -456,6 +464,7 @@ try {
   hs.aliens.length = 0;
 
   // 3g) Saut écrasant du crabe : point d'impact visé et reflété chez le client (télégraphe), soldat écrasé tué d'un coup.
+  await ensureRunning(client);
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_crab', a.center.x + 400, a.center.y);
   const jumper = hs.aliens[0];
@@ -487,6 +496,7 @@ try {
   for (let i = 0; i < 3; i++) await tick(client);
 
   // 4) Mort en coop : zone de réanimation au sol ; l'équipier qui y reste 2 s ramène le joueur ; quand les deux sont morts → fin, puis relance.
+  await ensureRunning(client);
   const deathAt = { x: b.center.x, y: b.center.y };
   for (const x of b.soldiers) x.alive = false;
   for (let i = 0; i < 15; i++) await tick(client);

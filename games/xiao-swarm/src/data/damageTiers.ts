@@ -20,17 +20,17 @@ export interface DamageTier {
 export const TIERED_TEXTURE = 'fx_blaster_blue';
 
 /**
- * 7 paliers : bleu > vert > jaune > orangé > violet > rose > rouge, répartis régulièrement de ×1 à ×4 (le plafond théorique de la stat Damage : 10 prises
- * toutes prismatiques ; ×2,5 sans prismatique, voir Squad / progression.ts) : un palier tous les ×0,5. Seuils légèrement sous la valeur exacte : le cumul de flottants ne doit pas faire rater un palier.
+ * 7 paliers : bleu > vert > jaune > orangé > violet > rose > rouge, répartis linéairement de ×1 à ×3,5 (14/10 : le dernier palier était à ×4, le plafond théorique de la stat Damage :
+ * 10 prises toutes prismatiques ; ×2,5 sans prismatique, voir Squad / progression.ts) : un palier tous les ×0,4167. Seuils légèrement sous la valeur exacte (−0,01) : le cumul de flottants ne doit pas faire rater un palier.
  */
 export const DAMAGE_TIERS: DamageTier[] = [
   { min: 1, texture: 'fx_blaster_blue', glow: [60, 150, 255], head: [130, 205, 255], impact: 0x5ab4ff },
-  { min: 1.49, texture: 'fx_blaster_green', glow: [60, 220, 110], head: [170, 255, 190], impact: 0x5aff8a },
-  { min: 1.99, texture: 'fx_blaster_yellow', glow: [255, 235, 60], head: [255, 250, 170], impact: 0xffec3a },
-  { min: 2.49, texture: 'fx_blaster_orange', glow: [255, 150, 40], head: [255, 210, 130], impact: 0xff9a3a },
-  { min: 2.99, texture: 'fx_blaster_purple', glow: [170, 90, 255], head: [215, 170, 255], impact: 0xb06aff },
-  { min: 3.49, texture: 'fx_blaster_pink', glow: [255, 90, 200], head: [255, 190, 235], impact: 0xff5ac8 },
-  { min: 3.99, texture: 'fx_blaster_red', glow: [255, 60, 60], head: [255, 160, 150], impact: 0xff4a4a },
+  { min: 1.41, texture: 'fx_blaster_green', glow: [60, 220, 110], head: [170, 255, 190], impact: 0x5aff8a },
+  { min: 1.82, texture: 'fx_blaster_yellow', glow: [255, 235, 60], head: [255, 250, 170], impact: 0xffec3a },
+  { min: 2.24, texture: 'fx_blaster_orange', glow: [255, 150, 40], head: [255, 210, 130], impact: 0xff9a3a },
+  { min: 2.66, texture: 'fx_blaster_purple', glow: [170, 90, 255], head: [215, 170, 255], impact: 0xb06aff },
+  { min: 3.07, texture: 'fx_blaster_pink', glow: [255, 90, 200], head: [255, 190, 235], impact: 0xff5ac8 },
+  { min: 3.49, texture: 'fx_blaster_red', glow: [255, 60, 60], head: [255, 160, 150], impact: 0xff4a4a },
 ];
 
 /** Palier atteint pour ce multiplicateur de dégâts. */

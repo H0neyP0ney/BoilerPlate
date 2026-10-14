@@ -175,7 +175,7 @@ export const ASSETS: AssetEntry[] = [
       },
     },
   },
-  // Araignée rouge (`spider`, calquée sur le gling : c'est ce que fait apparaître la Gling Mère).
+  // Araignée rouge (`spider`, unité à part entière, uniquement invoquée : Gling Mère, chaman à sa mort, boules du Giant Crab).
   // art-src/old/spider.png (grille 4×4, rangée sous art-src/spider.pack.json) réduit par node tools/pack-grids.mjs — 16 cases de 64×55, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
     type: 'sheet',

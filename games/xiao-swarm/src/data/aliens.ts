@@ -590,8 +590,9 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 200,
   },
   /**
-   * Araignée rouge : calquée sur le gling (mêmes stats : rapide, fragile, arrive en essaims). C'est elle que la Gling Mère fait apparaître
-   * (`boss_gling.swarm.spawn`) à la place des glings. Ajoutée en DERNIER : l'ordre de `ALIENS` donne l'index réseau des aliens (`Protocol.ts`).
+   * Araignée rouge : une unité à part entière (propre définition, sprites, taille, couleurs), JAMAIS dans une vague : elle n'existe que invoquée, par la Gling Mère
+   * (`boss_gling.swarm`), le chaman à sa mort (`deathSpawn`) et les boules du Giant Crab (`lob.spawn`) ; PV réglables par source (`hpMul`). Rapide, fragile, arrive en essaims ;
+   * ses stats de base sont pour l'instant proches de celles du gling, mais indépendantes. Ajoutée en DERNIER : l'ordre de `ALIENS` donne l'index réseau des aliens (`Protocol.ts`).
    */
   spider: {
     id: 'spider',

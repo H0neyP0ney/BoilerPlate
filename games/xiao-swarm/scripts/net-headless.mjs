@@ -386,7 +386,7 @@ try {
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');
     const { DIFFICULTY: D } = await vite.ssrLoadModule('/src/config.ts'); // les seuils suivent les dégâts de base de la squad
-    const names = [1, 1.5, 2, 2.5, 3, 3.5, 4].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
+    const names = [1, 1.4167, 1.8333, 2.25, 2.6667, 3.0833, 3.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
     check(names === 'blue > green > yellow > orange > purple > pink > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rose > rouge', names); }
   // arrivée tardive : upgrades au hasard pour rejoindre le niveau commun, squad à 60 % de l'effectif max des autres (comme un revive)
   { const lv = hs.sharedLevel;

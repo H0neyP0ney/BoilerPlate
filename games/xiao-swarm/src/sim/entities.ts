@@ -186,6 +186,8 @@ export interface Projectile {
   poison: number;
   /** Nombre d'araignées enragées qui surgissent à l'impact (boules du Giant Crab ; 0 = aucune). */
   spawn: number;
+  /** PV des araignées nées à l'impact (× leurs PV de base ; boules du Giant Crab). */
+  spawnHp: number;
   texture: string;
   team: Team;
   owner: PlayerId;

@@ -127,6 +127,7 @@ export class Squad {
     this.level = 1;
     this.offer = null;
     this.offerPrism = [];
+    this.prismBoost = false; // un booster prismatique ramassé mais pas encore utilisé ne passe pas à la partie suivante (relance coop)
     this.rerolls = Math.round(DIFFICULTY.rerolls);
     this.peakSize = 0;
     this.buffs.stim = 0;

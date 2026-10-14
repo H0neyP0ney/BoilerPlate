@@ -24,7 +24,6 @@ import { FX } from '../fxParams';
 import { teleColor, teleInner, teleOuter } from './telegraph';
 import { ROCKET_TEXTURE } from '../sim/Combat';
 import { CHEST_GOLD, LootViews } from './LootViews';
-import { HEAL_FIELD } from '../sim/PowerUps';
 import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, powerUpIconKey, RECRUIT_COLOR } from './PickupViews';
 import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
@@ -81,7 +80,7 @@ export const ORB_SCALE = 1.3;
 /** PV de base à partir desquels la mort d'un alien secoue l'écran (charger 390, lurker 360, bulle 2160, mini-boss ; hors slimes, gling…). */
 const BIG_KILL_HP = 300;
 /** Barre de vie : la part blanche attend ce temps (s) sur l'ancienne vie après un coup, puis rejoint la barre colorée à cette vitesse (part de la barre par seconde). */
-export const BAR_GHOST_HOLD = 0.5; // 0,15 avant le 08/10
+export const BAR_GHOST_HOLD = 0.65; // 0,5 avant le 14/10, 0,15 avant le 08/10
 /** Sous le feu, chaque coup relance l'attente de la part blanche mais ×`BAR_GHOST_HOLD_DECAY` de moins que le précédent (elle finit par rejoindre la rouge). */
 export const BAR_GHOST_HOLD_DECAY = 0.7; // 0,6 avant le 08/10
 export interface BarGhost { last: number; ghost: number; hold: number; hits: number }
@@ -1361,15 +1360,8 @@ export class WorldView {
       if (s.hp < s.maxHp || frozen || over) {
         // gelé : sa barre de vie reste affichée (il est attaquable dans son glaçon), même pleine
         const color = s.owner === this.localPlayer ? PALETTE.hpAlly : v.ringColor;
-        // overheal : même largeur de barre, qui représente alors le max de l'overheal ; cran blanc au niveau du max normal, surplus plus foncé
-        const scale = over ? s.maxHp * (1 + HEAL_FIELD.overheal) : s.maxHp;
-        this.bar(b, v.rx, y, 30, s.hp / scale, color, s.id, dt);
-        if (over) {
-          const x0 = v.rx - 15;
-          const notch = 30 * (s.maxHp / scale);
-          b.fillStyle(darken(color, 0.55), 1).fillRect(x0 + notch, y, 30 * Math.min(1, s.hp / scale) - notch, 5);
-          b.fillStyle(0xffffff, 1).fillRect(x0 + notch - 0.75, y - 1.5, 1.5, 8);
-        }
+        // overheal : la part de surplus (sombre, après le cran blanc du max normal) s'ajoute et se retire dynamiquement, sans zone vide
+        this.barOver(b, v.rx, y, 30, s.hp, s.maxHp, color, s.id, dt);
       }
       // PV du glaçon (gel, `FREEZE.hp`) : barre bleue au-dessus de la barre de vie ; les tirs alliés la vident
       if (frozen) this.bar(b, v.rx, y - 8, 30, Math.min(1, s.frozen / FREEZE.hp), ICE_BAR_COLOR);
@@ -1482,7 +1474,8 @@ export class WorldView {
     let ghost = r;
     if (id !== undefined) {
       this.barsSeen.add(id);
-      const st = this.barGhosts.get(id) ?? { last: r, ghost: r, hold: 0, hits: 0 };
+      // première apparition de la barre (affichée seulement une fois blessé) : l'état part de la barre PLEINE, sinon le premier coup (le seul d'un gling) n'aurait pas de part blanche
+      const st = this.barGhosts.get(id) ?? { last: 1, ghost: 1, hold: 0, hits: 0 };
       ghostHit(st, r); // nouveau coup : la barre blanche attend un instant sur l'ancienne vie (de moins en moins sous le feu)
       if (r >= st.ghost) st.ghost = r; // soin : pas de traînard
       else if (st.hold > 0) st.hold -= dt;
@@ -1494,6 +1487,31 @@ export class WorldView {
     g.fillStyle(PALETTE.hpBack, 0.85).fillRoundedRect(x - w / 2 - 1.5, y - 1.5, w + 3, h + 3, 3);
     if (ghost > r) g.fillStyle(0xffffff, 0.95).fillRect(x - w / 2, y, w * ghost, h);
     g.fillStyle(color, 1).fillRect(x - w / 2, y, w * r, h);
+  }
+
+  /**
+   * Barre de vie d'un soldat avec overheal : la largeur est fixe et représente `max(PV, PV max, part blanche)`, donc jamais de partie vide à droite. L'overheal
+   * (PV au-dessus du max) est la part sombre à droite du cran blanc ; elle grandit et rétrécit avec les PV, la part normale se réduit en proportion
+   * (200 % : moitié / moitié ; 150 % : un tiers de surplus). La part blanche est suivie en PV (pas en ratio) : elle montre aussi les dégâts pris dans l'overheal.
+   */
+  private barOver(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, hp: number, base: number, color: number, id: number, dt: number): void {
+    const h = 5;
+    this.barsSeen.add(id);
+    const st = this.barGhosts.get(id) ?? { last: base, ghost: base, hold: 0, hits: 0 }; // part de la barre pleine : le premier coup montre sa part blanche
+    ghostHit(st, hp);
+    if (hp >= st.ghost) st.ghost = hp;
+    else if (st.hold > 0) st.hold -= dt;
+    else st.ghost = Math.max(hp, st.ghost - BAR_GHOST_SPEED * base * dt);
+    st.last = hp;
+    this.barGhosts.set(id, st);
+    const total = Math.max(base, hp, st.ghost);
+    const x0 = x - w / 2;
+    const k = w / total;
+    g.fillStyle(PALETTE.hpBack, 0.85).fillRoundedRect(x0 - 1.5, y - 1.5, w + 3, h + 3, 3);
+    if (st.ghost > hp) g.fillStyle(0xffffff, 0.95).fillRect(x0, y, k * st.ghost, h);
+    g.fillStyle(color, 1).fillRect(x0, y, k * Math.min(hp, base), h);
+    if (hp > base) g.fillStyle(darken(color, 0.55), 1).fillRect(x0 + k * base, y, k * (hp - base), h);
+    if (total > base) g.fillStyle(0xffffff, 1).fillRect(x0 + k * base - 0.75, y - 1.5, 1.5, h + 3); // cran blanc au niveau du max normal
   }
 }
 

@@ -568,12 +568,12 @@ export const ASSETS: AssetEntry[] = [
 ];
 
 /**
- * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage (interface du début, soldats, décor). Paquet 2 (`LATE_ASSETS`) : tous les aliens (slime, gling et Gling Mère compris),
+ * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage (interface du début, soldats, décor). Paquet 2 (`LATE_ASSETS`) : tous les aliens sauf le slime et le gling (`CORE_ALIEN_FILES`),
  * la timeline et la barre d'XP, les icônes d'upgrade et de power-up, les globes, les pièces de la recrue, les critiques, tout l'écran de choix d'upgrade ; chargé en tâche de fond
  * dès que le joueur est sur la scène de jeu avec l'indice des commandes (`assets/latePack.ts`). En ligne, les deux paquets
  * sont chargés d'emblée (on peut rejoindre en cours de partie). Une seule liste `ASSETS` reste la source (la sauvegarde des visionneuses la réécrit).
  */
-const CORE_ALIEN_FILES: string[] = []; // aucun alien au paquet 1 depuis le 13/10 (slime, gling et Gling Mère compris : ils apparaissent après le premier input, le dessin procédural sert le temps du chargement) ; y mettre un fichier le garde au démarrage
+const CORE_ALIEN_FILES: string[] = ['aliens/slime.png', 'aliens/gling.png']; // slime et gling au paquet 1 (14/10) : ils sont dans les toutes premières vagues (tutoriel compris), sinon le dessin procédural s'affichait le temps du chargement du paquet 2 ; y mettre un fichier le garde au démarrage
 // Paquet 2 aussi : tout ce qui ne se voit qu'après les premières secondes — icônes d'upgrade et de power-up, globes et étoiles au sol, pièces de la recrue, bulle et chiffres des critiques, tout l'écran de choix d'upgrade (carte, slots, titre, relance, étoile), drone de stase
 // (la fusée est chargée sous `fx_rocket_png` puis échangée avec le dessin procédural `fx_rocket`). Tous ont un repli : voir `latePack.onReady`.
 const LATE_PREFIXES = ['fx/rocket.png', 'fx/xp.webp', 'ui/boss/', 'ui/rewarded.png', 'ui/xp/', 'ui/timeline/', 'ui/cards/', 'ui/reroll.png', 'ui/slot_', 'ui/levelup_title.png', 'fx/star.png', 'fx/crit/', 'ui/upgrades/', 'ui/powerups/', 'globes/', 'recruit/', 'fx/freezebot.png'];

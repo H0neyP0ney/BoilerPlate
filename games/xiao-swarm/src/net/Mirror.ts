@@ -609,8 +609,8 @@ export class Mirror {
     u.px = u.x;
     u.py = u.y;
     if (!g) return;
-    // un soldat gelé reste statique chez l'hôte : pas d'extrapolation à sa dernière vitesse
-    if (!(u.kind === 'soldier' && u.frozen > 0)) {
+    // un soldat gelé ou étourdi reste statique chez l'hôte : pas d'extrapolation à sa dernière vitesse
+    if (!(u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0))) {
       g.x += u.vx * dt;
       g.y += u.vy * dt;
     }
@@ -619,11 +619,12 @@ export class Mirror {
 
   /**
    * Soldat de la squad locale : but = position hôte du dernier snapshot + déplacement prédit de l'ancre depuis.
-   * Un soldat gelé ou avalé par une bulle ne suit pas l'ancre (il est hors du mouvement de foule) : il rejoint seulement sa position hôte
-   * (la bulle, elle, bouge : extrapolation à la vitesse reçue).
+   * Un soldat gelé, étourdi (charge électrique) ou avalé par une bulle ne suit pas l'ancre (il est hors du mouvement de foule : chez l'hôte il reste
+   * sur place) : il rejoint seulement sa position hôte (la bulle, elle, bouge : extrapolation à la vitesse reçue). Sinon il glisse avec la prédiction puis
+   * est ramené à chaque snapshot : tremblement.
    */
   private followPredicted(u: Unit, dt: number): void {
-    if (u.kind === 'soldier' && (u.frozen > 0 || u.capturedBy)) {
+    if (u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.capturedBy)) {
       this.follow(u, dt);
       return;
     }

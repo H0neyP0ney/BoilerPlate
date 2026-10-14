@@ -47,6 +47,7 @@ export class Combat {
       freeze: 0,
       poison: 0,
       spawn: 0,
+      spawnHp: 1,
       texture: '',
       team: 'aliens',
       owner: '',
@@ -65,6 +66,7 @@ export class Combat {
       p.freeze = 0;
       p.poison = 0;
       p.spawn = 0;
+      p.spawnHp = 1;
       p.flame = false;
       p.crit = false;
     },
@@ -196,6 +198,17 @@ export class Combat {
     this.launchLob(mx, my, lx, ly, flight, damage, weapon.aoe ?? 60, weapon.texture, s.team, s.owner).crit = crit;
   }
 
+  /** Ramène une coordonnée de point d'impact dans la zone de jeu de la carte. */
+  private inArenaX(x: number): number {
+    const b = this.sim.arena.bounds;
+    return Math.min(b.maxX, Math.max(b.minX, x));
+  }
+
+  private inArenaY(y: number): number {
+    const b = this.sim.arena.bounds;
+    return Math.min(b.maxY, Math.max(b.minY, y));
+  }
+
   /** Alien à tir en cloche (slime bleu) : boule visant la position anticipée d'un soldat, explosion au sol qui blesse les soldats. */
   throwBlob(a: AlienState, target: SoldierState): void {
     const lob = a.def.lob!;
@@ -205,11 +218,12 @@ export class Combat {
     this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
     for (let i = 0; i < n; i++) {
       const lead = lob.lead ? rng.range(lob.lead[0], lob.lead[1]) : 1; // part de l'anticipation (au hasard : pas toujours pile devant)
-      const lx = target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter);
-      const ly = target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter);
+      const lx = this.inArenaX(target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter)); // l'impact reste dans la carte
+      const ly = this.inArenaY(target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter));
       const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, lob.aoe, lob.texture, a.team, 'aliens');
       p.poison = lob.poison ?? 0;
       p.spawn = lob.spawn ?? 0;
+      p.spawnHp = lob.spawnHpMul ?? 1;
     }
   }
 
@@ -257,8 +271,8 @@ export class Combat {
     for (let i = 0; i < sp.pellets; i++) {
       const ang = rng.range(0, Math.PI * 2);
       const dist = Math.sqrt(rng.next()) * sp.scatter;
-      const lx = target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist;
-      const ly = target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7;
+      const lx = this.inArenaX(target.x + target.vx * sp.flight * sp.lead + Math.cos(ang) * dist); // l'impact reste dans la carte
+      const ly = this.inArenaY(target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7);
       const flight = sp.flight * rng.range(0.92, 1.1);
       const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, sp.aoe, sp.texture, a.team, 'aliens');
       if (sp.puddle) {
@@ -419,7 +433,7 @@ export class Combat {
           this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit || elec ? 0 : 300, elec ? 'electric' : spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
-          if (p.spawn > 0) this.sim.horde.spawnEnragedRing('spider', p.x, p.y, p.spawn);
+          if (p.spawn > 0) this.sim.horde.spawnEnragedRing('spider', p.x, p.y, p.spawn, p.spawnHp);
         }
         return true;
       }

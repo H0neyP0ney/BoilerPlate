@@ -568,18 +568,21 @@ try {
     let hopped = false;
     let randomReroll = false;
     let neverExpires = true;
-    for (let t = 0; t < 600; t += 0.5) {
+    const kill = { x: sq.center.x + 300, y: sq.center.y, noRecruit: false, noXp: false, def: { egg: false, xp: 4 } }; // un alien tué loin de la squad
+    for (let i = 0, t = 0; t < 600; t += 0.5, i++) {
       sim.powerups.update(0.5);
-      const kill = { x: sq.center.x + 300, y: sq.center.y, noRecruit: false, def: { egg: false } }; // un alien tué loin de la squad
-      sim.powerups.maybeDropReroll(kill, sq);
-      for (const p of sim.powerups.items) {
-        if (p.kind !== 'reroll' || seen.has(p.id)) continue;
-        seen.add(p.id);
-        if (p.hop) hopped = true;
-        if (p.life < 1e5) neverExpires = false; // aucune relance n'expire
-        if (Math.abs(p.x - kill.x) > 1 || Math.abs(p.y - kill.y) > 1) randomReroll = true; // né ailleurs que sur l'alien : tiré au hasard comme un power-up
+      for (let k = 0; k < (i % 2 ? 4 : 3); k++) {
+        // ~7 aliens tués par seconde (le loot se joue au nombre d'aliens tués, plus au temps)
+        sim.powerups.maybeDropReroll(kill, sq);
+        for (const p of sim.powerups.items) {
+          if (p.kind !== 'reroll' || seen.has(p.id)) continue;
+          seen.add(p.id);
+          if (p.hop) hopped = true;
+          if (p.life < 1e5) neverExpires = false; // aucune relance n'expire
+          if (Math.abs(p.x - kill.x) > 1 || Math.abs(p.y - kill.y) > 1) randomReroll = true; // né ailleurs que sur l'alien : tiré au hasard comme un power-up
+        }
+        sim.powerups.items.length = 0; // le test ne ramasse rien : on vide pour ne compter que les apparitions
       }
-      sim.powerups.items.length = 0; // le test ne ramasse rien : on vide pour ne compter que les apparitions
     }
     check(seen.size >= 4 && seen.size <= 6, 'relance (loot) : environ 5 en 10 minutes', `${seen.size} relances`);
     check(hopped && !randomReroll, 'relance (loot) : sort de l\'alien tué et retombe en cloche à l’écart');
@@ -594,7 +597,7 @@ try {
     sim.powerups.items.length = 0;
     const before = sq.rerolls;
     sim.powerups.rerollReady = true;
-    sim.powerups.maybeDropReroll({ x: sq.center.x + 5, y: sq.center.y, noRecruit: false, def: { egg: false } }, sq); // pile sur la squad : pas de saut
+    sim.powerups.maybeDropReroll({ x: sq.center.x + 5, y: sq.center.y, noRecruit: false, noXp: false, def: { egg: false, xp: 4 } }, sq); // pile sur la squad : pas de saut
     for (let i = 0; i < 8; i++) sim.powerups.update(0.1); // 0,8 s
     check(sim.powerups.items.length === 1 && sq.rerolls === before, 'relance : imprenable pendant le délai (0,8 s)', `${sim.powerups.items.length} au sol, ${sq.rerolls - before} ramassée(s)`);
     for (let i = 0; i < 12; i++) sim.powerups.update(0.1); // 2 s au total

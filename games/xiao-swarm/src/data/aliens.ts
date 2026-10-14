@@ -54,7 +54,7 @@ export interface AlienDef {
    * explosent au sol (zone `aoe`). Point visé : la cible + son déplacement pendant le vol × une part tirée au hasard dans `lead` (min, max ;
    * [1, 1] par défaut = anticipation complète), ± `scatter` px (22 par défaut, 70 si plusieurs boules).
    */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number };
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number; spawnHpMul?: number };
   /**
    * Murs : quand une squad est à portée (`range`), télégraphe jaune pendant `windup` s puis fait surgir `count` murs allongés (`length` px,
    * faits de rochers de rayon `rock.radius`, durée `rock.ttl` s) en arc, à `ring` px du centre de la squad, côté opposé au lanceur :
@@ -89,7 +89,7 @@ export interface AlienDef {
    * Essaim (boss Gling) : toutes les `every` s de marche, il s'arrête `duration` s et fait apparaître `count` aliens `spawn` en continu
    * (régulièrement répartis sur la durée), autour de lui.
    */
-  swarm?: { every: number; duration: number; count: number; spawn: AlienId };
+  swarm?: { every: number; duration: number; count: number; spawn: AlienId; hpMul?: number };
   /**
    * Slime de glace : tire en LIGNE DROITE une boucle de glace (vitesse `speed` px/s) vers la position de la squad au moment du tir, avec une anticipation partielle (`lead` × le déplacement de la squad pendant le trajet), à moins de
    * `range` px de sa cible. Au contact d'un soldat, elle lui inflige de faibles dégâts (`damage`) et GÈLE CE SEUL SOLDAT (pas de zone ; `zone` = rayon de l'onde visuelle) :
@@ -130,7 +130,7 @@ export interface AlienDef {
   /** Kamikaze : à sa mort le corps reste sur place, clignote `delay` s (zone rouge) puis explose : dégâts + recul aux soldats. */
   deathBlast?: { delay: number; radius: number; damage: number; knockback: number };
   /** À sa mort, `count` aliens `spawn` surgissent autour de son corps (chaman : 5 araignées). Invoqués : ni XP ni recrue ; pas pendant le clear screen d'un boss. */
-  deathSpawn?: { spawn: AlienId; count: number };
+  deathSpawn?: { spawn: AlienId; count: number; hpMul?: number };
   /** Langue : attrape un soldat à portée et le tire d'une fraction `pull` de la distance qui les sépare (jamais jusqu'à lui). */
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
@@ -247,6 +247,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Kamikaze : fonce sur les soldats ; le tuer déclenche une explosion retardée (il faut le tuer de loin). */
   kamikaze: {
     id: 'kamikaze',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 35.625, // avant : 25 (×1.5 intégré le 09/10)
     speed: 131.25, // avant : 105 (×1.25 intégré le 09/10)
     radius: 23.5,
@@ -264,6 +265,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Grenouille : reste à distance, tire la langue sur un soldat et le tire vers elle. */
   toad: {
     id: 'toad',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 57, // avant : 40 (×1.5 intégré le 09/10)
     speed: 87.5, // avant : 70 (×1.25 intégré le 09/10)
     radius: 25,
@@ -271,7 +273,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 3,
     attackCooldown: 0.45,
     target: 'nearest',
-    tongue: { range: 270, cooldown: 3.2, pull: 0.4, damage: 4 },
+    tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 4 }, // portée 270 → 297 (+10 %, 14/10)
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
     color: 0x3fd0a0,
@@ -281,7 +283,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Rhinocéros : lent à quatre pattes, mais charge toutes les 5 s dans une zone signalée en rouge. */
   charger: {
     id: 'charger',
-    hp: 665, // avant : 300 (×1.5 intégré le 09/10) ; ×3
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
+    hp: 997.5, // avant : 300 (×1.5 intégré le 09/10) ; ×3 ; 665 avant le 14/10 (+50 %)
     speed: 200, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
     radius: 39,
     mass: 5,
@@ -289,7 +292,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.5,
     target: 'nearest',
     cleave: 70, // mêlée en zone (07/10)
-    rush: { cooldown: 5, windup: 0.4725, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
+    rush: { cooldown: 5, windup: 0.3, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; préparation 0,4725 → 0,3 le 14/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     electric: true,
     xp: 10,
     recruitChance: 0.195, // avant : 0.15 (×1.3 intégré le 09/10)
@@ -300,6 +303,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Cracheur : crache quelques boules violettes en cloche qui laissent une flaque ralentissante. */
   spitter: {
     id: 'spitter',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 142.5, // avant : 100 (×1.5 intégré le 09/10)
     speed: 112.5, // avant : 90 (×1.25 intégré le 09/10)
     radius: 28,
@@ -318,6 +322,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Chaman : slime magique qui reste en retrait et ressuscite les slimes morts depuis leur flaque (une fois chacun). */
   shaman: {
     id: 'shaman',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 85.5, // avant : 60 (×1.5 intégré le 09/10)
     speed: 75, // avant : 60 (×1.25 intégré le 09/10)
     radius: 24,
@@ -327,7 +332,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     frost: { every: 9, range: 560, count: 2, gap: [103.5, 184], radius: 25.5, ttl: 10 }, // flocons à distance (07/10) : à 103,5-184 px du bord réel de la squad (+15 % le 09/10, 90-160 avant)
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30, zombie: { copies: 2, hpMul: 3, dmgMul: 1, speedMul: 1.35, attackMul: 3 } }, // le ressuscité est un ZOMBIE (réglages `zombie`, vue du chaman)
-    deathSpawn: { spawn: 'spider', count: 5 }, // à sa mort : 5 araignées
+    deathSpawn: { spawn: 'spider', count: 5, hpMul: 2 }, // hpMul : PV des araignées de CETTE source (× leurs PV de base), réglable à part de la Gling Mère et du crabe; // à sa mort : 5 araignées
     xp: 8,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
     color: 0xffd84a,
@@ -337,7 +342,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bâtisseur de murs : de très loin, fait surgir (après un télégraphe jaune) des murs allongés autour de la squad pour gêner sa fuite. */
   wall: {
     id: 'wall',
-    hp: 213.75, // avant : 150 (×1.5 intégré le 09/10)
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
+    hp: 384.75, // avant : 150 (×1.5 intégré le 09/10) ; 213,75 avant le 14/10 (+80 %)
     speed: 75, // avant : 60 (×1.25 intégré le 09/10)
     radius: 32.5,
     mass: 1.3,
@@ -354,14 +360,15 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Lurker : s'enterre sur le trajet anticipé de la squad et la frappe d'une ligne de pics (comme les lurkers de StarCraft). */
   lurker: {
     id: 'lurker',
-    hp: 570, // avant : 350 (×1.5 intégré le 09/10) ; ×3
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
+    hp: 1026, // avant : 350 (×1.5 intégré le 09/10) ; ×3 ; 570 avant le 14/10 (+80 %)
     speed: 200, // avant : 120 (×1.25 intégré le 09/10)
     radius: 29.5,
     mass: 2,
     damage: 0,
     attackCooldown: 1,
     target: 'nearest',
-    lurk: { lead: 2.4, digRange: 168, digTime: 0.7, rise: 0.6, wait: 7, rewait: 2, trigger: 432, aim: 0.6, length: 456, width: 44, sweep: 0.456, damage: 60, cooldown: 1.6 },
+    lurk: { lead: 2.4, digRange: 168, digTime: 0.7, rise: 0.6, wait: 7, rewait: 2, trigger: 432, aim: 0.45, length: 456, width: 44, sweep: 0.38, damage: 60, cooldown: 1.6 }, // 14/10 : télégraphe 0,6 → 0,45 s, pics +20 % de vitesse (0,456 → 0,38 s : 1200 px/s), même équilibrage que la couronne du Giant Crab
     xp: 8,
     recruitChance: 0.104, // avant : 0.08 (×1.3 intégré le 09/10)
     color: 0x7a5a9a,
@@ -371,6 +378,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Bulle flottante : rapide et très résistante ; elle avale un soldat et le digère sur place tant qu'on ne l'a pas détruite. */
   bubble: {
     id: 'bubble',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 3325, // avant : 2000 (×1.5 intégré le 09/10) ; ×3
     speed: 280, // avant : 210 (×1.25 intégré le 09/10)
     radius: 22,
@@ -381,7 +389,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
     maxPerWave: 3, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris ; 3 depuis le 12/10 (les vagues de bulles en ont 3 : niveaux 7 et 8)
-    capture: { dps: 30 }, // digestion : 25 → 50 → 40 (−20 %, 07/10)
+    capture: { dps: 39 }, // digestion : 25 → 50 → 40 (−20 %, 07/10) → 30 → 39 (+30 %, 14/10)
     xp: 12,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0x8fe0ff,
@@ -391,6 +399,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime de feu : laisse derrière lui une traînée de flammes qui brûle les soldats qui marchent dedans. */
   burner: {
     id: 'burner',
+    revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
     hp: 114, // avant : 80 (×1.5 intégré le 09/10) ; x2
     speed: 106.25, // avant : 85 (×1.25 intégré le 09/10)
     radius: 29,
@@ -496,7 +505,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
-    swarm: { every: 4, duration: 1.07, count: 19, spawn: 'spider' },
+    swarm: { every: 4, duration: 1.07, count: 19, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     xp: 100,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
@@ -572,8 +581,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     target: 'center',
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900, height: 200 },
-    spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.76, damage: 60, rays: 8 }, // comme les pics du lurker (380 px, 0,5 s) : 8 directions, 2× plus long
-    lob: { range: 620, cooldown: 3, flight: 1, damage: 20, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
+    spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 60, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
+    lob: { range: 620, cooldown: 3, flight: 1, damage: 20, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
     boss: { kind: 'final' },
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)

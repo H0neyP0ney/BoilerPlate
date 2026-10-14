@@ -113,7 +113,7 @@ export class Sim {
   private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric'; poison?: number }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
-  private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number }[] = [];
+  private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number; hpMul: number }[] = [];
   private readonly fuses: { x: number; y: number; t: number; r: number; dmg: number; knock: number }[] = [];
 
   constructor(readonly config: SimConfig) {
@@ -589,12 +589,18 @@ export class Sim {
 
   /** Annonce un mur (télégraphe jaune) ; `windup` s plus tard, une ligne de rochers de rayon `rockR` surgit, pour `ttl` s. */
   addWall(x: number, y: number, angle: number, length: number, windup: number, rockR: number, ttl: number): void {
+    const b = this.arena.bounds; // le centre du mur reste dans l'arène (le bâtisseur ne pose déjà que des murs entiers : `wallFits`)
+    x = Math.min(b.maxX, Math.max(b.minX, x));
+    y = Math.min(b.maxY, Math.max(b.minY, y));
     this.walls.push({ id: this.ids.get(), x, y, angle, length, rockR, ttl, t: windup, dur: windup });
     if (this.walls.length > 30) this.walls.shift();
   }
 
   /** Annonce une stalactite : zone de rayon `r` en (`x`, `y`), impact `delay` s plus tard. */
   addStalactite(x: number, y: number, r: number, delay: number, damage: number, knockback: number): void {
+    const b = this.arena.bounds; // jamais hors de la carte : la zone tient entièrement dans l'arène
+    x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
+    y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
     this.stalactites.push({ id: this.ids.get(), x, y, r, t: delay, dur: delay, damage, knockback });
     if (this.stalactites.length > 60) this.stalactites.shift();
   }
@@ -662,6 +668,9 @@ export class Sim {
 
   /** Rocher au sol (élément d'un mur) : obstacle pendant `ttl` secondes. */
   addRock(x: number, y: number, radius: number, ttl: number): void {
+    const b = this.arena.bounds; // jamais hors de la carte
+    x = Math.min(b.maxX - radius, Math.max(b.minX + radius, x));
+    y = Math.min(b.maxY - radius, Math.max(b.minY + radius, y));
     const rock = { id: this.ids.get(), x, y, radius, ttl };
     this.arena.rocks.push(rock);
     this.events.push({ t: 'rock', id: rock.id, x, y, r: radius, ttl });
@@ -757,6 +766,9 @@ export class Sim {
 
   /** Flaque de flammes : brûle les soldats dedans pendant `ttl` s. */
   addFire(x: number, y: number, r: number, ttl: number, dps: number): void {
+    const b = this.arena.bounds; // jamais hors de la carte : le centre reste dans l'arène
+    x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
+    y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
     const f: FirePatch = { id: this.ids.get(), x, y, r, ttl, dps };
     this.fires.push(f); // affichage : `WorldView.syncFires` suit cette liste (snapshot en ligne), pas d'événement
     if (this.fires.length > 150) this.endFire(this.fires[0]);
@@ -902,7 +914,7 @@ export class Sim {
       if (this.corpses.length > 60) this.endCorpse(this.corpses[0], false);
     }
     const brood = a.def.deathSpawn;
-    if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius });
+    if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius, hpMul: brood.hpMul ?? 1 });
     const bomb = a.def.deathBlast;
     if (bomb) {
       this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.escDmg, knock: bomb.knockback });
@@ -913,7 +925,7 @@ export class Sim {
       return;
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
-    this.powerups.maybeDropReroll(a, squad); // loot rare : ~5 relances par partie (DIFFICULTY.rerollLootFirst / rerollLootEvery)
+    this.powerups.maybeDropReroll(a, squad); // loot rare : ~5 relances par partie, au nombre d'aliens tués (DIFFICULTY.rerollLootFirst / rerollLootEvery)
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y), dirX, dirY); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }
 
@@ -992,7 +1004,7 @@ export class Sim {
         const dist = d.radius * this.rng.range(0.8, 1.5);
         const p = { x: d.x + Math.cos(ang) * dist, y: d.y + Math.sin(ang) * dist * 0.7, radius: ALIENS[d.type].radius };
         this.arena.constrain(p);
-        this.horde.spawnAt(d.type, p.x, p.y, 1, false, true); // sur place : pas enterrées
+        this.horde.spawnAt(d.type, p.x, p.y, 1, false, true, d.hpMul); // sur place : pas enterrées
       }
     }
 

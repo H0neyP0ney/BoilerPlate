@@ -42,8 +42,9 @@ export class Xp {
     for (const value of splitXp(xp, a.def.boss ? Infinity : undefined)) { // un boss laisse toute son XP, en autant de globes qu'il faut
       const ang = rng.range(0, Math.PI * 2);
       const r = a.radius * rng.range(0.2, 1.1);
-      const x = a.x + Math.cos(ang) * r;
-      const y = a.y + Math.sin(ang) * r * 0.6;
+      const b = this.sim.arena.bounds; // un alien collé au bord ne laisse jamais de globe hors de la carte
+      const x = Math.min(b.maxX, Math.max(b.minX, a.x + Math.cos(ang) * r));
+      const y = Math.min(b.maxY, Math.max(b.minY, a.y + Math.sin(ang) * r * 0.6));
       const slideAng = dir + rng.range(-XP_SLIDE.spread, XP_SLIDE.spread);
       const v = XP_SLIDE.speed * rng.range(XP_SLIDE.speedJitter[0], XP_SLIDE.speedJitter[1]);
       this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME, vx: Math.cos(slideAng) * v, vy: Math.sin(slideAng) * v });
@@ -64,6 +65,16 @@ export class Xp {
         else {
           o.x += o.vx! * dt;
           o.y += o.vy! * dt;
+          // la glissade s'arrête au bord de la carte (jamais de globe hors de la zone de jeu)
+          const b = this.sim.arena.bounds;
+          if (o.x < b.minX || o.x > b.maxX) {
+            o.x = Math.min(b.maxX, Math.max(b.minX, o.x));
+            o.vx = 0;
+          }
+          if (o.y < b.minY || o.y > b.maxY) {
+            o.y = Math.min(b.maxY, Math.max(b.minY, o.y));
+            o.vy = 0;
+          }
           const k = Math.exp(-XP_SLIDE.friction * dt);
           o.vx! *= k;
           o.vy! *= k;

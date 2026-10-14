@@ -211,7 +211,26 @@ export class PickupViews {
 
   // ---------- Power-ups ----------
 
+  /** Flash additif (cœur blanc, halo et anneau à la couleur du loot) qui s'élargit en s'effaçant à l'endroit où un dé de relance ou un booster tombe. */
+  private lootFlash(x: number, y: number, color: number): void {
+    const add = Phaser.BlendModes.ADD;
+    const halo = this.scene.add.circle(x, y, 70, color, 0.75).setBlendMode(add).setDepth(DEPTH.fx + 4).setScale(0.3);
+    const core = this.scene.add.circle(x, y, 40, 0xffffff, 0.95).setBlendMode(add).setDepth(DEPTH.fx + 4.1).setScale(0.3);
+    const ring = this.scene.add.circle(x, y, 70).setStrokeStyle(5, color, 1).setBlendMode(add).setDepth(DEPTH.fx + 4).setScale(0.3);
+    const fade = (obj: Phaser.GameObjects.Shape, scale: number, duration: number): void => {
+      this.scene.tweens.add({ targets: obj, scale, alpha: 0, duration, ease: 'Quad.Out', onComplete: () => obj.destroy() });
+    };
+    fade(halo, 1.8, 380);
+    fade(core, 1.1, 240);
+    fade(ring, 2.6, 460);
+  }
+
+  /** `alpha` de la frame précédente : une baisse marque le début d'un nouveau tick de simulation. */
+  private lastAlpha = 0;
+
   private syncPowerups(time: number, alpha: number): void {
+    const newTick = alpha < this.lastAlpha;
+    this.lastAlpha = alpha;
     const live = new Set<number>();
     for (const p of this.sim.powerups.items) {
       live.add(p.id);
@@ -221,6 +240,7 @@ export class PickupViews {
         this.scene.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.Out' });
         this.powerups.set(p.id, box);
         this.powerupPos.set(p.id, { px: p.x, py: p.y, x: p.x, y: p.y });
+        if (p.kind === 'reroll' || p.kind === 'prism') this.lootFlash(p.x, p.y, p.kind === 'prism' ? BEAM_PRISM : BEAM_PINK); // flash à l'apparition : on repère le loot même sans regarder l'alien tué
       }
       const born = this.powerupBorn.get(p.id) ?? time;
       this.powerupBorn.set(p.id, born);
@@ -230,6 +250,10 @@ export class PickupViews {
         pos.py = pos.y;
         pos.x = p.x;
         pos.y = p.y;
+      } else if (newTick) {
+        // immobile pendant ce tick : l'interpolation repart de la position d'arrivée (sinon elle oscille entre l'avant-dernier et le dernier point à chaque tick : tremblement d'un loot posé au sol)
+        pos.px = pos.x;
+        pos.py = pos.y;
       }
       const x = lerp(pos.px, pos.x, alpha);
       const y = lerp(pos.py, pos.y, alpha);

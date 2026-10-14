@@ -16,7 +16,20 @@ const CAPTURE_DRAG_SPEED = 0.28; // 0,35 avant l'intégration du ×1,25 de vites
 /** Rayon dans lequel un alien cherche une cible précise (au-delà : il marche vers la squad la plus proche). */
 const SEEK_RADIUS = 700;
 /** Chaman : px de distance « gagnés » par PV de base du cadavre (un Spitter de 60 PV passe devant un slime 200 px plus près). */
-const CORPSE_SIZE_PREF = 4;
+const CORPSE_SIZE_PREF = 3; // 4 avant le 14/10
+/** Chaman : amplitude (± px de « distance ») du hasard ajouté au choix d'un cadavre : pas toujours le plus gros, mais le gros reste favori. */
+const CORPSE_RANDOM = 200;
+/**
+ * Hasard du choix d'un cadavre, propre au couple (chaman, cadavre) : le même tirage à chaque tick (le chaman ne change pas d'avis d'un tick à l'autre), sans
+ * consommer `sim.rng` (cette fonction est appelée à chaque tick pour chaque chaman). Dans [−CORPSE_RANDOM, +CORPSE_RANDOM].
+ */
+function corpseNoise(shamanId: number, corpseId: number): number {
+  let h = Math.imul(shamanId ^ Math.imul(corpseId, 0x9e3779b1), 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return ((h >>> 0) / 4294967296 - 0.5) * 2 * CORPSE_RANDOM;
+}
 /** Places d'aliens en plus du plafond pour les costauds (voir `Horde.canSpawn`). */
 const ELITE_RESERVE = 12;
 /** La formation ramène vite le soldat à son slot : l'impulsion de la langue est majorée pour que la traction soit visible. */
@@ -236,9 +249,11 @@ export class Horde {
   }
 
   /** Fait apparaître un alien à un endroit précis (invocation ou résurrection par un chaman), si le plafond le permet ; il ne donne jamais d'XP. */
-  spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false, instant = false): void {
+  spawnAt(type: AlienId, x: number, y: number, hpFrac = 1, revived = false, instant = false, hpMul = 1): void {
     if (!this.canSpawn(type)) return;
-    const made = this.create(ALIENS[type], x, y, hpFrac, revived);
+    const p = { x, y, radius: ALIENS[type].radius };
+    this.sim.arena.constrain(p); // jamais hors de la carte (zombie du chaman, araignées de la Gling Mère) ni dans un décor
+    const made = this.create(ALIENS[type], p.x, p.y, hpFrac, revived, hpMul);
     made.instant = instant; // surgit sur place : pas de trou d'apparition, ni de délai avant d'agir
     made.noXp = true; // invoqué (essaim de la Gling Mère) ou ressuscité (chaman) : ne laisse jamais de globe d'XP
     made.noRecruit = true; // ni de recrue
@@ -259,14 +274,14 @@ export class Horde {
   }
 
   /** `count` aliens enragés (niveau 1 : plus rapides, attaquent plus vite) qui surgissent sur place en cercle autour de (x, y) : araignées des boules du Giant Crab. */
-  spawnEnragedRing(type: AlienId, x: number, y: number, count: number): void {
+  spawnEnragedRing(type: AlienId, x: number, y: number, count: number, hpMul = 1): void {
     const start = this.sim.rng.range(0, Math.PI * 2);
     for (let i = 0; i < count; i++) {
       const ang = start + (i / count) * Math.PI * 2;
       const p = { x: x + Math.cos(ang) * 32, y: y + Math.sin(ang) * 22, radius: ALIENS[type].radius };
       this.sim.arena.constrain(p);
       const before = this.sim.aliens.length;
-      this.spawnAt(type, p.x, p.y, 1, false, true);
+      this.spawnAt(type, p.x, p.y, 1, false, true, hpMul);
       if (this.sim.aliens.length > before) this.sim.aliens[this.sim.aliens.length - 1].enraged = 1;
     }
   }
@@ -296,7 +311,7 @@ export class Horde {
       if (c.claimed !== 0 && c.claimed !== a.id) continue;
       const d = Math.hypot(c.x - a.x, c.y - a.y);
       if (d > max) continue;
-      const score = d - ALIENS[c.type].hp * CORPSE_SIZE_PREF; // les gros aliens d'abord, à distance comparable
+      const score = d - ALIENS[c.type].hp * CORPSE_SIZE_PREF + corpseNoise(a.id, c.id); // les gros aliens d'abord, à distance comparable, avec un peu de hasard
       if (score >= bestD) continue;
       best = c;
       bestD = score;
@@ -491,7 +506,7 @@ export class Horde {
             const d = a.radius * rng.range(0.9, 1.3);
             const p = { x: a.x + Math.cos(ang) * d, y: a.y + Math.sin(ang) * d * 0.7, radius: ALIENS[w.spawn].radius };
             arena.constrain(p);
-            this.spawnAt(w.spawn, p.x, p.y);
+            this.spawnAt(w.spawn, p.x, p.y, 1, false, false, w.hpMul ?? 1);
           }
         } else if ((a.swarmCd -= dt) <= 0) {
           a.swarmT = w.duration;

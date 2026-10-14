@@ -121,6 +121,8 @@ export class HudScene extends Phaser.Scene {
   private bossGhost?: Phaser.GameObjects.NineSlice;
   private bossFill?: Phaser.GameObjects.NineSlice;
   private bossGhostState: BarGhost & { id: number } = { id: -1, last: 1, ghost: 1, hold: 0, hits: 0 };
+  /** Rhinos jumeaux vus (id → PV max, PV, nom) : la barre cumulée garde le maximum et le nom de celui déjà tombé. */
+  private twinSeen = new Map<number, { max: number; hp: number; name: string }>();
   private bossName!: Phaser.GameObjects.Text;
   private tutorialArrow!: Phaser.GameObjects.Graphics;
   private tutorialLabel!: Phaser.GameObjects.Text;
@@ -340,6 +342,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.bossFrame?.setVisible(!!boss);
     this.bossGhost?.setVisible(false);
     this.bossFill?.setVisible(!!boss);
+    if (!boss) this.twinSeen.clear();
     if (!boss || !this.bossFrame || !this.bossGhost || !this.bossFill) return;
     const { width, height } = this.scale;
     const w = Math.min(364, width - 60); // grosse barre (520 × 0,7), à la place de la timeline (en haut, centrée)
@@ -347,12 +350,30 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const cx = width / 2;
     const top = hudTop() + 2 + BOSS_NAME_H; // la barre descend d'une ligne : le titre du boss est au-dessus
     this.bossFrame.setPosition(cx, top + (BOSS_ART.H / 2) * k).setScale(k);
-    this.bossName.setText(t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab')).setPosition(cx, hudTop() + 2 + BOSS_NAME_H / 2 + BOSS_NAME_DY); // titre du boss AU-DESSUS de sa barre de vie
+    // Rhinos jumeaux : UNE barre qui cumule les PV des deux (celui déjà tombé compte à 0, son maximum reste dans le total) et leurs deux noms
+    let name = t(`alien_${boss.def.id as AlienId}` as 'alien_boss_crab');
+    let hp = boss.hp;
+    let maxHp = boss.maxHp;
+    let groupId = boss.id;
+    if (boss.def.boss?.twin) {
+      for (const s of this.twinSeen.values()) s.hp = 0; // celui qui n'est plus vivant compte à 0
+      for (const a of g.session.sim.aliens) if (a.alive && a.def.boss?.twin) this.twinSeen.set(a.id, { max: a.maxHp, hp: a.hp, name: t(`alien_${a.def.id as AlienId}` as 'alien_boss_crab') });
+      hp = maxHp = 0;
+      const names: string[] = [];
+      for (const s of this.twinSeen.values()) {
+        hp += s.hp;
+        maxHp += s.max;
+        names.push(s.name);
+      }
+      name = names.join(' & ');
+      groupId = -2; // même état de la part blanche tant que les jumeaux sont là (elle ne repart pas à 100 % quand le premier tombe)
+    } else this.twinSeen.clear();
+    this.bossName.setText(name).setPosition(cx, hudTop() + 2 + BOSS_NAME_H / 2 + BOSS_NAME_DY); // titre du boss AU-DESSUS de sa barre de vie
     // jauges 3-slice dans la zone sombre : la part blanche reste sur la vie d'avant le coup (BAR_GHOST_HOLD s) puis rejoint la rouge, comme sur les barres de vie des aliens
-    const ratio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+    const ratio = Math.max(0, Math.min(1, hp / maxHp));
     const st = this.bossGhostState;
     const dt = Math.min(0.1, this.game.loop.delta / 1000);
-    if (st.id !== boss.id) Object.assign(st, { id: boss.id, last: ratio, ghost: ratio, hold: 0, hits: 0 });
+    if (st.id !== groupId) Object.assign(st, { id: groupId, last: ratio, ghost: ratio, hold: 0, hits: 0 });
     ghostHit(st, ratio);
     if (ratio >= st.ghost) st.ghost = ratio;
     else if (st.hold > 0) st.hold -= dt;

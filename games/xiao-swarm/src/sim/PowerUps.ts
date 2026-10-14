@@ -35,11 +35,11 @@ export class PowerUps {
   readonly items: PowerUpState[] = [];
   readonly fields: Field[] = [];
   private timer: number = DIFFICULTY.powerupFirst;
-  /** Relance (loot) : compte à rebours (s) avant la prochaine, puis `rerollReady` = elle sortira de l'alien tué suivant. */
-  private rerollTimer: number = DIFFICULTY.rerollLootFirst;
+  /** Relance (loot) : aliens à tuer (toutes squads) avant la prochaine, puis `rerollReady` = elle sort de l'alien tué suivant (14/10 : au nombre d'aliens, plus au temps : plus de loot avec plus de joueurs). */
+  private rerollLeft = -1; // -1 : pas encore tiré (premier seuil = `rerollLootFirst` ± 20 %, tiré au premier alien compté)
   private rerollReady = false;
   /** Booster prismatique (loot) : même mécanique que la relance, en plus rare. */
-  private prismTimer: number = DIFFICULTY.prismLootFirst;
+  private prismLeft = -1;
   private prismReady = false;
 
   constructor(private readonly sim: Sim) {}
@@ -57,17 +57,24 @@ export class PowerUps {
    * alien invoqué / ressuscité, ni pour l'œuf d'un boss.
    */
   maybeDropReroll(a: AlienState, killer: Squad | undefined): void {
-    if ((!this.rerollReady && !this.prismReady) || this.sim.tutorial?.active || a.noRecruit || a.def.egg) return;
+    // un alien qui ne donne pas d'XP (invoqué, ressuscité, rejeu de vague pendant un boss, orbe) ne compte pas et ne laisse jamais de loot
+    if (this.sim.tutorial?.active || a.noRecruit || a.noXp || !a.def.xp || a.def.egg) return;
+    // chaque alien tué (hors invoqué / ressuscité / œuf / sans XP) fait avancer les deux compteurs ; à zéro, le loot est « prêt » et sort de cet alien
+    if (this.rerollLeft < 0) this.rerollLeft = this.jitter(DIFFICULTY.rerollLootFirst); // seuils aléatoires (± 20 %), le premier comme les suivants
+    if (this.prismLeft < 0) this.prismLeft = this.jitter(DIFFICULTY.prismLootFirst);
+    if (!this.rerollReady && --this.rerollLeft <= 0) this.rerollReady = true;
+    if (!this.prismReady && --this.prismLeft <= 0) this.prismReady = true;
+    if (!this.rerollReady && !this.prismReady) return;
     const squad = killer ?? this.sim.nearestSquad(a.x, a.y);
     if (!squad) return;
     // le booster prismatique (le plus rare) passe avant la relance quand les deux sont prêts ; un seul loot par alien tué
     const kind: PowerUpKind = this.prismReady ? 'prism' : 'reroll';
     if (kind === 'prism') {
       this.prismReady = false;
-      this.prismTimer = DIFFICULTY.prismLootEvery * this.sim.rng.range(0.8, 1.2);
+      this.prismLeft = this.jitter(DIFFICULTY.prismLootEvery);
     } else {
       this.rerollReady = false;
-      this.rerollTimer = this.nextRerollDelay();
+      this.rerollLeft = this.jitter(DIFFICULTY.rerollLootEvery);
     }
     const p = this.drop(kind, a.x, a.y, true); // forcé : ces loots n'expirent jamais
     p.age = 0; // imprenable la première seconde, comme les globes d'upgrade
@@ -77,22 +84,13 @@ export class PowerUps {
     p.hop = { vx: (Math.cos(ang) * dist) / RECRUIT.hopTime, vy: (Math.sin(ang) * dist) / RECRUIT.hopTime, t: RECRUIT.hopTime };
   }
 
-  /** Délai (s) avant la relance suivante : `rerollLootEvery` ± 20 %. */
-  private nextRerollDelay(): number {
-    return DIFFICULTY.rerollLootEvery * this.sim.rng.range(0.8, 1.2);
+  /** Nombre d'aliens à tuer avant le prochain loot : `n` ± 20 % (tirage de `sim.rng`), au moins 1. */
+  private jitter(n: number): number {
+    return Math.max(1, Math.round(n * this.sim.rng.range(0.8, 1.2)));
   }
 
   update(dt: number): void {
     const { rng } = this.sim;
-    if (!this.sim.tutorial?.active && !this.rerollReady) {
-      // plus il y a de squads vivantes, plus le compte à rebours est rapide : à peu près autant de relances par joueur
-      this.rerollTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
-      if (this.rerollTimer <= 0) this.rerollReady = true;
-    }
-    if (!this.sim.tutorial?.active && !this.prismReady) {
-      this.prismTimer -= dt * Math.max(1, this.sim.aliveSquads.length);
-      if (this.prismTimer <= 0) this.prismReady = true;
-    }
     if (!this.sim.tutorial?.active && !this.sim.ending) {
       // pendant le tutoriel, aucun power-up au hasard (ni pendant la séquence de fin) : seuls ceux du script apparaissent
       this.timer -= dt;
@@ -226,9 +224,9 @@ export class PowerUps {
     this.items.length = 0;
     this.fields.length = 0;
     this.timer = DIFFICULTY.powerupFirst;
-    this.rerollTimer = DIFFICULTY.rerollLootFirst;
+    this.rerollLeft = -1;
     this.rerollReady = false;
-    this.prismTimer = DIFFICULTY.prismLootFirst;
+    this.prismLeft = -1;
     this.prismReady = false;
   }
 }

@@ -219,18 +219,19 @@ export const DIFFICULTY_DEFAULTS = {
   powerupEveryMax: 15,
   powerupMax: 3,
   /**
-   * Relance (loot rose, pas un power-up) : la première à `rerollLootFirst` s, puis une toutes les ~`rerollLootEvery` s (± 20 %, plus vite avec
-   * plusieurs squads vivantes), sortie du prochain alien tué (comme une recrue) ; elle n'expire jamais. Environ 5 par partie de 10 min.
+   * Relance (loot rose, pas un power-up) : au NOMBRE D'ALIENS TUÉS (toutes squads, hors invoqués / ressuscités / œufs ; 14/10, avant : au temps, 90 s puis 110 s) : la première
+   * après `rerollLootFirst` aliens tués, puis une tous les ~`rerollLootEvery` (± 20 %), sortie de l'alien qui atteint le seuil (comme une recrue) ; elle n'expire jamais.
+   * Plus de joueurs = plus d'aliens = plus de relances. Environ 5 par partie de 10 min en solo (~8 aliens tués par seconde).
    */
-  rerollLootFirst: 90,
-  rerollLootEvery: 110,
+  rerollLootFirst: 600,
+  rerollLootEvery: 800,
   /**
-   * Booster prismatique (loot arc-en-ciel, encore plus rare que la relance) : le premier à `prismLootFirst` s, puis un toutes les ~`prismLootEvery` s (± 20 %, plus vite avec
-   * plusieurs squads vivantes), sorti du prochain alien tué comme la relance ; il n'expire jamais. Ramassé : le prochain level-up du joueur propose 3 cartes prismatiques
-   * (sauf s'il relance : tirage normal). Environ 3 à 4 par partie de 10 min (seule source de panneaux tout prismatiques).
+   * Booster prismatique (loot arc-en-ciel, encore plus rare que la relance) : même mécanique, au nombre d'aliens tués : le premier après `prismLootFirst`, puis un tous les
+   * ~`prismLootEvery` (± 20 %), sorti de l'alien qui atteint le seuil ; il n'expire jamais. Ramassé : le prochain level-up du joueur propose 3 cartes prismatiques
+   * (sauf s'il relance : tirage normal). Environ 3 à 4 par partie de 10 min en solo (seule source de panneaux tout prismatiques).
    */
-  prismLootFirst: 140, // 210 avant le 13/10 (+50 % de boosters : délais ÷ 1,5)
-  prismLootEvery: 160, // 280 avant le 13/10 (187 pendant quelques heures)
+  prismLootFirst: 900, // 140 s avant le 14/10 (≈ 800-970 aliens tués à 140 s d'après les parties enregistrées)
+  prismLootEvery: 1200, // 160 s avant le 14/10
   /** Roquettes du power-up sans aucune cible : elles filent droit dans une direction au hasard sur cette distance (px) avant d'exploser, au lieu d'exploser tout près de la squad. */
   rocketIdleRange: 1000,
   /** Durée du stimpack (s). */

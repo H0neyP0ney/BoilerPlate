@@ -1,53 +1,85 @@
 import Phaser from 'phaser';
-import { devLog, loadAssetsLater, log, poki } from '@xiao/engine';
+import { DEV_TOOLS, devLog, loadAssetsLater, log, poki } from '@xiao/engine';
 import { SFX } from '../settings';
-import { LATE_ASSETS } from './manifest';
+import { LATE_ASSETS, LATE_B_ASSETS } from './manifest';
 
-/** Ids de visuels du paquet 2 (image isolée : son id ; planche : ses sprites). */
-const LATE_IDS = new Set(LATE_ASSETS.flatMap((e) => (e.type === 'image' ? [e.id] : Object.keys(e.sprites))));
+/** Ids de visuels du paquet 2 (2a et 2b ; image isolée : son id ; planche : ses sprites). */
+const LATE_IDS = new Set([...LATE_ASSETS, ...LATE_B_ASSETS].flatMap((e) => (e.type === 'image' ? [e.id] : Object.keys(e.sprites))));
 
-type State = 'idle' | 'loading' | 'ready';
+/** idle → loading (2a) → ready (2a arrivé, 2b se télécharge) → complete (tout est là). */
+type State = 'idle' | 'loading' | 'ready' | 'complete';
 let state: State = 'idle';
 const listeners = new Set<() => void>();
+const completeListeners = new Set<() => void>();
+
+/** Temps écoulé depuis `t0`, rangé en 5 tranches lisibles pour les analytics (au lieu d'une ligne par demi-seconde). */
+const durationBucket = (t0: number): string => {
+  const s = (performance.now() - t0) / 1000;
+  return s < 1 ? '0-1s' : s < 3 ? '1-3s' : s < 6 ? '3-6s' : s < 10 ? '6-10s' : '10s+';
+};
 
 /**
- * Paquet 2 des visuels (aliens autres que slime / gling) chargé après le démarrage. Tant qu'il n'est pas prêt, les
- * visuels concernés restent leurs dessins procéduraux ; les vues se rafraîchissent via `onReady`.
+ * Paquet 2 des visuels, chargé après le démarrage en deux étapes. **2a** (`LATE_ASSETS`) : ce qui sert dans les ~2 premières minutes
+ * (aliens précoces, Gling Mère et Rhino Alpha, timeline, XP, globes, power-ups, recrue, bruitages) ; **2b** (`LATE_B_ASSETS`), enchaîné
+ * dès que 2a est arrivé : aliens tardifs et boss suivants (Scarab, rhinos jumeaux, Giant Crab…), critiques. Tant qu'un visuel n'est pas
+ * là, son dessin procédural sert ; les vues se rafraîchissent via `onReady` (2a) et `onComplete` (2b).
  */
 export const latePack = {
+  /** 2a arrivé (les écrans et visuels des premières minutes sont prêts). */
   get ready(): boolean {
-    return state === 'ready';
+    return state === 'ready' || state === 'complete';
+  },
+
+  /** 2a et 2b arrivés. */
+  get complete(): boolean {
+    return state === 'complete';
   },
 
   /** Déclare le paquet 2 déjà chargé (chargement complet au démarrage). */
   markLoaded(): void {
-    state = 'ready';
+    state = 'complete';
   },
 
-  /** Cet id de visuel est-il dans le paquet 2 ? */
+  /** Cet id de visuel est-il dans le paquet 2 (2a ou 2b) ? */
   has(spriteId: string): boolean {
     return LATE_IDS.has(spriteId);
   },
 
-  /** Lance le chargement (sans effet s'il est en cours ou fini). */
+  /** Lance le chargement (sans effet s'il est en cours ou fini) : 2a, puis 2b. */
   ensure(scene: Phaser.Scene): void {
     if (state !== 'idle') return;
+    if (DEV_TOOLS && poki.getURLParam('nolate') !== undefined) return; // dev : `?nolate=1` ne charge JAMAIS le paquet 2 (voir le jeu avec les seuls visuels du paquet 1 + dessins procéduraux)
     state = 'loading';
     const t0 = performance.now();
-    devLog(`paquet 2 : début du chargement (${LATE_ASSETS.length} entrées)`, 'warn');
-    for (const s of Object.values(SFX)) if (!scene.cache.audio.exists(s.key)) scene.load.audio(s.key, s.url); // bruitages : avec le paquet 2 (sfx.play ignore un son pas encore chargé)
+    devLog(`paquet 2a : début du chargement (${LATE_ASSETS.length} entrées)`, 'warn');
+    for (const s of Object.values(SFX)) if (!scene.cache.audio.exists(s.key)) scene.load.audio(s.key, s.url); // bruitages hors `CORE_SFX` : avec le paquet 2a (sfx.play ignore un son pas encore chargé)
     scene.load.on(Phaser.Loader.Events.FILE_LOAD, (file: Phaser.Loader.File) => devLog(`+ ${file.key} (${file.type})`));
     void loadAssetsLater(scene, LATE_ASSETS).then((applied) => {
       scene.load.off(Phaser.Loader.Events.FILE_LOAD);
-      devLog(`paquet 2 : prêt (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`, 'warn');
+      devLog(`paquet 2a : prêt (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`, 'warn');
       state = 'ready';
-      log.info(`[assets] paquet 2 chargé (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`);
-      poki.measureOnce('perf', 'late-assets', `${Math.round((performance.now() - t0) / 500) * 500}ms`); // temps de chargement du paquet 2, par tranches de 0,5 s
+      log.info(`[assets] paquet 2a chargé (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`);
+      poki.measureOnce('perf', 'late-assets-2a', durationBucket(t0)); // temps de chargement du paquet 2a
       for (const fn of [...listeners]) fn();
+      this.loadB(scene, t0);
     });
   },
 
-  /** Demande un visuel : lance le chargement si son paquet n'est pas là. À appeler quand une unité qui en dépend apparaît. */
+  /** Étape 2b : enchaînée dès que 2a est là. */
+  loadB(scene: Phaser.Scene, t0: number): void {
+    devLog(`paquet 2b : début du chargement (${LATE_B_ASSETS.length} entrées)`, 'warn');
+    scene.load.on(Phaser.Loader.Events.FILE_LOAD, (file: Phaser.Loader.File) => devLog(`+ ${file.key} (${file.type})`));
+    void loadAssetsLater(scene, LATE_B_ASSETS).then((applied) => {
+      scene.load.off(Phaser.Loader.Events.FILE_LOAD);
+      state = 'complete';
+      devLog(`paquet 2b : prêt (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms depuis le début)`, 'warn');
+      log.info(`[assets] paquet 2b chargé (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms depuis le début)`);
+      poki.measureOnce('perf', 'late-assets-2b', durationBucket(t0)); // temps total (2a + 2b) depuis le lancement du chargement
+      for (const fn of [...completeListeners]) fn();
+    });
+  },
+
+  /** Demande un visuel : lance le chargement si rien n'a démarré. À appeler quand une unité qui en dépend apparaît. */
   request(scene: Phaser.Scene, spriteId: string): void {
     if (state === 'idle' && LATE_IDS.has(spriteId)) {
       devLog(`paquet 2 demandé par l'apparition de ${spriteId}`, 'warn');
@@ -55,8 +87,15 @@ export const latePack = {
     }
   },
 
+  /** Appelé quand 2a arrive. */
   onReady(fn: () => void): () => void {
     listeners.add(fn);
     return () => listeners.delete(fn);
+  },
+
+  /** Appelé quand 2b arrive (tout est chargé) : à utiliser pour rafraîchir les visuels des aliens et boss tardifs. */
+  onComplete(fn: () => void): () => void {
+    completeListeners.add(fn);
+    return () => completeListeners.delete(fn);
   },
 };

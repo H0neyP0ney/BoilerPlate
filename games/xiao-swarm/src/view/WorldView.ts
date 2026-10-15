@@ -175,8 +175,13 @@ export class WorldView {
   ) {
     this.arena = new ArenaView(scene, sim.map);
     // paquet 2 des visuels chargé en cours de partie : les aliens déjà à l'écran passent de leur dessin procédural à leur planche
-    const offLate = latePack.onReady(() => this.aliens.forEach((v) => v.refreshSprite()));
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, offLate);
+    const refreshAliens = (): void => this.aliens.forEach((v) => v.refreshSprite());
+    const offLate = latePack.onReady(refreshAliens);
+    const offLateB = latePack.onComplete(refreshAliens); // 2b : aliens et boss tardifs
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offLate();
+      offLateB();
+    });
     this.fx = new Fx(scene);
     this.electric = new ElectricArcs(scene);
     this.turrets = new TurretViews(scene, this.fx);

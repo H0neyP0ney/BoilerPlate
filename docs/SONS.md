@@ -105,3 +105,6 @@ Chaque son de la page `?sounds` a une **liste déroulante** : `base` (le fichier
 - **Capacités de boss** : saut du Giant Crab, couronne de pics, plongée / sortie du Scarab, essaim de la Gling Mère, charge des rhinos jumeaux.
 - **Aliens** : sortie de terre des vagues, charge du chargeur, pics du lurker, incantation du chaman, flaques et flammes.
 - **Interface** : fenêtre de pause, volume réglé dans Options.
+
+## Chargement (15/10)
+Les sons de `CORE_SFX` (`src/assets/coreSfx.ts`) sont chargés au démarrage (paquet 1) ; tous les autres arrivent avec le paquet 2a (`latePack.ensure`). Pour déplacer un son d'un paquet à l'autre : l'ajouter à ou le retirer de cette liste.

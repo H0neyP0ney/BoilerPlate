@@ -4,6 +4,7 @@ import { ALIENS } from '../data/aliens';
 import type { SoldierClassId } from '../data/classes';
 import { CLASSES } from '../data/classes';
 import { OBSTACLES } from '../data/obstacles';
+import { proceduralKey, proceduralScale } from './aliens';
 
 /**
  * Réglages par défaut de tous les visuels (valables pour le dessin procédural).
@@ -32,7 +33,8 @@ export function registerDefaultSprites(): void {
     }
   }
   for (const id of Object.keys(ALIENS) as AlienId[]) {
-    sprites.defaults(`alien_${id}`, { texture: `alien_${id}`, originX: 0.5, originY: ALIENS[id].floats ? 1.3 : 0.92, scale: ALIENS[id].scale ?? 1 });
+    // échelle du dessin procédural : son corps suit la hitbox (`proceduralScale`) ; une planche déclarée dans le manifeste garde la sienne
+    sprites.defaults(`alien_${id}`, { texture: proceduralKey(`alien_${id}`), originX: 0.5, originY: ALIENS[id].floats ? 1.3 : 0.92, scale: proceduralScale(`alien_${id}`, ALIENS[id].radius) });
   }
   // Glaçon d'un soldat gelé (dessiné par sa vue, `SoldierView`) : même id de visuel qu'à l'époque où c'était un alien
   sprites.defaults('alien_iceblock', { texture: 'alien_iceblock', originX: 0.5, originY: 0.92, scale: 1 });

@@ -74,9 +74,13 @@ export function loadSfxOverrides(): void {
 }
 
 /** Recharge le fichier audio des sons dont la variante choisie (mémorisée) n'est pas celle chargée au lancement. */
-export function reloadChangedVariants(scene: Phaser.Scene): void {
+export function reloadChangedVariants(scene: Phaser.Scene, loadMissing = true): void {
   if (!DEV_TOOLS) return;
-  for (const id of ids()) if (def(id).variant !== loaded[id] || !scene.cache.audio.exists(def(id).key)) void reloadSound(scene, id); // variante changée, ou fichier absent du cache (chargement raté)
+  for (const id of ids()) {
+    const inCache = scene.cache.audio.exists(def(id).key);
+    if (!inCache && !loadMissing) continue; // paquet 2 pas encore chargé : ses bruitages arrivent avec lui (`latePack.ensure`), pas au démarrage
+    if (def(id).variant !== loaded[id] || !inCache) void reloadSound(scene, id); // variante changée, ou fichier absent du cache (chargement raté)
+  }
 }
 
 /** Chargements en cours par son : un nouveau chargement attend le précédent (sinon deux chargements de la même clé se marchent dessus). */

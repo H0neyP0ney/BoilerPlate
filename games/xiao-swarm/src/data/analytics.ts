@@ -7,4 +7,4 @@
 export const TIME_MILESTONES = [60, 120, 180, 300, 420, 600] as const;
 
 /** Numéros de partie dont on note l'arrivée (`retention/game-<n>/reached`) : combien de joueurs rejouent. */
-export const RETENTION_MILESTONES = [2, 3, 5, 10] as const;
+export const RETENTION_MILESTONES = [1, 2, 3, 4, 5, 10] as const;

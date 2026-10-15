@@ -7,6 +7,7 @@ import { PALETTE, SCENES, SHADOW_ALPHA, VIEW_BG } from '../config';
 import { button, header, line, note, slider } from '../dev/devUi';
 import type { AlienTestRequest } from '../dev/alienTest';
 import { ScaleRef } from '../dev/scaleRef';
+import { proceduralKey, proceduralScale } from '../art/aliens';
 import { getDefaultStat, getStat, listStats, resetStats, saveAllStatsToCode, setStat } from '../debugStats';
 import { fillMuzzle, placementSnippet, resetPlacement, saveSpriteToCode, setAnchor, setMuzzleFrame, setPlacement } from '../debugSprites';
 
@@ -96,6 +97,10 @@ export class UnitViewerScene extends Phaser.Scene {
   private shadowOffsetInputs = {} as Record<'x' | 'y', { slider: HTMLInputElement; label: HTMLSpanElement }>;
   /** Affiche la hitbox (cercle rouge transparent de rayon `radius`) de l'unité de la vue détaillée. */
   private showHit = true;
+  /** Dessin procédural de repli (affiché tant que la planche n'est pas chargée en jeu), montré au-dessus de l'unité en vue détaillée. */
+  private showFallback = true;
+  private fallbackImg?: Phaser.GameObjects.Image;
+  private fallbackLabel?: Phaser.GameObjects.Text;
   /** Poignées à glisser sur l'unité : hitbox (`radius`), ombre portée et échelle. */
   private handles!: { hit: Phaser.GameObjects.Arc; shadow: Phaser.GameObjects.Arc; scale: Phaser.GameObjects.Arc };
   /** Resynchronise les réglettes du panneau Stats (après un changement de `radius` à la poignée). */
@@ -203,10 +208,32 @@ export class UnitViewerScene extends Phaser.Scene {
       });
     });
 
+    this.buildFallback();
     this.fillAnimSelect();
     this.setupEditor();
     this.buildStats();
     this.fit();
+  }
+
+  /** Vue détaillée : le dessin procédural de l'unité (celui qu'on voit avant l'arrivée du paquet 2), au-dessus du visuel actuel. Option « Fallback procédural » du panneau. */
+  private buildFallback(): void {
+    this.fallbackImg?.destroy();
+    this.fallbackLabel?.destroy();
+    this.fallbackImg = undefined;
+    this.fallbackLabel = undefined;
+    const e = this.entries[0];
+    const key = e ? (e.kind === 'alien' ? proceduralKey(e.id) : e.id) : '';
+    if (this.selected === ALL || !e || !this.textures.exists(key)) return;
+    const replaced = sprites.get(e.id).texture !== key; // une planche remplace le dessin procédural en jeu
+    const scale = e.kind === 'alien' ? proceduralScale(e.id, this.radiusOf(e)) : 1; // même échelle qu'en jeu : le corps suit la hitbox
+    const img = this.add.image(e.x, 0, key).setScale(scale);
+    const half = Math.max(100, this.radiusOf(e) * 2.4, e.sprite.displayHeight) / 2;
+    img.setY(e.y - half - 40 - img.displayHeight / 2).setVisible(this.showFallback);
+    this.fallbackImg = img;
+    this.fallbackLabel = this.add
+      .text(e.x, 0, replaced ? 'Fallback procédural (avant le paquet 2)' : 'Fallback procédural (c’est aussi le visuel actuel)', { fontFamily: theme.font, fontSize: '13px', color: PALETTE.textDim })
+      .setOrigin(0.5, 1)
+      .setVisible(this.showFallback);
   }
 
   /** Libellé sous l'unité : son nom affiché en jeu (FR) puis son id de visuel. */
@@ -982,6 +1009,20 @@ ${id}` : id;
     });
     hitRow.append(hitBox, 'Hitbox (cercle rouge, vue détaillée)');
 
+    // fallback procédural : le dessin affiché tant que la planche n'est pas chargée, montré au-dessus de l'unité
+    const fallbackRow = document.createElement('label');
+    fallbackRow.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const fallbackBox = document.createElement('input');
+    fallbackBox.type = 'checkbox';
+    fallbackBox.checked = this.showFallback;
+    fallbackBox.addEventListener('change', () => {
+      this.showFallback = fallbackBox.checked;
+      this.fallbackImg?.setVisible(this.showFallback);
+      this.fallbackLabel?.setVisible(this.showFallback);
+      fallbackBox.blur();
+    });
+    fallbackRow.append(fallbackBox, 'Fallback procédural (au-dessus, vue détaillée)');
+
     const zoom = this.select(
       'Zoom',
       ZOOMS.map((z) => [String(z), `${z * 100} %`] as [string, string]),
@@ -996,7 +1037,7 @@ ${id}` : id;
     this.info.style.cssText = 'font-size:12px;color:#9fe;min-height:2.4em;white-space:pre-wrap';
 
     const editor = this.buildEditorBox(); // crée aussi la rangée Save / Reset / Copier
-    p.append(title, this.actionsRow, zoom.row, units.row, anims.row, sideRow, hitRow, editor, this.info);
+    p.append(title, this.actionsRow, zoom.row, units.row, anims.row, sideRow, hitRow, fallbackRow, editor, this.info);
     document.body.append(p);
     this.panel = p;
 
@@ -1133,6 +1174,7 @@ ${id}` : id;
     this.cross?.setScale(1 / cam.zoom);
     this.muzzleDot?.setScale(1 / cam.zoom);
     if (this.handles) for (const h of Object.values(this.handles)) h.setScale(1 / cam.zoom);
+    if (this.fallbackImg && this.fallbackLabel) this.fallbackLabel.setScale(1 / cam.zoom).setY(this.fallbackImg.y - this.fallbackImg.displayHeight / 2 - 6 / cam.zoom);
     for (const e of this.entries) {
       e.label.setScale(1 / cam.zoom).setY(e.y + 26 / cam.zoom);
       e.hit.setStrokeStyle(2 / cam.zoom, 0xff2a2a, 0.55); // trait d'épaisseur constante à l'écran

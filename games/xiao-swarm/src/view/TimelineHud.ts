@@ -83,8 +83,13 @@ export class TimelineHud {
   private ringStep = -1;
 
   constructor(private readonly scene: Phaser.Scene) {
-    const offLate = latePack.onReady(() => (this.iconKey = '')); // l'icône du prochain boss est recréée avec sa vraie planche
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, offLate);
+    const resetIcon = (): void => void (this.iconKey = ''); // l'icône du prochain boss est recréée avec sa vraie planche (2a : Gling Mère, Rhino ; 2b : les suivants)
+    const offLate = latePack.onReady(resetIcon);
+    const offLateB = latePack.onComplete(resetIcon);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offLate();
+      offLateB();
+    });
     const add = scene.add;
     this.frame = add.image(0, 0, KEYS.frame).setOrigin(0, 0).setDepth(0);
     this.fill = add.nineslice(0, 0, KEYS.fill, undefined, 60, scene.textures.get(KEYS.fill).getSourceImage().height, ART.fillCap.lr, ART.fillCap.lr, ART.fillCap.tb, ART.fillCap.tb).setOrigin(0, 0.5).setDepth(1);

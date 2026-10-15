@@ -10,6 +10,7 @@ import { loadFxOverrides } from '../debugFx';
 import { loadObstacleOverrides } from '../debugObstacles';
 import { loadSpriteOverrides } from '../debugSprites';
 import { loadWaveOverrides } from '../debugWaves';
+import { CORE_SFX } from '../assets/coreSfx';
 import { loadSfxOverrides, reloadChangedVariants } from '../debugSfx';
 import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
@@ -57,7 +58,9 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.assets = this.needsEverything() ? ASSETS : CORE_ASSETS;
-    if (this.assets === ASSETS) for (const s of Object.values(SFX)) this.load.audio(s.key, s.url); // bruitages courts : chargés d'emblée seulement si tout l'est, sinon avec le paquet 2 (`latePack.ensure`)
+    // bruitages : tous d'emblée si tout est chargé ; sinon seulement ceux de `CORE_SFX` (paquet 1), les autres avec le paquet 2a (`latePack.ensure`)
+    const sfxNow = this.assets === ASSETS ? Object.values(SFX) : CORE_SFX.map((id) => SFX[id]);
+    for (const s of sfxNow) this.load.audio(s.key, s.url);
     if (this.assets.length === 0) return;
     // écran de chargement : celui de la page HTML (logo XIAO Games, fond bleu dégradé, barre), piloté ici (`loadingScreen.ts`)
     this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => setLoadProgress(p));
@@ -83,14 +86,12 @@ export class BootScene extends Phaser.Scene {
       loadObstacleOverrides();
       loadWaveOverrides();
       loadSfxOverrides();
-      reloadChangedVariants(this); // variante de son choisie dans la page ?sounds
+      reloadChangedVariants(this, this.assets === ASSETS); // variante de son choisie dans la page ?sounds ; en mode 2 paquets, les sons absents attendent le paquet 2 (avant, ce rappel les chargeait TOUS au démarrage, en dev et avec ?debug=1)
       loadMapZoneOverrides();
       loadNameOverrides();
     }
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
     makeRecruitTextures(this); // recrues composées (pièces fournies) avant les recrues procédurales de repli
-    if (!latePack.ready) latePack.onReady(() => startUpgradeCardTextures(this)); // image de base des cartes dans le paquet 2 : fabrication des fonds à son arrivée
-    if (!latePack.ready) latePack.onReady(() => makeRecruitTextures(this)); // pièces de la recrue dans le paquet 2 : composée à son arrivée (d'ici là, recrue procédurale)
     makeSoldierTextures(this);
     makeAlienTextures(this);
     makeEnvironmentTextures(this);
@@ -147,6 +148,13 @@ export class BootScene extends Phaser.Scene {
   /** Lance la scène suivante et retire l'écran de chargement (fondu). */
   private go(key: string): void {
     hideLoadingScreen();
+    if (key === SCENES.game && this.assets !== ASSETS && !latePack.ready) {
+      // Paquet 2 lancé d'ici, sans attendre l'indice des commandes : son chargeur appartient à cette scène, qui doit donc RESTER active (`launch`, pas `start`, qui l'arrêterait et annulerait le téléchargement).
+      // Même délai de 300 ms que `HudScene` (laisser les premières images s'afficher avant le décodage).
+      this.scene.launch(key);
+      this.time.delayedCall(300, () => latePack.ensure(this));
+      return;
+    }
     this.scene.start(key);
   }
 }

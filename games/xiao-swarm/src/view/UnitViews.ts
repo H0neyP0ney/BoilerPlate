@@ -11,6 +11,8 @@ import { soldierSpriteId } from '../art/playerVariants';
 import { hasComposedRecruit, recruitSpriteId, RECRUIT_STAR } from '../art/recruits';
 import { createGlobeGlitter, type GlobeGlitter } from './GlobeGlitter';
 import type { AlienState, RecruitState, SoldierState } from '../sim/entities';
+import { fallbackSeen } from '../fallbackEvents';
+import { proceduralKey } from '../art/aliens';
 
 /**
  * Représentations visuelles des entités de la simulation. Elles lisent l'état
@@ -315,6 +317,7 @@ export class AlienView {
     if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
     latePack.request(scene, this.id); // visuel d'un paquet pas encore chargé : on le demande (dessin procédural d'ici là, `refreshSprite`)
+    if (latePack.has(this.id) && sprites.get(this.id).texture === proceduralKey(this.id)) fallbackSeen('alien'); // analytics : ce joueur a vu un alien en dessin procédural
     this.body = sprites.add(scene, this.id, state.x, state.y);
     this.animated = sprites.hasAnim(this.id, 'walk') || sprites.hasAnim(this.id, 'idle');
     this.body.setScale(0.01);

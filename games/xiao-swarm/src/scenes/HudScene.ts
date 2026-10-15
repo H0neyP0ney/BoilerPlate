@@ -19,6 +19,7 @@ import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
 import { iconCheat, iconCrowd, iconDifficulty, iconLog, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
+import { fallbackSeen } from '../fallbackEvents';
 
 /** Flèche de boss hors écran : toujours rouge (comme la flèche de réanimation, verte, a la sienne). */
 /** Rouge des flèches rouges du HUD (boss, ennemis qui arrivent) : celui des télégraphes d'attaque (`FX.telegraph`, réglable dans la visionneuse de particules). */
@@ -289,6 +290,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     );
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
+    if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline ni barre d'XP (paquet 2a pas arrivé)
     this.hint.setVisible(g.flow.state === 'ready');
     this.refreshModeButtons();
     this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active); // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas

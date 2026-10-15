@@ -11,6 +11,7 @@ import { soldierOffsetY } from './spriteOffset';
 import { BEAM_PINK, BEAM_PRISM, createLootBeam, type LootBeam } from './LootBeam';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
 import type { Fx } from './Fx';
+import { fallbackSeen } from '../fallbackEvents';
 
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
 const CAPSULE_LIFT = 60; // 52 + 12 (09/10), 60 (10/10)
@@ -73,6 +74,7 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
     const img = scene.add.image(0, -1, key);
     parts.push(img.setScale((160 * scale * 0.62) / Math.max(img.width, img.height))); // tient dans le globe (diamètre 160 × scale)
   } else {
+    fallbackSeen('pickup'); // analytics : icône du power-up absente, emoji à la place
     parts.push(scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: `${Math.round(80 * scale)}px` }).setOrigin(0.5));
   }
   return scene.add.container(0, 0, parts);
@@ -187,7 +189,10 @@ export class PickupViews {
     const live = new Set<number>();
     for (const f of this.sim.powerups.fields) {
       const key = f.kind === 'heal' ? powerUpIconKey('heal') : 'fx_freezebot';
-      if (!this.scene.textures.exists(key)) continue;
+      if (!this.scene.textures.exists(key)) {
+        fallbackSeen('other'); // analytics : drone absent (paquet 2b pour le drone de stase)
+        continue;
+      }
       live.add(f.id);
       let img = this.bots.get(f.id);
       if (!img) {

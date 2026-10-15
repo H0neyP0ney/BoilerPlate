@@ -40,6 +40,9 @@ import type { GameOverData } from './GameOverScene';
  * En ligne (voir online.ts) : ?net=host, ?net=join&room=CODE, ?net=auto. BootScene fournit alors
  * la session via `registry` ; la scène ne fait aucune différence entre solo, hôte et client.
  */
+/** Analytics de performance : tranches d'aliens vivants (50 par tranche, la dernière est « 150+ »). */
+const PERF_BANDS = ['0-49', '50-99', '100-149', '150+'];
+
 export class GameScene extends Phaser.Scene {
   readonly flow = new RunFlow('survival');
   session!: Session;
@@ -57,8 +60,8 @@ export class GameScene extends Phaser.Scene {
   private freeRevive = false;
   private ended = false;
   /** Analytics de performance : images et temps réel (ms) joués depuis le début de la partie (ou du dernier envoi), partie en cours seulement. */
-  private perfFrames = 0;
-  private perfMs = 0;
+  private perfFrames = [0, 0, 0, 0];
+  private perfMs = [0, 0, 0, 0];
   /** Séquence de fin du solo (boss final tombé) : fusée, soldats qui montent dedans, texte de victoire, fondu au noir, nouvelle partie. */
   private ending?: Ending;
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
@@ -88,8 +91,8 @@ export class GameScene extends Phaser.Scene {
     this.revived = false;
     this.freeRevive = false;
     this.ended = false;
-    this.perfFrames = 0;
-    this.perfMs = 0;
+    this.perfFrames = [0, 0, 0, 0];
+    this.perfMs = [0, 0, 0, 0];
     this.ending = undefined;
     this.upgradeOpen = false;
     this.moveLocked = false;
@@ -198,8 +201,10 @@ export class GameScene extends Phaser.Scene {
     const running = this.flow.isPlaying || this.session.online;
     if (running) {
       if (delta < 1000) {
-        this.perfFrames++; // images réellement jouées (hors pause, choix inclus) ; un arrêt de plus d'1 s (onglet caché) n'est pas compté
-        this.perfMs += delta;
+        // images réellement jouées (hors pause, choix inclus) ; un arrêt de plus d'1 s (onglet caché) n'est pas compté ; rangées par nombre d'aliens vivants
+        const band = Math.min(PERF_BANDS.length - 1, Math.floor(sim.aliens.length / 50));
+        this.perfFrames[band]++;
+        this.perfMs[band] += delta;
       }
       this.session.advance(delta * this.timeScale, this.onEvent);
       this.alienTest?.update(dt * this.timeScale);
@@ -419,18 +424,20 @@ export class GameScene extends Phaser.Scene {
 
   /** Dev : envoie la partie enregistrée au serveur de dev (`docs/bench/runs/`), si elle est assez longue pour compter. */
   /**
-   * Analytics de fin de partie : FPS moyen (par tranches de 5) et durée jouée (minutes entières, « 10+ » au-delà), pour voir si ça rame chez les joueurs.
-   * Un évènement `perf/fps-<tranche>/<durée>min` ; les compteurs repartent à zéro (un revive reprend une nouvelle mesure). Pas pendant les tests dev.
+   * Analytics de fin de partie : FPS moyen selon le nombre d'aliens vivants (tranches de `PERF_BANDS`), pour savoir si la horde est trop lourde.
+   * Un évènement `perf/fps-<ok (≥ 50) / moyen (30-49) / mauvais (< 30)>/aliens-<tranche>` par tranche jouée au moins 5 s ; les compteurs repartent à zéro (un revive reprend une nouvelle mesure). Pas pendant les tests dev.
    */
   private sendPerf(): void {
-    const ms = this.perfMs;
     const frames = this.perfFrames;
-    this.perfFrames = 0;
-    this.perfMs = 0;
-    if (frames < 30 || ms < 5000 || DEV_TOOLS) return;
-    const fps = Math.min(60, Math.round((frames * 1000) / ms / 5) * 5); // plafonné à 60 (écrans 120 Hz)
-    const minutes = Math.floor(ms / 60000);
-    poki.measure('perf', `fps-${fps}`, minutes >= 10 ? '10+min' : `${minutes}min`);
+    const times = this.perfMs;
+    this.perfFrames = [0, 0, 0, 0];
+    this.perfMs = [0, 0, 0, 0];
+    if (DEV_TOOLS) return;
+    for (let i = 0; i < PERF_BANDS.length; i++) {
+      if (frames[i] < 30 || times[i] < 5000) continue;
+      const fps = (frames[i] * 1000) / times[i];
+      poki.measure('perf', fps >= 50 ? 'fps-ok' : fps >= 30 ? 'fps-moyen' : 'fps-mauvais', `aliens-${PERF_BANDS[i]}`);
+    }
   }
 
   private saveRun(victory: boolean): void {

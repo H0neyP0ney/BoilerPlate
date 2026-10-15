@@ -51,6 +51,39 @@ function slime(ctx: CanvasRenderingContext2D, light = '#c4f07a', dark = '#6fb03a
   eye(ctx, 24, 21, 8);
 }
 
+/** Araignée : corps rond violet-rose, tête avec deux yeux, 8 pattes articulées (4 de chaque côté). Canvas 56 × 56. */
+function spider(ctx: CanvasRenderingContext2D): void {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const k = i - 1.5;
+      const x0 = 28 + side * 7;
+      const y0 = 31 + k * 4;
+      const knee = { x: 28 + side * (17 + (i % 2) * 2), y: y0 + k * 6 - 7 };
+      const foot = { x: 28 + side * 25, y: y0 + k * 9 + 3 };
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(knee.x, knee.y);
+      ctx.lineTo(foot.x, foot.y);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#7a2a5a';
+      ctx.stroke();
+    }
+  }
+  ctx.beginPath();
+  ctx.ellipse(28, 35, 11, 13, 0, 0, Math.PI * 2);
+  outlined(ctx, radial(ctx, 28, 33, 12, '#e8a0e0', '#7a2a8a'));
+  ctx.beginPath();
+  ctx.ellipse(28, 20, 8, 7, 0, 0, Math.PI * 2);
+  outlined(ctx, radial(ctx, 28, 19, 8, '#f0b8e8', '#8a3a9a'), 2.5);
+  eye(ctx, 24.5, 19, 3);
+  eye(ctx, 31.5, 19, 3);
+}
+
 /** Bête orange à cornes (charge). */
 function beast(ctx: CanvasRenderingContext2D, light = '#ffc27a', dark = '#e0741f', legs = '#c0621a'): void {
   // pattes
@@ -150,7 +183,78 @@ function crab(ctx: CanvasRenderingContext2D): void {
   eye(ctx, 80, 36, 6, 0);
 }
 
+/**
+ * Largeur visible du corps (px de texture) de chaque dessin procédural d'alien : sert à le mettre à l'échelle de la hitbox
+ * (`proceduralScale`). Un dessin absent d'ici garde l'échelle 1.
+ */
+const PROCEDURAL_BODY_WIDTH: Record<string, number> = {
+  alien_slime: 36,
+  alien_gling: 36,
+  alien_kamikaze: 36,
+  alien_toad: 36,
+  alien_burner: 36,
+  alien_shaman: 36,
+  alien_wall: 36,
+  alien_spitter: 36,
+  alien_iceballer: 36,
+  alien_shooter: 54,
+  alien_charger: 56,
+  alien_spider: 50,
+  alien_bubble: 52,
+  alien_lurker: 46,
+  alien_fire_orb: 34,
+  alien_ice_orb: 34,
+  alien_boss_egg: 46,
+  alien_boss_gling: 97,
+  alien_boss_rhino: 108,
+  alien_boss_rhino_fire: 108,
+  alien_boss_rhino_ice: 108,
+  alien_boss_scarab: 150,
+  alien_boss_crab: 120,
+};
+
+/** Diamètre affiché du dessin procédural, en rayons de hitbox (la hitbox est le cercle de collision : le corps la déborde un peu). */
+const PROCEDURAL_DIAMETERS = 2.4;
+
+/**
+ * Clé de texture du dessin procédural d'un visuel d'alien. L'œuf est une image du manifeste sous le même id (`alien_boss_egg`) : son dessin
+ * procédural a donc une clé à part, sinon l'image qui arrive avec le paquet 2a trouverait la clé déjà prise et ne remplacerait rien.
+ */
+export const proceduralKey = (spriteId: string): string => (spriteId === 'alien_boss_egg' ? 'alien_boss_egg_proc' : spriteId);
+
+/** Échelle d'affichage du dessin procédural d'un alien (`alien_<id>`) pour que son corps suive la taille de sa hitbox. */
+export function proceduralScale(spriteId: string, radius: number): number {
+  const body = PROCEDURAL_BODY_WIDTH[spriteId];
+  return body ? (radius * PROCEDURAL_DIAMETERS) / body : 1;
+}
+
+/** Œuf de boss : œuf vert pâle moucheté de taches sombres, reflet et contour (replis du paquet 2a). Canvas 64 × 80. */
+function egg(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(32, 5);
+  ctx.bezierCurveTo(52, 5, 59, 38, 59, 50);
+  ctx.bezierCurveTo(59, 66, 47, 76, 32, 76);
+  ctx.bezierCurveTo(17, 76, 5, 66, 5, 50);
+  ctx.bezierCurveTo(5, 38, 12, 5, 32, 5);
+  ctx.closePath();
+  outlined(ctx, radial(ctx, 32, 40, 32, '#eaf8a8', '#7fae2a'), 3.5);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = 'rgba(70,110,20,0.55)';
+  for (const [x, y, rx, ry] of [[22, 28, 6, 4.5], [41, 36, 5, 4], [30, 52, 7, 5], [46, 58, 4.5, 3.5], [16, 56, 4, 3.5], [36, 18, 3.5, 3]]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.ellipse(21, 26, 4.5, 11, 0.35, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function makeAlienTextures(scene: Phaser.Scene): void {
+  canvasTexture(scene, proceduralKey('alien_boss_egg'), 64, 80, egg);
   canvasTexture(scene, 'alien_slime', 48, 48, (ctx) => slime(ctx));
   canvasTexture(scene, 'alien_shooter', 72, 72, (ctx) => {
     ctx.scale(1.5, 1.5);
@@ -279,6 +383,23 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
   canvasTexture(scene, 'alien_charger', 66, 52, (ctx) => beast(ctx, '#e09a9a', '#a33030', '#7a2020'));
   canvasTexture(scene, 'alien_kamikaze', 48, 48, (ctx) => slime(ctx, '#ffd9a8', '#e0702a'));
   canvasTexture(scene, 'alien_toad', 48, 48, (ctx) => slime(ctx, '#c0f5e4', '#2aa88a'));
+  // Repli du paquet 2a : araignée (invoquée par la Gling Mère, le chaman et le Giant Crab) et Gling Mère, affichées d'ici l'arrivée de leur planche.
+  canvasTexture(scene, 'alien_spider', 56, 56, spider);
+  canvasTexture(scene, 'alien_boss_gling', 130, 130, (ctx) => {
+    ctx.scale(2.7, 2.7);
+    slime(ctx, '#ffb0c0', '#c0203a');
+    // couronne de reine sur la tête
+    ctx.beginPath();
+    ctx.moveTo(13, 9);
+    ctx.lineTo(15, 1);
+    ctx.lineTo(19, 6);
+    ctx.lineTo(24, 0);
+    ctx.lineTo(29, 6);
+    ctx.lineTo(33, 1);
+    ctx.lineTo(35, 9);
+    ctx.closePath();
+    outlined(ctx, '#ffd84a', 1.6);
+  });
   // Bulle flottante : sphère translucide à reflets (le soldat avalé se voit à travers).
   canvasTexture(scene, 'alien_bubble', 60, 60, (ctx) => {
     const g = ctx.createRadialGradient(24, 22, 4, 30, 30, 29);
@@ -307,6 +428,15 @@ export function makeAlienTextures(scene: Phaser.Scene): void {
   canvasTexture(scene, 'alien_boss_rhino', 119, 94, (ctx) => {
     ctx.scale(1.8, 1.8);
     beast(ctx, '#d98a8a', '#8c1f1f', '#5a1414');
+  });
+  // Rhinos jumeaux : le rhinocéros recoloré, braise (feu) et givre (glace).
+  canvasTexture(scene, 'alien_boss_rhino_fire', 119, 94, (ctx) => {
+    ctx.scale(1.8, 1.8);
+    beast(ctx, '#ffc27a', '#e0400f', '#8a2208');
+  });
+  canvasTexture(scene, 'alien_boss_rhino_ice', 119, 94, (ctx) => {
+    ctx.scale(1.8, 1.8);
+    beast(ctx, '#e0f6ff', '#3a9be0', '#1f5f9a');
   });
   canvasTexture(scene, 'alien_boss_scarab', 182, 157, (ctx) => {
     ctx.scale(1.4, 1.4);

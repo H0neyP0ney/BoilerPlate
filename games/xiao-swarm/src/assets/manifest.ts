@@ -569,15 +569,36 @@ export const ASSETS: AssetEntry[] = [
 
 /**
  * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage (interface du début, soldats, décor). Paquet 2 (`LATE_ASSETS`) : tous les aliens sauf le slime et le gling (`CORE_ALIEN_FILES`),
- * la timeline et la barre d'XP, les icônes d'upgrade et de power-up, les globes, les pièces de la recrue, les critiques, tout l'écran de choix d'upgrade ; chargé en tâche de fond
+ * la timeline et la barre d'XP, les icônes de power-up, les globes, les pièces de la recrue, les critiques ; chargé en tâche de fond
  * dès que le joueur est sur la scène de jeu avec l'indice des commandes (`assets/latePack.ts`). En ligne, les deux paquets
  * sont chargés d'emblée (on peut rejoindre en cours de partie). Une seule liste `ASSETS` reste la source (la sauvegarde des visionneuses la réécrit).
  */
-const CORE_ALIEN_FILES: string[] = ['aliens/slime.png', 'aliens/gling.png']; // slime et gling au paquet 1 (14/10) : ils sont dans les toutes premières vagues (tutoriel compris), sinon le dessin procédural s'affichait le temps du chargement du paquet 2 ; y mettre un fichier le garde au démarrage
-// Paquet 2 aussi : tout ce qui ne se voit qu'après les premières secondes — icônes d'upgrade et de power-up, globes et étoiles au sol, pièces de la recrue, bulle et chiffres des critiques, tout l'écran de choix d'upgrade (carte, slots, titre, relance, étoile), drone de stase
+const CORE_ALIEN_FILES: string[] = ['aliens/slime.png', 'aliens/gling.png', 'aliens/kamikaze.png', 'ui/powerups/heal.png']; // slime et gling au paquet 1 (14/10) : ils sont dans les toutes premières vagues (tutoriel compris), sinon le dessin procédural s'affichait le temps du chargement du paquet 2 ; y mettre un fichier le garde au démarrage
+// Paquet 2 aussi : tout ce qui ne se voit qu'après les premières secondes — icônes de power-up, globes et étoiles au sol, pièces de la recrue, bulle et chiffres des critiques, drone de stase
+// (l'écran de choix d'upgrade — carte, slots, titre, relance, étoile, icônes d'upgrade — est au paquet 1 depuis le 15/10 : un level-up rapide ne tombe plus sur « Loading », ~400 Ko de plus au démarrage)
 // (la fusée est chargée sous `fx_rocket_png` puis échangée avec le dessin procédural `fx_rocket`). Tous ont un repli : voir `latePack.onReady`.
-const LATE_PREFIXES = ['fx/rocket.png', 'fx/xp.webp', 'ui/boss/', 'ui/rewarded.png', 'ui/xp/', 'ui/timeline/', 'ui/cards/', 'ui/reroll.png', 'ui/slot_', 'ui/levelup_title.png', 'fx/star.png', 'fx/crit/', 'ui/upgrades/', 'ui/powerups/', 'globes/', 'recruit/', 'fx/freezebot.png'];
+const LATE_PREFIXES = ['fx/rocket.png', 'ui/boss/', 'ui/rewarded.png', 'ui/xp/', 'ui/timeline/', 'ui/powerups/', 'globes/'];
+// Le globe d'XP (`fx/xp.webp`) est au paquet 1 depuis le 15/10 : il tombe dès le premier alien tué.
+// Paquet 2b (15/10) : chargé juste après 2a. Aliens qui n'apparaissent pas avant ~3 min (first-seen de `data/waves.ts` : kamikaze 30 s, Gling Mère 60 s, toad / spitter 75 s, Rhino Alpha 120 s restent en 2a ; l'œuf de boss aussi, dès le premier boss tué),
+// Scarab (4:30), rhinos jumeaux (7:00) et Giant Crab (10:00, 767 Ko à lui seul), plus la bulle et les chiffres des critiques et le drone de stase.
+const LATE_B_ALIEN_FILES = [
+  'aliens/shooter.png',
+  'aliens/iceballer.png',
+  'aliens/burner.png',
+  'aliens/shaman.png',
+  'aliens/charger.png',
+  'aliens/wall.png',
+  'aliens/lurker.png',
+  'aliens/bubble.png',
+  'aliens/boss_scarab.png',
+  'aliens/boss_rhino_fire.png',
+  'aliens/boss_rhino_ice.png',
+  'aliens/crab.png',
+];
+const LATE_B_PREFIXES = ['fx/crit/', 'fx/freezebot.png'];
+const isLateB = (e: AssetEntry): boolean => LATE_B_ALIEN_FILES.includes(e.url) || LATE_B_PREFIXES.some((x) => e.url.startsWith(x));
 const isLate = (e: AssetEntry): boolean =>
-  (e.url.startsWith('aliens/') && !CORE_ALIEN_FILES.includes(e.url)) || LATE_PREFIXES.some((x) => e.url.startsWith(x));
-export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => !isLate(e));
+  !isLateB(e) && !CORE_ALIEN_FILES.includes(e.url) && (e.url.startsWith('aliens/') || LATE_PREFIXES.some((x) => e.url.startsWith(x))); // kamikaze (30 s), pièces de la recrue et icône du medibot (`ui/powerups/heal.png`) au paquet 1 (15/10)
+export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => !isLate(e) && !isLateB(e));
 export const LATE_ASSETS: AssetEntry[] = ASSETS.filter(isLate);
+export const LATE_B_ASSETS: AssetEntry[] = ASSETS.filter(isLateB);

@@ -4,6 +4,7 @@ import { CRACK_SIZE, CRACK_VARIANTS, SCORCH_VARIANTS } from '../art/fx';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
 import { t as tr } from '../i18n';
+import { fallbackSeen } from '../fallbackEvents';
 
 /**
  * Effets visuels déclenchés par les événements de la simulation :
@@ -601,6 +602,7 @@ export class Fx {
       }
       box.add([bubble, ...imgs]);
     } else {
+      fallbackSeen('other'); // analytics : chiffres de critique pas encore chargés (paquet 2b)
       box.add(this.scene.add.text(0, 0, `! ${txt}`, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffe14a', stroke: '#8a1a00', strokeThickness: 5 }).setOrigin(0.5));
     }
     this.scene.tweens.add({ targets: box, scale: FX.crit.scale, duration: FX.crit.popMs, ease: 'Back.Out' });

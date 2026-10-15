@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { canvasTexture } from '@xiao/engine';
 import type { UpgradeId } from '../data/progression';
 import { upgradeIconKey } from '../view/upgradeIcons';
+import { fallbackSeen } from '../fallbackEvents';
 
 /**
  * Globes au sol (power-ups, globe d'upgrade des œufs de boss) et leurs étoiles : des IMAGES (public/assets/globes/, à retoucher à la main),
@@ -26,7 +27,9 @@ export const upgradeOrbKey = (id: UpgradeId): string => `upgrade_orb_${id}`;
 
 /** Clé de l'image si elle est chargée, sinon null. */
 export function loadedKey(scene: Phaser.Scene, key: string): string | null {
-  return scene.textures.exists(key) ? key : null;
+  if (scene.textures.exists(key)) return key;
+  fallbackSeen('pickup'); // analytics : globe ou étoile pas encore chargé (paquet 2a)
+  return null;
 }
 
 /** Supprime les globes d'upgrade déjà assemblés (visionneuse : ils sont refaits au prochain besoin). */
@@ -41,7 +44,10 @@ export function ensureUpgradeOrbTexture(scene: Phaser.Scene, id: UpgradeId): str
   const img = (k: string): HTMLImageElement | null => (scene.textures.exists(k) ? (scene.textures.get(k).getSourceImage() as HTMLImageElement) : null);
   const globe = img(globeKey('upgrade'));
   const icon = img(upgradeIconKey(id));
-  if (!globe || !icon) return null;
+  if (!globe || !icon) {
+    fallbackSeen('pickup');
+    return null;
+  }
   canvasTexture(scene, key, SIZE, SIZE, (ctx) => {
     ctx.drawImage(globe, 0, 0, SIZE, SIZE);
     const w = GLOBE * ICON_SCALE;

@@ -7,7 +7,7 @@
 export type Pack = 'core' | '2a' | '2b';
 
 export const PACK_OF: Record<string, Pack> = {
-  'aliens/boss_mother.png': '2a',
+  'aliens/boss_mother.png': '2b',
   'aliens/boss_rhino.png': '2b',
   'aliens/boss_rhino_fire.png': '2b',
   'aliens/boss_rhino_ice.png': '2b',
@@ -16,7 +16,7 @@ export const PACK_OF: Record<string, Pack> = {
   'aliens/burner.png': '2b',
   'aliens/charger.png': '2b',
   'aliens/crab.png': '2b',
-  'aliens/egg.png': '2a',
+  'aliens/egg.png': '2b',
   'aliens/gling.png': 'core',
   'aliens/iceballer.png': '2b',
   'aliens/kamikaze.png': 'core',
@@ -24,7 +24,7 @@ export const PACK_OF: Record<string, Pack> = {
   'aliens/shaman.png': '2b',
   'aliens/shooter.png': '2b',
   'aliens/slime.png': 'core',
-  'aliens/spider.png': '2a',
+  'aliens/spider.png': '2b',
   'aliens/spitter.png': '2b',
   'aliens/toad.png': '2b',
   'aliens/wall.png': '2b',
@@ -104,7 +104,7 @@ export const PACK_OF: Record<string, Pack> = {
   'sfx:xp': 'core',
   'soldiers/gunner.png': 'core',
   'ui/boss/fill.png': '2a',
-  'ui/boss/frame.png': '2a',
+  'ui/boss/frame.png': '2b',
   'ui/cards/card_base.png': 'core',
   'ui/hand.png': 'core',
   'ui/hud/button.png': 'core',

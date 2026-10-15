@@ -192,12 +192,13 @@ export class WaveRunner {
     const configs = all;
     const config = forced ?? configs[Math.floor(this.rng.next() * configs.length)];
     const groups = config.groups.map((g) => ({ ...g }));
-    if (!forced && level >= 1) {
+    const guestChance = this._replaying ? DIFFICULTY.waveGuestReplayChance : DIFFICULTY.waveGuestChance;
+    if (!forced && level >= 1 && guestChance > 0 && (guestChance >= 1 || this.rng.next() < guestChance)) { // pas de tirage de plus quand la chance vaut 1 (même suite aléatoire qu'avant)
       // Mélange : un groupe « invité » tiré d'une configuration d'un niveau voisin (plus doux ou plus dur), en petit nombre.
       const pool = [level - 1, level + 1].flatMap((l) => (l >= 1 && l <= WAVE_LEVELS.length ? (this.script.levels?.[l] ?? []).flatMap((c) => c.groups) : []));
       if (pool.length > 0) {
         const guest = pool[Math.floor(this.rng.next() * pool.length)];
-        const n = Math.max(1, Math.round(guest.count * 0.4));
+        const n = Math.max(1, Math.round(guest.count * DIFFICULTY.waveGuestShare));
         const same = groups.find((g) => g.type === guest.type);
         if (same) same.count += n;
         else groups.push({ type: guest.type, count: n });

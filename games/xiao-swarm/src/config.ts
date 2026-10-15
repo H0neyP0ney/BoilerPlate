@@ -186,6 +186,12 @@ export const DIFFICULTY_DEFAULTS = {
   // ---- vagues (`WaveRunner`)
   /** Chance qu'une vague (hors boss et vagues rejouées) soit une embuscade : ses aliens sortent du sol juste devant la squad (`AMBUSH`, `Horde.spawnAhead`). 0 = jamais. */
   ambushChance: 0.1,
+  /** Mélange des vagues (`WaveRunner.trigger`) : une vague tirée au hasard (jamais un boss ni une configuration forcée) reçoit un groupe « invité » d'un niveau voisin (L−1 ou L+1). Chance de l'invité (1 = toujours, comme avant ; 0 = vagues exactement comme écrites dans le Gestionnaire). */
+  waveGuestChance: 1,
+  /** Part du groupe invité ajoutée à la vague : nombre du groupe tiré × cette valeur, arrondi, au moins 1. */
+  waveGuestShare: 0.4,
+  /** Même chance d'invité, mais pour les vagues rejouées pendant un combat de boss (0 = rejeux purs, sans cracheur ni autre alien d'un niveau voisin). */
+  waveGuestReplayChance: 1,
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,

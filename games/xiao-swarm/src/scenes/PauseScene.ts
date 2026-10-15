@@ -63,7 +63,7 @@ export class PauseScene extends Phaser.Scene {
     this.busy = true;
     const game = this.scene.get(SCENES.game) as GameScene;
     this.scene.stop();
-    await game.retry();
+    await game.retry(true); // retour à l'écran d'accueil (niveau à choisir), pas de relance directe
   }
 
   private async resume(): Promise<void> {

@@ -181,6 +181,15 @@ export const DIFFICULTY_DEFAULTS = {
   /** Escalade de la vitesse de déplacement par boss ou mini-boss tué. */
   bossEscalationSpeed: 0.07,
   /**
+   * Niveaux de difficulté (14/10), `expert` et `impossible` (en normal : ×1). Deux multiplicateurs par niveau : `…BaseMul` agit sur les stats de BASE de tous les aliens (PV, dégâts, cadence
+   * d'attaque, vitesse ; ni XP ni recrues) ; `…ScaleMul` agit sur les stats qui GRANDISSENT avec les boss tués : il multiplie chaque gain d'escalade ci-dessus
+   * (1,1 : +15 % par boss devient +16,5 %). Voir `Sim.escalation*`.
+   */
+  expertBaseMul: 1.1,
+  expertScaleMul: 1.1,
+  impossibleBaseMul: 1.2,
+  impossibleScaleMul: 1.2,
+  /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).
    */

@@ -122,6 +122,9 @@ export interface AlienState extends Body {
   revived: boolean;
   /** Boss Gling : compte à rebours avant l'essaim (s), temps d'essaim restant (s) et temps écoulé depuis le dernier gling apparu. */
   swarmCd: number;
+  /** Compteurs (s) des capacités des niveaux Expert (cercle d'araignées) et Impossible (zones de gel), voir `AlienDef.expert` / `impossible`. */
+  ringCd: number;
+  iceCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */
   lurkBlockT: number;
   swarmT: number;

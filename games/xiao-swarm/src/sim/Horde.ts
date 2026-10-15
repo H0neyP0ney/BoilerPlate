@@ -1,6 +1,7 @@
 import { damp, type Point } from '@xiao/engine/sim';
 import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
-import { ALIENS, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
+import { ALIENS, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
+import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -123,7 +124,8 @@ export class Horde {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
     const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * this.sim.escalationHp; // escalade des PV : par boss déjà tué
-    const maxShield = def.shield ? maxHp * def.shield.pct : 0;
+    const shield = shieldOf(def, this.sim.difficulty);
+    const maxShield = shield ? maxHp * shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
     return {
       kind: 'alien',
@@ -144,7 +146,7 @@ export class Horde {
       maxHp,
       shield: maxShield,
       maxShield,
-      shieldT: def.shield ? def.shield.regenDelay : 0,
+      shieldT: shield ? shield.regenDelay : 0,
       alive: true,
       target: null,
       goalX: c.x,
@@ -191,6 +193,8 @@ export class Horde {
       reviveLock: 0,
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
+      ringCd: def.expert?.spiderRing ? def.expert.spiderRing.every : 0,
+      iceCd: def.impossible?.frost ? def.impossible.frost.every : 0,
       lurkBlockT: 0,
       swarmT: 0,
       swarmAcc: 0,
@@ -246,6 +250,40 @@ export class Horde {
       out.push(made);
     }
     return out;
+  }
+
+  /**
+   * `F.count` nuages de gel (rayon `F.radius`, durée `F.ttl` s) autour de la squad `sq`, répartis d'un coup tout autour à `F.gap` px (min-max) de son bord réel (le soldat le plus éloigné de son
+   * centre : la formation s'étale plus que son rayon théorique), jamais hors de la carte (angles retentés si le point tombe dans le vide, puis `addPuddle` recadre). Chaman et Gling Mère (impossible).
+   */
+  private castFrost(F: NonNullable<AlienState['def']['frost']>, sq: Squad): void {
+    const { rng } = this.sim;
+    let edge = sq.radius;
+    for (const s of sq.soldiers) if (s.alive && !s.capturedBy && !s.frozen) edge = Math.max(edge, Math.hypot(s.x - sq.center.x, s.y - sq.center.y) + s.radius);
+    const start = rng.range(0, Math.PI * 2);
+    const bounds = this.sim.arena.bounds;
+    for (let i = 0; i < F.count; i++) {
+      const d = edge + F.radius + rng.range(F.gap[0], F.gap[1]);
+      let ang = start + (i / F.count) * Math.PI * 2 + rng.range(-0.3, 0.3);
+      for (let tries = 0; tries < 8; tries++) {
+        const px = sq.center.x + Math.cos(ang) * d;
+        const py = sq.center.y + Math.sin(ang) * d;
+        if (px >= bounds.minX + F.radius && px <= bounds.maxX - F.radius && py >= bounds.minY + F.radius && py <= bounds.maxY - F.radius) break;
+        ang = rng.range(0, Math.PI * 2);
+      }
+      this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true);
+    }
+  }
+
+  /** Cercle de `ring.count` araignées de rayon `ring.radius` autour du centre de la squad visée par `a`, angle de départ au hasard (Gling Mère, Expert et Impossible). */
+  private spiderRing(a: AlienState, ring: { count: number; radius: number; hpMul: number }): void {
+    const squad = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    if (!squad) return;
+    const start = this.sim.rng.range(0, Math.PI * 2);
+    for (let i = 0; i < ring.count; i++) {
+      const ang = start + (i / ring.count) * Math.PI * 2;
+      this.spawnAt('spider', squad.center.x + Math.cos(ang) * ring.radius, squad.center.y + Math.sin(ang) * ring.radius * 0.8, 1, false, false, ring.hpMul);
+    }
   }
 
   /** Fait apparaître un alien à un endroit précis (invocation ou résurrection par un chaman), si le plafond le permet ; il ne donne jamais d'XP. */
@@ -362,9 +400,10 @@ export class Horde {
       }
 
       // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
-      if (def.shield && a.maxShield > 0) {
+      const shieldDef = shieldOf(def, this.sim.difficulty);
+      if (shieldDef && a.maxShield > 0) {
         a.shieldT += dt;
-        if (a.shieldT >= def.shield.regenDelay && a.shield < a.maxShield) a.shield = Math.min(a.maxShield, a.shield + (a.maxShield / def.shield.regenTime) * dt);
+        if (a.shieldT >= shieldDef.regenDelay && a.shield < a.maxShield) a.shield = Math.min(a.maxShield, a.shield + (a.maxShield / shieldDef.regenTime) * dt);
       }
 
       if (def.projectile) {
@@ -514,6 +553,19 @@ export class Horde {
           a.swarmCd = w.every;
         }
       }
+      // Niveaux Expert / Impossible (Gling Mère) : cercle d'araignées autour de la squad visée (elles surgissent du sol, avec leur trou d'apparition habituel : un court télégraphe)
+      const ring = atLeast(this.sim.difficulty, 'expert') ? def.expert?.spiderRing : undefined;
+      if (ring && !swarming && (a.ringCd -= dt * cdRate) <= 0) {
+        a.ringCd = ring.every;
+        this.spiderRing(a, ring);
+      }
+      // Impossible : zones de gel autour de la squad visée (comme le chaman)
+      const ice = this.sim.difficulty === 'impossible' ? def.impossible?.frost : undefined;
+      if (ice && !swarming && (a.iceCd -= dt * cdRate) <= 0) {
+        a.iceCd = ice.every;
+        const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (target) this.castFrost(ice, target);
+      }
       if (def.slam) {
         a.slamCd -= dt * cdRate;
         if (a.slamWind > 0) {
@@ -628,23 +680,7 @@ export class Horde {
         if (sq) {
           const F = def.frost;
           if (Math.hypot(sq.center.x - a.x, sq.center.y - a.y) < F.range) {
-            // bord réel de la squad : le soldat le plus éloigné de son centre (la formation s'étale plus que son rayon théorique)
-            let edge = sq.radius;
-            for (const s of sq.soldiers) if (s.alive && !s.capturedBy && !s.frozen) edge = Math.max(edge, Math.hypot(s.x - sq.center.x, s.y - sq.center.y) + s.radius);
-            const start = rng.range(0, Math.PI * 2);
-            const bounds = this.sim.arena.bounds;
-            for (let i = 0; i < F.count; i++) {
-              // 3 nuages d'un coup, répartis tout autour ; jamais hors de la carte : si le point tombe dans le vide (squad au bord), on retente d'autres angles
-              const d = edge + F.radius + rng.range(F.gap[0], F.gap[1]);
-              let ang = start + (i / F.count) * Math.PI * 2 + rng.range(-0.3, 0.3);
-              for (let tries = 0; tries < 8; tries++) {
-                const px = sq.center.x + Math.cos(ang) * d;
-                const py = sq.center.y + Math.sin(ang) * d;
-                if (px >= bounds.minX + F.radius && px <= bounds.maxX - F.radius && py >= bounds.minY + F.radius && py <= bounds.maxY - F.radius) break;
-                ang = rng.range(0, Math.PI * 2);
-              }
-              this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true); // (addPuddle recadre en dernier recours)
-            }
+            this.castFrost(F, sq);
             a.cloudCd = F.every * rng.range(0.9, 1.15);
           } else a.cloudCd = 0.5;
         }

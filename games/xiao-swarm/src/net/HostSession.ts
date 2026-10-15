@@ -1,6 +1,7 @@
 import { FixedStep } from '@xiao/engine/sim';
 import { MAX_BOTS, type BotLevel } from '../data/bots';
 import { START_SQUADS } from '../data/classes';
+import type { DifficultyLevel } from '../data/difficultyLevels';
 import type { ModeDef } from '../data/modes';
 import { CoopBot } from '../sim/CoopBot';
 import { Sim } from '../sim/Sim';
@@ -35,6 +36,8 @@ export interface HostSessionOptions {
   /** Coop : nombre de coéquipiers IA au départ (0 si absent) et leur niveau. */
   bots?: number;
   botLevel?: BotLevel;
+  /** Niveau de difficulté de la room (`normal` par défaut) : l'hôte décide pour tous les joueurs. */
+  difficulty?: DifficultyLevel;
 }
 
 interface RemotePlayer {
@@ -55,6 +58,7 @@ export class HostSession implements Session {
   readonly sim: Sim;
   readonly localPlayer: PlayerId;
   readonly online = true;
+  readonly isHost = true;
   readonly roomCode: string;
   connection: 'connected' | 'lost' = 'connected';
   readonly hostStalled = false;
@@ -82,7 +86,7 @@ export class HostSession implements Session {
     this.transport = opts.transport;
     this.roomCode = opts.roomCode;
     this.localPlayer = opts.transport.localId;
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true, online: true });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true, online: true, difficulty: opts.difficulty });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
 
@@ -214,6 +218,12 @@ export class HostSession implements Session {
     }
   }
 
+  setDifficulty(level: DifficultyLevel): void {
+    this.sim.setDifficulty(level);
+    const msg: HostMessage = { t: 'difficulty', level };
+    this.transport.broadcast('reliable', JSON.stringify(msg));
+  }
+
   private send(peer: PlayerId, msg: HostMessage): void {
     this.transport.send(peer, 'reliable', JSON.stringify(msg));
   }
@@ -253,7 +263,7 @@ export class HostSession implements Session {
       this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0 });
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));
     }
-    this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer });
+    this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer, difficulty: this.sim.difficulty });
   }
 
   private readonly onPeerLeft = (peer: string): void => {

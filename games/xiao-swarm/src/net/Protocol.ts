@@ -9,7 +9,7 @@ import { ROCKET_TEXTURE } from '../sim/Combat';
 import type { PlayerId, SimEvent } from '../sim/types';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 58; // 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 59; // 59 : le welcome annonce le niveau de difficulté de la room (`difficulty`), message `difficulty` de l'hôte, bouclier écrit aussi pour tous les boss ; 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -28,10 +28,12 @@ export type ClientMessage =
 
 /** Hôte → client. */
 export type HostMessage =
-  | { t: 'welcome'; v: number; mode: string; seed: number; you: PlayerId; host: PlayerId }
+  | { t: 'welcome'; v: number; mode: string; seed: number; you: PlayerId; host: PlayerId; difficulty: string }
   /** `seq` : numéro du snapshot envoyé avec ces événements (le client les joue en même temps que lui, après son tampon d'interpolation). */
   | { t: 'events'; seq: number; list: SimEvent[] }
-  | { t: 'refused'; reason: string };
+  | { t: 'refused'; reason: string }
+  /** L'hôte change le niveau de difficulté de la room (avant le départ de la run) : fiable, envoyé à tous les joueurs déjà là. */
+  | { t: 'difficulty'; level: string };
 
 export function parseMessage<T>(data: string): T | null {
   try {
@@ -107,7 +109,7 @@ export interface AlienSnap {
   vy: number;
   hp: number;
   maxHp: number;
-  /** Aliens à `def.shield` seulement (champ écrit selon le type) : part restante du bouclier max (0 → 1). */
+  /** Aliens à `def.shield` et boss seulement (champ écrit selon le type) : part restante du bouclier max (0 → 1). */
   shield: number;
   slamWind: number;
   /** Rhinocéros : préparation de la charge (s), charge en cours, direction verrouillée. */
@@ -537,7 +539,7 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
       w.u8(Math.min(255, Math.round(a.lurkT * 30)));
       w.f32(a.spikeAng);
     }
-    if (def.shield) w.u8(a.shield * 255); // champ écrit selon le TYPE (pas la valeur) : le décodeur teste la même chose
+    if (def.shield || def.boss) w.u8(a.shield * 255); // champ écrit selon le TYPE (pas la valeur, ni le niveau de difficulté) : le décodeur teste la même chose ; les boss l'écrivent toujours (bouclier du mode impossible)
   }
 
   mark('aliens');
@@ -797,7 +799,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
         lurkT = r.u8() / 30;
         spikeAng = r.f32();
       }
-      const shield = def.shield ? r.u8() / 255 : 0;
+      const shield = def.shield || def.boss ? r.u8() / 255 : 0;
       snap.aliens.push({ id, type, x, y, vx, vy, hp, maxHp, shield, slamWind, rushWind, rushing: !!(aflags & 1), rushDx, rushDy, rushX, rushY, leapT, leapX, leapY, castT, castCorpse, zombie: !!(aflags & 2), sinking: !!(aflags & 16), instant: !!(aflags & 64), enraged: (aflags >> 2) & 3, lurkPhase, lurkT, spikeAng });
     }
 

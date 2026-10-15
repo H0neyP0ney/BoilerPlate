@@ -273,6 +273,10 @@ try {
   check(zb.revived && Math.abs(zb.maxHp - ALIENS.slime.hp * ALIENS.shaman.revive.zombie.hpMul) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
   check(hs.map.obstacles.length > 0 && JSON.stringify(client.sim.map.obstacles) === JSON.stringify(hs.map.obstacles), 'carte : mêmes obstacles tirés chez l’hôte et chez le client (même seed)', `${hs.map.obstacles.length} obstacles`);
+  check(client.sim.difficulty === hs.difficulty && !client.isHost && host.isHost, 'niveau de difficulté : le client voit celui de l’hôte (welcome) et ne le choisit pas', `${hs.difficulty} / ${client.sim.difficulty}`);
+  host.setDifficulty('expert'); hub.pump(); // message fiable : distribué sans faire avancer la simulation (le reste du test en dépend)
+  check(client.sim.difficulty === 'expert' && hs.difficulty === 'expert', 'niveau de difficulté : l’hôte le change, les joueurs déjà là le reçoivent', `${hs.difficulty} / ${client.sim.difficulty}`);
+  host.setDifficulty('normal'); hub.pump();
   hs.horde.spawnAt('lurker', a.center.x + 300, a.center.y);
   const lurker = hs.aliens[0];
   lurker.hp = lurker.maxHp = 1e6; // la squad ne doit pas le tuer avant qu'il soit enterré
@@ -369,8 +373,13 @@ try {
   // plus aucun bouclier de soldat : le power-up a disparu (seuls certains aliens, comme le Scarab, en ont)
   const onS = a.soldiers.find((s) => s.alive);
   check(a.soldiers.every((s) => s.shield === 0 && s.maxShield === 0), 'aucun soldat n’a de bouclier');
-  // Scarab : bouclier = 10 % de ses PV max, régénéré vite après 5 s sans dégâts (encodage conditionnel par type : lecture fidèle chez le client)
+  // Scarab : plus de bouclier en normal (14/10) ; la capacité reste (prévue sur tous les boss du mode impossible) : on la redonne le temps du test (5 % des PV max, régénéré vite après 5 s sans dégâts,
+  // encodage conditionnel par type : lecture fidèle chez le client)
   hs.aliens.length = 0;
+  hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
+  check(!ALIENS.boss_scarab.shield && hs.aliens[0].maxShield === 0, 'scarab : plus de bouclier en normal');
+  hs.aliens.length = 0;
+  ALIENS.boss_scarab.shield = { pct: 0.05, regenDelay: 5, regenTime: 4 };
   hs.horde.spawnAt('boss_scarab', onS.x + 400, onS.y, 1, false);
   const scarab = hs.aliens[0];
   scarab.age = 1; // sorti de son trou d'apparition (invulnérable avant)
@@ -386,6 +395,7 @@ try {
   check(Math.abs(scarab.shield - shieldBefore) < 1e-6, 'scarab : pas de régénération avant 5 s sans dégâts');
   for (let i = 0; i < 30 * 6; i++) hs.horde.update(1 / 30); // 10 s au total : délai écoulé puis régénération complète (4 s)
   check(scarab.shield === scarab.maxShield, 'scarab : bouclier régénéré après 5 s sans dégâts', `${Math.round(scarab.shield)} / ${Math.round(scarab.maxShield)}`);
+  delete ALIENS.boss_scarab.shield; // retour à la définition normale
   hs.aliens.length = 0;
   // paliers de dégâts : couleur du tir du Gunner selon le multiplicateur de dégâts
   { const { damageTier, projectileTexture } = await vite.ssrLoadModule('/src/data/damageTiers.ts');

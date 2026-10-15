@@ -1,6 +1,7 @@
 import { FixedStep } from '@xiao/engine/sim';
 import { DIFFICULTY } from '../config';
 import { START_SQUADS } from '../data/classes';
+import type { DifficultyLevel } from '../data/difficultyLevels';
 import type { ModeDef } from '../data/modes';
 import { BotBrain } from '../sim/bots';
 import { Sim } from '../sim/Sim';
@@ -39,6 +40,10 @@ export interface Session {
    * et un joueur anéanti réapparaît tout seul (l'hôte s'en charge).
    */
   readonly online: boolean;
+  /** Le joueur local choisit le niveau de la run : vrai en solo et pour l'hôte, faux pour un joueur qui rejoint la room d'un autre. */
+  readonly isHost: boolean;
+  /** Choisit le niveau de la run (solo ou hôte ; en ligne, l'hôte l'annonce aux joueurs). Sans effet pour un joueur qui rejoint. */
+  setDifficulty(level: DifficultyLevel): void;
   /** Code de la salle à partager (null hors ligne). */
   readonly roomCode: string | null;
   /** 'lost' : la connexion à l'hôte / à la salle est coupée. */
@@ -55,12 +60,19 @@ export interface LocalSessionOptions {
   bots: number;
   /** Onboarding scripté au début de la partie (voir `sim/Tutorial.ts`). */
   tutorial?: boolean;
+  /** Niveau de difficulté (`normal` par défaut). */
+  difficulty?: DifficultyLevel;
 }
 
 export class LocalSession implements Session {
   readonly sim: Sim;
   readonly localPlayer: PlayerId = 'p1';
   readonly online = false;
+  readonly isHost = true;
+
+  setDifficulty(level: DifficultyLevel): void {
+    this.sim.setDifficulty(level);
+  }
   readonly roomCode = null;
   readonly connection = 'connected';
   readonly hostStalled = false;
@@ -72,7 +84,7 @@ export class LocalSession implements Session {
   constructor(opts: LocalSessionOptions) {
     const players: PlayerId[] = [this.localPlayer];
     for (let i = 0; i < opts.bots; i++) players.push(`bot${i + 1}`);
-    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true, tutorial: opts.tutorial });
+    this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true, tutorial: opts.tutorial, difficulty: opts.difficulty });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
     this.inputs.set(this.localPlayer, this.local);
     players.slice(1).forEach((id, i) => this.bots.push(new BotBrain(id, opts.seed + 101 * (i + 1))));

@@ -1,6 +1,6 @@
 import { robustCentroid } from '@xiao/engine/sim';
 import { CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
-import { ALIENS } from '../data/aliens';
+import { ALIENS, shieldOf } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { CLASSES } from '../data/classes';
 import type { AlienState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
@@ -442,6 +442,8 @@ export class Mirror {
         revives: 0,
         reviveLock: 0,
         swarmCd: 0,
+        ringCd: 0,
+        iceCd: 0,
         lurkBlockT: 0,
         swarmT: 0,
         swarmAcc: 0,
@@ -474,7 +476,8 @@ export class Mirror {
     s.vy = vy;
     s.hp = a.hp;
     s.maxHp = a.maxHp;
-    s.maxShield = s.def.shield ? a.maxHp * s.def.shield.pct : 0;
+    const shield = shieldOf(s.def, this.sim.difficulty); // le niveau de la room (bouclier des boss en impossible)
+    s.maxShield = shield ? a.maxHp * shield.pct : 0;
     s.shield = a.shield * s.maxShield;
     s.slamWind = a.slamWind;
     s.rushWind = a.rushWind;

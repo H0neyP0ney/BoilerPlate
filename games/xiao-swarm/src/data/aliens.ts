@@ -1,6 +1,8 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
+import type { DifficultyLevel } from './difficultyLevels';
+
 export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
@@ -47,6 +49,17 @@ export interface AlienDef {
    * slime de glace) et le nuage disparaît ; sinon il dure `ttl` s.
    */
   frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
+  /**
+   * Capacités en plus selon le niveau de difficulté (un niveau hérite des précédents : `impossible` a aussi celles d'`expert`). `expert.spiderRing` (Gling Mère) : toutes les `every` s,
+   * `count` araignées surgissent du sol en cercle de rayon `radius` autour de la squad visée (PV × `hpMul`). `impossible.frost` : les nuages de gel du chaman (même fonctionnement que `frost`,
+   * `range` ignoré : la Gling Mère les pose autour de la squad où qu'elle soit).
+   */
+  expert?: { spiderRing?: { every: number; count: number; radius: number; hpMul: number } };
+  impossible?: {
+    frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
+    /** Bouclier propre au niveau Impossible (même fonctionnement que `shield`) : posé sur tous les boss. Voir `shieldOf`. */
+    shield?: { pct: number; regenDelay: number; regenTime: number };
+  };
   /** Slam de zone : knockback + dégâts autour de lui. */
   slam?: { radius: number; damage: number; cooldown: number; knockback: number; /** Étourdit les soldats touchés (s) : ils ne bougent ni ne tirent. */ stun?: number };
   /**
@@ -417,6 +430,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (2:00) : énorme rhinocéros, charge tous les 4,5 s dans un couloir large signalé en rouge. */
   boss_rhino: {
     id: 'boss_rhino',
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
     hp: 9500, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10) ; 55 + 30 %
     radius: 50,
@@ -439,6 +453,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   boss_rhino_fire: {
     id: 'boss_rhino_fire',
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
     hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (4:30) et le Giant Crab (10:00)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
@@ -457,6 +472,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   boss_rhino_ice: {
     id: 'boss_rhino_ice',
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
     hp: 14250,
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
@@ -476,6 +492,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (4:30) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
     hp: 19000, // 1500 × 11
     speed: 187.5, // avant : 150 (×1.25 intégré le 09/10) ; ×3
     radius: 68,
@@ -484,7 +501,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.2,
     oneShot: true,
     target: 'center',
-    shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, // plus de slam (08/10) : remplacé par la pluie de stalactites
+    // plus de slam (08/10) : remplacé par la pluie de stalactites. Plus de bouclier en normal (14/10) : il valait `shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }` ; la capacité est prévue sur TOUS les boss du mode impossible.
     stalactites: { count: 8, onSoldiers: 3, spread: 260, radius: 55, delay: 0.825, stagger: 0.12, damage: 80, knockback: 300, walk: { count: 3, onSoldiers: 2 } }, // + petite pluie de 3 quand il marche (08/10)
     burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 60, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad ; 1,5 s avant, la direction du télégraphe se fige mais il suit encore la squad sur cet axe (08/10)
     boss: { kind: 'mini' },
@@ -505,6 +522,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
+    expert: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 } }, // expert et impossible : toutes les 6 s, 10 araignées surgissent en cercle autour de la squad
+    impossible: { frost: { every: 8, range: 99999, count: 3, gap: [103.5, 184], radius: 25.5, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 8 s, 3 zones de gel autour de la squad (comme le chaman) + bouclier de 5 %
     swarm: { every: 4, duration: 1.07, count: 19, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     xp: 100,
@@ -571,6 +590,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Boss final (10:00) : Giant Crab, saut écrasant et jets de gelée. Le tuer gagne la partie. */
   boss_crab: {
     id: 'boss_crab',
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
     hp: 47500, // 3000 × 11
     speed: 60, // avant : 48 (×1.25 intégré le 09/10)
     radius: 75, // 3× plus gros (affichage et collision)
@@ -641,4 +661,12 @@ export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze'
 /** Réglages des zombies (ressuscités par le chaman), lus en direct : modifiables dans la vue d'unité du chaman. */
 export function zombieStats(): ZombieStats {
   return ALIENS.shaman.revive!.zombie;
+}
+
+/**
+ * Bouclier d'un alien au niveau de difficulté `level` : le sien (`def.shield`), sinon celui que lui donne le niveau Impossible (`def.impossible.shield` : tous les boss, 5 % de leurs PV).
+ * Un seul endroit pour la simulation (hôte) et le miroir (client), qui connaissent tous deux le niveau de la room.
+ */
+export function shieldOf(def: AlienDef, level: DifficultyLevel): AlienDef['shield'] {
+  return def.shield ?? (level === 'impossible' ? def.impossible?.shield : undefined);
 }

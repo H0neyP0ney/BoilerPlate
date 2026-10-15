@@ -25,8 +25,8 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 | `spider` | unité à part entière (propre définition, sprites, couleurs), **jamais dans une vague** : invoquée par la Gling Mère, le chaman à sa mort et les boules du Giant Crab (PV réglables par source : `swarm.hpMul`, `deathSpawn.hpMul`, `lob.spawnHpMul`) ; stats de base proches du gling, indépendantes ; `revivable` |
 | `boss_egg` | œuf laissé par un boss tué (`egg`) : immobile, inoffensif, PV exacts (2500 actuellement), insensible aux ondes de choc ; détruit, il libère 2 globes d'upgrade roses par joueur |
 | `boss_rhino` (2:00, **Ironhorn** / Corne-de-Fer) | `rush` (charge), `oneShot` |
-| `boss_scarab` (4:30, **Sandstalker** / Rôdeur des Sables) | `burrow` (s'enterre, ressort sur la squad), `stalactites` (pluie), `shield`, `oneShot` |
-| `boss_gling` (Gling Mère, **Brood Queen** / Reine de la Couvée) | `swarm` (19 araignées toutes les 4 s, `hpMul`), `oneShot` |
+| `boss_scarab` (4:30, **Sandstalker** / Rôdeur des Sables) | `burrow` (s'enterre, ressort sur la squad), `stalactites` (pluie), `oneShot` (bouclier retiré en normal le 14/10 ; bouclier de 5 % en impossible, comme tous les boss) |
+| `boss_gling` (Gling Mère, **Brood Queen** / Reine de la Couvée) | `swarm` (19 araignées toutes les 4 s, `hpMul`), `oneShot` ; **expert / impossible** : 10 araignées en cercle autour de la squad toutes les 6 s (`expert.spiderRing`) ; **impossible** : 3 zones de gel toutes les 8 s (`impossible.frost`) |
 | `boss_rhino_fire` / `boss_rhino_ice` (7:00, **Cinder** / Braise et **Frost** / Givre) | `rush` + `rush.trail` (feu / gel) + `rush.burst` (8 orbes), `oneShot` ; **le premier tombé est un alien comme les autres** (`boss.twin` : ni clear screen, ni œuf, ni escalade) ; **seul le dernier** fait le clear screen, laisse l'œuf et déclenche l'escalade (une fois) |
 | `boss_crab` (10:00, final, **King Claw** / Roi Pince) | `leap` (saut écrasant), `spikeRing` (8 lignes de pics à la réception du saut ; télégraphe 0,45 s, front à 1200 px/s depuis le 14/10), `lob` (3 boules rouges + 5 araignées enragées par boule, `spawnHpMul` ×3), `oneShot` |
 

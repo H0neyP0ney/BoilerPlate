@@ -1,3 +1,4 @@
+import { parseDifficultyLevel, type DifficultyLevel } from './data/difficultyLevels';
 import { SFX_TUNING } from './data/sfxTuning';
 import { clamp, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
 import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
@@ -202,6 +203,14 @@ export const settings = {
     // arrondi au pas pour éviter la dérive des flottants (0.7000000001)
     this.zoom = clamp(Math.round(value / ZOOM_STEP) * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
     storage.set('settings.zoom', this.zoom);
+  },
+
+  /** Dernier niveau de difficulté choisi avec les boutons de l'écran d'accueil (mémorisé) : la run suivante démarre dans ce niveau. */
+  difficulty: parseDifficultyLevel(storage.get<string>('settings.difficulty', 'normal')),
+
+  setDifficulty(level: DifficultyLevel): void {
+    this.difficulty = level;
+    storage.set('settings.difficulty', level);
   },
 
   setTutorialDone(done: boolean): void {

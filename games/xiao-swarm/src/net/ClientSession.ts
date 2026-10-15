@@ -1,4 +1,5 @@
 import { FixedStep } from '@xiao/engine/sim';
+import { parseDifficultyLevel } from '../data/difficultyLevels';
 import { MODES } from '../data/modes';
 import { Sim } from '../sim/Sim';
 import type { PlayerId, SimEvent } from '../sim/types';
@@ -41,6 +42,11 @@ type Welcome = Extract<HostMessage, { t: 'welcome' }>;
 export class ClientSession implements Session {
   readonly sim: Sim;
   readonly online = true;
+  readonly isHost = false;
+
+  setDifficulty(): void {
+    /* le niveau est celui de l'hôte */
+  }
   connection: 'connected' | 'lost' = 'connected';
   /** Temps (ms) écoulé chez ce client depuis le dernier snapshot de l'hôte. */
   private sinceSnapshot = 0;
@@ -68,7 +74,7 @@ export class ClientSession implements Session {
     this.localPlayer = welcome.you;
     this.hostId = welcome.host;
     // xp : la jauge et les choix d'upgrade s'affichent (la simulation, elle, tourne chez l'hôte)
-    this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES] ?? MODES.survival, seed: welcome.seed, players: [], xp: true, online: true });
+    this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES] ?? MODES.survival, seed: welcome.seed, players: [], xp: true, online: true, difficulty: parseDifficultyLevel(welcome.difficulty) });
     this.mirror = new Mirror(this.sim, welcome.you);
     this.playSeq = this.latestSeq = this.appliedSeq = first.seq;
     this.applySnapshot(first);
@@ -187,6 +193,7 @@ export class ClientSession implements Session {
       return;
     }
     const msg = parseMessage<HostMessage>(data);
+    if (msg?.t === 'difficulty') this.sim.setDifficulty(parseDifficultyLevel(msg.level)); // l'hôte a changé le niveau de la room
     if (msg?.t !== 'events') return;
     if (INTERP_DELAY_MS <= 0 || msg.seq <= this.appliedSeq) this.pushEvents(msg.list);
     else this.eventBuffer.push({ seq: msg.seq, list: msg.list });

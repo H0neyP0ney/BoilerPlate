@@ -22,6 +22,15 @@ export interface DifficultySpec {
 /** Réglages du panneau, par section (titre → curseurs). Toute nouvelle clé de `DIFFICULTY_DEFAULTS` doit y figurer. */
 export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] = [
   {
+    title: 'Niveaux de difficulté',
+    specs: [
+      { key: 'expertBaseMul', label: 'Expert : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie les stats de base de TOUS les aliens (PV, dégâts, cadence d\'attaque, vitesse ; pas l\'XP ni les recrues) en mode Expert. 1,1 = +10 %' },
+      { key: 'expertScaleMul', label: 'Expert : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie chaque gain d\'escalade par boss tué (section Boss) en mode Expert. 1,1 : +15 % par boss devient +16,5 %' },
+      { key: 'impossibleBaseMul', label: 'Impossible : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 %' },
+      { key: 'impossibleScaleMul', label: 'Impossible : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 % sur chaque gain d\'escalade' },
+    ],
+  },
+  {
     title: 'Boss',
     specs: [
       { key: 'bossEscalationHp', label: 'Escalade : PV des aliens / boss', min: 0, max: 1, step: 0.01, hint: 'PV gagnés par les aliens à chaque boss ou mini-boss tué (0,15 = +15 %, cumulés ×1,15 par boss). Vaut pour les aliens qui apparaissent ensuite' },

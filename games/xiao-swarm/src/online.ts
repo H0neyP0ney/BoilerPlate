@@ -1,5 +1,7 @@
 import { poki, DEV_TOOLS } from '@xiao/engine';
 import { BOT_LEVEL_IDS, MAX_BOTS, type BotLevel } from './data/bots';
+import { startDifficulty } from './difficultyStart';
+import { settings } from './settings';
 import { MODES, type ModeDef } from './data/modes';
 import { ClientSession } from './net/ClientSession';
 import { HostSession } from './net/HostSession';
@@ -67,7 +69,7 @@ async function host(mode: ModeDef): Promise<HostSession> {
   const transport = makeTransport();
   const { bots, botLevel } = readBots();
   const roomCode = await withTimeout(transport.host({ public: true }), transport);
-  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode, bots, botLevel });
+  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode, bots, botLevel, difficulty: startDifficulty(!settings.tutorialDone) });
 }
 
 async function join(code: string): Promise<ClientSession> {

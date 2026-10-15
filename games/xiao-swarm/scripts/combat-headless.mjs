@@ -559,6 +559,95 @@ try {
     check(dist > 1500 && farLeft === 0 && gotXp && sq.soldiers.length > size0 && sq.buffs.stim > 0, 'aimant : aspire globes, recrues et power-ups de toute la carte', `objets à ${dist.toFixed(0)} px ; restent ${farLeft} globe(s) au loin, ${sim.recruits.items.length} recrue(s), ${sim.powerups.items.length} power-up(s)`);
   }
 
+  // ---- niveaux de difficulté : multiplicateur de stats de base (PV, dégâts, cadence, vitesse) et d'escalade (gains par boss tué) ; normal inchangé
+  {
+    const want = { normal: [1, 1], expert: [DIFFICULTY.expertBaseMul, DIFFICULTY.expertScaleMul], impossible: [DIFFICULTY.impossibleBaseMul, DIFFICULTY.impossibleScaleMul] };
+    for (const difficulty of ['normal', 'expert', 'impossible']) {
+      const session = new LocalSession({ mode: MODES.survival, seed: 12, bots: 0, difficulty });
+      const sim = session.sim;
+      for (let i = 0; i < 2; i++) session.advance(34, () => {});
+      if (sim.tutorial) sim.tutorial = null;
+      sim.aliens.length = 0;
+      const sq = sim.squadOf('p1');
+      const [base, scale] = want[difficulty];
+      const spawn = () => { sim.aliens.length = 0; sim.horde.spawnAt('slime', sq.center.x + 700, sq.center.y, 1, false, true); return sim.aliens[0]; };
+      sim.bossKills = 0;
+      const a0 = spawn();
+      check(Math.abs(a0.maxHp - ALIENS.slime.hp * base) < 1e-6 && Math.abs(a0.escDmg - base) < 1e-9 && Math.abs(a0.escRate - base) < 1e-9 && Math.abs(a0.escSpeed - base) < 1e-9, `${difficulty} : stats de base des aliens ×${base} (PV, dégâts, cadence, vitesse)`, `${a0.maxHp.toFixed(1)} PV pour ${ALIENS.slime.hp} de base`);
+      sim.bossKills = 2;
+      const a2 = spawn();
+      const wantHp = ALIENS.slime.hp * base * (1 + DIFFICULTY.bossEscalationHp * scale) ** 2;
+      const wantSpeed = base * (1 + DIFFICULTY.bossEscalationSpeed * scale) ** 2;
+      check(Math.abs(a2.maxHp - wantHp) < 1e-6 && Math.abs(a2.escSpeed - wantSpeed) < 1e-9, `${difficulty} : escalade ×${scale} sur chaque gain par boss tué (2 boss)`, `${a2.maxHp.toFixed(1)} PV, vitesse ×${a2.escSpeed.toFixed(3)}`);
+      sim.bossKills = 0;
+    }
+  }
+
+  // ---- Gling Mère par niveau : expert = 10 araignées en cercle autour de la squad toutes les 6 s ; impossible = en plus 3 zones de gel toutes les 8 s ; rien en normal
+  for (const difficulty of ['normal', 'expert', 'impossible']) {
+    const session = new LocalSession({ mode: MODES.survival, seed: 9, bots: 0, difficulty });
+    const sim = session.sim;
+    for (let i = 0; i < 2; i++) session.advance(34, () => {});
+    if (sim.tutorial) sim.tutorial = null;
+    sim.aliens.length = 0;
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('boss_gling', sq.center.x + 900, sq.center.y, 1, false, true);
+    const boss = sim.aliens[0];
+    boss.swarmCd = 1e9; // on isole les nouvelles capacités : pas d'essaim classique
+    let seenSpiders = 0, spiderBursts = 0, seenIce = 0, iceBursts = 0, ringErr = 0;
+    for (let tick = 0; tick < 30 * 18; tick++) {
+      boss.x = sq.center.x + 900; boss.y = sq.center.y; boss.hp = boss.maxHp; // le boss reste en vie, loin
+      sq.soldiers.forEach((x) => { x.invulnerable = 5; }); // les nuages de gel ne sont pas consommés par le test
+      session.advance(34, () => {});
+      const spiders = sim.aliens.filter((a) => a.def.id === 'spider');
+      if (spiders.length - seenSpiders >= 5) { spiderBursts++; ringErr = spiders.reduce((m, a) => Math.max(m, Math.abs(Math.hypot(a.x - sq.center.x, a.y - sq.center.y) - 300)), 0); }
+      seenSpiders = spiders.length;
+      const ice = sim.puddles.filter((p) => p.frost).length;
+      if (ice - seenIce >= 3) iceBursts++;
+      seenIce = ice;
+    }
+    const wantSpiders = difficulty === 'normal' ? 0 : 3; // 18 s : surgissements à 6, 12 et 18 s (le dernier peut tomber juste après)
+    const wantIce = difficulty === 'impossible' ? 2 : 0; // 18 s : 8 s et 16 s
+    check(spiderBursts >= (wantSpiders ? 2 : 0) && spiderBursts <= wantSpiders, `${difficulty} : Gling Mère, cercle d'araignées ${difficulty === 'normal' ? 'absent' : 'toutes les 6 s'}`, `${spiderBursts} surgissement(s)`);
+    if (wantSpiders) check(ringErr < 120, `${difficulty} : les araignées surgissent en cercle autour de la squad (rayon ~300 px)`, `écart max au rayon ${ringErr.toFixed(0)} px`);
+    check(iceBursts === wantIce, `${difficulty} : Gling Mère, zones de gel ${difficulty === 'impossible' ? 'toutes les 8 s (3 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
+  }
+
+  // ---- bouclier de 5 % sur TOUS les boss en mode impossible seulement (normal et expert : aucun) ; il encaisse avant les PV et passe correctement par le réseau
+  {
+    const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
+    const BOSSES = ['boss_rhino', 'boss_gling', 'boss_scarab', 'boss_rhino_fire', 'boss_rhino_ice', 'boss_crab'];
+    for (const difficulty of ['normal', 'expert', 'impossible']) {
+      const session = new LocalSession({ mode: MODES.survival, seed: 14, bots: 0, difficulty });
+      const sim = session.sim;
+      for (let i = 0; i < 2; i++) session.advance(34, () => {});
+      if (sim.tutorial) sim.tutorial = null;
+      const sq = sim.squadOf('p1');
+      let ok = true;
+      let detail = '';
+      for (const id of BOSSES) {
+        sim.aliens.length = 0;
+        sim.horde.spawnAt(id, sq.center.x + 900, sq.center.y, 1, false, true);
+        const boss = sim.aliens[0];
+        const want = difficulty === 'impossible' ? boss.maxHp * 0.05 : 0;
+        if (Math.abs(boss.maxShield - want) > 1e-6 || Math.abs(boss.shield - want) > 1e-6) { ok = false; detail = `${id} : ${boss.maxShield.toFixed(0)} au lieu de ${want.toFixed(0)}`; break; }
+      }
+      check(ok, `${difficulty} : bouclier des boss ${difficulty === 'impossible' ? '= 5 % de leurs PV max (les 6 boss)' : 'absent'}`, detail);
+      if (difficulty === 'impossible') {
+        sim.aliens.length = 0;
+        sim.horde.spawnAt('boss_rhino', sq.center.x + 900, sq.center.y, 1, false, true);
+        const boss = sim.aliens[0];
+        boss.age = 1;
+        const before = boss.shield;
+        sim.damage(boss, 100, null);
+        check(boss.hp === boss.maxHp && Math.abs(boss.shield - (before - 100)) < 1e-6, 'impossible : le bouclier d’un boss encaisse avant ses PV');
+        const snap = decodeSnapshot(encodeSnapshot(takeSnapshot(sim)));
+        const bs = snap?.aliens.find((x) => x.id === boss.id);
+        check(!!bs && Math.abs(bs.shield - boss.shield / boss.maxShield) < 0.01, 'impossible : bouclier du boss lu fidèlement dans le snapshot', `${bs?.shield.toFixed(3)}`);
+      }
+    }
+  }
+
   // ---- relance : un loot rare lâché par un alien tué (pas un power-up tiré au hasard), environ 5 par partie de 10 minutes
   {
     const { sim } = fresh(33);

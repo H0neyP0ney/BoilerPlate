@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { playSfx } from '../playSfx';
 import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
-import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
+import { Button, device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
 import { defaultMoveLabels } from '../hotkeys';
+import { DIFFICULTY_LABEL_KEYS, DIFFICULTY_LEVELS, type DifficultyLevel } from '../data/difficultyLevels';
 import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
@@ -83,6 +84,10 @@ export class HudScene extends Phaser.Scene {
   /** Boutons de dev visibles (mode debug du menu Options) ? */
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
+  /** Les trois boutons de niveau (Normal / Expert / Impossible), en colonne à droite de l'écran d'arrivée : visibles tant que le joueur n'a pas bougé. Seul Normal est actif pour l'instant. */
+  private modeButtons!: Phaser.GameObjects.Container;
+  /** Niveau dont les boutons sont dessinés (pour les reconstruire quand il change). */
+  private modeShown: DifficultyLevel | null = null;
   private hintLabel!: Phaser.GameObjects.Text;
   private latePackAsked = false;
   /** Entrée des barres du haut (timeline) et du bas (XP) : 0 = hors de l'écran, 1 = en place. Cachées tant que le joueur n'a pas commencé, puis elles glissent (Quad.Out). */
@@ -104,6 +109,9 @@ export class HudScene extends Phaser.Scene {
   /** Nombre d'aliens en jeu, en bas à droite (au-dessus du compteur de FPS). */
   private alienText!: Phaser.GameObjects.Text;
   private alienShown = -1;
+  /** Niveau de difficulté de la run (Normal / Expert / Impossible), en bas à droite au-dessus du nombre d'aliens. */
+  private levelText!: Phaser.GameObjects.Text;
+  private levelShown: DifficultyLevel | null = null;
   /** Timeline des vagues et « Next boss » (haut centre). */
   private timeline?: TimelineHud; // timeline et barre d'XP : images du paquet 2, construites à son arrivée (`buildBars`)
   /** Barre d'XP en bas de l'écran (hors ligne). */
@@ -160,6 +168,8 @@ export class HudScene extends Phaser.Scene {
     this.fpsAt = 0;
     this.alienText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
     this.alienShown = -1; // la scène est réutilisée : le texte est à refaire
+    this.levelText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
+    this.levelShown = null;
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
@@ -231,6 +241,7 @@ export class HudScene extends Phaser.Scene {
     this.soundBtn = this.makeSoundButton();
     this.musicBtn = this.makeMusicButton();
     this.hint = this.makeHint();
+    this.modeButtons = this.makeModeButtons();
     // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
     if (DEV_TOOLS && staleDropped.length > 0) {
       const note = this.add
@@ -257,6 +268,12 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.drawNote();
     }
     const aliens = this.game_.session.sim.aliens.length;
+    const level = this.game_.session.sim.difficulty;
+    if (level !== this.levelShown) {
+      // le niveau peut encore changer avant le départ de la run (boutons de l'écran d'accueil) ; couleurs des boutons : jaune / orange / rouge
+      this.levelShown = level;
+      this.levelText.setText(t(DIFFICULTY_LABEL_KEYS[level])).setColor(level === 'expert' ? '#ffb347' : level === 'impossible' ? '#ff6a6a' : '#ffe14a');
+    }
     if (aliens !== this.alienShown) {
       this.alienShown = aliens;
       this.alienText.setText(t('aliensCount', { value: aliens }));
@@ -268,11 +285,13 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const g = this.game_;
     const s = g.session;
     this.roomText.setText(
-      !s.online ? '' : s.connection === 'lost' ? t('connectionLost') : t('room', { code: s.roomCode ?? '', players: g.playerCount }),
+      !s.online ? '' : s.connection === 'lost' ? t('connectionLost') : `${t('room', { code: s.roomCode ?? '', players: g.playerCount })} · ${t(DIFFICULTY_LABEL_KEYS[s.sim.difficulty])}`, // le niveau de la room, visible de tous les joueurs
     );
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     this.hint.setVisible(g.flow.state === 'ready');
+    this.refreshModeButtons();
+    this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active); // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas
     if (!this.latePackAsked && g.flow.state === 'ready') {
       // paquet 2 des visuels : chargé dès que le joueur est sur la scène de jeu avec l'indice des commandes affiché (pas pendant l'écran de choix d'upgrade)
       this.latePackAsked = true;
@@ -713,6 +732,42 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
   }
 
+  /**
+   * Boutons Normal / Expert / Impossible (colonne à droite de l'écran d'accueil) : choisissent le niveau de difficulté de la run. Le niveau en cours est plein (jaune / orange / rouge), les autres
+   * sont discrets. Le choix est mémorisé (`settings.difficulty`) : la run suivante démarre dans ce niveau ; en ligne, l'hôte l'annonce à tous les joueurs (`Session.setDifficulty`).
+   * Reconstruits quand le niveau change (`refreshModeButtons`).
+   */
+  private makeModeButtons(): Phaser.GameObjects.Container {
+    const c = this.add.container(0, 0);
+    this.modeShown = null;
+    return c;
+  }
+
+  private refreshModeButtons(): void {
+    const level = this.game_.session.sim.difficulty;
+    if (level === this.modeShown) return;
+    this.modeShown = level;
+    for (const b of this.modeButtons.list.slice()) b.destroy();
+    const fills: Record<DifficultyLevel, number | undefined> = { normal: undefined, expert: 0xe8892b, impossible: 0xc63b3b };
+    DIFFICULTY_LEVELS.forEach((l, i) => {
+      const on = l === level;
+      const b = new Button(this, 0, (i - 1) * 74, {
+        label: t(DIFFICULTY_LABEL_KEYS[l]),
+        variant: on ? 'primary' : 'secondary',
+        fill: on ? fills[l] : undefined,
+        textColor: on && fills[l] !== undefined ? '#ffffff' : undefined,
+        width: 210,
+        height: 58,
+        onClick: () => {
+          if (l === this.game_.session.sim.difficulty) return;
+          settings.setDifficulty(l); // mémorisé : la prochaine run démarre dans ce niveau
+          this.game_.session.setDifficulty(l);
+        },
+      });
+      this.modeButtons.add(b);
+    });
+  }
+
   private makeHint(): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const label = this.add
@@ -774,6 +829,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.roomText.setPosition(14 + 44 + 8 + 10, top + 10);
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
     this.alienText.setOrigin(1, 1).setPosition(width - 14, height - 34); // nombre d'aliens juste au-dessus
+    this.levelText.setOrigin(1, 1).setPosition(width - 14, height - 56); // niveau de difficulté au-dessus du nombre d'aliens
     // boutons de dev en bas à gauche, en colonne (le premier tout en bas, les suivants au-dessus)
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];
@@ -782,6 +838,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     devBtns.forEach((b, i) => b.setPosition(14 + 22 + Math.floor(i / rows) * (44 + 8), bottomY - (i % rows) * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
+    this.modeButtons.setPosition(width - 14 - 105, height / 2); // à droite, au centre verticalement, les uns au-dessus des autres
     this.respawnText.setPosition(width / 2, height * 0.22);
     this.hostText.setPosition(width / 2, height * 0.34);
     this.endText.setPosition(width / 2, height * 0.4);

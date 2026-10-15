@@ -4,6 +4,7 @@ import { FREE_GAMES, INTERSTITIALS_ENABLED, SCENES } from '../config';
 import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
 import type { SoldierClassId } from '../data/classes';
 import { TUTORIAL } from '../data/tutorial';
+import { startDifficulty } from '../difficultyStart';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
@@ -118,6 +119,7 @@ export class GameScene extends Phaser.Scene {
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
         tutorial: mode.id === 'survival' && !settings.tutorialDone && !poki.getURLParam('notuto') && !jump && !test, // onboarding scripté à la première partie solo
+        difficulty: startDifficulty(!settings.tutorialDone), // dernier niveau choisi avec les boutons (normal pendant le tutoriel) ; ?difficulty=expert|impossible pour un test
       });
       this.alienTest = test
         ? new AlienTest(this, this.session.sim, this.session.localPlayer, test, (back) => {
@@ -514,13 +516,13 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  async retry(): Promise<void> {
+  async retry(toHome = false): Promise<void> {
     poki.measure('game', 'retry', 'interact');
     if (this.session.online) return this.retryOnline();
     await this.flow.restart({ ad: this.adBeforeNextGame() });
     this.scene.restart();
-    // "Rejouer" est un input du joueur : le run démarre directement.
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.beginRun());
+    // "Rejouer" est un input du joueur : le run démarre directement. `toHome` (Recommencer du menu pause) : retour à l'écran d'accueil, où les boutons de niveau permettent de choisir la run ; elle démarre au premier input.
+    if (!toHome) this.events.once(Phaser.Scenes.Events.CREATE, () => this.beginRun());
   }
 
   /** En ligne, le seul écran de fin est « connexion perdue » : retour au solo. */

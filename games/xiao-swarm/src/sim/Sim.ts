@@ -2,6 +2,7 @@ import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/si
 import { BURIED, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
+import type { DifficultyLevel } from '../data/difficultyLevels';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
@@ -46,6 +47,8 @@ export interface SimConfig {
    * (`ModeDef.reviveZones`). Faux seul hors ligne. Remplace l'ancien mode `coop` (08/10).
    */
   online?: boolean;
+  /** Niveau de difficulté de la run (`normal` par défaut) ; en ligne, celui de l'hôte. Pour l'instant sans effet sur le jeu. */
+  difficulty?: DifficultyLevel;
 }
 
 /** Durée (s) pendant laquelle la flaque d'un slime mort peut encore être ressuscitée. */
@@ -118,6 +121,7 @@ export class Sim {
 
   constructor(readonly config: SimConfig) {
     this.rng = new Rng(config.seed);
+    this.level = config.difficulty ?? 'normal';
     this.map = config.mode.map(config.seed);
     this.arena = new Arena(this.map);
     this.horde = new Horde(this);
@@ -352,6 +356,18 @@ export class Sim {
     this.afterChoice();
   }
 
+  private level: DifficultyLevel = 'normal';
+
+  /** Niveau de difficulté de la run (`normal` par défaut). */
+  get difficulty(): DifficultyLevel {
+    return this.level;
+  }
+
+  /** Change le niveau de la run : seulement avant son départ (écran d'accueil, boutons de niveau) ; les aliens déjà apparus ne changent pas. */
+  setDifficulty(level: DifficultyLevel): void {
+    this.level = level;
+  }
+
   get mode(): ModeDef {
     return this.config.mode;
   }
@@ -533,19 +549,30 @@ export class Sim {
 
   /** Escalade de tout alien qui apparaît maintenant : ×(1 + gain) par boss ou mini-boss déjà tué, un gain par stat (`DIFFICULTY.bossEscalation*`). */
   get escalationHp(): number {
-    return (1 + DIFFICULTY.bossEscalationHp) ** this.bossKills;
+    return this.escalation(DIFFICULTY.bossEscalationHp);
   }
 
   get escalationDamage(): number {
-    return (1 + DIFFICULTY.bossEscalationDamage) ** this.bossKills;
+    return this.escalation(DIFFICULTY.bossEscalationDamage);
   }
 
   get escalationRate(): number {
-    return (1 + DIFFICULTY.bossEscalationRate) ** this.bossKills;
+    return this.escalation(DIFFICULTY.bossEscalationRate);
   }
 
   get escalationSpeed(): number {
-    return (1 + DIFFICULTY.bossEscalationSpeed) ** this.bossKills;
+    return this.escalation(DIFFICULTY.bossEscalationSpeed);
+  }
+
+  /**
+   * Multiplicateur d'une stat d'alien qui apparaît maintenant : multiplicateur de BASE du niveau de difficulté (×1 en normal) × (1 + `gain` × multiplicateur d'ESCALADE du niveau) par boss tué.
+   * Les stats de base de tous les aliens passent par là (`Horde.create` : PV, `escDmg`, `escRate`, `escSpeed`).
+   */
+  private escalation(gain: number): number {
+    const level = this.difficulty;
+    const base = level === 'expert' ? DIFFICULTY.expertBaseMul : level === 'impossible' ? DIFFICULTY.impossibleBaseMul : 1;
+    const scale = level === 'expert' ? DIFFICULTY.expertScaleMul : level === 'impossible' ? DIFFICULTY.impossibleScaleMul : 1;
+    return base * (1 + gain * scale) ** this.bossKills;
   }
 
   /** Dégâts à n'importe quelle unité. `attacker` = joueur crédité du kill. */

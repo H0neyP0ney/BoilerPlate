@@ -11,12 +11,12 @@ export type GlobeKind = (typeof GLOBE_KINDS)[number];
 
 export const GLOBE_TINTS: Record<GlobeKind, number> = {
   stim: 0xff5a2a, // rouge orangé
-  magnet: 0xcfe6ff, // blanc légèrement bleuté
-  heal: 0x4cff7a, // vert
-  stasis: 0x4aa8ff, // bleu
+  magnet: 0x9ce3ed, // blanc légèrement bleuté
+  heal: 0x44ee6f, // vert
+  stasis: 0x5cd6ff, // bleu
   rockets: 0xffb02a, // jaune orangé
   prism: 0xffd24a, // booster prismatique : l'or d'origine de la recrue
-  upgrade: 0xffa8e6, // rose clair (globes d'upgrade des œufs de boss, relance)
+  upgrade: 0xfc86fe, // rose clair (globes d'upgrade des œufs de boss, relance)
 };
 
 /** Teintes du code (dernière sauvegarde) : le Reset de la visionneuse y revient. */

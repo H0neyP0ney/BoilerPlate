@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 /**
  * Textures fabriquées PAR LE CODE au lancement du jeu (`BootScene.create` : repli des aliens, effets, soldats, recrue assemblée, décor…), plus les fonds de cartes et slots
- * que `art/cardTextures.ts` fabrique en tâche de fond juste après. Sert à la 3e colonne de la vue Paquets (`PacksViewerScene`), qui ne montre QUE ces textures : celles
+ * que `art/cardTextures.ts` fabrique en tâche de fond juste après. Sert aux lignes roses de la vue Paquets (`PacksViewerScene`) ; celles
  * créées plus tard à la demande (globes recolorés, variantes de couleur d'un joueur, tronçons de sol, jauge de la timeline…) n'y figurent pas.
  */
 const launchKeys = new Set<string>();

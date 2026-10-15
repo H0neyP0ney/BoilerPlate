@@ -95,7 +95,7 @@ export class BootScene extends Phaser.Scene {
     if (DEV_TOOLS) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
     initPlayerHue(this); // soldats et têtes de recrue recolorés : fabriqués à la demande (première squad d'un autre emplacement de joueur), plus au lancement
 
-    recordLaunchTextures(this); // textures fabriquées par le code au lancement (3e colonne de la vue Paquets)
+    recordLaunchTextures(this); // textures fabriquées par le code au lancement (lignes roses de la vue Paquets)
     const summary = `create : terminé en ${Math.round(performance.now() - t0)} ms (${steps.join(' · ')})`;
     devLog(summary);
     log.info(`[boot] ${summary}`);

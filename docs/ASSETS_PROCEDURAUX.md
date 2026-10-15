@@ -53,7 +53,7 @@ Le dessin existe encore comme repli si le fichier manque, mais le jeu affiche la
 
 - aliens : `alien_slime`, `alien_gling`, `alien_shooter`, `alien_kamikaze`, `alien_toad`, `alien_charger`, `alien_spitter`, `alien_shaman`, `alien_wall`, `alien_bubble`, `alien_burner`, `alien_lurker`, `alien_iceballer`, `alien_boss_rhino`, `alien_boss_scarab`, `alien_boss_crab` (`art/aliens.ts`) ;
 - `soldier_trooper`, `gun_trooper` (`art/soldiers.ts`) ; `recruit_trooper` (globe composé : `art/recruits.ts`) ;
-- `fx_rocket` (fichier `fx/rocket.png`), `fx_xp` (remplacé par `xp_orb`).
+- ~~`fx_rocket`, `fx_xp`~~ : dessins supprimés le 15/10 (la roquette est le fichier `fx/rocket.png`, le globe d'XP le fichier `xp_orb` du paquet 1 ; aucun repli).
 
 ## 3. Dessinés en code, pas affichés aujourd'hui
 

@@ -28,7 +28,8 @@ export * from './sim/index';
 export { rng } from './math/random';
 
 // Art : procédural + planches de sprites
-export { canvasTexture, roundRect, fillOutlined } from './art/canvasTexture';
+export { canvasTexture, captureCanvasTextures, roundRect, fillOutlined, type LazyCanvasTexture } from './art/canvasTexture';
+export { TextureFactory, hideMissingTexture } from './art/textureFactory';
 export { recolorPixels, recolorTexture, type RecolorSpec } from './art/recolor';
 export { SpriteCatalog, sprites, type SpriteDef } from './art/SpriteCatalog';
 export { loadAssets, loadAssetsLater, applyAssets, range, type AssetEntry, type AnimSpec, type SheetSprite, type AsepriteSprite } from './art/assetManifest';

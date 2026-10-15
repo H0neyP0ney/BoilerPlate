@@ -104,6 +104,7 @@ export function holoCard(data: Uint8ClampedArray, w: number): void {
  * Carré prismatique d'une carte d'upgrade (prise prismatique) : le slot plein d'origine (`ui_slot_full`) repeint par un dégradé à quatre coins (rose en haut à gauche,
  * jaune en haut à droite, bleu en bas à gauche, vert en bas à droite), en gardant son relief (la luminosité du pixel d'origine) et son contour.
  */
+// (n'est plus appelée au lancement : `ui/slot_prism.png` en est la sortie ; reste pour refaire l'image si `slot_full.png` change)
 const SLOT_CORNERS = { tl: [255, 40, 170], tr: [255, 225, 0], bl: [20, 120, 255], br: [20, 225, 80] } as const;
 export function holoSlot(data: Uint8ClampedArray, w: number): void {
   const h = data.length / 4 / w;

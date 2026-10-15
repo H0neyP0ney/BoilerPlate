@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { clamp } from '@xiao/engine';
 import { MAP_ZONES, type ObstacleZone } from '../data/mapZones';
-import { JUNGLE_SIZE, makeJungleMap } from '../data/maps';
+import { ARENA_SIZE, makeArenaMap } from '../data/maps';
 import { OBSTACLES } from '../data/obstacles';
 import { SCENES, VISUAL, VIEW_BG } from '../config';
 import { button, checkbox, header, line, note, panel, title } from '../dev/devUi';
@@ -10,7 +10,7 @@ import { mapZonesSnippet, persistMapZones, resetMapZones, saveMapZonesToCode } f
 /**
  * Éditeur de carte (dev uniquement) : place les ZONES D'OBSTACLE de l'arène solo / coop. À chaque début de partie, la carte tire
  * un obstacle au hasard (et sa position) dans chaque zone, avec la seed de la partie : tous les joueurs ont la même carte
- * (`makeJungleMap`, data/maps.ts). L'aperçu utilise exactement ce tirage avec une seed d'aperçu : « Nouveau tirage » en change.
+ * (`makeArenaMap`, data/maps.ts). L'aperçu utilise exactement ce tirage avec une seed d'aperçu : « Nouveau tirage » en change.
  * Ouverture : bouton « Carte » en haut à gauche du jeu, ou `?mapedit` dans l'URL.
  *
  * Souris : clic sur une zone = la sélectionner, glisser = la déplacer, glisser un coin = la redimensionner ; clic droit
@@ -78,7 +78,7 @@ export class MapEditorScene extends Phaser.Scene {
   // ---------- Décor de l'éditeur ----------
 
   private drawMap(): void {
-    const map = makeJungleMap(0);
+    const map = makeArenaMap(0);
     const W = map.width;
     const H = map.height;
     const B = map.border;
@@ -106,8 +106,8 @@ export class MapEditorScene extends Phaser.Scene {
     const vw = Math.max(200, this.scale.width - PANEL_W - 10);
     const vh = this.scale.height;
     cam.setViewport(PANEL_W + 10, 0, vw, vh);
-    cam.setZoom(Math.min(vw / (JUNGLE_SIZE + 120), vh / (JUNGLE_SIZE + 120)));
-    cam.centerOn(JUNGLE_SIZE / 2, JUNGLE_SIZE / 2);
+    cam.setZoom(Math.min(vw / (ARENA_SIZE + 120), vh / (ARENA_SIZE + 120)));
+    cam.centerOn(ARENA_SIZE / 2, ARENA_SIZE / 2);
   };
 
   // ---------- Données ----------
@@ -127,10 +127,10 @@ export class MapEditorScene extends Phaser.Scene {
   }
 
   private clampZone(z: ObstacleZone): void {
-    z.w = Math.round(clamp(z.w, MIN_SIZE, JUNGLE_SIZE));
-    z.h = Math.round(clamp(z.h, MIN_SIZE, JUNGLE_SIZE));
-    z.x = Math.round(clamp(z.x, 0, JUNGLE_SIZE));
-    z.y = Math.round(clamp(z.y, 0, JUNGLE_SIZE));
+    z.w = Math.round(clamp(z.w, MIN_SIZE, ARENA_SIZE));
+    z.h = Math.round(clamp(z.h, MIN_SIZE, ARENA_SIZE));
+    z.x = Math.round(clamp(z.x, 0, ARENA_SIZE));
+    z.y = Math.round(clamp(z.y, 0, ARENA_SIZE));
   }
 
   private addZone(x: number, y: number): void {
@@ -154,7 +154,7 @@ export class MapEditorScene extends Phaser.Scene {
     this.previewImgs = [];
     this.hitG.clear();
     if (!this.showPreview) return;
-    const map = makeJungleMap(this.previewSeed);
+    const map = makeArenaMap(this.previewSeed);
     for (const o of map.obstacles) {
       const def = OBSTACLES[o.kind];
       const k = o.size ?? 1;
@@ -320,10 +320,10 @@ export class MapEditorScene extends Phaser.Scene {
       row.append(label, input);
       return { row, input };
     };
-    const fx = num('X', 'x', 5, 0, JUNGLE_SIZE);
-    const fy = num('Y', 'y', 5, 0, JUNGLE_SIZE);
-    const fw = num('Largeur', 'w', 5, MIN_SIZE, JUNGLE_SIZE);
-    const fh = num('Hauteur', 'h', 5, MIN_SIZE, JUNGLE_SIZE);
+    const fx = num('X', 'x', 5, 0, ARENA_SIZE);
+    const fy = num('Y', 'y', 5, 0, ARENA_SIZE);
+    const fw = num('Largeur', 'w', 5, MIN_SIZE, ARENA_SIZE);
+    const fh = num('Hauteur', 'h', 5, MIN_SIZE, ARENA_SIZE);
     const fc = num('Chance (%)', 'chance', 5, 0, 100);
     this.fields = { x: fx.input, y: fy.input, w: fw.input, h: fh.input, chance: fc.input };
 
@@ -336,7 +336,7 @@ export class MapEditorScene extends Phaser.Scene {
     p.append(
       header('Carte : zones d’obstacles', () => this.scene.start(SCENES.game)),
       note(
-        `Arène ${JUNGLE_SIZE} × ${JUNGLE_SIZE} px. À chaque partie, UN obstacle au hasard est posé à une position au hasard dans chaque zone ` +
+        `Arène ${ARENA_SIZE} × ${ARENA_SIZE} px. À chaque partie, UN obstacle au hasard est posé à une position au hasard dans chaque zone ` +
           '(même carte pour tous les joueurs de la partie). Les obstacles affichés sont un tirage d’aperçu.',
       ),
       this.info,

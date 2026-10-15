@@ -1,4 +1,4 @@
-import { Rng, type Point } from '@xiao/engine/sim';
+import { Rng } from '@xiao/engine/sim';
 import { MAP_ZONES } from './mapZones';
 import { BIG_OBSTACLES, OBSTACLE_IDS, SMALL_OBSTACLES, type ObstacleId } from './obstacles';
 
@@ -38,17 +38,16 @@ export interface MapDef {
   id: string;
   width: number;
   height: number;
-  /** Bande de jungle infranchissable sur les bords. */
+  /** Bande infranchissable sur les bords. */
   border: number;
   ponds: PondDef[];
   obstacles: PlacedObstacle[];
-  logs: Point[];
   /** Seed du décor procédural (sol, végétation). */
   seed: number;
 }
 
 /** Côté (px) de l'arène solo / coop : 2400 d'origine, +20 % (2880), +20 % (3456), puis +10 % (3802). Les zones de `data/mapZones.ts` sont à la même échelle. */
-export const JUNGLE_SIZE = 3802;
+export const ARENA_SIZE = 3802;
 
 /**
  * Arène solo : une île carrée flottant dans l'espace (GDD §3). Seuls des obstacles volcaniques (data/obstacles.ts) font obstacle
@@ -59,7 +58,7 @@ export const JUNGLE_SIZE = 3802;
  * ont la même carte. Le nombre de tirages par zone est fixe (même si la zone ne donne rien) : changer une zone ne change pas le
  * tirage des autres.
  */
-export function makeJungleMap(seed: number): MapDef {
+export function makeArenaMap(seed: number): MapDef {
   const rng = new Rng(seed + 11);
   const obstacles: PlacedObstacle[] = [];
   for (const z of MAP_ZONES.obstacleZones) {
@@ -69,7 +68,7 @@ export function makeJungleMap(seed: number): MapDef {
     const y = z.y + (rng.next() - 0.5) * z.h;
     if (roll < (z.chance ?? 1)) obstacles.push({ x: Math.round(x), y: Math.round(y), kind });
   }
-  return { id: `jungle-${seed}`, width: JUNGLE_SIZE, height: JUNGLE_SIZE, border: 170, seed, ponds: [], obstacles: withSizes(obstacles, seed), logs: [] };
+  return { id: `arena-${seed}`, width: ARENA_SIZE, height: ARENA_SIZE, border: 170, seed, ponds: [], obstacles: withSizes(obstacles, seed) };
 }
 
 /**
@@ -89,5 +88,5 @@ export function makeRoyaleMap(seed: number, size = 4800): MapDef {
     obstacles.push({ x, y, kind: rng.pick(rng.chance(0.45) ? BIG_OBSTACLES : SMALL_OBSTACLES) });
     if (rng.chance(0.3)) obstacles.push({ x: x + rng.range(90, 130), y: y + rng.range(20, 50), kind: rng.pick(SMALL_OBSTACLES) });
   }
-  return { id: `royale-${seed}`, width: size, height: size, border, seed, ponds: [], obstacles: withSizes(obstacles, seed), logs: [] };
+  return { id: `royale-${seed}`, width: size, height: size, border, seed, ponds: [], obstacles: withSizes(obstacles, seed) };
 }

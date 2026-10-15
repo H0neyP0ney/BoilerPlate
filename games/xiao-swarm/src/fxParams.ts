@@ -101,8 +101,6 @@ export const FX_DEFAULTS = {
     displayScale: 0.34,
     globeScale: 1,
     globeAlpha: 1,
-    ringScale: 1,
-    ringAlpha: 1,
     headX: 0,
     headY: 0.02,
     headScale: 0.58,

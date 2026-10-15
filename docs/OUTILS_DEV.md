@@ -102,7 +102,7 @@ le masquer). « Copier le code » → bloc à coller dans `FX_DEFAULTS` ; **Save
 
 ## Éditeur de carte (`?mapedit`, `src/scenes/MapEditorScene.ts`, `src/data/mapZones.ts`, `src/debugMapZones.ts`)
 
-Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `JUNGLE_SIZE` dans `data/maps.ts`). À chaque début de partie, `makeJungleMap(seed)` tire **un obstacle au hasard** (parmi `data/obstacles.ts`) à une **position au hasard** dans chaque zone ; tout vient de la seed de la partie (celle du `welcome` en ligne), donc tous les joueurs ont la même carte. Le nombre de tirages par zone est fixe : modifier une zone ne change pas le tirage des autres.
+Place les **zones d'obstacle** de l'arène solo / coop (2880 × 2880 px, `ARENA_SIZE` dans `data/maps.ts`). À chaque début de partie, `makeArenaMap(seed)` tire **un obstacle au hasard** (parmi `data/obstacles.ts`) à une **position au hasard** dans chaque zone ; tout vient de la seed de la partie (celle du `welcome` en ligne), donc tous les joueurs ont la même carte. Le nombre de tirages par zone est fixe : modifier une zone ne change pas le tirage des autres.
 
 - Zone = rectangle (centre `x` / `y`, `w` × `h`) + `chance` (0 → 1, 1 par défaut : probabilité que la zone donne un obstacle).
 - Clic = sélectionner, glisser = déplacer, glisser un coin = redimensionner, clic droit glissé = déplacer la vue, molette = zoom, Suppr = supprimer, flèches = 5 px (Maj : 25). « + Ajouter une zone » puis clic sur la carte ; Dupliquer ; champs X / Y / Largeur / Hauteur / Chance.

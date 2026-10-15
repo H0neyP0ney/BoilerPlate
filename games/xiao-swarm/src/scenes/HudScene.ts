@@ -196,7 +196,7 @@ export class HudScene extends Phaser.Scene {
     this.bossFrame = this.bossGhost = this.bossFill = undefined;
     this.reviveLabels = [];
     this.buildXpBar(); // images du paquet 1 : la barre d'XP existe dès le départ
-    if (latePack.ready || this.textures.exists('ui_tl_frame')) this.buildBars(true); // paquet 2 déjà là, ou ses images de la timeline ont leur repli (`art/imageFallbacks.ts`, redessiné dans la même texture à l'arrivée du fichier) (debug, en ligne, ?jump…) : `create` n'est pas encore « actif » (`sys.isActive`)
+    if (latePack.ready || this.textures.exists('ui_tl_frame')) this.buildBars(true); // paquet 2 déjà là (debug, en ligne, ?jump…), sinon construites à l'arrivée du paquet 2a (aucun repli d'image) : `create` n'est pas encore « actif » (`sys.isActive`)
     else {
       const off = latePack.onReady(() => this.buildBars());
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);

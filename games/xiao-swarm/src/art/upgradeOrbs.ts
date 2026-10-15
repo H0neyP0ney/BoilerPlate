@@ -1,11 +1,11 @@
 import type Phaser from 'phaser';
-import { recolorPixels } from '@xiao/engine';
-import type { UpgradeId } from '../data/progression';
+import { recolorPixels, type TextureFactory } from '@xiao/engine';
+import { UPGRADE_IDS, type UpgradeId } from '../data/progression';
 import { upgradeIconKey } from '../view/upgradeIcons';
 import { GLOBE_KINDS, GLOBE_TINTS, globeRecolorSpec, type GlobeKind } from './globeTints';
 
 /**
- * Globes au sol (power-ups, globe d'upgrade des œufs de boss) et leurs étoiles : l'or de la recrue (pièces `recruit_part_globe`, `recruit_part_ring`,
+ * Globes au sol (power-ups, globe d'upgrade des œufs de boss) et leurs étoiles : l'or de la recrue (pièces `recruit_part_globe` (globe + anneau) et
  * `recruit_part_star` du paquet 1) recoloré au premier besoin à la teinte de la sorte (`GLOBE_TINTS`, `art/globeTints.ts`), comme les fonds des
  * cartes d'upgrade : aucune image par sorte. Un globe d'upgrade = le globe `upgrade` + l'icône de la carte d'upgrade au centre (une texture par upgrade).
  */
@@ -45,11 +45,10 @@ function paint(scene: Phaser.Scene, key: string, w: number, h: number, color: nu
 export function globeTexture(scene: Phaser.Scene, kind: GlobeKind): string | null {
   const key = globeKey(kind);
   if (scene.textures.exists(key)) return key;
-  const globe = img(scene, 'recruit_part_globe');
-  const ring = img(scene, 'recruit_part_ring');
-  if (!globe || !ring) return null;
+  const globe = img(scene, 'recruit_part_globe'); // globe et anneau, fusionnés en une image
+  if (!globe) return null;
   const ok = paint(scene, key, SIZE, SIZE, GLOBE_TINTS[kind], (ctx) => {
-    for (const part of [globe, ring]) ctx.drawImage(part, (SIZE - part.width) / 2, (SIZE - part.height) / 2);
+    ctx.drawImage(globe, (SIZE - globe.width) / 2, (SIZE - globe.height) / 2);
     return true;
   });
   return ok ? key : null;
@@ -66,6 +65,15 @@ export function starTexture(scene: Phaser.Scene, kind: GlobeKind): string | null
     return true;
   });
   return ok ? key : null;
+}
+
+/** Déclare à l'atelier de textures les globes, les étoiles et les globes d'upgrade : ils sont fabriqués en tâche de fond (ou à la demande), plus au premier usage. */
+export function declareGlobeTextures(f: TextureFactory, scene: Phaser.Scene, priority: (key: string) => number): void {
+  for (const kind of GLOBE_KINDS) {
+    f.declareLazy(globeKey(kind), SIZE, SIZE, () => void globeTexture(scene, kind), priority(globeKey(kind)));
+    f.declareLazy(starKey(kind), 48, 48, () => void starTexture(scene, kind), priority(starKey(kind)));
+  }
+  for (const id of UPGRADE_IDS) f.declareLazy(upgradeOrbKey(id), SIZE, SIZE, () => void ensureUpgradeOrbTexture(scene, id), priority(upgradeOrbKey(id)));
 }
 
 /** Supprime les globes d'upgrade déjà assemblés (visionneuse : ils sont refaits au prochain besoin). */

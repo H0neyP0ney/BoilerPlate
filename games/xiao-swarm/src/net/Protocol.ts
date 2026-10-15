@@ -223,7 +223,7 @@ const TEXTURES = [
 ];
 
 const SNAPSHOT_TAG = 0x53;
-/** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (jungle 3802, royale 4800). */
+/** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (arène 3802, royale 4800). */
 const POS_SCALE = 4;
 const TWO_PI = Math.PI * 2;
 const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'turrets', 'prism'];

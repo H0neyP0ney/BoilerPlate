@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
-import { devLog, log } from '@xiao/engine';
+import type { TextureFactory } from '@xiao/engine';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from '../data/progression';
-import { holoCard, holoSlot, recolorCard, recolorSlot } from './cardPixels';
+import { CARD_BASE, holoCard, recolorCard, recolorSlot } from './cardPixels';
 
 /**
  * Fonds des cartes d'upgrade et slots vides fabriqués à partir de deux images rouges (`ui_card_base`, `ui_slot_empty`) : par upgrade, une
@@ -9,11 +9,12 @@ import { holoCard, holoSlot, recolorCard, recolorSlot } from './cardPixels';
  * prismatiques). Les formules sont dans `cardPixels.ts` ; les images de base sont produites par `node tools/slice-upgrade-cards.mjs` et
  * `node tools/slice-upgrade-slots.mjs`.
  *
- * Chaque texture coûte quelques ms : on ne bloque pas le chargement, on les fabrique une par une juste après le lancement
- * (`startUpgradeCardTextures`) ; l'écran de choix d'upgrade rattrape ce qui manque encore (`finishUpgradeCardTextures`). La visionneuse
- * d'upgrades (dev) refait celles d'une upgrade quand on change sa couleur (`repaintUpgradeTextures`).
+ * Depuis le 15/10 ces textures sont déclarées à l'atelier de textures (`declareUpgradeCardTextures`, `art/textureWorkshop.ts`) : fabriquées en tâche de fond une
+ * fois le jeu affiché, ou à l'instant où le jeu en demande une (`textures.get / exists`), selon la case « tâche de fond » de la vue Paquets. Les pixels des
+ * deux images de base ne sont lus qu'à la première fabrication. La visionneuse d'upgrades (dev) refait celles d'une upgrade quand on change sa couleur
+ * (`repaintUpgradeTextures`).
  */
-const SPACING_MS = 50;
+const SLOT_SIZE = { w: 54, h: 53 };
 
 interface Base {
   w: number;
@@ -22,17 +23,20 @@ interface Base {
 }
 interface Item {
   key: string;
-  base: 'card' | 'slot' | 'slotFull';
+  base: 'card' | 'slot';
   paint: (data: Uint8ClampedArray, w: number) => void;
 }
 interface Job {
   scene: Phaser.Scene;
-  bases: Record<'card' | 'slot' | 'slotFull', Base>;
-  queue: Item[];
-  timer: number;
-  busy: number; // ms passées à peindre
+  bases: Record<'card' | 'slot', Base>;
 }
 let job: Job | null = null;
+let workshop: TextureFactory | null = null;
+let sceneRef: Phaser.Scene | null = null;
+
+const cardItem = (id: UpgradeId): Item => ({ key: `ui_card_${id}`, base: 'card', paint: (d, w) => recolorCard(d, w, UPGRADES[id].color) });
+const slotItem = (id: UpgradeId): Item => ({ key: `ui_slot_empty_${id}`, base: 'slot', paint: (d) => recolorSlot(d, UPGRADES[id].color) });
+const ALL: Item[] = [...UPGRADE_IDS.flatMap((id) => [cardItem(id), slotItem(id)]), { key: 'ui_card_prism', base: 'card', paint: holoCard }];
 
 /** Pixels d'une texture déjà chargée. */
 function readBase(scene: Phaser.Scene, key: string): Base | null {
@@ -47,68 +51,78 @@ function readBase(scene: Phaser.Scene, key: string): Base | null {
   return { w: canvas.width, h: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data };
 }
 
+/** Les deux images de base, lues à la première fabrication (ou relues par `rebuildUpgradeCardTextures`). Null si l'une n'est pas là. */
+function getJob(scene: Phaser.Scene): Job | null {
+  if (job) return job;
+  const card = readBase(scene, 'ui_card_base');
+  const slot = readBase(scene, 'ui_slot_empty');
+  if (!card || !slot) return null;
+  job = { scene, bases: { card, slot } };
+  return job;
+}
+
 /** Peint une texture `item` depuis sa base et la (re)crée dans le gestionnaire de textures. */
-function paintItem(j: Job, item: Item): void {
-  const t = performance.now();
+function paintItem(j: Job, item: Item, inPlace = false): void {
   const b = j.bases[item.base];
   const img = new ImageData(new Uint8ClampedArray(b.data), b.w, b.h);
   item.paint(img.data, b.w);
+  if (inPlace && j.scene.textures.exists(item.key)) {
+    // même texture, même canvas : les cartes déjà affichées changent sans être recréées
+    const tex = j.scene.textures.get(item.key) as Phaser.Textures.CanvasTexture;
+    tex.getContext().putImageData(img, 0, 0);
+    tex.refresh();
+    return;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = b.w;
   canvas.height = b.h;
   canvas.getContext('2d')!.putImageData(img, 0, 0);
   if (j.scene.textures.exists(item.key)) j.scene.textures.remove(item.key);
   j.scene.textures.addCanvas(item.key, canvas);
-  j.busy += performance.now() - t;
 }
 
-function step(j: Job): void {
-  const next = j.queue.shift();
-  if (!next) return;
-  if (!j.scene.textures.exists(next.key)) paintItem(j, next);
-  if (j.queue.length === 0) devLog(`cartes : fonds et slots fabriqués (${Math.round(j.busy)} ms de calcul)`);
-  if (j.queue.length === 0) log.info(`[cartes] fonds et slots d'upgrade fabriqués (${Math.round(j.busy)} ms de calcul)`);
+/** Déclare à l'atelier de textures tous les fonds de cartes et slots vides (rien n'est dessiné ici). */
+export function declareUpgradeCardTextures(f: TextureFactory, scene: Phaser.Scene, priority: (key: string) => number): void {
+  workshop = f;
+  sceneRef = scene;
+  for (const item of ALL) {
+    const w = item.base === 'card' ? CARD_BASE.W : SLOT_SIZE.w;
+    const h = item.base === 'card' ? CARD_BASE.H : SLOT_SIZE.h;
+    f.declareLazy(
+      item.key,
+      w,
+      h,
+      () => {
+        const j = getJob(scene);
+        if (j) paintItem(j, item);
+      },
+      priority(item.key),
+    );
+  }
 }
 
-const cardItem = (id: UpgradeId): Item => ({ key: `ui_card_${id}`, base: 'card', paint: (d, w) => recolorCard(d, w, UPGRADES[id].color) });
-const slotItem = (id: UpgradeId): Item => ({ key: `ui_slot_empty_${id}`, base: 'slot', paint: (d) => recolorSlot(d, UPGRADES[id].color) });
-
-/** Prépare la fabrication des textures (rien n'est dessiné tout de suite) et la lance en tâche de fond, une toutes les `SPACING_MS` ms. */
-export function startUpgradeCardTextures(scene: Phaser.Scene): void {
-  if (job) return;
-  const card = readBase(scene, 'ui_card_base');
-  const slot = readBase(scene, 'ui_slot_empty');
-  const slotFull = readBase(scene, 'ui_slot_full');
-  if (!card || !slot || !slotFull) return;
-  const j: Job = {
-    scene,
-    bases: { card, slot, slotFull },
-    queue: [...UPGRADE_IDS.flatMap((id) => [cardItem(id), slotItem(id)]), { key: 'ui_card_prism', base: 'card', paint: holoCard }, { key: 'ui_slot_prism', base: 'slotFull', paint: holoSlot }],
-    timer: 0,
-    busy: 0,
-  };
-  job = j;
-  const tick = (): void => {
-    step(j);
-    if (j.queue.length > 0) j.timer = window.setTimeout(tick, SPACING_MS);
-  };
-  j.timer = window.setTimeout(tick, SPACING_MS);
-}
-
-/** Fabrique tout de suite les textures qui manquent (à appeler avant d'afficher une carte). Sans effet quand tout est prêt. */
+/** Fabrique tout de suite ce qui manque encore (à appeler avant d'afficher une carte). Sans effet quand tout est prêt. */
 export function finishUpgradeCardTextures(): void {
-  if (!job) return;
-  window.clearTimeout(job.timer);
-  const left = job.queue.length;
-  const t0 = performance.now();
-  while (job.queue.length > 0) step(job);
-  if (left > 0) devLog(`cartes : RATTRAPAGE de ${left} textures en ${Math.round(performance.now() - t0)} ms`, 'warn');
+  if (!workshop) return;
+  for (const item of ALL) workshop.ensure(item.key);
+}
+
+/**
+ * Une des deux images de base (`ui_card_base`, `ui_slot_empty`) vient d'arriver à la place de son repli dessiné : on relit les bases et on refait sur
+ * place tous les fonds et slots déjà fabriqués (ceux qui ne le sont pas encore partiront des vraies images).
+ */
+export function rebuildUpgradeCardTextures(scene: Phaser.Scene): void {
+  job = null;
+  const j = getJob(scene);
+  if (!j) return;
+  for (const item of ALL) if (!workshop?.isPending(item.key) && scene.textures.exists(item.key)) paintItem(j, item, true);
 }
 
 /** Dev : refait le fond et le slot d'une upgrade avec sa couleur courante (`UPGRADES[id].color`). */
 export function repaintUpgradeTextures(id: UpgradeId): void {
   finishUpgradeCardTextures();
-  if (!job) return;
-  paintItem(job, cardItem(id));
-  paintItem(job, slotItem(id));
+  const j = sceneRef ? getJob(sceneRef) : null;
+  if (!j) return;
+  paintItem(j, cardItem(id));
+  paintItem(j, slotItem(id));
 }

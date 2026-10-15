@@ -6,7 +6,7 @@ import { ensurePlayerSlot, madePlayerSlots, registerSlotMaker, shiftBlues } from
 
 /**
  * Recrue « bonus +1 » assemblée à partir de pièces fournies (art-src/bonus_recrue → public/assets/recruit, déclarées dans
- * assets/manifest.ts) : globe doré, anneau lumineux, tête de la classe et « +1 » décalé en bas à droite. Une seule texture
+ * assets/manifest.ts) : globe doré avec son anneau lumineux (une seule image depuis le 15/10), tête de la classe et « +1 » décalé en bas à droite. Une seule texture
  * `recruit_<classe>` est produite au chargement (et redessinée par la visionneuse de particules) ; les étoiles qui
  * scintillent autour sont des particules (view/UnitViews.ts). Réglages : `FX.recruit` (fxParams.ts).
  * Si une pièce manque, la recrue procédurale (art/soldiers.ts) reste utilisée.
@@ -64,10 +64,9 @@ registerSlotMaker((scene, slot) => paintRecruits(scene, slot));
 function paintRecruits(scene: Phaser.Scene, slot: number): void {
   const img = (key: string): HTMLImageElement | null =>
     scene.textures.exists(key) ? (scene.textures.get(key).getSourceImage() as HTMLImageElement) : null;
-  const globe = img('recruit_part_globe');
-  const ring = img('recruit_part_ring');
+  const globe = img('recruit_part_globe'); // globe et anneau fusionnés en une image
   const plus = img('recruit_part_plus_one');
-  if (!globe || !ring || !plus) return;
+  if (!globe || !plus) return;
   const r = FX.recruit;
   for (const [cls, headKey] of Object.entries(HEADS)) {
     const head0 = img(headKey);
@@ -85,7 +84,6 @@ function paintRecruits(scene: Phaser.Scene, slot: number): void {
         ctx.globalAlpha = 1;
       };
       draw(globe, 0, 0, r.globeScale, r.globeAlpha);
-      draw(ring, 0, 0, r.ringScale, r.ringAlpha); // même cadrage que le globe : l'anneau épouse son bord
       draw(head, r.headX, r.headY, r.headScale);
       draw(plus, r.plusX, r.plusY, r.plusScale); // « +1 » excentré en bas à droite
     };

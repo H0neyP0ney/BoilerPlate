@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { applyAssets, devLog, loadAssets, log, poki, DEV_TOOLS } from '@xiao/engine';
+import { applyAssets, devLog, loadAssets, log, poki, DEV_TOOLS, hideMissingTexture } from '@xiao/engine';
 import { SCENES } from '../config';
-import { installImageFallbacks } from '../art/imageFallbacks';
-import { ASSETS, CORE_ASSETS, LATE_ASSETS, LATE_B_ASSETS } from '../assets/manifest';
+import { recordLaunchTextures } from '../art/launchTextures';
+import { ASSETS, CORE_ASSETS } from '../assets/manifest';
 import { latePack } from '../assets/latePack';
-import { makeAlienTextures } from '../art/aliens';
+import { setupTextureWorkshop, startTextureWorkshop, textureWorkshop } from '../art/textureWorkshop';
 import { registerDefaultSprites } from '../art/catalog';
 import { initPlayerHue } from '../art/playerHue';
 import { loadFxOverrides } from '../debugFx';
@@ -17,11 +17,6 @@ import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
 import { loadStatOverrides } from '../debugStats';
 import { loadUpgradeOverrides } from '../debugUpgrades';
-import { makeEnvironmentTextures } from '../art/environment';
-import { makeFxTextures } from '../art/fx';
-import { makeTurretTextures } from '../art/turret';
-import { startUpgradeCardTextures } from '../art/cardTextures';
-import { makeSoldierTextures } from '../art/soldiers';
 import { makeRecruitTextures } from '../art/recruits';
 import { t } from '../i18n';
 import { SFX } from '../settings';
@@ -36,6 +31,7 @@ import { hideLoadingScreen, setLoadProgress, setLoadStatus } from '../loadingScr
 /** La fusée du power-up (`fx_rocket`, dessin procédural) est remplacée par l'image chargée sous `fx_rocket_png`, une fois celle-ci arrivée. */
 function useRocketImage(scene: Phaser.Scene): void {
   if (!scene.textures.exists('fx_rocket_png')) return;
+  textureWorkshop()?.discard('fx_rocket'); // le dessin n'est plus à fabriquer
   if (scene.textures.exists('fx_rocket')) scene.textures.remove('fx_rocket');
   scene.textures.renameTexture('fx_rocket_png', 'fx_rocket');
 }
@@ -75,10 +71,18 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    hideMissingTexture(this); // clé absente = rien à l'écran (jamais le carré vert de Phaser) tant que l'image n'est pas chargée ou fabriquée
     if (this.assets === ASSETS) latePack.markLoaded();
     devLog('create : application des assets + textures procédurales…');
     const t0 = performance.now();
-    const applied = applyAssets(this, this.assets);
+    const steps: string[] = []; // durée de chaque étape de fabrication, affichée à la fin (console de log en jeu et console du navigateur)
+    const timed = <T>(label: string, fn: () => T): T => {
+      const t = performance.now();
+      const out = fn();
+      steps.push(`${label} ${Math.round(performance.now() - t)} ms`);
+      return out;
+    };
+    const applied = timed('applyAssets', () => applyAssets(this, this.assets));
     if (applied.length) log.info('[assets] visuels remplacés :', applied.join(', '));
     if (DEV_TOOLS) {
       // dev : réglages édités dans les visionneuses (particules, obstacles) ; code éliminé du build Poki.
@@ -91,25 +95,22 @@ export class BootScene extends Phaser.Scene {
       loadMapZoneOverrides();
       loadNameOverrides();
     }
-    // images du paquet 2 : un repli simple de la même taille porte leur clé jusqu'à l'arrivée du fichier (`latePack` le redessine alors dans cette texture)
-    if (this.assets !== ASSETS) installImageFallbacks(this, [...LATE_ASSETS, ...LATE_B_ASSETS].flatMap((e) => (e.type === 'image' ? [e.id] : [])));
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
-    makeRecruitTextures(this); // recrues composées (pièces fournies) avant les recrues procédurales de repli
-    makeSoldierTextures(this);
-    makeAlienTextures(this);
-    makeEnvironmentTextures(this);
-    makeFxTextures(this);
-    makeTurretTextures(this);
+    timed('recrue assemblée', () => makeRecruitTextures(this)); // recrues composées (pièces fournies) avant les recrues procédurales de repli
+    // le reste (soldats, replis d'aliens, effets, tourelles, globes) est DÉCLARÉ à l'atelier de textures, fabriqué en tâche de fond une fois le jeu jouable (`startTextureWorkshop`)
+    timed('atelier de textures (déclaration)', () => setupTextureWorkshop(this, this.assets));
     useRocketImage(this);
     if (!latePack.ready) latePack.onReady(() => useRocketImage(this)); // fusée du Rocket barrage : image dans le paquet 2
-    startUpgradeCardTextures(this); // fonds des cartes d'upgrade (une carte de base recolorée par upgrade + la prismatique), fabriqués en tâche de fond
     registerDefaultSprites();
     if (DEV_TOOLS) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
     if (DEV_TOOLS) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités
     if (DEV_TOOLS) loadSpriteOverrides(); // dev : placements édités dans la visionneuse d'unités
     initPlayerHue(this); // soldats et têtes de recrue recolorés : fabriqués à la demande (première squad d'un autre emplacement de joueur), plus au lancement
 
-    devLog(`create : terminé en ${Math.round(performance.now() - t0)} ms`);
+    recordLaunchTextures(this); // textures fabriquées par le code au lancement (3e colonne de la vue Paquets)
+    const summary = `create : terminé en ${Math.round(performance.now() - t0)} ms (${steps.join(' · ')})`;
+    devLog(summary);
+    log.info(`[boot] ${summary}`);
     poki.gameLoadingFinished();
     void this.launch();
   }
@@ -152,6 +153,7 @@ export class BootScene extends Phaser.Scene {
   /** Lance la scène suivante et retire l'écran de chargement (fondu). */
   private go(key: string): void {
     hideLoadingScreen();
+    window.setTimeout(() => startTextureWorkshop(), 400); // le jeu (ou une vue de dev) est affiché : les textures procédurales se fabriquent en tâche de fond (quelques ms par image)
     if (key === SCENES.game && this.assets !== ASSETS && !latePack.ready) {
       // Paquet 2 lancé d'ici, sans attendre l'indice des commandes : son chargeur appartient à cette scène, qui doit donc RESTER active (`launch`, pas `start`, qui l'arrêterait et annulerait le téléchargement).
       // Même délai de 300 ms que `HudScene` (laisser les premières images s'afficher avant le décodage).

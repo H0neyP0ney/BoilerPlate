@@ -1,7 +1,7 @@
 import type { Point, Rng } from '@xiao/engine/sim';
 import { DIFFICULTY } from '../config';
 import { WAVE_SCRIPT, WAVE_SCRIPT_END, type WaveScript, type TimelineEntry } from './waves';
-import { makeJungleMap, makeRoyaleMap, type MapDef } from './maps';
+import { makeArenaMap, makeRoyaleMap, type MapDef } from './maps';
 
 /**
  * Modes de jeu en données. Le solo et le battle royale partagent 100 % de la
@@ -24,14 +24,14 @@ export interface ModeDef {
 }
 
 /**
- * Survie (08/10 : fusion de l'ancien mode solo et de l'ancienne coop) : la carte de jungle et la timeline complète, pas de tir ami ; victoire
+ * Survie (08/10 : fusion de l'ancien mode solo et de l'ancienne coop) : l'arène et la timeline complète, pas de tir ami ; victoire
  * en tuant le boss final (~10:00). Jouable SEUL (hors ligne : pause, revive par pub, tutoriel) ou À PLUSIEURS en ligne (2-4 joueurs, humains
  * et / ou coéquipiers IA : XP partagée, zones de réanimation, difficulté qui grandit avec les joueurs vivants, spectateur, relance) ; ce qui
  * change en ligne dépend de `SimConfig.online`, pas du mode.
  */
 export const SURVIVAL: ModeDef = {
   id: 'survival',
-  map: (seed) => makeJungleMap(seed),
+  map: (seed) => makeArenaMap(seed),
   pvp: false,
   reviveZones: true, // seulement en ligne (`SimConfig.online`) : seul, la squad anéantie a le revive par pub
   duration: 600, // la partie se gagne en tuant le boss final (~10:00), pas à la fin du chrono
@@ -111,7 +111,7 @@ const versusWaves = (): WaveScript => ({
  */
 export const VERSUS: ModeDef = {
   id: 'versus',
-  map: (seed) => makeJungleMap(seed),
+  map: (seed) => makeArenaMap(seed),
   pvp: true,
   duration: Infinity,
   get waves() {

@@ -1,6 +1,6 @@
 import { range, type AssetEntry } from '@xiao/engine';
 import { UPGRADE_IDS } from '../data/progression';
-import { PACK_OVERRIDES, type Pack } from './packOverrides';
+import { PACK_OF, type Pack } from './packTable';
 
 /**
  * Planches de sprites du jeu (fichiers dans public/assets/). Chaque visuel
@@ -53,6 +53,7 @@ export const ASSETS: AssetEntry[] = [
   // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_slot_empty', url: 'ui/slot_empty.png' }, // vide : base des slots à la couleur de chaque carte (art/cardTextures.ts)
   { type: 'image', id: 'ui_slot_full', url: 'ui/slot_full.png' },
+  { type: 'image', id: 'ui_slot_prism', url: 'ui/slot_prism.png' }, // carré prismatique d'une prise prismatique (dégradé à quatre coins) : tiré de slot_full par `holoSlot` (art/cardPixels.ts), fichier depuis le 15/10
   // Étoile des cartes prismatiques — art-src/star.png rogné par `node tools/slice-star-particle.mjs` ; particule teintée par l'émetteur de scenes/LevelUpScene.ts.
   { type: 'image', id: 'fx_star', url: 'fx/star.png' },
   // Icône « pub vidéo » des boutons rewarded (Revive, etc.) — art-src/rewarded.png rogné par `node tools/slice-rewarded-icon.mjs` ; lue par le Button du moteur (REWARDED_ICON).
@@ -65,6 +66,8 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'ui_xp_fill', url: 'ui/xp/fill.png' },
   // Titre « LEVEL UP! » du choix d'upgrade — art-src/levelup.png rogné par `node tools/slice-levelup-title.mjs` ; affiché par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_levelup_title', url: 'ui/levelup_title.png' },
+  // Main du tutoriel (« glisse ») : dessinée à l'origine par art/fx.ts, exportée en PNG 64 × 72 le 15/10 .
+  { type: 'image', id: 'hand', url: 'ui/hand.png' },
   // Icônes des upgrades — art-src/icon_upgrade.png découpé par `node tools/slice-upgrade-icons.mjs` ; affichées par view/upgradeIcons.ts (cartes, texte flottant, visionneuse).
   ...UPGRADE_IDS.map((id): AssetEntry => ({ type: 'image', id: `upgrade_icon_${id}`, url: `ui/upgrades/${id}.png` })),
   // Rocher des murs du lanceur de cailloux (`wall`) — art-src/wall.png rogné (131 × 117) et réduit à 96 px de large ; affiché par WorldView.syncRocks à la largeur de la hitbox (2 × rayon).
@@ -80,7 +83,7 @@ export const ASSETS: AssetEntry[] = [
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) ; sans cette image : orbe procédural `fx_xp`.
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).
-  ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
+  ...['globe', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
   // Globes au sol (power-ups, globe d'upgrade des œufs) et leurs étoiles : plus d'image par sorte, ce sont les pièces de la recrue ci-dessus, recolorées au lancement (art/upgradeOrbs.ts, teintes dans art/globeTints.ts).
   // Slime de base (`slime`, vert).
   // art-src/slime_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json — 9 cases de 82×78, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
@@ -567,42 +570,14 @@ export const ASSETS: AssetEntry[] = [
 ];
 
 /**
- * Deux paquets de visuels. Paquet 1 (`CORE_ASSETS`) : chargé au démarrage (interface du début, soldats, décor). Paquet 2 (`LATE_ASSETS`) : tous les aliens sauf le slime et le gling (`CORE_ALIEN_FILES`),
- * la timeline et la barre d'XP, les icônes de power-up, les globes, les pièces de la recrue, les critiques ; chargé en tâche de fond
- * dès que le joueur est sur la scène de jeu avec l'indice des commandes (`assets/latePack.ts`). En ligne, les deux paquets
- * sont chargés d'emblée (on peut rejoindre en cours de partie). Une seule liste `ASSETS` reste la source (la sauvegarde des visionneuses la réécrit).
+ * Trois paquets de visuels, répartis par la table `PACK_OF` (`assets/packTable.ts`, écrite par la vue Paquets : `?packs`, bouton « Paquets » du HUD).
+ * Paquet 1 (`CORE_ASSETS`) : chargé au démarrage. Paquet 2a (`LATE_ASSETS`) : tâche de fond dès la scène de jeu (`assets/latePack.ts`), puis, enchaîné, paquet 2b
+ * (`LATE_B_ASSETS`). En ligne, tout est chargé d'emblée (on peut rejoindre en cours de partie). Un visuel absent de la table est au paquet 1. Tant qu'un visuel du
+ * paquet 2 n'est pas arrivé, son repli sert (planches d'unités : dessin procédural ; images isolées : aucun, rien ne s'affiche). Une seule liste `ASSETS` reste la source
+ * (la sauvegarde des visionneuses la réécrit).
  */
-const CORE_ALIEN_FILES: string[] = ['aliens/slime.png', 'aliens/gling.png', 'aliens/kamikaze.png', 'ui/powerups/heal.png']; // slime et gling au paquet 1 (14/10) : ils sont dans les toutes premières vagues (tutoriel compris), sinon le dessin procédural s'affichait le temps du chargement du paquet 2 ; y mettre un fichier le garde au démarrage
-// (la barre d'XP, `ui/xp/`, est au paquet 1 depuis le 15/10 : `HudScene.buildXpBar`, construite dès la création de la scène)
-// Paquet 2 aussi : tout ce qui ne se voit qu'après les premières secondes — icônes de power-up, globes et étoiles au sol, pièces de la recrue, bulle et chiffres des critiques, drone de stase
-// (l'écran de choix d'upgrade — carte, slots, titre, relance, étoile, icônes d'upgrade — est au paquet 1 depuis le 15/10 : un level-up rapide ne tombe plus sur « Loading », ~400 Ko de plus au démarrage)
-// (la fusée est chargée sous `fx_rocket_png` puis échangée avec le dessin procédural `fx_rocket`). Tous ont un repli : voir `latePack.onReady`.
-const LATE_PREFIXES = ['fx/rocket.png', 'ui/boss/', 'ui/rewarded.png', 'ui/timeline/', 'ui/powerups/'];
-// Le globe d'XP (`fx/xp.webp`) est au paquet 1 depuis le 15/10 : il tombe dès le premier alien tué.
-// Paquet 2b (15/10) : chargé juste après 2a. Aliens qui n'apparaissent pas avant ~3 min (first-seen de `data/waves.ts` : kamikaze 30 s, Gling Mère 60 s, toad / spitter 75 s, Rhino Alpha 120 s restent en 2a ; l'œuf de boss aussi, dès le premier boss tué),
-// Scarab (4:30), rhinos jumeaux (7:00) et Giant Crab (10:00, 767 Ko à lui seul), plus la bulle et les chiffres des critiques et le drone de stase.
-const LATE_B_ALIEN_FILES = [
-  'aliens/shooter.png',
-  'aliens/iceballer.png',
-  'aliens/burner.png',
-  'aliens/shaman.png',
-  'aliens/charger.png',
-  'aliens/wall.png',
-  'aliens/lurker.png',
-  'aliens/bubble.png',
-  'aliens/boss_scarab.png',
-  'aliens/boss_rhino_fire.png',
-  'aliens/boss_rhino_ice.png',
-  'aliens/crab.png',
-];
-const LATE_B_PREFIXES = ['fx/crit/', 'fx/freezebot.png'];
-const isLateB = (e: AssetEntry): boolean => LATE_B_ALIEN_FILES.includes(e.url) || LATE_B_PREFIXES.some((x) => e.url.startsWith(x));
-const isLate = (e: AssetEntry): boolean =>
-  !isLateB(e) && !CORE_ALIEN_FILES.includes(e.url) && (e.url.startsWith('aliens/') || LATE_PREFIXES.some((x) => e.url.startsWith(x))); // kamikaze (30 s), pièces de la recrue et icône du medibot (`ui/powerups/heal.png`) au paquet 1 (15/10)
-/** Paquet d'un visuel d'après les règles ci-dessus (sans les exceptions de la vue Paquets). */
-export const defaultAssetPack = (e: AssetEntry): Pack => (isLateB(e) ? '2b' : isLate(e) ? '2a' : 'core');
-/** Paquet d'un visuel : l'exception posée dans la vue Paquets (`PACK_OVERRIDES`), sinon la règle par défaut. */
-export const assetPack = (e: AssetEntry): Pack => PACK_OVERRIDES[e.url] ?? defaultAssetPack(e);
+/** Paquet d'un visuel d'après la table (l'adresse de son fichier est la clé) ; absent : paquet 1. */
+export const assetPack = (e: AssetEntry): Pack => PACK_OF[e.url] ?? 'core';
 export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === 'core');
 export const LATE_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === '2a');
 export const LATE_B_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === '2b');

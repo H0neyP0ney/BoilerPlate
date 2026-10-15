@@ -44,7 +44,7 @@ il regarde vers la gauche (`facesLeft: true`) et `idle` réutilise le même cycl
 **Aliens (03/10)** : `slime`, `gling`, `shooter`, `toad`, `charger`, `kamikaze`, `spitter`, `wall`, `burner`, `lurker`, `bubble` ont chacun une planche 3×3 (9 frames, cycle de marche, face à gauche) dans `art-src/<nom>_walk.png`, assemblée par `node tools/pack-grids.mjs games/xiao-swarm/art-src/<nom>.pack.json` → `public/assets/aliens/<nom>.png` (option `"cleanShadow": true` : retire l'ombre brune peinte, utilisée pour `shooter`). Après une mise à jour d'une planche : relancer la commande puis vérifier la taille / l'ancrage dans la visionneuse (`?viewer`). `shaman` n'a pas encore de planche : dessin procédural (`src/art/aliens.ts`).
 
 **Ennemis actifs** : seul le slime (`ACTIVE_ALIENS` dans `data/aliens.ts`) ; les vagues des autres sont filtrées.
-**Bordure de carte** : de la lave animée (texture procédurale `lava`) avec un liseré incandescent, plus de palmiers.
+**Bordure de carte** : plus de lave ni de palmiers (textures `lava` et `palm` supprimées le 15/10) ; l'arène est une île sur fond noir avec une falaise dessinée en formes. Plus de bordure de repli (supprimée le 15/10) : sans l'image du sol, l'arène n'a pas de décor de bordure.
 
 ## Conventions
 
@@ -78,7 +78,6 @@ Sans animation, le jeu garde ses animations procédurales (rebond, squash).
 | `alien_slime` | 48×48 | ×1 | slime vert à un oeil |
 | `alien_gling` `alien_shooter` `alien_kamikaze` `alien_toad` `alien_charger` `alien_spitter` `alien_shaman` `alien_wall` `alien_lurker` `alien_bubble` `alien_burner` | 48×48 → 72×72 | ×1 | aliens (ids renommés le 02/10) |
 | `alien_boss_rhino` `alien_boss_scarab` `alien_boss_crab` | 119×94 → 182×157 | ×1 | boss : rhinocéros (mini, 2:00), scarabée (mini, 5:00, réutilise la marche du crabe en attendant son dessin), crabe géant (**final**, 10:00) |
-| `palm` `bush` `bush_flowers` `log` | 160×172, 112×78, 112×78, 150×44 | ×1 | décor de bordure |
 | `obstacle_1` … `obstacle_8` | 111×107 → 260×189 (WebP) | voir `data/obstacles.ts` | obstacles volcaniques (lave, rochers, cristaux) : `public/assets/decor/`, sources `art-src/obstacle_N.png` |
 | `tache_1` … `tache_4` | 235×203 → 260×237 (WebP) | voir `data/obstacles.ts` | taches sombres sous les obstacles : chaque obstacle a son jeu de variantes (image, position, largeur, échelle Y, miroir), une tirée au hasard par obstacle posé (seed de la carte) ; `ArenaView.stain`, sources `art-src/tache_N.png` |
 | `fx_bullet` `fx_blaster_blue` `fx_bolt_green` `fx_grenade` `fx_flame` `fx_glow` `fx_dot` `fx_ring` `fx_plus` `hand` | variées | — | effets : PNG isolé (`image`) du même id |
@@ -99,4 +98,4 @@ l'entrée dans `OBSTACLES`. Opacité des taches : menu Réglages, section « Vis
 
 ## Rhinos jumeaux (mini-boss de 7:30)
 
-Ids `boss_rhino_fire` et `boss_rhino_ice` : planches `public/assets/aliens/boss_rhino_fire.png` / `boss_rhino_ice.png`, la planche du Rhino Alpha recolorée par `node tools/hue-shift.mjs` (feu : `165 1.15 160 270`, glace : `-12 0.45 160 270 0.35` ; mêmes cases, ancrages, échelle et ombre que l'Alpha). L'orbe de feu (`alien_fire_orb`) est dessiné (`src/art/aliens.ts`). Les globes au sol (power-ups, globe d'upgrade) et leurs étoiles n'ont pas d'image : ce sont les pièces de la recrue (`recruit/globe.webp`, `ring.webp`, `star.webp`) recolorées au lancement à la teinte de `GLOBE_TINTS` (`src/art/globeTints.ts`, `src/art/upgradeOrbs.ts`), réglable dans la visionneuse de bonus.
+Ids `boss_rhino_fire` et `boss_rhino_ice` : planches `public/assets/aliens/boss_rhino_fire.png` / `boss_rhino_ice.png`, la planche du Rhino Alpha recolorée par `node tools/hue-shift.mjs` (feu : `165 1.15 160 270`, glace : `-12 0.45 160 270 0.35` ; mêmes cases, ancrages, échelle et ombre que l'Alpha). L'orbe de feu (`alien_fire_orb`) est dessiné (`src/art/aliens.ts`). Les globes au sol (power-ups, globe d'upgrade) et leurs étoiles n'ont pas d'image : ce sont les pièces de la recrue (`recruit/globe.webp` (globe + anneau fusionnés), `star.webp`) recolorées au lancement à la teinte de `GLOBE_TINTS` (`src/art/globeTints.ts`, `src/art/upgradeOrbs.ts`), réglable dans la visionneuse de bonus.

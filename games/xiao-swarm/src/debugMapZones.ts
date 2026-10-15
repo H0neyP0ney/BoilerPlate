@@ -1,6 +1,6 @@
 import { DEV_TOOLS } from '@xiao/engine';
 import { DEFAULT_MAP_ZONES, MAP_ZONES, type ObstacleZone } from './data/mapZones';
-import { JUNGLE_SIZE } from './data/maps';
+import { ARENA_SIZE } from './data/maps';
 import { saveToCode } from './dev/devSave';
 import { dropStaleOverride } from './dev/staleOverrides';
 
@@ -24,8 +24,8 @@ function sanitize(raw: unknown): ObstacleZone[] | null {
     .map((z): ObstacleZone => {
       const chance = Math.min(1, Math.max(0, num(z.chance, 1)));
       return {
-        x: r1(Math.min(JUNGLE_SIZE, Math.max(0, num(z.x, JUNGLE_SIZE / 2)))),
-        y: r1(Math.min(JUNGLE_SIZE, Math.max(0, num(z.y, JUNGLE_SIZE / 2)))),
+        x: r1(Math.min(ARENA_SIZE, Math.max(0, num(z.x, ARENA_SIZE / 2)))),
+        y: r1(Math.min(ARENA_SIZE, Math.max(0, num(z.y, ARENA_SIZE / 2)))),
         w: r1(Math.max(1, num(z.w, 200))),
         h: r1(Math.max(1, num(z.h, 200))),
         ...(chance < 1 ? { chance: Math.round(chance * 100) / 100 } : {}),

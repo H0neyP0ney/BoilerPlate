@@ -107,34 +107,10 @@ export class ArenaView {
   }
 
   private addDecor(): void {
-    const { width: W, height: H, border: B } = this.map;
-    const rng = new Rng(this.map.seed + 1);
     // Taches d'abord (sous les obstacles). Rng à part : le tirage des taches ne change pas le reste du décor.
     const stainRng = new Rng(this.map.seed + 2);
     for (const o of this.map.obstacles) this.stain(o, stainRng);
     for (const o of this.map.obstacles) this.decor(o.x, o.y, o.kind, o.size ?? 1);
-    for (const l of this.map.logs) this.decor(l.x, l.y, 'log', 0.95);
-
-    // Bordure : plus de jungle, c'est de la lave (voir le constructeur). Le sol procédural de repli, lui, garde ses bords.
-    if (!this.tiled) {
-      const edge = (x: number, y: number) => {
-        const r = rng.next();
-        const key = r < 0.35 ? 'palm' : r < 0.7 ? 'bush' : 'bush_flowers';
-        this.decor(x + rng.range(-25, 25), y + rng.range(-25, 25), key, rng.range(0.85, 1.25), rng.chance(0.5));
-      };
-      for (let x = 0; x <= W; x += 95) {
-        edge(x, B * 0.35);
-        edge(x, B * 0.8);
-        edge(x, H - B * 0.25);
-        edge(x, H - B * 0.7 + 40);
-      }
-      for (let y = B; y <= H - B; y += 95) {
-        edge(B * 0.3, y);
-        edge(B * 0.75, y);
-        edge(W - B * 0.3, y);
-        edge(W - B * 0.75, y);
-      }
-    }
   }
 
   /**

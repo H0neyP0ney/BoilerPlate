@@ -15,8 +15,11 @@ export const BEAM_PINK = 0xff4fcf;
 /** Colonne (et rond au sol) du booster prismatique : doré. */
 export const BEAM_PRISM = 0xffd24a;
 
-/** Texture de la colonne : blanche, opaque en bas, qui s'estompe vers le haut, bords doux. */
-function ensureBeamTexture(scene: Phaser.Scene): void {
+/**
+ * Texture de la colonne : blanche, opaque en bas, qui s'estompe vers le haut, bords doux. Déclarée à l'atelier de textures (`art/textureWorkshop.ts`) ou fabriquée
+ * à la demande au premier loot (`createLootBeam`).
+ */
+export function ensureBeamTexture(scene: Phaser.Scene): void {
   canvasTexture(scene, TEXTURE, 64, 256, (ctx, w, h) => {
     const gx = ctx.createLinearGradient(0, 0, w, 0);
     gx.addColorStop(0, 'rgba(255,255,255,0)');

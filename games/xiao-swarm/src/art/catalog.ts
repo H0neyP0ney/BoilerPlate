@@ -38,7 +38,6 @@ export function registerDefaultSprites(): void {
   }
   // Glaçon d'un soldat gelé (dessiné par sa vue, `SoldierView`) : même id de visuel qu'à l'époque où c'était un alien
   sprites.defaults('alien_iceblock', { texture: 'alien_iceblock', originX: 0.5, originY: 0.92, scale: 1 });
-  for (const id of ['palm', 'bush', 'bush_flowers', 'log']) sprites.defaults(id, { texture: id, originX: 0.5, originY: 0.92, scale: 1 });
   // Obstacles : ancrage et échelle viennent de data/obstacles.ts (avec la hitbox), l'image du manifeste.
   for (const o of Object.values(OBSTACLES)) sprites.defaults(o.id, { texture: o.id, originX: o.originX, originY: o.originY, scale: o.scale });
 }

@@ -1,5 +1,28 @@
 import type Phaser from 'phaser';
 
+/** Une texture dessinée en canvas dont la fabrication est reportée (voir `captureCanvasTextures`, `TextureFactory`). */
+export interface LazyCanvasTexture {
+  key: string;
+  width: number;
+  height: number;
+  draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+}
+
+let sink: ((t: LazyCanvasTexture) => void) | null = null;
+
+/** Exécute `fn` en mode « déclaration » : chaque `canvasTexture` appelé pendant `fn` est mémorisé (clé, taille, dessin) au lieu d'être dessiné. */
+export function captureCanvasTextures(fn: () => void): LazyCanvasTexture[] {
+  const out: LazyCanvasTexture[] = [];
+  const previous = sink;
+  sink = (t) => out.push(t);
+  try {
+    fn();
+  } finally {
+    sink = previous;
+  }
+  return out;
+}
+
 /**
  * Crée une texture Phaser dessinée en Canvas 2D (formes, dégradés, courbes).
  * Idéal pour des placeholders propres sans aucun fichier à télécharger.
@@ -12,6 +35,10 @@ export function canvasTexture(
   height: number,
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void,
 ): void {
+  if (sink) {
+    sink({ key, width, height, draw }); // déclaration seulement : fabriquée plus tard par la `TextureFactory`
+    return;
+  }
   if (scene.textures.exists(key)) return;
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(width);

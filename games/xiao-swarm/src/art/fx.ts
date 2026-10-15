@@ -517,28 +517,4 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.fillRect(7, 2, 4, 14);
     ctx.fillRect(2, 7, 14, 4);
   });
-  // Main pour le tuto "glisse"
-  canvasTexture(scene, 'hand', 64, 72, (ctx) => {
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#2a1d2e';
-    ctx.lineWidth = 3.5;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(22, 8);
-    ctx.quadraticCurveTo(22, 2, 28, 2);
-    ctx.quadraticCurveTo(34, 2, 34, 8);
-    ctx.lineTo(34, 30);
-    ctx.lineTo(44, 30);
-    ctx.quadraticCurveTo(58, 32, 56, 46);
-    ctx.lineTo(52, 62);
-    ctx.quadraticCurveTo(50, 70, 40, 70);
-    ctx.lineTo(26, 70);
-    ctx.quadraticCurveTo(18, 70, 14, 60);
-    ctx.lineTo(8, 44);
-    ctx.quadraticCurveTo(6, 36, 14, 38);
-    ctx.lineTo(22, 46);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  });
 }

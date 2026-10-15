@@ -1,7 +1,7 @@
 import type { RecolorSpec } from '@xiao/engine';
 
 /**
- * Teintes des globes au sol : le globe et l'étoile de chaque sorte sont l'or de la recrue (`recruit/globe.webp`, `ring.webp`, `star.webp`, paquet 1)
+ * Teintes des globes au sol : le globe et l'étoile de chaque sorte sont l'or de la recrue (`recruit/globe.webp` : globe et anneau fusionnés, `star.webp`, paquet 1)
  * recoloré au lancement (`art/upgradeOrbs.ts`), comme les fonds des cartes d'upgrade ; aucune image par sorte. Une couleur par sorte : c'est aussi celle du
  * rond posé au sol, de l'onde et des éclats du ramassage (`POWERUP_INFO` de `view/PickupViews.ts`). Réglées dans la visionneuse de bonus (Save écrit ce fichier).
  * La relance (loot) prend la teinte `upgrade`.

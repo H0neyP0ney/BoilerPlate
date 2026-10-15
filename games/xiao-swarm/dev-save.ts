@@ -358,6 +358,21 @@ function saveGlobeTints(d: Record<string, number>): Result {
   return { ok: true, message: `Teintes des globes enregistrées dans ${rel}${missing.length ? ` (introuvables : ${missing.join(', ')})` : ''}` };
 }
 
+/** Moment de fabrication des textures (art/textureModes.ts) : les tableaux `AT_LAUNCH` (paquet 1) et `AT_PACK_2B` sont réécrits en entier, triés. */
+function saveTextureModes(d: { pack2b: string[]; launch: string[] }): Result {
+  const rel = 'art/textureModes.ts';
+  let src = readSrc(rel);
+  for (const [name, list] of [['AT_LAUNCH', d.launch], ['AT_PACK_2B', d.pack2b]] as const) {
+    const re = new RegExp(`export const ${name}: string\\[\\] = \\[[\\s\\S]*?\\n\\];`);
+    if (!re.test(src)) return { ok: false, message: `${name} introuvable dans ${rel}` };
+    const keys = [...new Set(list.filter((k) => /^[\w#:.-]+$/.test(k)))].sort();
+    const body = keys.map((k) => `  '${k}',\n`).join('');
+    src = src.replace(re, () => `export const ${name}: string[] = [\n${body}];`);
+  }
+  writeSrc(rel, readSrc(rel), src);
+  return { ok: true, message: `Modes de fabrication enregistrés dans ${rel} (${d.launch.length} au paquet 1, ${d.pack2b.length} au 2b)` };
+}
+
 // ---------- Parties enregistrées (calibration) ----------
 
 /** Écrit une partie enregistrée (`RunRecorder`) dans `docs/bench/runs/` ; lue par `npm run sim:calibrate`. */
@@ -396,8 +411,10 @@ function handle(target: string, data: any): Result {
       return saveSprite(String(data.id), data.props as SpriteProps);
     case 'upgrades':
       return saveUpgrade(String(data.id), data);
+    case 'texturemodes':
+      return saveTextureModes(data as { pack2b: string[]; launch: string[] });
     case 'packs':
-      return replaceDeclaration('assets/packOverrides.ts', /export const PACK_OVERRIDES: Record<string, Pack> = \{/, String(data.code), 'Paquets des assets');
+      return replaceDeclaration('assets/packTable.ts', /export const PACK_OF: Record<string, Pack> = \{/, String(data.code), 'Paquets des assets');
     case 'globetints':
       return saveGlobeTints(data as Record<string, number>);
     case 'bench-run':

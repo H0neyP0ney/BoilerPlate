@@ -5,7 +5,7 @@
  * Convention pour toutes les vues : **Save** = enregistrer les valeurs actuelles dans le code (elles deviennent les
  * valeurs par défaut) ; **Reset** = revenir à la dernière sauvegarde (les valeurs par défaut du code).
  */
-export type SaveTarget = 'crowd' | 'difficulty' | 'visual' | 'fx' | 'waves' | 'obstacle' | 'sprite' | 'names' | 'mapzones' | 'sfxtuning' | 'stats' | 'upgrades' | 'globetints' | 'packs' | 'bench-run';
+export type SaveTarget = 'crowd' | 'difficulty' | 'visual' | 'fx' | 'waves' | 'obstacle' | 'sprite' | 'names' | 'mapzones' | 'sfxtuning' | 'stats' | 'upgrades' | 'globetints' | 'packs' | 'texturemodes' | 'bench-run';
 
 export async function saveToCode(target: SaveTarget, data: unknown): Promise<string> {
   if (!import.meta.env.DEV) return 'Save : disponible en dev uniquement';

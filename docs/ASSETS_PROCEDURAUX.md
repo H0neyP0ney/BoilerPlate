@@ -45,7 +45,7 @@ Les recolorations au lancement (soldats et tête de recrue de chaque joueur) ne 
 
 | Clé | Ce que c'est | Fichier |
 |---|---|---|
-| `hand` | main du tutoriel (HUD) | `art/fx.ts` |
+| `hand` | main du tutoriel (HUD) : **vrai fichier `ui/hand.png` depuis le 15/10** (paquet 1), plus de repli | — |
 
 ## 2. Dessinés en code mais cachés par une planche (rien à faire)
 
@@ -53,13 +53,13 @@ Le dessin existe encore comme repli si le fichier manque, mais le jeu affiche la
 
 - aliens : `alien_slime`, `alien_gling`, `alien_shooter`, `alien_kamikaze`, `alien_toad`, `alien_charger`, `alien_spitter`, `alien_shaman`, `alien_wall`, `alien_bubble`, `alien_burner`, `alien_lurker`, `alien_iceballer`, `alien_boss_rhino`, `alien_boss_scarab`, `alien_boss_crab` (`art/aliens.ts`) ;
 - `soldier_trooper`, `gun_trooper` (`art/soldiers.ts`) ; `recruit_trooper` (globe composé : `art/recruits.ts`) ;
-- `fx_rocket` (fichier `fx/rocket.png`), `fx_xp` (remplacé par `xp_orb`), `rock_big`.
+- `fx_rocket` (fichier `fx/rocket.png`), `fx_xp` (remplacé par `xp_orb`).
 
 ## 3. Dessinés en code, pas affichés aujourd'hui
 
 - **Classes de soldats désactivées** (`ACTIVE_CLASSES` = trooper seul) : `soldier_` / `gun_` / `recruit_` de `medic`, `flammer`, `sniper`, `bruiser`, `bomber`, et leurs projectiles `fx_bolt_green` (medic), `fx_grenade` (bomber), `fx_bullet` (bruiser). À dessiner seulement si ces classes reviennent.
 - **Projectile sans utilisateur** : `fx_blob_green` (boule verte en cloche ; plus aucun alien ne la lance).
-- **Décor de l'ancienne carte** : `palm`, `bush`, `bush_flowers` (bordure, seulement sans le sol en image), `log` (la carte actuelle n'a pas de troncs), `lava`, `rock_small`, `fx_rock_small` (`art/environment.ts`, `art/fx.ts`).
+- **Décor de l'ancienne carte** : `palm`, `lava`, `log` (et `MapDef.logs`), `bush`, `bush_flowers`, `rock_big`, `rock_small` et la bordure de repli de `ArenaView` ont été supprimés le 15/10 ; `makeJungleMap` / `JUNGLE_SIZE` sont devenus `makeArenaMap` / `ARENA_SIZE` (`fx_rock_small`, lui, reste : débris de rochers, `view/Fx.ts`).
 
 ## 4. Formes tracées à chaque frame (Graphics)
 

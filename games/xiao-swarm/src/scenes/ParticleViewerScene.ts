@@ -404,13 +404,11 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'recruit',
     label: 'Recrue gunner (bonus +1)',
-    where: "Recrue à ramasser : globe, anneau, tête et « +1 » assemblés en une image (art/recruits.ts), plus les étoiles qui scintillent autour. Position = part de la taille du globe, depuis son centre.",
+    where: "Recrue à ramasser : globe (avec son anneau), tête et « +1 » assemblés en une image (art/recruits.ts), plus les étoiles qui scintillent autour. Position = part de la taille du globe, depuis son centre.",
     specs: [
       { key: 'displayScale', label: 'Taille de TOUS les globes au sol', min: 0.1, max: 1.2, step: 0.01, hint: "Recrue, power-up et globe d'upgrade ont la même taille : 0,34 ≈ 55 px de globe à l'écran (zoom 1), taille d'origine de la recrue" },
       { key: 'globeScale', label: 'Globe : taille', min: 0.3, max: 1.3, step: 0.01 },
       { key: 'globeAlpha', label: 'Globe : opacité', min: 0, max: 1, step: 0.05 },
-      { key: 'ringScale', label: 'Anneau : taille', min: 0.3, max: 1.3, step: 0.01 },
-      { key: 'ringAlpha', label: 'Anneau : opacité', min: 0, max: 1, step: 0.05 },
       { key: 'headX', label: 'Tête : position X', min: -0.5, max: 0.5, step: 0.01 },
       { key: 'headY', label: 'Tête : position Y', min: -0.5, max: 0.5, step: 0.01 },
       { key: 'headScale', label: 'Tête : taille', min: 0.1, max: 1.2, step: 0.01 },

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEV_TOOLS, devLog, loadAssetsLater, log, poki, type AssetEntry } from '@xiao/engine';
-import { isPlaceholder, realKey, swapInRealImages } from '../art/imageFallbacks';
+import { rebuildUpgradeCardTextures } from '../art/cardTextures';
 import { SFX, type SfxId } from '../settings';
 import { sfxPack } from './coreSfx';
 import { LATE_ASSETS, LATE_B_ASSETS } from './manifest';
@@ -8,17 +8,13 @@ import { LATE_ASSETS, LATE_B_ASSETS } from './manifest';
 /** Ids de visuels du paquet 2 (2a et 2b ; image isolée : son id ; planche : ses sprites). */
 const LATE_IDS = new Set([...LATE_ASSETS, ...LATE_B_ASSETS].flatMap((e) => (e.type === 'image' ? [e.id] : Object.keys(e.sprites))));
 
-/**
- * Charge un lot. Une image qui a un repli posé (`art/imageFallbacks.ts`) est chargée sous une autre clé puis redessinée dans la texture de repli
- * (même objet : ce qui l'affiche la voit changer sans rien faire) ; les autres suivent le chemin habituel.
- */
+/** Images dont dérivent les fonds de cartes et les slots vides (`art/cardTextures.ts`). */
+const CARD_BASES = ['ui_card_base', 'ui_slot_empty'];
+
+/** Charge un lot. Les fonds de cartes et les slots dérivent de `ui_card_base` / `ui_slot_empty` : s'ils arrivent avec ce lot, on les refait sur place. */
 function loadPack(scene: Phaser.Scene, entries: readonly AssetEntry[]): Promise<string[]> {
-  const holders = entries.filter((e): e is Extract<AssetEntry, { type: 'image' }> => e.type === 'image' && isPlaceholder(e.id));
-  scene.load.setPath('assets/');
-  for (const h of holders) scene.load.image(realKey(h.id), h.url);
-  scene.load.setPath('');
-  return loadAssetsLater(scene, entries.filter((e) => !holders.includes(e as never))).then((applied) => {
-    swapInRealImages(scene, holders.map((h) => h.id));
+  return loadAssetsLater(scene, entries).then((applied) => {
+    if (entries.some((e) => e.type === 'image' && CARD_BASES.includes(e.id))) rebuildUpgradeCardTextures(scene);
     return applied;
   });
 }
@@ -76,7 +72,7 @@ export const latePack = {
       devLog(`paquet 2a : prêt (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`, 'warn');
       state = 'ready';
       log.info(`[assets] paquet 2a chargé (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms)`);
-      poki.measureOnce('perf', 'late-assets-2a', durationBucket(t0)); // temps de chargement du paquet 2a
+      poki.measureOnce('perf', 'late-assets-a', durationBucket(t0)); // temps de chargement du paquet 2a
       for (const fn of [...listeners]) fn();
       this.loadB(scene, t0);
     });
@@ -100,7 +96,7 @@ export const latePack = {
       state = 'complete';
       devLog(`paquet 2b : prêt (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms depuis le début)`, 'warn');
       log.info(`[assets] paquet 2b chargé (${applied.length} visuels, ${Math.round(performance.now() - t0)} ms depuis le début)`);
-      poki.measureOnce('perf', 'late-assets-2b', durationBucket(t0)); // temps total (2a + 2b) depuis le lancement du chargement
+      poki.measureOnce('perf', 'late-assets-b', durationBucket(t0)); // temps total (2a + 2b) depuis le lancement du chargement
       for (const fn of [...completeListeners]) fn();
     });
   },

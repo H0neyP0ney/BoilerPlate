@@ -132,8 +132,8 @@ export class BonusViewerScene extends Phaser.Scene {
     });
 
     // globes d'XP : trois tailles selon la valeur, comme WorldView.syncOrbs
-    const orbTex = this.textures.exists('xp_orb') ? 'xp_orb' : 'fx_xp';
-    const orbBase = orbTex === 'xp_orb' ? 32 / this.textures.get('xp_orb').getSourceImage().width : 1;
+    const orbTex = 'xp_orb';
+    const orbBase = 32 / this.textures.get(orbTex).getSourceImage().width;
     const orbs = [{ value: 1, name: 'Petit' }, { value: 3, name: 'Moyen' }, { value: 8, name: 'Gros' }];
     orbs.forEach((o, c) => {
       const x = (c - (orbs.length - 1) / 2) * COL_GAP;

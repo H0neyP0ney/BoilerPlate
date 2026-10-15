@@ -4,7 +4,7 @@ import { UPGRADES, type UpgradeId } from '../data/progression';
 import { t } from '../i18n';
 import { upgradeIconKey } from './upgradeIcons';
 import { latePack } from '../assets/latePack';
-import { finishUpgradeCardTextures } from '../art/cardTextures';
+import { cardTexturePending } from '../art/cardTextures';
 
 /**
  * Fond des cartes d'upgrade : une texture par upgrade (couleur de `UPGRADES[id].color`), fabriquée au lancement par `art/cardTextures.ts` à partir
@@ -12,6 +12,25 @@ import { finishUpgradeCardTextures } from '../art/cardTextures';
  * carte prismatique : `ui_card_prism` (arc-en-ciel holographique, même pour toutes les upgrades).
  */
 export const cardTexture = (id: UpgradeId, prism = false): string => (prism ? 'ui_card_prism' : `ui_card_${id}`);
+
+/**
+ * Image dont le fond est une texture fabriquée en tâche de fond (`art/cardTextures.ts`) : tant qu'elle n'est pas prête, l'image affiche l'image de base du paquet 1
+ * (`ui_card_base` pour une carte, `ui_slot_empty` pour un slot), puis prend la vraie texture dès qu'elle est fabriquée (même taille : rien ne bouge).
+ */
+function addWithBase(scene: Phaser.Scene, wanted: string, base: string): Phaser.GameObjects.Image {
+  if (!cardTexturePending(wanted)) return scene.add.image(0, 0, wanted);
+  const img = scene.add.image(0, 0, base);
+  const off = (): void => void scene.events.off(Phaser.Scenes.Events.UPDATE, check);
+  const check = (): void => {
+    if (!img.scene) return off();
+    if (cardTexturePending(wanted)) return;
+    img.setTexture(wanted);
+    off();
+  };
+  scene.events.on(Phaser.Scenes.Events.UPDATE, check);
+  img.once(Phaser.GameObjects.Events.DESTROY, off);
+  return img;
+}
 
 /**
  * Repères du dessin (pixels de la planche recadrée, CARD.W × CARD.H) : la carte se met à l'échelle `largeur affichée / CARD.W` et chaque
@@ -41,10 +60,9 @@ export const CARD_TEXT_RES = 3;
  * `resizeUpgradeCard` la met à la taille voulue. Partagée par la fenêtre de choix et la visionneuse d'upgrades : un seul dessin.
  */
 export function buildUpgradeCard(scene: Phaser.Scene, id: UpgradeId, count: number, prism: boolean, prismCount = 0): Phaser.GameObjects.Container {
-  finishUpgradeCardTextures(); // fonds fabriqués en tâche de fond après le lancement : rattrape ceux qui manquent
   const def = UPGRADES[id];
   const c = scene.add.container(0, 0);
-  const bg = scene.add.image(0, 0, cardTexture(id, prism)); // prismatique : fond holographique
+  const bg = addWithBase(scene, cardTexture(id, prism), 'ui_card_base'); // prismatique : fond holographique ; repli : la carte de base du paquet 1
   // nom en haut ; icône ; description ; compteur ; « Claim » sur la plaque dorée
   const icon = scene.add.image(0, 0, upgradeIconKey(id));
   if (!scene.textures.exists(upgradeIconKey(id))) {
@@ -87,7 +105,8 @@ function makeSlots(scene: Phaser.Scene, id: UpgradeId, max: number, count: numbe
     const row = Math.floor(i / perRow);
     const inRow = Math.min(perRow, max - row * perRow);
     const col = i - row * perRow;
-    const img = scene.add.image((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep, i < count ? (i < prismCount && scene.textures.exists('ui_slot_prism') ? 'ui_slot_prism' : 'ui_slot_full') : `ui_slot_empty_${id}`);
+    const img = i < count ? scene.add.image(0, 0, i < prismCount && scene.textures.exists('ui_slot_prism') ? 'ui_slot_prism' : 'ui_slot_full') : addWithBase(scene, `ui_slot_empty_${id}`, 'ui_slot_empty');
+    img.setPosition((col - (inRow - 1) / 2) * S.step, S.y - CARD.H / 2 + (row - (rows - 1) / 2) * S.rowStep);
     img.setScale(S.size / img.width);
     box.add(img);
   }

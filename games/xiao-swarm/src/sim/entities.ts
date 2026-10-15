@@ -62,13 +62,6 @@ export interface SoldierState extends Body {
   grabbed: number;
 }
 
-/** Tourelle automatique (power-up `turrets`) : un « soldat » hors de toute squad, que les aliens ciblent et blessent comme les autres (`Sim.turrets`). */
-export interface TurretState extends SoldierState {
-  /** Temps restant (s) et durée totale. */
-  ttl: number;
-  ttlMax: number;
-}
-
 export interface AlienState extends Body {
   kind: 'alien';
   def: AlienDef;
@@ -198,7 +191,7 @@ export interface Projectile {
 }
 
 /** Flaque de flammes au sol (traînée du slime de feu) : brûle les soldats qui s'y trouvent. */
-export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'reroll' | 'prism';
+export type PowerUpKind = 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'reroll' | 'prism';
 
 /** Power-up au sol : petit boost immédiat ramassé par une squad ; disparaît vite si personne ne le prend. */
 export interface PowerUpState {

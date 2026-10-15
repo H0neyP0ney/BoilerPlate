@@ -33,8 +33,6 @@ export class Arena {
   readonly obstacles: Circle[] = [];
   /** Cailloux lancés par les aliens : obstacles temporaires (peu nombreux : parcours direct, sans grille). */
   readonly rocks: (Circle & { id: number; ttl: number })[] = [];
-  /** Obstacles temporaires sans affichage propre (tourelles du power-up `turrets`) : bloquent soldats et aliens comme le décor ; remplis à chaque tick par `Turrets` (hôte) / `Mirror` (client). */
-  readonly blockers: Circle[] = [];
   readonly bounds: { minX: number; minY: number; maxX: number; maxY: number };
 
   private grid: number[][] = [];
@@ -126,9 +124,6 @@ export class Arena {
     for (const o of this.rocks) {
       if (Math.abs(c.x - o.x) < c.radius + o.radius && Math.abs(c.y - o.y) < c.radius + o.radius) pushOutOfCircle(c, o);
     }
-    for (const o of this.blockers) {
-      if (Math.abs(c.x - o.x) < c.radius + o.radius && Math.abs(c.y - o.y) < c.radius + o.radius) pushOutOfCircle(c, o);
-    }
     c.x = clamp(c.x, this.bounds.minX + c.radius, this.bounds.maxX - c.radius);
     c.y = clamp(c.y, this.bounds.minY + c.radius, this.bounds.maxY - c.radius);
   }
@@ -157,8 +152,8 @@ export class Arena {
     let pushX = 0;
     let pushY = 0;
     let pushMax = 0;
-    for (let k = 0; k < nr + this.blockers.length; k++) {
-      const o = k < n ? this.obstacles[near[k]] : k < nr ? this.rocks[k - n] : this.blockers[k - nr];
+    for (let k = 0; k < nr; k++) {
+      const o = k < n ? this.obstacles[near[k]] : this.rocks[k - n];
       const reach = radius + o.radius + m;
       const dx = x - o.x;
       const dy = y - o.y;
@@ -238,11 +233,6 @@ export class Arena {
       if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
     }
     for (const o of this.rocks) {
-      const dx = p.x - o.x;
-      const dy = p.y - o.y;
-      if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
-    }
-    for (const o of this.blockers) {
       const dx = p.x - o.x;
       const dy = p.y - o.y;
       if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;

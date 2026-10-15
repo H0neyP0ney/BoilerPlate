@@ -3,7 +3,6 @@ import { lerp, sfx, sprites, theme } from '@xiao/engine';
 import { DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
-import { TurretViews } from './TurretViews';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
 import { CLASSES, type SoldierClassId } from '../data/classes';
@@ -118,7 +117,6 @@ export class WorldView {
   readonly fx: Fx;
   /** Arcs électriques : boss électrique (`AlienDef.electric`) et soldats étourdis. */
   private readonly electric: ElectricArcs;
-  private readonly turrets: TurretViews;
   private readonly soldiers = new Map<number, SoldierView>();
   private readonly aliens = new Map<number, AlienView>();
   private readonly recruits = new Map<number, RecruitView>();
@@ -184,7 +182,6 @@ export class WorldView {
     });
     this.fx = new Fx(scene);
     this.electric = new ElectricArcs(scene);
-    this.turrets = new TurretViews(scene, this.fx);
     this.shock = new ShockDistort(scene);
     this.ground = scene.add.graphics().setDepth(DEPTH.groundFx);
     this.bars = scene.add.graphics().setDepth(DEPTH.bars);
@@ -426,15 +423,6 @@ export class WorldView {
         break;
       }
       case 'explosion':
-        if (e.style === 'electric') {
-          // tir / mort d'une tourelle : petite décharge électrique discrète (2 ou 3 arcs bleus, quelques étincelles), sans anneau, flammes ni secousse
-          if (nearCam(e.x, e.y)) {
-            for (let i = 0; i < 2 + (e.r >= 80 ? 2 : 0); i++) this.electric.spawn(e.x, e.y - 8, e.r * 0.8, 18 + e.r * 0.3);
-            this.fx.burst(e.x, e.y - 8, 0xbfeaff, e.r >= 80 ? 6 : 2);
-            if (e.r >= 80) sfx.play(this.scene, SFX.blast.key, SFX.blast); // le tir courant est silencieux (rafale) : seule la mort fait du bruit
-          }
-          break;
-        }
         if (e.style === 'spit') {
           // crachat du cracheur : éclaboussure verte (son nuage ralentissant, violet, est dessiné par drawOverlay)
           this.fx.gloop(e.x, e.y, 0x62d04a, 0xe6ffd0, e.r / 50);
@@ -516,7 +504,7 @@ export class WorldView {
         if (e.owner === this.localPlayer || nearCam(e.x, e.y)) playPowerUpSfx(this.scene, e.kind);
         const label = t(`pu_${e.kind}` as 'pu_stim');
         const iconKey = powerUpIconKey(e.kind as Parameters<typeof powerUpIconKey>[0]);
-        const tx = this.scene.textures.exists(iconKey) ? this.fx.iconText(e.x, e.y - 46, iconKey, label, '#ffffff', 22) : this.fx.text(e.x, e.y - 46, `${info.icon} ${label}`, '#ffffff', 22);
+        const tx = this.scene.textures.exists(iconKey) ? this.fx.iconText(e.x, e.y - 46, iconKey, label, '#ffffff', 22) : this.fx.text(e.x, e.y - 46, info.icon ? `${info.icon} ${label}` : label, '#ffffff', 22);
         const owner = e.owner;
         this.fx.follow(tx, () => this.squadFocus(owner), FX.text.holdMs + FX.text.fadeMs); // idem : suit la squad qui bouge
         break;
@@ -720,7 +708,6 @@ export class WorldView {
       if (a.def.electric && a.alive && this.onScreen(v.rx, v.ry, 120)) this.electric.crackle(v.rx, v.ry - a.radius * 0.8 + alienOffsetY(a.def.id), a.radius * 1.1, 46, 11, dt); // alien électrique (chargeur) : arcs au hasard
     }
     this.prune(this.aliens);
-    this.turrets.update(this.sim.turrets.items, this.localPlayer, dt);
     this.electric.update(dt);
 
     for (const v of this.recruits.values()) v.seen = false;
@@ -928,9 +915,9 @@ export class WorldView {
   private syncOrbs(alpha: number, time: number): void {
     const orbs = this.sim.xp.orbs;
     const view = this.scene.cameras.main.worldView;
-    // image fournie (assets/manifest.ts `xp_orb`) sinon orbe procédural ; blend normal : en additif le bleu virait au blanc
-    const orbTex = this.scene.textures.exists('xp_orb') ? 'xp_orb' : 'fx_xp';
-    const orbBase = orbTex === 'xp_orb' ? 32 / this.scene.textures.get('xp_orb').getSourceImage().width : 1;
+    // image fournie (assets/manifest.ts `xp_orb`, paquet 1) ; blend normal : en additif le bleu virait au blanc
+    const orbTex = 'xp_orb';
+    const orbBase = 32 / this.scene.textures.get(orbTex).getSourceImage().width;
     while (this.orbImgs.length < orbs.length) this.orbImgs.push(this.scene.add.image(0, 0, orbTex).setDepth(DEPTH.groundFx + 0.2));
     // âge de chaque globe (hors caméra compris : un globe qui entre dans le champ plus tard ne refait pas son apparition)
     const seen = new Set<number>();

@@ -406,17 +406,9 @@ const SPECS: Record<string, Spec> = {
       ctx.fill();
     },
   },
-  // Œuf de boss : coquille crème piquetée de rose, grosses taches orange dorées.
-  alien_boss_egg: {
-    w: 70,
-    h: 80,
-    body: { x: 35, y: 42, rx: 30, ry: 36, light: '#ffffff', dark: '#efd4c4' },
-    spots: { color: 'rgba(244,150,180,0.7)', pts: [[16, 40, 3], [52, 30, 3.5], [30, 14, 3], [56, 56, 3], [12, 62, 3]] },
-    bumps: { light: '#ffe060', dark: '#f08a10', pts: [[24, 22, 9], [46, 20, 8], [18, 46, 9], [46, 44, 10], [32, 64, 9], [52, 62, 6]] },
-  },
 };
 
-/** Crée tous les dessins procéduraux d'aliens calés sur les textures. `alien_boss_egg` passe par la clé `alien_boss_egg_proc` (voir `proceduralKey`). */
+/** Crée tous les dessins procéduraux d'aliens calés sur les textures. (l'œuf de boss n'en a pas : rien n'est affiché avant l'arrivée de son image). */
 export function makeAlienFallbacks(scene: Phaser.Scene, keyOf: (spriteId: string) => string): void {
   for (const [id, spec] of Object.entries(SPECS)) canvasTexture(scene, keyOf(id), spec.w, spec.h, (ctx) => creature(ctx, spec));
 }

@@ -36,7 +36,7 @@ export type SimEvent =
   | { t: 'alienShot'; id: number; alien: AlienId; x: number; y: number }
   /** Onboarding : une étape commence (`phase`, voir `sim/Tutorial.ts`) ; 'done' = fin, le gestionnaire de vagues normal prend le relai. */
   | { t: 'tutorial'; phase: string }
-  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric' }
+  | { t: 'explosion'; x: number; y: number; r: number; style?: 'slime' | 'fire' | 'spit' | 'acid' }
   | { t: 'fuse'; x: number; y: number; r: number; delay: number; alien: AlienId }
   | { t: 'tongue'; alien: number; target: number; dur: number }
   | { t: 'gameEnd'; victory: boolean; delay: number }

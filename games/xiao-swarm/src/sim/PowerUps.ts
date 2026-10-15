@@ -7,7 +7,7 @@ import type { Squad } from './Squad';
 
 /** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
 const REROLL_FALL_DIST: [number, number] = [50, 100];
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // le power-up `turrets` (tourelles automatiques) est DÉSACTIVÉ depuis le 11/10 (pas assez satisfaisant) : son code reste, pour le réactiver il suffit de l'ajouter ici // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
@@ -188,9 +188,6 @@ export class PowerUps {
         break;
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
-        break;
-      case 'turrets':
-        this.sim.turrets.spawn(squad.owner, p.x, p.y); // 3 tourelles automatiques à l'endroit du globe
         break;
       case 'prism':
         squad.prismBoost = true; // le prochain level-up de ce joueur propose 3 cartes prismatiques (pas après une relance)

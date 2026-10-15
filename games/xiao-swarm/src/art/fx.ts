@@ -144,64 +144,6 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   });
-  // Tir électrique des tourelles : éclair en zigzag pointant à droite, halo bleu et cœur blanc
-  canvasTexture(scene, 'fx_bolt_electric', 32, 16, (ctx) => {
-    const zig: [number, number][] = [[1, 8], [7, 4], [12, 11], [18, 5], [24, 10], [31, 8]];
-    const path = (): void => {
-      ctx.beginPath();
-      zig.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    };
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(79,200,255,0.18)';
-    ctx.lineWidth = 5;
-    path();
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(79,200,255,0.85)';
-    ctx.lineWidth = 2;
-    path();
-    ctx.stroke();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    path();
-    ctx.stroke();
-  });
-  canvasTexture(scene, 'fx_rocket', 34, 14, (ctx) => {
-    // fusée du power-up, pointe vers la DROITE (tournée selon sa vitesse) : ailerons, corps clair, bande, ogive rouge, tuyère
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#2a1d2e';
-    ctx.lineWidth = 2;
-    ctx.fillStyle = '#d23a3a'; // ailerons
-    ctx.beginPath();
-    ctx.moveTo(4, 1.5);
-    ctx.lineTo(11, 5);
-    ctx.lineTo(11, 9);
-    ctx.lineTo(4, 12.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#f2f2f5'; // corps
-    ctx.beginPath();
-    ctx.roundRect(6, 4, 19, 6, 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffb938'; // bande
-    ctx.fillRect(14, 4.5, 3, 5);
-    ctx.fillStyle = '#d23a3a'; // ogive
-    ctx.beginPath();
-    ctx.moveTo(24, 3.5);
-    ctx.quadraticCurveTo(33, 7, 24, 10.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffe066'; // flamme de la tuyère
-    ctx.beginPath();
-    ctx.moveTo(6, 5);
-    ctx.lineTo(0, 7);
-    ctx.lineTo(6, 9);
-    ctx.closePath();
-    ctx.fill();
-  });
   canvasTexture(scene, 'fx_smoke', 32, 32, (ctx) => {
     // bouffée de fumée : disque blanc opaque au bord à peine adouci
     const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
@@ -305,20 +247,6 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(7, 7, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  });
-  // Globe d'XP : orbe bleu lumineux à reflet clair (taille réglée à l'affichage selon sa valeur).
-  canvasTexture(scene, 'fx_xp', 28, 28, (ctx) => {
-    const g = ctx.createRadialGradient(11, 10, 1, 14, 14, 13);
-    g.addColorStop(0, '#d8f2ff');
-    g.addColorStop(0.25, '#3fa8ff');
-    g.addColorStop(1, '#0b3fd0');
-    ctx.fillStyle = g;
-    ctx.strokeStyle = '#06227a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(14, 14, 11.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   });

@@ -19,6 +19,9 @@ function loadPack(scene: Phaser.Scene, entries: readonly AssetEntry[]): Promise<
   });
 }
 
+/** Dev (`?nolate=1`, ou `?debug=1&split=1&nolate=1` en ligne) : les paquets 2a et 2b ne sont jamais chargés, et leurs textures procédurales jamais fabriquées. */
+export const noLatePackage = (): boolean => DEV_TOOLS && poki.getURLParam('nolate') !== undefined;
+
 /** idle → loading (2a) → ready (2a arrivé, 2b se télécharge) → complete (tout est là). */
 type State = 'idle' | 'loading' | 'ready' | 'complete';
 let state: State = 'idle';
@@ -61,7 +64,7 @@ export const latePack = {
   /** Lance le chargement (sans effet s'il est en cours ou fini) : 2a, puis 2b. */
   ensure(scene: Phaser.Scene): void {
     if (state !== 'idle') return;
-    if (DEV_TOOLS && poki.getURLParam('nolate') !== undefined) return; // dev : `?nolate=1` ne charge JAMAIS le paquet 2 (voir le jeu avec les seuls visuels du paquet 1 + dessins procéduraux)
+    if (noLatePackage()) return; // dev : `?nolate=1` ne charge JAMAIS le paquet 2 ni ne fabrique ses textures procédurales (voir le jeu avec le seul paquet 1)
     state = 'loading';
     const t0 = performance.now();
     devLog(`paquet 2a : début du chargement (${LATE_ASSETS.length} entrées)`, 'warn');

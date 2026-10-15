@@ -7,11 +7,14 @@
  * Une texture demandée avant son tour est de toute façon fabriquée à l'instant (filet de sécurité de l'atelier, signalé dans le journal `[textures]` si elle est lourde).
  */
 export const AT_LAUNCH: string[] = [
+  'fx_blaster_blue',
   'fx_column',
   'fx_dot',
-  'fx_flame',
   'fx_glow',
-  'fx_smoke',
+  'fx_puddle',
+  'fx_ring',
+  'globe_heal',
+  'recruit_trooper',
 ];
 
 export const AT_PACK_2B: string[] = [

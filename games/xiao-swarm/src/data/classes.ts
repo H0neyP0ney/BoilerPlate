@@ -1,7 +1,3 @@
-import { TURRETS } from '../config';
-
-/** Tir électrique des tourelles : texture du projectile (`art/fx.ts`) ; son explosion est électrique et sans recul (`Combat.stepProjectile`). */
-export const ELECTRIC_TEXTURE = 'fx_bolt_electric';
 /**
  * Classes de soldats (GDD §8). Valeurs de design, à équilibrer.
  * Ajouter une classe = une entrée ici + ses textures dans art/soldiers.ts.
@@ -39,8 +35,8 @@ export interface SoldierClassDef {
   /** Soin de la squad à l'arrêt (Medic). PV/s par soldat dans le rayon. */
   heal?: { radius: number; perSecond: number };
   /** Explosion à la mort (Flammeur). */
-  /** `knock` : recul des unités touchées (défaut 300) ; `style` : apparence de l'explosion (défaut : flammes). */
-  deathBlast?: { radius: number; damage: number; knock?: number; style?: 'electric' };
+  /** `knock` : recul des unités touchées (défaut 300). */
+  deathBlast?: { radius: number; damage: number; knock?: number };
   /** Couleur d'identification (HUD, textes). */
   color: number;
 }
@@ -148,26 +144,4 @@ export const TARGET_MIX: Record<SoldierClassId, number> = {
   sniper: 0.05,
   bruiser: 0.05,
   bomber: 0.05,
-};
-
-/**
- * Tourelle automatique (power-up `turrets`) : pas une classe de squad (absente de `CLASSES`, jamais recrutée), mais un « soldat » que les aliens ciblent.
- * Tir : celui du trooper de base, dégâts × `TURRETS.damageMul`, explosif sur une petite zone.
- */
-export const TURRET_DEF: SoldierClassDef = {
-  id: 'turret' as SoldierClassId,
-  hp: TURRETS.hp,
-  radius: TURRETS.radius,
-  mass: 8,
-  color: 0xa86bff,
-  weapon: {
-    ...CLASSES.trooper.weapon,
-    damage: CLASSES.trooper.weapon.damage * TURRETS.damageMul,
-    range: CLASSES.trooper.weapon.range * TURRETS.rangeMul,
-    cooldown: CLASSES.trooper.weapon.cooldown / TURRETS.fireRateMul,
-    projectileSpeed: TURRETS.projectileSpeed,
-    aoe: TURRETS.aoe,
-    texture: ELECTRIC_TEXTURE,
-  },
-  deathBlast: { ...TURRETS.blast, knock: 0, style: 'electric' }, // sans recul, explosion électrique
 };

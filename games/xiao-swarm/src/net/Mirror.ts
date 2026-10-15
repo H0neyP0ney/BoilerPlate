@@ -175,19 +175,6 @@ export class Mirror {
     }
     prune(this.upgradeOrbs, seenUpOrbs);
 
-    sim.turrets.items.length = 0; // tourelles : immobiles, remplacées à chaque snapshot (la vue les retrouve par id)
-    for (const t of snap.turrets) {
-      const o = sim.turrets.make(t.id, t.owner, t.x, t.y);
-      o.hp = t.hp;
-      o.maxHp = t.maxHp;
-      o.ttl = t.ttl;
-      o.aim = t.aim;
-      o.facing = Math.cos(t.aim) >= 0 ? 1 : -1;
-      sim.turrets.items.push(o);
-    }
-    sim.arena.blockers.length = 0; // elles bloquent le passage (la squad prédite les contourne comme chez l'hôte)
-    for (const t of sim.turrets.items) sim.arena.blockers.push({ x: t.x, y: t.y, radius: t.radius });
-
     sim.reviveZones.length = 0;
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
 
@@ -267,7 +254,6 @@ export class Mirror {
     for (const p of sim.puddles) tick(p);
     for (const k of sim.arena.rocks) tick(k);
     for (const f of sim.powerups.fields) tick(f);
-    for (const t of sim.turrets.items) tick(t);
     for (const p of sim.powerups.items) {
       if (p.life > 0) p.life = Math.max(0, p.life - dt);
       const g = this.goals.get(p);

@@ -135,30 +135,6 @@ export const CRIT_MAX = 100; // plus de plafond depuis le 12/10 (100 % = limite 
 export const STIM_SPEED = 1.25;
 export const STIM_FIRE = 1.5;
 /** Power-ups : durée de vie au sol (s) ; fréquence, premier et nombre max : `DIFFICULTY.powerup*`. */
-/**
- * Power-up « tourelles » : une tourelle automatique posée sur le globe ramassé (obstacle pour soldats et aliens). Elles sont traitées comme des soldats par les aliens (cibles, dégâts de zone, mêlée),
- * tirent sur l'alien le plus proche des projectiles explosifs (dégâts = tir du trooper de base × `damageMul`, cadence × `fireRateMul`, portée × `rangeMul`, ×le bonus de dégâts de la squad) et explosent à leur mort
- * (`blast`) ; elles disparaissent sans explosion au bout de `life` s.
- */
-export const TURRETS = {
-  count: 1, // 3 avant le 11/10 : une seule tourelle, qui bloque le passage comme un décor (`Arena.blockers`)
-  hp: 200,
-  life: 20,
-  /** Dégâts du tir = dégâts du trooper de base × ce facteur. */
-  damageMul: 0.4, // 0,5 avant le 11/10 (−20 %)
-  rangeMul: 1.2, // +20 %
-  /** Cadence du trooper × ce facteur (+50 %). */
-  fireRateMul: 1.5,
-  /** Rayon (px) de l'explosion de chaque tir. */
-  aoe: 40,
-  projectileSpeed: 700,
-  radius: 16,
-  /** Distance (px) du globe où chaque tourelle est posée. */
-  spread: 28, // 46 avant : tourelles resserrées
-  /** Explosion à la mort d'une tourelle. */
-  blast: { radius: 95, damage: 60 },
-};
-
 export const POWERUP_LIFE = 12;
 
 /**

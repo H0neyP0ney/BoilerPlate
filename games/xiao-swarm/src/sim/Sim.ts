@@ -12,7 +12,6 @@ import { Combat } from './Combat';
 import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
-import { Turrets } from './Turrets';
 import { Recruits } from './Recruits';
 import { Tutorial } from './Tutorial';
 import { Xp } from './Xp';
@@ -102,8 +101,6 @@ export class Sim {
   /** Coffres des boss tués et globes d'upgrade qui en sortent (réservés à leur joueur). */
   readonly upgradeOrbs: UpgradeOrbs;
   readonly powerups: PowerUps;
-  /** Tourelles automatiques du power-up `turrets` (traitées comme des soldats par les aliens). */
-  readonly turrets: Turrets;
   readonly xp: Xp;
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
   readonly scratchSoldiers: SoldierState[] = [];
@@ -113,7 +110,7 @@ export class Sim {
   /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric'; poison?: number }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
   private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number; hpMul: number }[] = [];
@@ -129,7 +126,6 @@ export class Sim {
     this.recruits = new Recruits(this);
     this.upgradeOrbs = new UpgradeOrbs(this);
     this.powerups = new PowerUps(this);
-    this.turrets = new Turrets(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
     this.squads.forEach((sq, i) => (sq.slot = i));
@@ -190,7 +186,6 @@ export class Sim {
     this.recruits.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
-    this.turrets.clear();
     this.xp.clear();
     this.finalBossDead = false;
     this.ending = false;
@@ -228,7 +223,6 @@ export class Sim {
     this.recruits.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
-    this.turrets.clear();
     this.xp.clear();
     this.choiceT = 0;
     this.choiceDelay = 0;
@@ -245,11 +239,10 @@ export class Sim {
     this.ending = true;
     this.choiceDelay = 0; // pas de choix d'upgrade en attente : la pause figerait la séquence sans écran pour la lever
     this.choiceT = 0;
-    // on finit le jeu : plus aucun bonus ni loot au sol (recrues, globes d'XP et d'upgrade, power-ups, zones, relance, booster, tourelles, œufs de boss) ni bonus actif
+    // on finit le jeu : plus aucun bonus ni loot au sol (recrues, globes d'XP et d'upgrade, power-ups, zones, relance, booster, œufs de boss) ni bonus actif
     this.recruits.clear();
     this.upgradeOrbs.clear();
     this.powerups.clear();
-    this.turrets.clear();
     this.xp.clear();
     for (const a of this.aliens) if (a.def.egg) a.alive = false; // œuf détruit sans ses globes (pas de `killAlien`)
     for (const sq of this.squads) sq.buffs.stim = 0;
@@ -504,7 +497,6 @@ export class Sim {
     this.rebuildHashes();
     for (const sq of this.squads) sq.update(dt, inputs.get(sq.owner) ?? NO_INPUT);
     this.horde.update(dt);
-    this.turrets.update(dt);
     this.combat.update(dt);
     this.recruits.update(dt);
     this.upgradeOrbs.update(dt);
@@ -534,7 +526,6 @@ export class Sim {
     for (const a of this.aliens) if (a.alive) this.alienHash.insert(a);
     this.soldierHash.clear();
     for (const sq of this.squads) for (const s of sq.soldiers) if (s.alive) this.soldierHash.insert(s);
-    for (const t of this.turrets.items) if (t.alive) this.soldierHash.insert(t); // les aliens les prennent pour des soldats
   }
 
   // ---------- Dégâts & morts ----------
@@ -881,7 +872,7 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
-  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid' | 'electric', poison = 0): void {
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0): void {
     this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison });
   }
 
@@ -907,7 +898,7 @@ export class Sim {
       if (k) k.kills++;
     }
     const blast = s.def.deathBlast;
-    if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: blast.knock ?? 300, style: blast.style });
+    if (blast) this.blasts.push({ x: s.x, y: s.y, r: blast.radius, dmg: blast.damage, team: s.team, owner: s.owner, knock: blast.knock ?? 300 });
   }
 
   /** (`dirX`, `dirY`) : sens du coup fatal (les globes d'XP y sont expulsés). */

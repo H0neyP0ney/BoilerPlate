@@ -4,7 +4,6 @@ import { CRACK_SIZE, CRACK_VARIANTS, SCORCH_VARIANTS } from '../art/fx';
 import { DEPTH } from '../config';
 import { FX } from '../fxParams';
 import { t as tr } from '../i18n';
-import { fallbackSeen } from '../fallbackEvents';
 
 /**
  * Effets visuels déclenchés par les événements de la simulation :
@@ -583,28 +582,24 @@ export class Fx {
 
   /**
    * Coup critique : bulle d'explosion jaune avec « ! » et les dégâts infligés en chiffres dorés (glyphes `crit_*` du manifeste) ;
-   * l'ensemble pop (Back.Out), monte et s'efface. Sans ces images, repli sur du texte.
+   * l'ensemble pop (Back.Out), monte et s'efface. Sans ces images (paquet 2b pas encore arrivé) : rien n'est affiché.
    */
   crit(x: number, y: number, dmg: number): void {
     const txt = String(Math.round(dmg));
     const glyphs = [...txt.split(''), 'bang'].map((g) => `crit_${g}`);
+    if (!glyphs.every((g) => this.scene.textures.exists(g)) || !this.scene.textures.exists('crit_bubble')) return;
     const box = this.scene.add.container(x + Phaser.Math.Between(-8, 8), y - 22).setDepth(DEPTH.bars + 2).setScale(0.3 * FX.crit.scale);
-    if (glyphs.every((g) => this.scene.textures.exists(g)) && this.scene.textures.exists('crit_bubble')) {
-      const SCALE = 0.7;
-      const gap = -7; // chiffres serrés (les glyphes ont une marge transparente)
-      const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE * FX.crit.textGrow));
-      const total = imgs.reduce((n, im) => n + im.displayWidth + gap, -gap);
-      const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total / FX.crit.textGrow + 40) / 136), 0.7); // la bulle garde sa taille : seul le texte grossit
-      let cx = -total / 2;
-      for (const im of imgs) {
-        im.setPosition(cx + im.displayWidth / 2, 1);
-        cx += im.displayWidth + gap;
-      }
-      box.add([bubble, ...imgs]);
-    } else {
-      fallbackSeen('other'); // analytics : chiffres de critique pas encore chargés (paquet 2b)
-      box.add(this.scene.add.text(0, 0, `! ${txt}`, { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffe14a', stroke: '#8a1a00', strokeThickness: 5 }).setOrigin(0.5));
+    const SCALE = 0.7;
+    const gap = -7; // chiffres serrés (les glyphes ont une marge transparente)
+    const imgs = glyphs.map((g) => this.scene.add.image(0, 0, g).setScale(SCALE * FX.crit.textGrow));
+    const total = imgs.reduce((n, im) => n + im.displayWidth + gap, -gap);
+    const bubble = this.scene.add.image(0, 0, 'crit_bubble').setScale(Math.max(0.62, (total / FX.crit.textGrow + 40) / 136), 0.7); // la bulle garde sa taille : seul le texte grossit
+    let cx = -total / 2;
+    for (const im of imgs) {
+      im.setPosition(cx + im.displayWidth / 2, 1);
+      cx += im.displayWidth + gap;
     }
+    box.add([bubble, ...imgs]);
     this.scene.tweens.add({ targets: box, scale: FX.crit.scale, duration: FX.crit.popMs, ease: 'Back.Out' });
     this.scene.tweens.add({ targets: box, y: box.y - FX.crit.rise, alpha: 0, delay: FX.crit.holdMs, duration: FX.crit.riseMs, onComplete: () => box.destroy() });
   }

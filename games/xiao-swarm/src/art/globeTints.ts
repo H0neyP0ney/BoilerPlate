@@ -6,7 +6,7 @@ import type { RecolorSpec } from '@xiao/engine';
  * rond posé au sol, de l'onde et des éclats du ramassage (`POWERUP_INFO` de `view/PickupViews.ts`). Réglées dans la visionneuse de bonus (Save écrit ce fichier).
  * La relance (loot) prend la teinte `upgrade`.
  */
-export const GLOBE_KINDS = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'turrets', 'prism', 'upgrade'] as const;
+export const GLOBE_KINDS = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'prism', 'upgrade'] as const;
 export type GlobeKind = (typeof GLOBE_KINDS)[number];
 
 export const GLOBE_TINTS: Record<GlobeKind, number> = {
@@ -15,7 +15,6 @@ export const GLOBE_TINTS: Record<GlobeKind, number> = {
   heal: 0x4cff7a, // vert
   stasis: 0x4aa8ff, // bleu
   rockets: 0xffb02a, // jaune orangé
-  turrets: 0xa86bff, // violet
   prism: 0xffd24a, // booster prismatique : l'or d'origine de la recrue
   upgrade: 0xffa8e6, // rose clair (globes d'upgrade des œufs de boss, relance)
 };

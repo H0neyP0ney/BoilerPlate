@@ -37,6 +37,8 @@ export class TextureFactory {
   busyMs = 0;
   /** Filtre de préfabrication : une texture pour laquelle il répond faux n'est jamais fabriquée en tâche de fond (seulement à la demande). Absent : toutes le sont. */
   prefetch?: (key: string) => boolean;
+  /** Texture pour laquelle on refuse toute fabrication, même à la demande (test « sans les paquets 2a / 2b ») : elle reste absente. */
+  blocked?: (key: string) => boolean;
   /** Appelé quand la file est vide (fabrication en tâche de fond terminée). */
   onDone?: () => void;
   /** Appelé après chaque fabrication À LA DEMANDE (avant son tour) : clé et durée en ms (une saccade possible si la durée dépasse quelques ms). */
@@ -100,7 +102,7 @@ export class TextureFactory {
   /** Fabrique la texture tout de suite si elle est en attente (priorité absolue). Renvoie vrai si elle vient d'être fabriquée. */
   ensure(key: string): boolean {
     const e = this.pending.get(key);
-    if (!e) return false;
+    if (!e || this.blocked?.(key)) return false;
     this.buildEntry(e, true);
     return true;
   }

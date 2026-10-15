@@ -4,7 +4,7 @@ import { SCENES } from '../config';
 import { recordLaunchTextures } from '../art/launchTextures';
 import { ASSETS, CORE_ASSETS } from '../assets/manifest';
 import { latePack } from '../assets/latePack';
-import { setupTextureWorkshop, startTextureWorkshop, textureWorkshop } from '../art/textureWorkshop';
+import { setupTextureWorkshop, startTextureWorkshop } from '../art/textureWorkshop';
 import { registerDefaultSprites } from '../art/catalog';
 import { initPlayerHue } from '../art/playerHue';
 import { loadFxOverrides } from '../debugFx';
@@ -17,7 +17,6 @@ import { loadMapZoneOverrides } from '../debugMapZones';
 import { loadNameOverrides } from '../debugNames';
 import { loadStatOverrides } from '../debugStats';
 import { loadUpgradeOverrides } from '../debugUpgrades';
-import { makeRecruitTextures } from '../art/recruits';
 import { t } from '../i18n';
 import { SFX } from '../settings';
 import { createOnlineSession, OnlineError, readOnlineRequest } from '../online';
@@ -28,14 +27,6 @@ import { hideLoadingScreen, setLoadProgress, setLoadStatus } from '../loadingScr
  * puis dessin procédural de tout ce qui n'a pas été fourni. Signale ensuite
  * la fin du chargement à Poki et lance directement le jeu (pas d'écran titre).
  */
-/** La fusée du power-up (`fx_rocket`, dessin procédural) est remplacée par l'image chargée sous `fx_rocket_png`, une fois celle-ci arrivée. */
-function useRocketImage(scene: Phaser.Scene): void {
-  if (!scene.textures.exists('fx_rocket_png')) return;
-  textureWorkshop()?.discard('fx_rocket'); // le dessin n'est plus à fabriquer
-  if (scene.textures.exists('fx_rocket')) scene.textures.remove('fx_rocket');
-  scene.textures.renameTexture('fx_rocket_png', 'fx_rocket');
-}
-
 export class BootScene extends Phaser.Scene {
   /** Assets chargés ici : tout, ou seulement le paquet 1 (le paquet 2 arrive pendant le premier choix d'upgrade, `assets/latePack.ts`). */
   private assets = CORE_ASSETS;
@@ -96,11 +87,8 @@ export class BootScene extends Phaser.Scene {
       loadNameOverrides();
     }
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
-    timed('recrue assemblée', () => makeRecruitTextures(this)); // recrues composées (pièces fournies) avant les recrues procédurales de repli
-    // le reste (soldats, replis d'aliens, effets, tourelles, globes) est DÉCLARÉ à l'atelier de textures, fabriqué en tâche de fond une fois le jeu jouable (`startTextureWorkshop`)
+    // le reste (soldats, replis d'aliens, effets, globes) est DÉCLARÉ à l'atelier de textures, fabriqué en tâche de fond une fois le jeu jouable (`startTextureWorkshop`)
     timed('atelier de textures (déclaration)', () => setupTextureWorkshop(this, this.assets));
-    useRocketImage(this);
-    if (!latePack.ready) latePack.onReady(() => useRocketImage(this)); // fusée du Rocket barrage : image dans le paquet 2
     registerDefaultSprites();
     if (DEV_TOOLS) loadUpgradeOverrides(); // dev : upgrades éditées dans la visionneuse d'upgrades
     if (DEV_TOOLS) loadStatOverrides(); // dev : stats éditées dans la visionneuse d'unités

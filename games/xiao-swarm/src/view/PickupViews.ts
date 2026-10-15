@@ -23,19 +23,18 @@ const CAPSULE_SCALE = 1.035; // 0,9 × 1,15 (+15 % le 12/10)
 
 
 /**
- * `icon` : emoji de repli, utilisé seulement si l'image `powerup_icon_<kind>` (art-src/powerups.png) n'est pas chargée.
+ * `icon` : emoji de repli, utilisé seulement si l'image `powerup_icon_<kind>` (art-src/powerups.png) n'est pas chargée ; absent (tous sauf le soin) = rien n'est affiché tant que l'image n'est pas là.
  * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage), lue dans `GLOBE_TINTS` (`art/globeTints.ts`) : c'est la teinte à laquelle l'or de la
  * recrue est recoloré pour fabriquer son globe et ses étoiles (`art/upgradeOrbs.ts`), réglable dans la visionneuse de bonus.
  */
-export const POWERUP_INFO: Record<PowerUpKind, { icon: string; readonly color: number }> = {
-  stim: { icon: '💉', get color() { return GLOBE_TINTS.stim; } }, // rouge orangé
-  magnet: { icon: '🧲', get color() { return GLOBE_TINTS.magnet; } }, // blanc légèrement bleuté
+export const POWERUP_INFO: Record<PowerUpKind, { icon?: string; readonly color: number }> = {
+  stim: { get color() { return GLOBE_TINTS.stim; } }, // rouge orangé
+  magnet: { get color() { return GLOBE_TINTS.magnet; } }, // blanc légèrement bleuté
   heal: { icon: '💚', get color() { return GLOBE_TINTS.heal; } }, // vert
-  stasis: { icon: '❄️', get color() { return GLOBE_TINTS.stasis; } }, // bleu
-  rockets: { icon: '🚀', get color() { return GLOBE_TINTS.rockets; } }, // jaune orangé
-  turrets: { icon: '🔫', get color() { return GLOBE_TINTS.turrets; } }, // violet
-  prism: { icon: '🌈', get color() { return GLOBE_TINTS.prism; } }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
-  reroll: { icon: '🎲', get color() { return GLOBE_TINTS.upgrade; } }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
+  stasis: { get color() { return GLOBE_TINTS.stasis; } }, // bleu
+  rockets: { get color() { return GLOBE_TINTS.rockets; } }, // jaune orangé
+  prism: { get color() { return GLOBE_TINTS.prism; } }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
+  reroll: { get color() { return GLOBE_TINTS.upgrade; } }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
 /** Drone (medivac / freezebot) qui plane au centre d'un globe de soin / de stase : largeur (px monde) de l'image, hauteur de vol au-dessus du centre du globe, amplitude et vitesse du balancement. */
@@ -44,7 +43,7 @@ const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 const MEDIBOT_WIDTH = 46;
 
 /** Sorte de globe (teinte du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
-export const globeKind =(kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
+export const globeKind =(kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;
@@ -66,7 +65,7 @@ export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.
   if (scene.textures.exists(key)) {
     const img = scene.add.image(0, -1, key);
     parts.push(img.setScale((160 * scale * 0.62) / Math.max(img.width, img.height))); // tient dans le globe (diamètre 160 × scale)
-  } else {
+  } else if (info.icon) {
     fallbackSeen('pickup'); // analytics : icône du power-up absente, emoji à la place
     parts.push(scene.add.text(0, -1, info.icon, { fontFamily: theme.font, fontSize: `${Math.round(80 * scale)}px` }).setOrigin(0.5));
   }

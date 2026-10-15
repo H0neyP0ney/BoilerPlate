@@ -954,60 +954,6 @@ try {
     check(!sim.recruits.items.includes(r2), 'recrue posée : elle est ramassée dès qu’elle redevient utile (soldat blessé)');
   }
 
-  // ---- tourelles automatiques (power-up `turrets`) : 3 posées, ciblées par les aliens comme des soldats, tirent des projectiles explosifs, explosent à leur mort
-  {
-    const { TURRETS } = await vite.ssrLoadModule('/src/config.ts');
-    const { sim, step } = fresh(33);
-    clearAliens(sim);
-    const sq = sim.squadOf('p1');
-    sim.powerups.drop('turrets', sq.center.x + 30, sq.center.y, true);
-    step(40);
-    check(sim.turrets.items.length === TURRETS.count, 'power-up tourelles ramassé : la tourelle est posée', `${sim.turrets.items.length} tourelle(s)`);
-    const t0 = sim.turrets.items[0];
-    check(t0 && t0.hp === 200 && t0.maxHp === 200, 'chaque tourelle a 200 PV', `${t0?.hp}`);
-    // la tourelle bloque le passage comme un décor : un cercle posé dessus est repoussé, et ce n'est pas libre
-    const probe = { x: t0.x + 4, y: t0.y, radius: 14 };
-    sim.arena.constrain(probe);
-    check(Math.hypot(probe.x - t0.x, probe.y - t0.y) >= t0.radius + 14 - 0.5 && !sim.arena.isFree({ x: t0.x, y: t0.y }, 10), 'la tourelle bloque soldats et aliens comme un décor', `distance ${Math.hypot(probe.x - t0.x, probe.y - t0.y).toFixed(1)} px`);
-    // un slime lointain : les tourelles tirent dessus, il meurt
-    clearAliens(sim);
-    const cx = t0.x;
-    const cy = t0.y;
-    sim.horde.spawnAt('slime', cx + 150, cy, 1, false, true);
-    const slime = sim.aliens[sim.aliens.length - 1];
-    const hp0 = slime.hp;
-    step(30);
-    check(slime.hp < hp0 || !slime.alive, 'les tourelles tirent sur l’alien à portée', `PV ${Math.round(hp0)} → ${Math.round(slime.hp)}`);
-    // aggro : un alien de mêlée collé à une tourelle (squad éloignée) la vise et la blesse
-    clearAliens(sim);
-    sq.soldiers.forEach((s) => { s.x = cx - 1500; s.px = s.x; s.y = cy; s.py = s.y; });
-    sq.updateCenter?.();
-    const alive0 = sim.turrets.items.length;
-    sim.horde.spawnAt('charger', cx + 60, cy, 1, false, true);
-    const ch = sim.aliens[sim.aliens.length - 1];
-    step(10);
-    check(ch.target && ch.target.def.id === 'turret', 'un alien vise une tourelle comme un soldat', `cible : ${ch.target?.def?.id}`);
-    // mort : l'explosion blesse les aliens autour
-    const tt = sim.turrets.items[0];
-    clearAliens(sim);
-    sim.horde.spawnAt('gling', tt.x + 20, tt.y, 1, false, true);
-    const g = sim.aliens[sim.aliens.length - 1];
-    g.hp = g.maxHp = 400;
-    tt.invulnerable = 0;
-    sim.damageSoldier(tt, 1e6, null);
-    step(1);
-    check(Math.hypot(g.kx, g.ky) < 1, 'l’explosion d’une tourelle ne repousse pas les aliens', `recul ${Math.hypot(g.kx, g.ky).toFixed(1)}`);
-    step(2);
-    check(g.hp < 400, 'une tourelle détruite explose et blesse les aliens autour', `PV ${Math.round(g.hp)}/400`);
-    // durée de vie : 20 s puis disparition sans explosion
-    clearAliens(sim);
-    for (let i = 0; i < 30 * 21; i++) {
-      if (sim.choiceT > 0) sim.chooseUpgrade('p1', 0); // un level-up fige la partie : on choisit pour continuer
-      step(1);
-    }
-    check(sim.turrets.items.length === 0, 'les tourelles disparaissent au bout de 20 s', `${sim.turrets.items.length} restante(s) (avant : ${alive0})`);
-  }
-
   // ---- la charge du rhinocéros fracasse les rochers de mur (débris envoyés dans le sens de la charge)
   {
     const { sim, step } = fresh(9);

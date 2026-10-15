@@ -4,18 +4,18 @@ import { ACTIVE_CLASSES } from '../data/classes';
 import { LATE_ASSETS, LATE_B_ASSETS } from '../assets/manifest';
 import type { SoldierClassId } from '../data/classes';
 import { proceduralKey, makeAlienTextures } from './aliens';
+import { makeRecruitTextures } from './recruits';
 import { makeFxTextures } from './fx';
 import { makeSoldierTextures } from './soldiers';
-import { makeTurretTextures } from './turret';
 import { declareGlobeTextures } from './upgradeOrbs';
 import { declareUpgradeCardTextures } from './cardTextures';
 import { AT_LAUNCH, AT_PACK_2B } from './textureModes';
-import { latePack } from '../assets/latePack';
+import { latePack, noLatePackage } from '../assets/latePack';
 import { ensureBeamTexture } from '../view/LootBeam';
 
 /**
  * Atelier des textures dessinées par le code (`TextureFactory` de l'engine) : au lancement, on ne fait que DÉCLARER les textures procédurales (effets, soldats, replis
- * d'aliens, tourelles, globes recolorés, globes d'upgrade) ; leur fabrication démarre en tâche de fond une fois le jeu jouable (`startTextureWorkshop`), par
+ * d'aliens, globes recolorés, globes d'upgrade) ; leur fabrication démarre en tâche de fond une fois le jeu jouable (`startTextureWorkshop`), par
  * tranches de quelques ms, dans l'ordre de `texturePriority`. Une texture demandée avant son tour (`textures.get / exists`) est fabriquée à l'instant : le journal
  * `[textures]` liste ces fabrications « à la demande » avec leur durée, pour repérer ce qu'il faudrait fabriquer avant l'affichage (`AT_LAUNCH`).
  */
@@ -47,7 +47,6 @@ function makePriority(): (key: string) => number {
     if (key.startsWith('fx_')) return 10; // petits effets : servent tout de suite
     if (key.startsWith('alien_') || key.startsWith('spider')) return late2a.has(key) ? 20 : late2b.has(key) ? 30 : /^alien_(ice|fire)_orb|^alien_iceblock/.test(key) ? 25 : 80; // replis : seulement tant que le paquet 2 n'est pas là
     if (/^(soldier|gun|recruit)_/.test(key)) return active.has(key.replace(/^(soldier|gun|recruit)_/, '').replace(/#.*$/, '')) ? 12 : 85; // classes inactives : en dernier
-    if (key.startsWith('turret_')) return 90;
     if (/^(globe|star)_/.test(key)) return 50;
     if (key.startsWith('upgrade_orb_')) return 55;
     return 60;
@@ -71,11 +70,11 @@ export function setupTextureWorkshop(scene: Phaser.Scene, loaded: readonly Asset
     if (m && !active.has(m[2] as SoldierClassId) && !DEV_TOOLS) return true; // classes désactivées : seulement en dev (panneau Triche)
     return false;
   };
+  f.declare(() => makeRecruitTextures(scene), priority); // recrue assemblée à partir de ses pièces (paquet 1) : déclarée AVANT les soldats, dont la recrue procédurale de même clé est alors ignorée
   f.declare(() => {
     makeSoldierTextures(scene);
     makeAlienTextures(scene);
     makeFxTextures(scene);
-    makeTurretTextures(scene);
   }, priority, skip);
   declareGlobeTextures(f, scene, priority);
   declareUpgradeCardTextures(f, scene, priority);
@@ -83,6 +82,7 @@ export function setupTextureWorkshop(scene: Phaser.Scene, loaded: readonly Asset
   // étape de fabrication choisie dans la vue Paquets (art/textureModes.ts) : 2a par défaut, 2b si listée ; rien n'est fabriqué d'avance avant que son paquet soit arrivé
   const pack2b = new Set(AT_PACK_2B);
   f.prefetch = (key) => stage >= (pack2b.has(key) ? 2 : 1);
+  if (noLatePackage()) { const p1 = new Set(AT_LAUNCH); f.blocked = (key) => !p1.has(key); } // `?nolate=1` : seules les textures du paquet 1 existent, rien n'est fabriqué ensuite, même à la demande
   f.install();
   for (const key of AT_LAUNCH) f.ensure(key); // fabriquées pendant le chargement, avant l'affichage (paquet 1)
   f.onDemandBuilt = (key, ms) => {
@@ -101,6 +101,9 @@ export function setupTextureWorkshop(scene: Phaser.Scene, loaded: readonly Asset
   return f;
 }
 
+/** Ordre de fabrication en tâche de fond : priorité d'une texture (plus petit = plus tôt) ; sert aussi à la vue Paquets (tri par ordre de chargement). */
+export const texturePriority = (): ((key: string) => number) => makePriority();
+
 /** Étapes débloquées : 0 = seulement le paquet 1 (déjà fabriqué), 1 = textures « paquet 2a » (défaut, pendant le téléchargement du 2a), 2 = aussi celles du « paquet 2b » (pendant le téléchargement du 2b). */
 let stage = 0;
 
@@ -109,6 +112,7 @@ let stage = 0;
  * arrivé (tout de suite s'il l'est déjà), celles du « paquet 2b » quand 2b arrive.
  */
 export function startTextureWorkshop(): void {
+  if (noLatePackage()) return; // `?nolate=1` : aucune texture des paquets 2a / 2b
   const release = (to: 1 | 2): void => {
     if (stage >= to) return;
     stage = to;

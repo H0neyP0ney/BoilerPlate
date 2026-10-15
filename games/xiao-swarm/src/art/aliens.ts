@@ -25,7 +25,6 @@ const PROCEDURAL_BODY_WIDTH: Record<string, number> = {
   alien_spider: 56,
   alien_fire_orb: 34,
   alien_ice_orb: 34,
-  alien_boss_egg: 60,
   alien_boss_gling: 106,
   alien_boss_rhino: 104,
   alien_boss_rhino_fire: 104,
@@ -38,10 +37,9 @@ const PROCEDURAL_BODY_WIDTH: Record<string, number> = {
 const PROCEDURAL_DIAMETERS = 2.4;
 
 /**
- * Clé de texture du dessin procédural d'un visuel d'alien. L'œuf est une image du manifeste sous le même id (`alien_boss_egg`) : son dessin
- * procédural a donc une clé à part, sinon l'image qui arrive avec le paquet 2a trouverait la clé déjà prise et ne remplacerait rien.
+ * Clé de texture du dessin procédural d'un visuel d'alien (la même que l'id du visuel).
  */
-export const proceduralKey = (spriteId: string): string => (spriteId === 'alien_boss_egg' ? 'alien_boss_egg_proc' : spriteId);
+export const proceduralKey = (spriteId: string): string => spriteId;
 
 /** Échelle d'affichage du dessin procédural d'un alien (`alien_<id>`) pour que son corps suive la taille de sa hitbox. */
 export function proceduralScale(spriteId: string, radius: number): number {

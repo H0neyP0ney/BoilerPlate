@@ -10,7 +10,8 @@ import { CARD_BASE, holoCard, recolorCard, recolorSlot } from './cardPixels';
  * `node tools/slice-upgrade-slots.mjs`.
  *
  * Depuis le 15/10 ces textures sont déclarées à l'atelier de textures (`declareUpgradeCardTextures`, `art/textureWorkshop.ts`) : fabriquées en tâche de fond une
- * fois le jeu affiché, ou à l'instant où le jeu en demande une (`textures.get / exists`), selon la case « tâche de fond » de la vue Paquets. Les pixels des
+ * fois le jeu affiché, selon le paquet choisi dans la vue Paquets. Une carte pas encore fabriquée s'affiche avec `ui_card_base` (et un slot avec `ui_slot_empty`), puis prend
+ * son fond à sa fabrication (`view/upgradeCards.ts`). Les pixels des
  * deux images de base ne sont lus qu'à la première fabrication. La visionneuse d'upgrades (dev) refait celles d'une upgrade quand on change sa couleur
  * (`repaintUpgradeTextures`).
  */
@@ -100,6 +101,9 @@ export function declareUpgradeCardTextures(f: TextureFactory, scene: Phaser.Scen
     );
   }
 }
+
+/** Cette texture de fond de carte ou de slot est-elle déclarée mais pas encore fabriquée ? (sans la fabriquer : ne passe pas par `textures.exists`) */
+export const cardTexturePending = (key: string): boolean => !!workshop?.isPending(key);
 
 /** Fabrique tout de suite ce qui manque encore (à appeler avant d'afficher une carte). Sans effet quand tout est prêt. */
 export function finishUpgradeCardTextures(): void {

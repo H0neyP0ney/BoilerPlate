@@ -24,15 +24,15 @@ Conséquences pour le code :
 
 **Exceptions : les replis dessinés**, seulement pour les visuels **complexes, longs à charger ou vus dès les premières secondes** :
 - les **aliens** des paquets 2a / 2b : dessin procédural calé sur la vraie texture (`art/alienFallbacks.ts`, fabriqué par l'atelier) ; remplacé par le vrai sprite à l'arrivée du paquet (`AlienView.refreshSprite`) ;
-- les **soldats** / têtes de recrue, tourelles : dessinés par le code (atelier) ;
-- les **cartes d'upgrade** : dérivées de `ui_card_base` / `ui_slot_empty` (`art/cardTextures.ts`) ; si ces images arrivent avec un lot, `latePack` refait les fonds de cartes sur place (`rebuildUpgradeCardTextures`) ;
-- cas à part : globe d'XP (`fx_xp`), fusée (`fx_rocket`), œuf (`alien_boss_egg_proc`), sol (`drawGroundChunk`), icônes de power-up (emoji), chiffres de critique (texte), pièces de la recrue (`art/recruits.ts`).
+- les **soldats** / têtes de recrue : dessinés par le code (atelier) ;
+- les **cartes d'upgrade** : dérivées de `ui_card_base` / `ui_slot_empty` (`art/cardTextures.ts`) ; tant qu'un fond de carte (ou un slot vide) n'est pas fabriqué, la carte s'affiche avec **`ui_card_base`** (le slot avec `ui_slot_empty`), images du paquet 1, puis prend sa vraie texture à sa fabrication (`addWithBase` de `view/upgradeCards.ts`) : plus de fabrication forcée à l'ouverture de l'écran de choix ; si ces images arrivent avec un lot, `latePack` refait les fonds de cartes sur place (`rebuildUpgradeCardTextures`) ;
+- cas à part : sol (`drawGroundChunk`), icônes de power-up (emoji, seulement le soin ; les autres : rien), pièces de la recrue (`art/recruits.ts`) ; **critiques et œuf de boss : aucun repli**, rien ne s'affiche avant l'arrivée de leurs images.
 
-Un nouvel asset du paquet 2 : choisir s'il mérite un repli (alien : oui, ajouter sa fiche à `SPECS` de `art/alienFallbacks.ts` et sa largeur à `PROCEDURAL_BODY_WIDTH`) ou s'il peut rester invisible (image d'interface : construire l'écran à l'arrivée). La vue Paquets marque d'une pastille rouge les fichiers qui ont un repli.
+Un nouvel asset du paquet 2 : choisir s'il mérite un repli (alien : oui, ajouter sa fiche à `SPECS` de `art/alienFallbacks.ts` et sa largeur à `PROCEDURAL_BODY_WIDTH`) ou s'il peut rester invisible (image d'interface : construire l'écran à l'arrivée). La vue Paquets marque d'une pastille rouge les assets qui ont un repli (fichiers, et fonds de cartes d'upgrade) ; elle lit **`art/fallbackRegistry.ts`** : tout nouveau repli doit y être déclaré, sinon la vue ne le signale pas.
 
 ## 3. Textures procédurales : trois états
 
-Les textures dessinées par le code sont **déclarées** au lancement (clé, taille, dessin : `TextureFactory` de l'engine, `canvasTexture` en mode déclaration) puis **fabriquées plus tard**, par tranches de 4 ms de calcul au plus toutes les 16 ms, dans l'ordre de `makePriority` (`art/textureWorkshop.ts`). La 3e colonne de la vue Paquets donne à chacune un état (`art/textureModes.ts`, Save réécrit le fichier) :
+Les textures dessinées par le code sont **déclarées** au lancement (clé, taille, dessin : `TextureFactory` de l'engine, `canvasTexture` en mode déclaration) puis **fabriquées plus tard**, par tranches de 4 ms de calcul au plus toutes les 16 ms, dans l'ordre de `makePriority` (`art/textureWorkshop.ts`). Dans la vue Paquets, chaque texture est une **ligne sur fond rose** rangée dans la colonne de son état (les fichiers sont sur fond bleu) ; sa liste déroulante donne l'état (`art/textureModes.ts`, Save réécrit le fichier) :
 
 | État | Quand la texture est fabriquée | Liste |
 |---|---|---|
@@ -42,7 +42,7 @@ Les textures dessinées par le code sont **déclarées** au lancement (clé, tai
 
 - **Filet de sécurité** : une texture demandée avant son tour est fabriquée à l'instant (`textures.get / exists / getFrame` passent par l'atelier, `install`). Le joueur ne voit jamais de trou ; le coût est une saccade possible si la texture est lourde (carte prismatique ≈ 27 ms, petit effet 1 à 2 ms). Le journal `[textures]` (console, F4) signale toute fabrication « à la demande » de plus de 8 ms (`SLOW_ON_DEMAND_MS`) : la passer au paquet 1 ou lui donner une priorité plus haute.
 - **Pas de texture procédurale pour un visuel dont le fichier est au paquet 1** (chargé avant l'affichage, son repli ne servirait à rien) ; les soldats des classes désactivées ne sont fabriqués qu'en dev.
-- Verrouillées au paquet 1 (cadenas dans la vue) : la recrue assemblée à partir de ses pièces (`makeRecruitTextures`).
+- Verrouillées au paquet 1 (cadenas dans la vue, liste grisée) : la recrue assemblée à partir de ses pièces (`makeRecruitTextures`).
 - À part (non préfabricables, listées pour mémoire) : variantes de couleur de chaque joueur (à la demande), textures dynamiques de l'interface.
 - Mémoire : ≈ 11,6 à 12,5 Mo de canvas une fois tout fabriqué (cartes d'upgrade 5,7 Mo, globes et globes d'upgrade 3,8 Mo, effets 1,7 Mo).
 - Aucune analytics pour ce mécanisme.
@@ -52,7 +52,8 @@ Les textures dessinées par le code sont **déclarées** au lancement (clé, tai
 | Je veux… | Je fais… |
 |---|---|
 | déplacer un fichier d'un paquet à l'autre | vue Paquets, colonne de gauche / droite, liste déroulante, Save (`assets/packTable.ts`) |
-| changer le moment de fabrication d'une texture procédurale | vue Paquets, colonne 3, liste déroulante, « Enregistrer les cases » (`art/textureModes.ts`) |
+| changer le moment de fabrication d'une texture procédurale | vue Paquets, ligne rose, liste déroulante, Save (`art/textureModes.ts`) |
 | changer l'ordre de fabrication | `makePriority` de `art/textureWorkshop.ts` |
+| trier les colonnes de la vue Paquets par poids ou par ordre de chargement | liste « Tri » de la vue Paquets (rang affiché devant chaque nom) |
 | voir le vrai chargement en deux paquets | `?debug=1&split=1` (console de log : F4) |
-| ne jamais charger le paquet 2 | `?nolate=1` (dev ; sur un build déployé : `?debug=1&split=1&nolate=1`) |
+| ne jamais charger les paquets 2a / 2b, ni fabriquer leurs textures procédurales (même à la demande : elles restent absentes, invisibles) | `?nolate=1` (dev ; sur un build déployé : `?debug=1&split=1&nolate=1`) |

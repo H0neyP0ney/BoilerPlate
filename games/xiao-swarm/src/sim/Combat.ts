@@ -1,9 +1,9 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
 import { ALIENS, zombieStats } from '../data/aliens';
-import { ELECTRIC_TEXTURE, type WeaponDef } from '../data/classes';
+import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
-import type { AlienState, Projectile, SoldierState, TurretState, Unit } from './entities';
+import type { AlienState, Projectile, SoldierState, Unit } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 import type { PlayerId, Team } from './types';
@@ -359,35 +359,6 @@ export class Combat {
     p.owner = src.owner;
   }
 
-  /** Tir d'une tourelle (power-up `turrets`) : projectile explosif en ligne droite, à la cible anticipée ; dégâts = ceux du trooper de base × `TURRETS.damageMul` × bonus de dégâts de la squad du propriétaire. */
-  turretShot(t: TurretState, target: AlienState): void {
-    const { rng } = this.sim;
-    const weapon = t.def.weapon;
-    const mx = t.x + Math.cos(t.aim) * 22;
-    const my = t.y - 17 + Math.sin(t.aim) * 22;
-    const speed = weapon.projectileSpeed ?? 700;
-    const reach = Math.hypot(target.x - mx, target.y - my) / speed;
-    const lx = target.x + target.vx * reach + rng.range(-6, 6);
-    const ly = target.y - 10 + target.vy * reach + rng.range(-6, 6);
-    const flight = Math.max(0.05, Math.hypot(lx - mx, ly - my) / speed);
-    const owner = this.sim.squadOf(t.owner);
-    const p = this.projectiles.acquire();
-    p.x = p.px = mx;
-    p.y = p.py = my;
-    p.vx = (lx - mx) / flight;
-    p.vy = (ly - my) / flight;
-    p.life = p.maxLife = flight;
-    p.damage = weapon.damage * (owner ? owner.stats.get('damage') : 1);
-    p.pierce = 0;
-    p.flame = false;
-    p.lob = false;
-    p.aoe = weapon.aoe ?? 0;
-    p.knock = 0;
-    p.texture = weapon.texture;
-    p.team = t.team;
-    p.owner = t.owner;
-  }
-
   private launchLob(mx: number, my: number, lx: number, ly: number, flight: number, damage: number, aoe: number, texture: string, team: Team, owner: PlayerId): Projectile {
     const p = this.projectiles.acquire();
     p.x = p.px = mx;
@@ -429,8 +400,7 @@ export class Combat {
           p.y += p.vy * (dt + p.life);
           // crachat (et toute boule à flaque) : pas de recul ; les autres boules repoussent comme avant
           const spit = p.puddle > 0 || p.texture === 'fx_spit';
-          const elec = p.texture === ELECTRIC_TEXTURE; // tir de tourelle : explosion électrique, sans recul
-          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit || elec ? 0 : 300, elec ? 'electric' : spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
+          this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
           if (p.spawn > 0) this.sim.horde.spawnEnragedRing('spider', p.x, p.y, p.spawn, p.spawnHp);
@@ -454,9 +424,8 @@ export class Combat {
         for (const a of alienHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchA)) {
           if (!this.sim.horde.targetable(a) || !this.overlaps(p, a, hitR)) continue; // dans son trou ou sous terre : la balle passe au-dessus
           if (p.aoe > 0) {
-            // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris) ; tir de tourelle : explosion électrique, sans recul
-            const elec = p.texture === ELECTRIC_TEXTURE;
-            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, elec ? 0 : 300, elec ? 'electric' : undefined);
+            // roquette : explose au premier alien touché (dégâts de zone, celui-ci compris)
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner);
             return true;
           }
           this.sim.damage(a, p.damage, p.owner, p.vx / len, p.vy / len);
@@ -469,8 +438,7 @@ export class Combat {
         for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
           if (s.frozen <= 0 || !this.sim.allied(p.owner, s) || !this.overlaps(p, s, hitR)) continue;
           if (p.aoe > 0) {
-            const elec = p.texture === ELECTRIC_TEXTURE;
-            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, elec ? 0 : 300, elec ? 'electric' : undefined); // roquette : elle explose (la glace compte 1 coup)
+            this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner); // roquette : elle explose (la glace compte 1 coup)
             return true;
           }
           this.sim.damage(s, p.damage, p.owner);

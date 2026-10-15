@@ -3,9 +3,13 @@ import { sprites, theme } from '@xiao/engine';
 import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
 import { PALETTE, REVIVE_RADIUS, REVIVE_TIME, SCENES, VIEW_BG } from '../config';
 import { getName } from '../debugNames';
-import { header, note, panel } from '../dev/devUi';
+import { button, colorInput, header, line, note, panel, select } from '../dev/devUi';
+import { saveToCode } from '../dev/devSave';
 import { ScaleRef } from '../dev/scaleRef';
-import { drawField, drawPickupSpot, drawReviveZone, GLOBE_LIFT, makePowerUpIcon, POWERUP_INFO, RECRUIT_COLOR } from '../view/PickupViews';
+import { GLOBE_KINDS, GLOBE_TINTS, GLOBE_TINT_DEFAULTS, type GlobeKind } from '../art/globeTints';
+import { clearGlobeKind, starTexture } from '../art/upgradeOrbs';
+import { drawField, drawPickupSpot, drawReviveZone, GLOBE_LIFT, globeKind, makePowerUpIcon, POWERUP_INFO, RECRUIT_COLOR } from '../view/PickupViews';
+import { TINT_SWATCHES } from './UpgradeViewerScene';
 import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import { ORB_SCALE, orbSize } from '../view/WorldView';
@@ -39,6 +43,8 @@ export class BonusViewerScene extends Phaser.Scene {
   /** Ronds colorés posés au sol sous les globes à ramasser (recrues : jaune ; power-ups : couleur de chaque bonus), comme en jeu. */
   private spots: { x: number; y: number; color: number; k: number }[] = [];
   private titles: { text: Phaser.GameObjects.Text; y: number }[] = [];
+  /** Étoiles de couleur posées à côté des globes de power-up (aperçu de la teinte de l'étoile). */
+  private stars: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super(SCENES.bonus);
@@ -118,6 +124,11 @@ export class BonusViewerScene extends Phaser.Scene {
       this.spots.push({ x, y: y1 + GLOBE_LIFT * FX.recruit.displayScale * VIEW_SCALE, color: POWERUP_INFO[kind].color, k: VIEW_SCALE });
       const name = getName(`pu_${kind}`, 'en') || kind;
       this.items.push({ node: box, label: this.label(x, y1 + 40, `${name}\npu_${kind}`), x, y: y1, phase: c });
+      const starKey = starTexture(this, globeKind(kind));
+      if (starKey) {
+        const star = this.add.image(x + 46, y1 - 34, starKey).setBlendMode(Phaser.BlendModes.ADD);
+        this.stars.push(star.setScale(26 / star.width));
+      }
     });
 
     // globes d'XP : trois tailles selon la valeur, comme WorldView.syncOrbs
@@ -163,11 +174,88 @@ ${z.id}`), x, y: y3, phase: 0, dy: 70 });
     for (let i = -40; i <= 40; i++) g.lineBetween(i * 50, -2000, i * 50, 2000).lineBetween(-2000, i * 50, 2000, i * 50);
   }
 
+  /** Défait les objets de la vue et la remonte (teinte d'un globe modifiée : les textures du globe et de l'étoile sont refaites au besoin). */
+  private rebuild(kinds: readonly GlobeKind[]): void {
+    for (const it of this.items) {
+      it.node.destroy();
+      it.label.destroy();
+    }
+    for (const s of this.stars) s.destroy();
+    for (const t of this.titles) t.text.destroy();
+    this.ground?.destroy();
+    this.items = [];
+    this.stars = [];
+    this.titles = [];
+    this.spots = [];
+    this.zones = [];
+    for (const k of kinds) clearGlobeKind(this, k);
+    this.build();
+    this.fit();
+  }
+
   private buildPanel(): void {
     const p = panel(290);
+    // Teinte des globes : l'or de la recrue est recoloré à cette couleur (globe, anneau et étoile), qui est aussi celle du rond au sol, de l'onde et des éclats. Save écrit art/globeTints.ts.
+    let kind: GlobeKind = 'stim';
+    const hexOf = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
+    const picker = select('Globe', GLOBE_KINDS.map((k): [string, string] => [k, k === 'upgrade' ? 'upgrade (globe d’upgrade, relance)' : k]));
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.maxLength = 7;
+    hex.style.cssText = 'width:72px;font:12px monospace';
+    const apply = (c: number): void => {
+      GLOBE_TINTS[kind] = c;
+      this.rebuild([kind]);
+      col.sync();
+    };
+    const col = colorInput('Teinte du globe', () => GLOBE_TINTS[kind], apply);
+    const syncColor = col.sync;
+    col.sync = (): void => {
+      syncColor();
+      hex.value = hexOf(GLOBE_TINTS[kind]);
+    };
+    hex.addEventListener('change', () => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex.value.trim());
+      if (m) apply(parseInt(m[1], 16));
+      else col.sync();
+    });
+    col.row.append(hex);
+    col.sync();
+    picker.select.addEventListener('change', () => {
+      kind = picker.select.value as GlobeKind;
+      col.sync();
+    });
+    const swatches = document.createElement('div');
+    swatches.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px';
+    for (const [name, c] of TINT_SWATCHES) {
+      const b = document.createElement('button');
+      b.title = `${name} ${hexOf(c)}`;
+      b.style.cssText = `width:24px;height:24px;border:1px solid #fff8;border-radius:4px;cursor:pointer;background:${hexOf(c)}`;
+      b.addEventListener('click', () => apply(c));
+      swatches.append(b);
+    }
     p.append(
       header('Visionneuse de bonus', () => this.scene.start(SCENES.game)),
       note("Bonus ramassés par les soldats : recrues (une par classe), power-ups et globes d'XP. Vue d'observation."),
+      note("Teinte des globes : l'or de la recrue est recoloré au lancement (globe, anneau, étoile) ; la même couleur sert au rond au sol, à l'onde et aux éclats. Save écrit art/globeTints.ts."),
+      line(
+        button('Save', () => void saveToCode('globetints', { ...GLOBE_TINTS }).then((msg) => {
+          info.textContent = msg;
+          if (msg.startsWith('✔')) Object.assign(GLOBE_TINT_DEFAULTS, GLOBE_TINTS);
+        })),
+        button('Reset', () => {
+          Object.assign(GLOBE_TINTS, GLOBE_TINT_DEFAULTS);
+          this.rebuild(GLOBE_KINDS);
+          col.sync();
+          info.textContent = 'Retour à la dernière sauvegarde.';
+        }),
+      ),
+      info,
+      picker.row,
+      col.row,
+      swatches,
     );
     document.body.append(p);
     this.panel = p;

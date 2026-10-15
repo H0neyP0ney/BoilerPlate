@@ -5,7 +5,8 @@ import { FX } from '../fxParams';
 import type { PowerUpKind } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
-import { globeKey, loadedKey, starKey } from '../art/upgradeOrbs';
+import { GLOBE_TINTS } from '../art/globeTints';
+import { globeTexture, starTexture } from '../art/upgradeOrbs';
 import { createEnragedFlames } from './EnragedFx';
 import { soldierOffsetY } from './spriteOffset';
 import { BEAM_PINK, BEAM_PRISM, createLootBeam, type LootBeam } from './LootBeam';
@@ -23,18 +24,18 @@ const CAPSULE_SCALE = 1.035; // 0,9 × 1,15 (+15 % le 12/10)
 
 /**
  * `icon` : emoji de repli, utilisé seulement si l'image `powerup_icon_<kind>` (art-src/powerups.png) n'est pas chargée.
- * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage). Le globe et ses étoiles sont des images à la couleur du power-up
- * (public/assets/globes/globe_<sorte>.png, star_<sorte>.png ; `art/upgradeOrbs.ts`).
+ * `color` : couleur du power-up (rond au sol, onde et éclats du ramassage), lue dans `GLOBE_TINTS` (`art/globeTints.ts`) : c'est la teinte à laquelle l'or de la
+ * recrue est recoloré pour fabriquer son globe et ses étoiles (`art/upgradeOrbs.ts`), réglable dans la visionneuse de bonus.
  */
-export const POWERUP_INFO: Record<PowerUpKind, { icon: string; color: number }> = {
-  stim: { icon: '💉', color: 0xff5a2a }, // rouge orangé
-  magnet: { icon: '🧲', color: 0xcfe6ff }, // blanc légèrement bleuté
-  heal: { icon: '💚', color: POWERUP_GREEN }, // vert
-  stasis: { icon: '❄️', color: 0x4aa8ff }, // bleu
-  rockets: { icon: '🚀', color: 0xffb02a }, // jaune orangé
-  turrets: { icon: '🔫', color: 0xa86bff }, // violet
-  prism: { icon: '🌈', color: BEAM_PRISM }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
-  reroll: { icon: '🎲', color: UPGRADE_PINK }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
+export const POWERUP_INFO: Record<PowerUpKind, { icon: string; readonly color: number }> = {
+  stim: { icon: '💉', get color() { return GLOBE_TINTS.stim; } }, // rouge orangé
+  magnet: { icon: '🧲', get color() { return GLOBE_TINTS.magnet; } }, // blanc légèrement bleuté
+  heal: { icon: '💚', get color() { return GLOBE_TINTS.heal; } }, // vert
+  stasis: { icon: '❄️', get color() { return GLOBE_TINTS.stasis; } }, // bleu
+  rockets: { icon: '🚀', get color() { return GLOBE_TINTS.rockets; } }, // jaune orangé
+  turrets: { icon: '🔫', get color() { return GLOBE_TINTS.turrets; } }, // violet
+  prism: { icon: '🌈', get color() { return GLOBE_TINTS.prism; } }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
+  reroll: { icon: '🎲', get color() { return GLOBE_TINTS.upgrade; } }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
 /** Drone (medivac / freezebot) qui plane au centre d'un globe de soin / de stase : largeur (px monde) de l'image, hauteur de vol au-dessus du centre du globe, amplitude et vitesse du balancement. */
@@ -42,8 +43,8 @@ const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 /** Largeur (px monde) du medibot : son image est plus haute que celle du freezebot à largeur égale, on la réduit pour que les deux robots paraissent de même taille. */
 const MEDIBOT_WIDTH = 46;
 
-/** Sorte de globe (image du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
-const globeKind = (kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
+/** Sorte de globe (teinte du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
+export const globeKind =(kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'turrets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;
@@ -52,23 +53,15 @@ export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kin
 export { GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK };
 
 /**
- * Power-up : globe à la couleur du bonus (image `globe_<sorte>`) avec l'icône du bonus au centre, centré sur (0, 0) ;
- * partagé avec la visionneuse de bonus. Sans les pièces d'art, repli sur un disque dessiné.
+ * Power-up : globe à la couleur du bonus (l'or de la recrue recoloré, `globeTexture`) avec l'icône du bonus au centre, centré sur (0, 0) ;
+ * partagé avec la visionneuse de bonus.
  */
 export function makePowerUpIcon(scene: Phaser.Scene, kind: PowerUpKind): Phaser.GameObjects.Container {
   const info = POWERUP_INFO[kind];
   const scale = FX.recruit.displayScale; // même taille que les recrues et les globes d'upgrade
   const parts: Phaser.GameObjects.GameObject[] = [];
-  const globe = loadedKey(scene, globeKey(globeKind(kind)));
-  if (globe) {
-    parts.push(scene.add.image(0, 0, globe).setScale(scale));
-  } else {
-    const g = scene.add.graphics();
-    g.fillStyle(0x0a1422, 0.75).fillCircle(0, 0, 160 * scale * 0.5);
-    g.fillStyle(info.color, 0.4).fillCircle(0, 0, 160 * scale * 0.5);
-    g.lineStyle(4, info.color, 1).strokeCircle(0, 0, 160 * scale * 0.5);
-    parts.push(g);
-  }
+  const globe = globeTexture(scene, globeKind(kind));
+  if (globe) parts.push(scene.add.image(0, 0, globe).setScale(scale));
   const key = powerUpIconKey(kind);
   if (scene.textures.exists(key)) {
     const img = scene.add.image(0, -1, key);
@@ -280,7 +273,7 @@ export class PickupViews {
       let glitter = this.powerupGlitter.get(p.id);
       if (!glitter) {
         const prism = p.kind === 'prism'; // booster prismatique : étoiles dorées (`star_prism`) ; le dé de relance garde les étoiles roses
-        const tex = loadedKey(this.scene, starKey(prism ? 'prism' : globeKind(p.kind))); // l'étoile de la recrue, à la couleur du power-up (relance : étoile rose des globes d'upgrade)
+        const tex = starTexture(this.scene, prism ? 'prism' : globeKind(p.kind)); // l'étoile de la recrue, à la couleur du power-up (relance : étoile rose des globes d'upgrade)
         const made = tex ? createGlobeGlitter(this.scene, x, cy, tex) : null;
         if (made) this.powerupGlitter.set(p.id, (glitter = made));
       }

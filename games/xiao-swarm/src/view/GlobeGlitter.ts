@@ -18,7 +18,7 @@ export interface GlobeGlitter {
 /**
  * Étoiles qui scintillent autour d'un globe au sol : apparaissent, grossissent puis s'éteignent en tournant (réglages `FX.recruit.star*`). C'est l'effet
  * d'origine de la recrue, appliqué à TOUS les globes : `texture` est l'étoile dorée de la recrue (`RECRUIT_STAR`) ou l'étoile de la couleur du
- * globe (images `star_<sorte>`, public/assets/globes/ : une par power-up, rose pour les globes d'upgrade ; `art/upgradeOrbs.ts`).
+ * globe (l'étoile de la recrue recolorée, `starTexture` de `art/upgradeOrbs.ts` : une teinte par power-up, rose pour les globes d'upgrade).
  */
 /** `tints` : couleurs tirées au hasard pour chaque étoile (étoiles arc-en-ciel du booster prismatique) ; absent = couleur de l'image. */
 export function createGlobeGlitter(scene: Phaser.Scene, x: number, y: number, texture: string, tints?: number[]): GlobeGlitter | null {

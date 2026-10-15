@@ -114,7 +114,7 @@ export class HudScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private levelShown: DifficultyLevel | null = null;
   /** Timeline des vagues et « Next boss » (haut centre). */
-  private timeline?: TimelineHud; // timeline et barre d'XP : images du paquet 2, construites à son arrivée (`buildBars`)
+  private timeline?: TimelineHud; // timeline et barre de vie du boss : images du paquet 2, construites à son arrivée (`buildBars`) ; la barre d'XP est au paquet 1 (`buildXpBar`)
   /** Barre d'XP en bas de l'écran (hors ligne). */
   private xpFrame?: Phaser.GameObjects.Image;
   private xpFill?: Phaser.GameObjects.NineSlice;
@@ -195,7 +195,8 @@ export class HudScene extends Phaser.Scene {
     this.xpFrame = this.xpFill = this.xpLabel = undefined;
     this.bossFrame = this.bossGhost = this.bossFill = undefined;
     this.reviveLabels = [];
-    if (latePack.ready) this.buildBars(true); // paquet 2 déjà là (debug, en ligne, ?jump…) : `create` n'est pas encore « actif » (`sys.isActive`)
+    this.buildXpBar(); // images du paquet 1 : la barre d'XP existe dès le départ
+    if (latePack.ready || this.textures.exists('ui_tl_frame')) this.buildBars(true); // paquet 2 déjà là, ou ses images de la timeline ont leur repli (`art/imageFallbacks.ts`, redessiné dans la même texture à l'arrivée du fichier) (debug, en ligne, ?jump…) : `create` n'est pas encore « actif » (`sys.isActive`)
     else {
       const off = latePack.onReady(() => this.buildBars());
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
@@ -290,7 +291,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     );
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
-    if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline ni barre d'XP (paquet 2a pas arrivé)
+    if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline (paquet 2a pas arrivé)
     this.hint.setVisible(g.flow.state === 'ready');
     this.refreshModeButtons();
     this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active); // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas
@@ -606,16 +607,20 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return !tut?.active || tut.phase === 'wave2';
   }
 
-  /** Timeline et barre d'XP (images du paquet 2) : construites dès que le paquet est là ; d'ici là elles n'existent pas (et restent cachées hors de l'écran). */
-  private buildBars(creating = false): void {
-    if (this.timeline || (!creating && !this.sys.isActive())) return; // à l'arrivée tardive du paquet : seulement si la scène tourne encore
-    this.timeline = new TimelineHud(this);
+  /** Barre d'XP (images du paquet 1, depuis le 15/10) : construite à la création de la scène. */
+  private buildXpBar(): void {
     this.xpFrame = this.add.image(0, 0, 'ui_xp_frame');
     this.xpFill = this.add.nineslice(0, 0, 'ui_xp_fill', undefined, 53, 32, XP_ART.fillCap, XP_ART.fillCap).setOrigin(0, 0.5); // 3-slice : capuchons arrondis, milieu étiré
     this.xpFill.setDepth(this.xpFrame.depth + 0.1);
     this.xpLabel = this.add
       .text(0, 0, '', { fontFamily: theme.font, fontSize: '20px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 5 })
       .setOrigin(0.5, 1); // « Niv. X » centré au-dessus de la jauge
+  }
+
+  /** Timeline et barre de vie du boss (images du paquet 2) : construites dès que le paquet est là ; d'ici là elles n'existent pas (et restent cachées hors de l'écran). */
+  private buildBars(creating = false): void {
+    if (this.timeline || (!creating && !this.sys.isActive())) return; // à l'arrivée tardive du paquet : seulement si la scène tourne encore
+    this.timeline = new TimelineHud(this);
     this.bossFrame = this.add.image(0, 0, 'ui_boss_frame').setVisible(false);
     this.bossGhost = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL).setVisible(false);
     this.bossFill = this.add.nineslice(0, 0, 'ui_boss_fill', undefined, 53, 32, BOSS_ART.fillCap, BOSS_ART.fillCap).setOrigin(0, 0.5).setVisible(false);

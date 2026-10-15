@@ -317,6 +317,16 @@ export const VISUAL_DEFAULTS = {
   groundScale: 0.73,
   /** Opacité des taches sombres (0 → 1). */
   stainAlpha: 0.6,
+  /** Caméra : constante de temps du suivi de la squad (s) ; la caméra la rattrape en ~3 × ce temps. 0 = collée à la squad, plus grand = plus doux et plus en retard (0,13 s ≈ l'ancien 0,12 par image à 60 FPS). */
+  camFollowTime: 0.13,
+  /** Caméra : avance (px) dans le sens de course de la squad quand elle va à sa vitesse normale (0 = la squad reste au centre de l'écran). */
+  camLookAhead: 0,
+  /** Caméra : temps (s) que met l'avance à s'installer ou à revenir quand la squad change de direction ou s'arrête. */
+  camLookTime: 0.5,
+  /** Caméra : zone morte (px, rayon autour du centre de l'écran) : la caméra ne bouge pas tant que la squad y reste. 0 = aucune. */
+  camDeadzone: 0,
+  /** Caméra : vitesse du zoom automatique (dézoome quand la squad grossit) ; plus grand = plus vif. */
+  camZoomSpeed: 2,
 };
 
 export type VisualKey = keyof typeof VISUAL_DEFAULTS;
@@ -381,5 +391,6 @@ export const SCENES = {
   waves: 'Waves',
   mapEditor: 'MapEditor',
   sounds: 'Sounds',
+  packs: 'Packs',
   gameOver: 'GameOver',
 } as const;

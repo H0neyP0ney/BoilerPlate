@@ -11,7 +11,7 @@ import { CARD, buildUpgradeCard, resizeUpgradeCard } from '../view/upgradeCards'
 const DISABLED_ALPHA = 0.25;
 
 /** Teintes proposées dans le panneau (clic = essai sur la carte sélectionnée) : celles qu'aucune carte n'utilise. */
-const TINT_SWATCHES: [string, number][] = [
+export const TINT_SWATCHES: [string, number][] = [
   ['Écarlate', 0xff2a2a], ['Citron', 0xf0f03a], ['Vert pomme', 0x5be83a], ['Menthe', 0x3af0a0], ['Cyan glacier', 0x1ee6ff],
   ['Indigo', 0x5a5ae6], ['Orchidée', 0xc04aff], ['Cuivre', 0xb8743a],
 ];

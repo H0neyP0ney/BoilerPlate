@@ -19,12 +19,13 @@ import { ObstacleEditorScene } from './scenes/ObstacleEditorScene';
 import { ParticleViewerScene } from './scenes/ParticleViewerScene';
 import { WaveEditorScene } from './scenes/WaveEditorScene';
 import { SoundTestScene } from './scenes/SoundTestScene';
+import { PacksViewerScene } from './scenes/PacksViewerScene';
 import { UnitViewerScene } from './scenes/UnitViewerScene';
 
 void bootPokiGame({
   safeSize: SAFE_SIZE,
   backgroundColor: PALETTE.bgDark,
-  scenes: [BootScene, GameScene, HudScene, EndingScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(DEV_TOOLS ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene, SoundTestScene] : [])],
+  scenes: [BootScene, GameScene, HudScene, EndingScene, PauseScene, OptionsScene, LevelUpScene, GameOverScene, ...(DEV_TOOLS ? [UnitViewerScene, ParticleViewerScene, ObstacleEditorScene, MiscViewerScene, BonusViewerScene, UpgradeViewerScene, WaveEditorScene, MapEditorScene, SoundTestScene, PacksViewerScene] : [])],
   beforeCreate: () => {
     storage.setNamespace('xiao-swarm');
     Button.clickHook = (scene) => playSfx(scene, 'ui_click'); // clic de tous les boutons des menus

@@ -48,7 +48,7 @@
   "best": "Record : {value}",
   "retry": "Rejouer",
   "revive": "Relancer l'escouade",
-  "freeRevive": "Free Revive",
+  "freeRevive": "Revive (free)",
   "recruit": "+1 {name} !",
   "noSave": "La progression n'est pas sauvegardée en navigation privée",
   "class_trooper": "Fusilier",

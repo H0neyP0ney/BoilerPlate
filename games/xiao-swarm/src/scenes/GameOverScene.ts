@@ -74,7 +74,7 @@ export class GameOverScene extends Phaser.Scene {
     if (data.scores.length > 0) buildScoreboard(this, cx, cy - 70 - up, data.scores);
     if (data.freeRevive) {
       // partie qui suit le tutoriel : un seul bouton, le revive offert
-      const free: Button = new Button(this, cx, cy + 5 + up, { label: t('freeRevive'), width: 360, height: 88, onClick: () => this.revive(free, true) });
+      const free: Button = new Button(this, cx, cy + 5 + up, { label: t('freeRevive'), fill: RETRY_GREEN, textColor: '#ffffff', width: 360, height: 88, onClick: () => this.revive(free, true) });
       poki.measure('reward', 'free_revive', 'visible'); // affiché, puis `interact` au clic (RunFlow.reviveFree)
       this.input.keyboard!.on('keydown-ENTER', () => free.trigger());
       this.input.keyboard!.on('keydown-SPACE', () => free.trigger());

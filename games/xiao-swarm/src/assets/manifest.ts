@@ -1,6 +1,6 @@
 import { range, type AssetEntry } from '@xiao/engine';
-import { GLOBE_KINDS } from '../art/upgradeOrbs';
 import { UPGRADE_IDS } from '../data/progression';
+import { PACK_OVERRIDES, type Pack } from './packOverrides';
 
 /**
  * Planches de sprites du jeu (fichiers dans public/assets/). Chaque visuel
@@ -81,8 +81,7 @@ export const ASSETS: AssetEntry[] = [
   { type: 'image', id: 'xp_orb', url: 'fx/xp.webp' },
   // Recrue « bonus +1 » — art-src/bonus_recrue/*.png réduits en WebP, assemblés en une texture `recruit_trooper` (art/recruits.ts).
   ...['globe', 'ring', 'gunner', 'plus_one', 'star'].map((n): AssetEntry => ({ type: 'image', id: `recruit_part_${n}`, url: `recruit/${n}.webp` })),
-  // Globes au sol (power-ups, globe d'upgrade des œufs) et leurs étoiles : images à retoucher (générées une fois par python tools/bake-globes.py, art/upgradeOrbs.ts).
-  ...GLOBE_KINDS.flatMap((k): AssetEntry[] => [{ type: 'image', id: `globe_${k}`, url: `globes/globe_${k}.png` }, { type: 'image', id: `star_${k}`, url: `globes/star_${k}.png` }]),
+  // Globes au sol (power-ups, globe d'upgrade des œufs) et leurs étoiles : plus d'image par sorte, ce sont les pièces de la recrue ci-dessus, recolorées au lancement (art/upgradeOrbs.ts, teintes dans art/globeTints.ts).
   // Slime de base (`slime`, vert).
   // art-src/slime_walk.png (grille 3×3) réduit par node tools/pack-grids.mjs games/xiao-swarm/art-src/slime.pack.json — 9 cases de 82×78, cycle de marche, regarde vers la GAUCHE ; idle = même cycle, plus lent.
   {
@@ -574,10 +573,11 @@ export const ASSETS: AssetEntry[] = [
  * sont chargés d'emblée (on peut rejoindre en cours de partie). Une seule liste `ASSETS` reste la source (la sauvegarde des visionneuses la réécrit).
  */
 const CORE_ALIEN_FILES: string[] = ['aliens/slime.png', 'aliens/gling.png', 'aliens/kamikaze.png', 'ui/powerups/heal.png']; // slime et gling au paquet 1 (14/10) : ils sont dans les toutes premières vagues (tutoriel compris), sinon le dessin procédural s'affichait le temps du chargement du paquet 2 ; y mettre un fichier le garde au démarrage
+// (la barre d'XP, `ui/xp/`, est au paquet 1 depuis le 15/10 : `HudScene.buildXpBar`, construite dès la création de la scène)
 // Paquet 2 aussi : tout ce qui ne se voit qu'après les premières secondes — icônes de power-up, globes et étoiles au sol, pièces de la recrue, bulle et chiffres des critiques, drone de stase
 // (l'écran de choix d'upgrade — carte, slots, titre, relance, étoile, icônes d'upgrade — est au paquet 1 depuis le 15/10 : un level-up rapide ne tombe plus sur « Loading », ~400 Ko de plus au démarrage)
 // (la fusée est chargée sous `fx_rocket_png` puis échangée avec le dessin procédural `fx_rocket`). Tous ont un repli : voir `latePack.onReady`.
-const LATE_PREFIXES = ['fx/rocket.png', 'ui/boss/', 'ui/rewarded.png', 'ui/xp/', 'ui/timeline/', 'ui/powerups/', 'globes/'];
+const LATE_PREFIXES = ['fx/rocket.png', 'ui/boss/', 'ui/rewarded.png', 'ui/timeline/', 'ui/powerups/'];
 // Le globe d'XP (`fx/xp.webp`) est au paquet 1 depuis le 15/10 : il tombe dès le premier alien tué.
 // Paquet 2b (15/10) : chargé juste après 2a. Aliens qui n'apparaissent pas avant ~3 min (first-seen de `data/waves.ts` : kamikaze 30 s, Gling Mère 60 s, toad / spitter 75 s, Rhino Alpha 120 s restent en 2a ; l'œuf de boss aussi, dès le premier boss tué),
 // Scarab (4:30), rhinos jumeaux (7:00) et Giant Crab (10:00, 767 Ko à lui seul), plus la bulle et les chiffres des critiques et le drone de stase.
@@ -599,6 +599,10 @@ const LATE_B_PREFIXES = ['fx/crit/', 'fx/freezebot.png'];
 const isLateB = (e: AssetEntry): boolean => LATE_B_ALIEN_FILES.includes(e.url) || LATE_B_PREFIXES.some((x) => e.url.startsWith(x));
 const isLate = (e: AssetEntry): boolean =>
   !isLateB(e) && !CORE_ALIEN_FILES.includes(e.url) && (e.url.startsWith('aliens/') || LATE_PREFIXES.some((x) => e.url.startsWith(x))); // kamikaze (30 s), pièces de la recrue et icône du medibot (`ui/powerups/heal.png`) au paquet 1 (15/10)
-export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => !isLate(e) && !isLateB(e));
-export const LATE_ASSETS: AssetEntry[] = ASSETS.filter(isLate);
-export const LATE_B_ASSETS: AssetEntry[] = ASSETS.filter(isLateB);
+/** Paquet d'un visuel d'après les règles ci-dessus (sans les exceptions de la vue Paquets). */
+export const defaultAssetPack = (e: AssetEntry): Pack => (isLateB(e) ? '2b' : isLate(e) ? '2a' : 'core');
+/** Paquet d'un visuel : l'exception posée dans la vue Paquets (`PACK_OVERRIDES`), sinon la règle par défaut. */
+export const assetPack = (e: AssetEntry): Pack => PACK_OVERRIDES[e.url] ?? defaultAssetPack(e);
+export const CORE_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === 'core');
+export const LATE_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === '2a');
+export const LATE_B_ASSETS: AssetEntry[] = ASSETS.filter((e) => assetPack(e) === '2b');

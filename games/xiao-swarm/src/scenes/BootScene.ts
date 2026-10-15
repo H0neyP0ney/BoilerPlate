@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { applyAssets, devLog, loadAssets, log, poki, DEV_TOOLS } from '@xiao/engine';
 import { SCENES } from '../config';
-import { ASSETS, CORE_ASSETS } from '../assets/manifest';
+import { installImageFallbacks } from '../art/imageFallbacks';
+import { ASSETS, CORE_ASSETS, LATE_ASSETS, LATE_B_ASSETS } from '../assets/manifest';
 import { latePack } from '../assets/latePack';
 import { makeAlienTextures } from '../art/aliens';
 import { registerDefaultSprites } from '../art/catalog';
@@ -90,6 +91,8 @@ export class BootScene extends Phaser.Scene {
       loadMapZoneOverrides();
       loadNameOverrides();
     }
+    // images du paquet 2 : un repli simple de la même taille porte leur clé jusqu'à l'arrivée du fichier (`latePack` le redessine alors dans cette texture)
+    if (this.assets !== ASSETS) installImageFallbacks(this, [...LATE_ASSETS, ...LATE_B_ASSETS].flatMap((e) => (e.type === 'image' ? [e.id] : [])));
     // Procédural : canvasTexture ignore les clés déjà chargées (PNG 'image' du même id).
     makeRecruitTextures(this); // recrues composées (pièces fournies) avant les recrues procédurales de repli
     makeSoldierTextures(this);
@@ -129,6 +132,7 @@ export class BootScene extends Phaser.Scene {
     if (DEV_TOOLS && poki.getURLParam('waves') !== undefined) return void this.go(SCENES.waves);
     if (DEV_TOOLS && poki.getURLParam('mapedit') !== undefined) return void this.go(SCENES.mapEditor);
     if (DEV_TOOLS && poki.getURLParam('sounds') !== undefined) return void this.go(SCENES.sounds);
+    if (DEV_TOOLS && poki.getURLParam('packs') !== undefined) return void this.go(SCENES.packs);
     const req = readOnlineRequest();
     if (req) {
       setLoadStatus(t('connecting')); // sous la barre de l'écran de chargement HTML

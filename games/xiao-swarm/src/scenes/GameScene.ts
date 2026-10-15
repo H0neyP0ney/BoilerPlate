@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS } from '@xiao/engine';
-import { FREE_GAMES, INTERSTITIALS_ENABLED, SCENES } from '../config';
+import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../config';
 import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
 import type { SoldierClassId } from '../data/classes';
+import { ALIENS, type AlienId } from '../data/aliens';
 import { TUTORIAL } from '../data/tutorial';
 import { startDifficulty } from '../difficultyStart';
 import { MODES, type ModeDef } from '../data/modes';
@@ -30,6 +31,14 @@ import { scoreRows } from '../view/Scoreboard';
 import { Ending } from '../view/Ending';
 import { WorldView } from '../view/WorldView';
 import type { GameOverData } from './GameOverScene';
+
+/**
+ * Nom sous lequel un boss est compté dans l'analytics : les rhinos jumeaux (un seul combat, deux unités) partagent un seul nom,
+ * `boss_rhino_twins` (start, complete, fail) ; sinon l'id de l'alien.
+ */
+function bossAnalyticsId(id: AlienId): string {
+  return ALIENS[id].boss?.twin ? 'boss_rhino_twins' : id;
+}
 
 /**
  * Scène de jeu : relie une Session (qui fait avancer la simulation) à
@@ -325,13 +334,13 @@ export class GameScene extends Phaser.Scene {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown' || e.t === 'bossEnrage') this.events.emit('boss', e); // bandeau / flèche du HUD
     if (e.t === 'boss') this.recorder?.noteBoss(e.alien, e.kind);
-    if (e.t === 'boss') poki.measureOnce('boss', e.alien, 'start');
-    if (e.t === 'bossDown') poki.measureOnce('boss', e.alien, 'complete');
+    if (e.t === 'boss') poki.measureOnce('boss', bossAnalyticsId(e.alien), 'start'); // jumeaux : une seule fois pour les deux
+    if (e.t === 'bossDown') poki.measureOnce('boss', bossAnalyticsId(e.alien), 'complete'); // jumeaux : `bossDown` ne part qu'à la mort du dernier
     if (e.t === 'tutorial') {
       this.trackTutorial(e.phase);
       if (e.phase === 'done') settings.setTutorialDone(true); // terminé : les parties suivantes sautent l'onboarding
     }
-    if (e.t === 'upgradePicked' && e.owner === this.session.localPlayer) poki.measure('upgrade', e.id, e.prism ? 'prism' : 'picked');
+    if (e.t === 'upgradePicked' && e.owner === this.session.localPlayer) poki.measure('upgrade', e.id, 'picked'); // prismatique ou non : une seule ligne par upgrade
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
     // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
     if (e.t === 'gameEnd') {
@@ -344,7 +353,6 @@ export class GameScene extends Phaser.Scene {
       this.closeUpgrade(); // relance coop : plus de choix d'upgrade en cours
       this.shownOffer = '';
     }
-    if (e.t === 'recruited' && e.owner === this.session.localPlayer) poki.measure('recruit', e.cls, 'complete');
   };
 
   private checkEnd(): void {
@@ -490,7 +498,7 @@ export class GameScene extends Phaser.Scene {
       // analytics : à quel niveau de vague la squad est tombée, et sur quel boss (s'il y en avait un en vie)
       poki.measureOnce('death', `level-${this.waveNumber}`, 'reached');
       const boss = sim.aliens.find((a) => a.alive && a.def.boss);
-      if (boss) poki.measureOnce('boss', boss.def.id, 'fail');
+      if (boss) poki.measureOnce('boss', bossAnalyticsId(boss.def.id), 'fail');
     }
     const time = Math.floor(this.runTime);
     const best = online ? time : Math.max(time, storage.get('bestTime', 0));
@@ -524,7 +532,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   async retry(toHome = false): Promise<void> {
-    poki.measure('game', 'retry', 'interact');
     if (this.session.online) return this.retryOnline();
     await this.flow.restart({ ad: this.adBeforeNextGame() });
     this.scene.restart();
@@ -560,17 +567,43 @@ export class GameScene extends Phaser.Scene {
     this.watching = alive[(i + 1) % alive.length].owner;
   }
 
+  /** Dernière position suivie, vitesse estimée de la squad (px/s, lissée) et avance de la caméra dans son sens de course (réglages `VISUAL.cam*`). */
+  private camPrev: { x: number; y: number } | null = null;
+  private readonly camVel = { x: 0, y: 0 };
+  private readonly camLook = { x: 0, y: 0 };
+
+  /**
+   * Suivi de la squad, réglé par `VISUAL.cam*` (menu Réglages > Visuel, Save / Reset) : constante de temps du suivi (indépendante du FPS : la caméra rattrape la
+   * squad en ~3 × ce temps), avance dans le sens de course (la squad n'est plus au centre quand elle fonce, on voit devant), zone morte, vitesse du zoom.
+   */
   private updateCamera(dt: number): void {
     const focus = this.view.squadFocus(this.spectated);
     const cam = this.cameras.main;
     if (focus) {
       // Réapparition à l'autre bout de la carte : on saute au lieu de traverser la carte en glissant.
-      const jump = Math.hypot(focus.x - this.camTarget.x, focus.y - this.camTarget.y) > 900;
-      this.camTarget.x = focus.x;
-      this.camTarget.y = focus.y;
-      if (jump) cam.centerOn(focus.x, focus.y);
+      const jump = Math.hypot(focus.x - this.camTarget.x - this.camLook.x, focus.y - this.camTarget.y - this.camLook.y) > 900;
+      if (jump || !this.camPrev || dt <= 0) {
+        this.camVel.x = this.camVel.y = this.camLook.x = this.camLook.y = 0;
+      } else {
+        const kv = 1 - Math.exp(-dt / 0.2); // vitesse estimée sur la position affichée de la squad
+        this.camVel.x += ((focus.x - this.camPrev.x) / dt - this.camVel.x) * kv;
+        this.camVel.y += ((focus.y - this.camPrev.y) / dt - this.camVel.y) * kv;
+        const speed = Math.hypot(this.camVel.x, this.camVel.y);
+        const reach = (VISUAL.camLookAhead * Math.min(1, speed / CROWD.speed)) / (speed || 1); // pleine avance à la vitesse normale de la squad
+        const kl = 1 - Math.exp(-dt / Math.max(0.02, VISUAL.camLookTime));
+        this.camLook.x += (this.camVel.x * reach - this.camLook.x) * kl;
+        this.camLook.y += (this.camVel.y * reach - this.camLook.y) * kl;
+      }
+      this.camPrev = { x: focus.x, y: focus.y };
+      this.camTarget.x = focus.x + this.camLook.x;
+      this.camTarget.y = focus.y + this.camLook.y;
+      if (jump) cam.centerOn(this.camTarget.x, this.camTarget.y);
     }
-    cam.setZoom(damp(cam.zoom, this.targetZoom(), 2, dt));
+    const lerp = VISUAL.camFollowTime > 0 ? 1 - Math.exp(-dt / VISUAL.camFollowTime) : 1;
+    cam.setLerp(lerp, lerp);
+    if (VISUAL.camDeadzone > 0) cam.setDeadzone(VISUAL.camDeadzone * 2, VISUAL.camDeadzone * 2);
+    else cam.setDeadzone();
+    cam.setZoom(damp(cam.zoom, this.targetZoom(), VISUAL.camZoomSpeed, dt));
   }
 
   /** Zoom auto (dézoome quand la squad grossit) × réglage du joueur. */

@@ -339,6 +339,25 @@ function saveUpgrade(id: string, d: { value: number; maxStacks: number; color?: 
   return { ok: true, message: `Upgrade ${id} enregistrée dans ${rel}` };
 }
 
+/** Teintes des globes au sol (art/globeTints.ts) : une ligne `  <sorte>: 0xrrggbb,` par sorte dans `GLOBE_TINTS`. */
+function saveGlobeTints(d: Record<string, number>): Result {
+  const rel = 'art/globeTints.ts';
+  const src = readSrc(rel);
+  const start = src.indexOf('export const GLOBE_TINTS');
+  const end = start < 0 ? -1 : src.indexOf('};', start);
+  if (end < 0) return { ok: false, message: `GLOBE_TINTS introuvable dans ${rel}` };
+  let block = src.slice(start, end);
+  const missing: string[] = [];
+  for (const [kind, color] of Object.entries(d)) {
+    if (!/^[a-z]+$/.test(kind) || typeof color !== 'number' || !Number.isFinite(color)) continue;
+    const re = new RegExp(String.raw`^(  ${kind}: )0x[0-9a-fA-F]+`, 'm');
+    if (re.test(block)) block = block.replace(re, `$10x${(color & 0xffffff).toString(16).padStart(6, '0')}`);
+    else missing.push(kind);
+  }
+  writeSrc(rel, src, src.slice(0, start) + block + src.slice(end));
+  return { ok: true, message: `Teintes des globes enregistrées dans ${rel}${missing.length ? ` (introuvables : ${missing.join(', ')})` : ''}` };
+}
+
 // ---------- Parties enregistrées (calibration) ----------
 
 /** Écrit une partie enregistrée (`RunRecorder`) dans `docs/bench/runs/` ; lue par `npm run sim:calibrate`. */
@@ -377,6 +396,10 @@ function handle(target: string, data: any): Result {
       return saveSprite(String(data.id), data.props as SpriteProps);
     case 'upgrades':
       return saveUpgrade(String(data.id), data);
+    case 'packs':
+      return replaceDeclaration('assets/packOverrides.ts', /export const PACK_OVERRIDES: Record<string, Pack> = \{/, String(data.code), 'Paquets des assets');
+    case 'globetints':
+      return saveGlobeTints(data as Record<string, number>);
     case 'bench-run':
       return saveBenchRun(data as { mode?: string });
     case 'stats':

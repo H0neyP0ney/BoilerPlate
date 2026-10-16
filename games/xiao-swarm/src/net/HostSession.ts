@@ -14,6 +14,7 @@ import {
   takeSnapshot,
   type ClientMessage,
   type HostMessage,
+  type LobbyInfo,
   type Snapshot,
 } from './Protocol';
 import { TICK_RATE, type Session } from './Session';
@@ -38,6 +39,10 @@ export interface HostSessionOptions {
   botLevel?: BotLevel;
   /** Niveau de difficulté de la room (`normal` par défaut) : l'hôte décide pour tous les joueurs. */
   difficulty?: DifficultyLevel;
+  /** Salle d'attente : la simulation reste figée jusqu'à `startGame()` (l'hôte règle la difficulté, ajoute des bots, attend ses amis). */
+  lobby?: boolean;
+  /** Salle listée dans les parties publiques (information du lobby ; la visibilité réelle est décidée à la création par le transport). */
+  public?: boolean;
 }
 
 interface RemotePlayer {
@@ -81,10 +86,15 @@ export class HostSession implements Session {
   /** Coop : ticks restants avant la relance de la partie (> 0 = écran de fin, simulation figée). */
   private endTicks = 0;
   private frame = 0;
+  /** Salle d'attente (null = partie lancée sans attente). */
+  lobby: LobbyInfo | null = null;
+  private readonly isPublic: boolean;
 
   constructor(opts: HostSessionOptions) {
     this.transport = opts.transport;
     this.roomCode = opts.roomCode;
+    this.isPublic = opts.public ?? true;
+    if (opts.lobby) this.lobby = { started: false, humans: 1, bots: 0, public: this.isPublic };
     this.localPlayer = opts.transport.localId;
     this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true, online: true, difficulty: opts.difficulty });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
@@ -102,6 +112,7 @@ export class HostSession implements Session {
     const id = `bot${++this.botCount}`;
     this.bots.set(id, new CoopBot(id, this.sim.config.seed + 101 * this.botCount, level));
     this.sim.spawnLate(id, this.sim.rng.pick(START_SQUADS));
+    this.updateLobby();
     return id;
   }
 
@@ -110,6 +121,30 @@ export class HostSession implements Session {
     this.inputs.delete(id);
     this.deadSince.delete(id);
     this.sim.removePlayer(id);
+    this.updateLobby();
+  }
+
+  /** Fin de partie (défaite ou victoire) : nouvelle run prête, monde figé, tous les joueurs retrouvent la salle d'attente (l'hôte relance avec Start). */
+  private backToLobby(): void {
+    this.sim.restart();
+    this.lobby ??= { started: true, humans: 1, bots: 0, public: this.isPublic };
+    this.lobby.started = false;
+    this.updateLobby();
+  }
+
+  /** Lance la partie : fin de la salle d'attente pour tous les joueurs. */
+  startGame(): void {
+    if (!this.lobby || this.lobby.started) return;
+    this.lobby.started = true;
+    this.updateLobby();
+  }
+
+  /** Remet l'effectif à jour et le diffuse (changement de joueurs, de bots, départ de la partie). */
+  private updateLobby(): void {
+    if (!this.lobby) return;
+    this.lobby.humans = 1 + this.remotes.size;
+    this.lobby.bots = this.bots.size;
+    this.transport.broadcast('reliable', JSON.stringify({ t: 'lobby', info: this.lobby } satisfies HostMessage));
   }
 
   /** Joueurs présents (hôte, clients et coéquipiers IA). */
@@ -134,9 +169,11 @@ export class HostSession implements Session {
       }
       this.frame++;
       for (const [id, bot] of this.bots) this.inputs.set(id, bot.think(this.sim, dt));
-      if (this.endTicks > 0) {
+      if (this.lobby && !this.lobby.started) {
+        // salle d'attente : le monde est figé (les squads attendent), les snapshots partent quand même
+      } else if (this.endTicks > 0) {
         // écran de fin : le monde est figé jusqu'à la relance
-        if (--this.endTicks === 0) this.sim.restart();
+        if (--this.endTicks === 0) this.backToLobby();
       } else {
         this.sim.step(dt, this.inputs);
         for (const [id, bot] of this.bots) {
@@ -262,8 +299,11 @@ export class HostSession implements Session {
     if (!this.remotes.has(peer)) {
       this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0 });
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));
+      if (this.lobby) this.lobby.humans = 1 + this.remotes.size;
     }
-    this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer, difficulty: this.sim.difficulty });
+    const lobby = this.lobby ?? { started: true, humans: 1 + this.remotes.size, bots: this.bots.size, public: false };
+    this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer, difficulty: this.sim.difficulty, lobby });
+    this.updateLobby();
   }
 
   private readonly onPeerLeft = (peer: string): void => {
@@ -272,6 +312,7 @@ export class HostSession implements Session {
     this.acks.delete(peer);
     this.deadSince.delete(peer);
     this.sim.removePlayer(peer);
+    this.updateLobby();
   };
 }
 

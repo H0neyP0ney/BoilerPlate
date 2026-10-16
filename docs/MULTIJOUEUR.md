@@ -163,3 +163,10 @@ Au total, ≈ −25 à −30 % de débit à charge égale (≈ 94 Ko/s contre �
 
 ## Poki / déploiement
 - Netlib : l'id de jeu doit être un UUID ; **prévenir Poki avant la mise en ligne** (API en bêta) et autoriser leurs serveurs de signalisation / STUN / TURN dans la CSP.
+
+## Menu multijoueur et salle d'attente (16/10, protocole v61)
+- **Entrée** : bouton « Multijoueur » de l'écran d'accueil solo (`HudScene.multiBtn`) → `scenes/MultiplayerScene.ts` : Partie rapide (`?net=auto` : rejoint une salle publique ou en crée une), créer une partie publique / privée, rejoindre par code (champ `<input>` DOM), liste des parties publiques (`listPublicRooms` → `Transport.listRooms`, Netlib `list()`). Une salle **privée** (`host({public:false})`) n'apparaît pas dans la liste : on la rejoint par son code ou son lien (`?room=CODE`, `poki.shareableURL`).
+- **Salle d'attente** (`scenes/LobbyScene.ts`, overlay de `GameScene` tant que `session.lobby` n'est pas `started`) : `HostSession({ lobby: true })` fige la simulation (les snapshots partent quand même) ; l'hôte règle la difficulté, ajoute / retire des bots et appuie sur Start (`startGame()`) ; les clients voient l'effectif (`LobbyInfo`, message `lobby`) et « on attend l'hôte ». Une partie lancée sans salle d'attente (`?net=host` seul) garde l'ancien comportement.
+- URL de dev : `?net=host&lobby=1&public=0`. Test : `npm run sim:lobby` (liste publique / privée, monde figé, bot, Start).
+- **Fin de partie** : défaite ou victoire en ligne → après l'écran de fin (3 s), `HostSession.backToLobby` relance la run, fige le monde et rouvre la salle d'attente chez tous (même pour une partie lancée sans salle) ; l'hôte relance avec Start.
+- **À faire** : `NETLIB_GAME_ID` définitif fourni par Poki, nombre de joueurs / difficulté dans la liste publique (nécessite `customData` de Netlib, non documenté).

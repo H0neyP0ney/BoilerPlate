@@ -1,5 +1,5 @@
 import { Network } from '@poki/netlib';
-import type { Channel, Payload, Transport } from '../net/Transport';
+import type { Channel, Payload, RoomInfo, Transport } from '../net/Transport';
 
 /**
  * Transport basé sur Netlib (lib P2P WebRTC de Poki). C'est le SEUL fichier du jeu
@@ -43,10 +43,16 @@ export class NetlibTransport implements Transport {
     if (!lobby) throw new Error('not-found');
   }
 
-  async findRoom(): Promise<string | null> {
+  async listRooms(): Promise<RoomInfo[]> {
     await this.ready;
     const rooms = await this.net.list();
-    return rooms.find((r) => r.playerCount < r.maxPlayers && !r.hasPassword)?.code ?? null;
+    return rooms
+      .filter((r) => r.public !== false && r.playerCount < r.maxPlayers && !r.hasPassword)
+      .map((r) => ({ code: r.code, playerCount: r.playerCount, maxPlayers: r.maxPlayers }));
+  }
+
+  async findRoom(): Promise<string | null> {
+    return (await this.listRooms())[0]?.code ?? null;
   }
 
   send(peerId: string, channel: Channel, data: Payload): void {

@@ -172,11 +172,19 @@ export class GameScene extends Phaser.Scene {
       this.session.close();
       this.view.arena.destroy();
       this.scene.stop(SCENES.hud);
+      this.scene.stop(SCENES.lobby);
     });
 
     this.scene.launch(SCENES.hud);
+    if (this.inLobby) this.scene.launch(SCENES.lobby); // salle d'attente du coop en ligne : le monde reste figé jusqu'au Start de l'hôte
     this.setupDebug();
     sfx.setVolume(settings.sfxGain());
+  }
+
+  /** Salle d'attente en ligne encore ouverte (l'hôte n'a pas lancé la partie). */
+  get inLobby(): boolean {
+    const lobby = this.session.lobby;
+    return !!lobby && !lobby.started;
   }
 
   update(time: number, delta: number): void {
@@ -192,8 +200,10 @@ export class GameScene extends Phaser.Scene {
       const d = this.ending.moveDir(); // fin de partie : commandes verrouillées, la squad marche vers la fusée
       dir.set(d.x, d.y);
     }
+    if (this.inLobby && !this.scene.isActive(SCENES.lobby)) this.scene.launch(SCENES.lobby); // retour à la salle d'attente après une partie
+    if (this.inLobby) dir.set(0, 0); // salle d'attente : personne ne bouge (et le client ne prédit rien)
     this.session.setLocalInput(dir.x, dir.y);
-    if (this.flow.state === 'ready' && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
+    if (this.flow.state === 'ready' && !this.inLobby && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
 
     // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
     // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.

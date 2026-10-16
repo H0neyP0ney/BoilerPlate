@@ -34,7 +34,9 @@ try {
   };
   const sizes = (s) => s.squads.map((q) => `${q.owner}:${q.size}`).join(' ');
   const sizeHistory = []; // tailles des squads de l'hôte aux derniers ticks : le client affiche l'état d'il y a LAG_TICKS ticks
+  let autoStart = true; // une partie qui se termine en route ramène à la salle d'attente : sauf test dédié, l'hôte relance aussitôt
   const tick = async (client) => {
+    if (autoStart && host.lobby && !host.lobby.started) host.startGame();
     host.advance(1000 / 30, (e) => hostEvents.push(e));
     sizeHistory.push(sizes(host.sim));
     if (sizeHistory.length > LAG_TICKS + 2) sizeHistory.shift();
@@ -45,6 +47,7 @@ try {
   // la partie peut s'être terminée en route (écran de fin : monde figé, puis relance) selon la trajectoire des aliens : les scénarios qui suivent veulent un monde qui tourne
   const ensureRunning = async (client) => {
     for (let guard = 0; host.endTicks > 0 && guard < 600; guard++) await tick(client);
+    if (host.lobby && !host.lobby.started) host.startGame(); // fin de partie : retour à la salle d'attente, l'hôte relance
   };
 
   // 1) L'hôte joue seul 5 s, puis un client rejoint EN COURS de partie.
@@ -540,10 +543,15 @@ try {
   const frozen = hs.time;
   for (let i = 0; i < 30; i++) await tick(client);
   check(Math.abs(hs.time - frozen) < 0.05, 'le monde est figé pendant l\'écran de fin');
+  autoStart = false;
   for (let i = 0; i < 9 * 30; i++) await tick(client);
   check(clientEvents.some((e) => e.t === 'restart'), 'relance annoncée aux clients');
   check(a.alive && b.alive && hs.time < timeAtEnd, 'la partie est relancée : les deux squads de retour, horloge remise à zéro', `t=${hs.time.toFixed(1)} s`);
   check(client.sim.squadOf(client.localPlayer).alive, 'le client voit sa squad de retour');
+  check(host.lobby?.started === false && client.lobby?.started === false, 'retour à la salle d’attente chez les deux joueurs');
+  host.startGame();
+  autoStart = true;
+  for (let i = 0; i < 6; i++) await tick(client);
   // hôte muet (onglet en arrière-plan, gel) : sans snapshot depuis 1,5 s le client le sait, et il le sait de nouveau « vivant » au snapshot suivant
   check(!client.hostStalled, 'hôte actif : pas d’alerte chez le client');
   for (let i = 0; i < 20; i++) client.advance(100, () => {});

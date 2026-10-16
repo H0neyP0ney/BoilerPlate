@@ -1,4 +1,6 @@
-import type { Channel, Payload, Transport } from './Transport';
+import type { Channel, Payload, RoomInfo, Transport } from './Transport';
+
+const MAX_ROOM_PLAYERS = 4;
 
 /**
  * Transport en mémoire : plusieurs participants dans le même processus, sans réseau.
@@ -8,6 +10,7 @@ import type { Channel, Payload, Transport } from './Transport';
  */
 export class LoopbackHub {
   private readonly rooms = new Map<string, LoopbackTransport[]>();
+  private readonly publicCodes = new Set<string>();
   private readonly queue: { due: number; fn: () => void }[] = [];
   private clock = 0;
   /** Latence simulée, en nombre d'appels à `pump()` (1 pump = 1 tick de test) entre l'envoi et la livraison. */
@@ -20,9 +23,10 @@ export class LoopbackHub {
   }
 
   /** @internal */
-  createRoom(t: LoopbackTransport): string {
+  createRoom(t: LoopbackTransport, isPublic: boolean): string {
     const code = `room${this.nextRoom++}`;
     this.rooms.set(code, [t]);
+    if (isPublic) this.publicCodes.add(code);
     return code;
   }
 
@@ -60,8 +64,17 @@ export class LoopbackHub {
     this.queue.push({ due: this.clock + this.latency, fn });
   }
 
+  /** Salles publiques (hors salles privées), avec leur effectif. */
+  publicRooms(): RoomInfo[] {
+    const out: RoomInfo[] = [];
+    for (const [code, room] of this.rooms) {
+      if (this.publicCodes.has(code) && room.length < MAX_ROOM_PLAYERS) out.push({ code, playerCount: room.length, maxPlayers: MAX_ROOM_PLAYERS });
+    }
+    return out;
+  }
+
   publicRoom(): string | null {
-    return this.rooms.keys().next().value ?? null;
+    return this.publicRooms()[0]?.code ?? null;
   }
 
   /** Livre les messages arrivés à échéance (y compris ceux produits pendant la livraison, si la latence est nulle). */
@@ -82,8 +95,12 @@ export class LoopbackTransport implements Transport {
     readonly localId: string,
   ) {}
 
-  async host(): Promise<string> {
-    return this.hub.createRoom(this);
+  async host(opts: { public?: boolean } = {}): Promise<string> {
+    return this.hub.createRoom(this, opts.public ?? false);
+  }
+
+  async listRooms(): Promise<RoomInfo[]> {
+    return this.hub.publicRooms();
   }
 
   async join(code: string): Promise<void> {

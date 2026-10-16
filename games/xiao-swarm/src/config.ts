@@ -300,7 +300,7 @@ export const VISUAL_DEFAULTS = {
   /** Opacité des taches sombres (0 → 1). */
   stainAlpha: 0.6,
   /** Caméra : constante de temps du suivi de la squad (s) ; la caméra la rattrape en ~3 × ce temps. 0 = collée à la squad, plus grand = plus doux et plus en retard (0,13 s ≈ l'ancien 0,12 par image à 60 FPS). */
-  camFollowTime: 0.15,
+  camFollowTime: 0.13,
   /** Caméra : avance (px) dans le sens de course de la squad quand elle va à sa vitesse normale (0 = la squad reste au centre de l'écran). */
   camLookAhead: 0,
   /** Caméra : temps (s) que met l'avance à s'installer ou à revenir quand la squad change de direction ou s'arrête. */
@@ -363,6 +363,8 @@ export const SCENES = {
   hud: 'Hud',
   ending: 'Ending',
   pause: 'Pause',
+  lobby: 'Lobby',
+  multiplayer: 'Multiplayer',
   options: 'Options',
   viewer: 'Viewer',
   obstacles: 'Obstacles',

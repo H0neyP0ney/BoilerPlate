@@ -6,6 +6,7 @@ import type { ModeDef } from '../data/modes';
 import { BotBrain } from '../sim/bots';
 import { Sim } from '../sim/Sim';
 import type { PlayerId, PlayerInput, SimEvent } from '../sim/types';
+import type { LobbyInfo } from './Protocol';
 
 /** Fréquence de la simulation (ticks/s). En réseau : fréquence des inputs/snapshots. */
 export const TICK_RATE = 30;
@@ -50,6 +51,10 @@ export interface Session {
   readonly connection: 'connected' | 'lost';
   /** Client en ligne : l'hôte n'envoie plus rien depuis un moment alors que la connexion tient (onglet de l'hôte en arrière-plan, gel, réseau coupé). Toujours faux ailleurs. */
   readonly hostStalled: boolean;
+  /** Salle d'attente en ligne (null hors ligne ou pour une session lancée sans attente) ; `started` passe à vrai au départ de la partie. */
+  readonly lobby: LobbyInfo | null;
+  /** Hôte : lance la partie pour tous. Sans effet ailleurs. */
+  startGame(): void;
   /** Libère les ressources réseau. */
   close(): void;
 }
@@ -74,6 +79,8 @@ export class LocalSession implements Session {
     this.sim.setDifficulty(level);
   }
   readonly roomCode = null;
+  readonly lobby = null;
+  startGame(): void {}
   readonly connection = 'connected';
   readonly hostStalled = false;
   private readonly loop = new FixedStep(TICK_RATE);

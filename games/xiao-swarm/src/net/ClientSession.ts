@@ -10,6 +10,7 @@ import {
   PROTOCOL_VERSION,
   type ClientMessage,
   type HostMessage,
+  type LobbyInfo,
   type Snapshot,
 } from './Protocol';
 import { TICK_RATE, type Session } from './Session';
@@ -47,6 +48,11 @@ export class ClientSession implements Session {
   setDifficulty(): void {
     /* le niveau est celui de l'hôte */
   }
+  startGame(): void {
+    /* seul l'hôte lance la partie */
+  }
+  /** Salle d'attente annoncée par l'hôte (mise à jour à chaque changement). */
+  lobby: LobbyInfo | null;
   connection: 'connected' | 'lost' = 'connected';
   /** Temps (ms) écoulé chez ce client depuis le dernier snapshot de l'hôte. */
   private sinceSnapshot = 0;
@@ -73,6 +79,7 @@ export class ClientSession implements Session {
   ) {
     this.localPlayer = welcome.you;
     this.hostId = welcome.host;
+    this.lobby = welcome.lobby.started ? null : welcome.lobby;
     // xp : la jauge et les choix d'upgrade s'affichent (la simulation, elle, tourne chez l'hôte)
     this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES] ?? MODES.survival, seed: welcome.seed, players: [], xp: true, online: true, difficulty: parseDifficultyLevel(welcome.difficulty) });
     this.mirror = new Mirror(this.sim, welcome.you);
@@ -194,6 +201,7 @@ export class ClientSession implements Session {
     }
     const msg = parseMessage<HostMessage>(data);
     if (msg?.t === 'difficulty') this.sim.setDifficulty(parseDifficultyLevel(msg.level)); // l'hôte a changé le niveau de la room
+    if (msg?.t === 'lobby') this.lobby = msg.info; // aussi le retour à la salle d'attente après une partie
     if (msg?.t !== 'events') return;
     if (INTERP_DELAY_MS <= 0 || msg.seq <= this.appliedSeq) this.pushEvents(msg.list);
     else this.eventBuffer.push({ seq: msg.seq, list: msg.list });

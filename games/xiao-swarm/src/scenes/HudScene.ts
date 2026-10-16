@@ -87,6 +87,8 @@ export class HudScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Container;
   /** Les trois boutons de niveau (Normal / Expert / Impossible), en colonne à droite de l'écran d'arrivée : visibles tant que le joueur n'a pas bougé. Seul Normal est actif pour l'instant. */
   private modeButtons!: Phaser.GameObjects.Container;
+  /** Écran d'accueil solo : ouvre le menu multijoueur (`MultiplayerScene`). */
+  private multiBtn!: Button;
   /** Niveau dont les boutons sont dessinés (pour les reconstruire quand il change). */
   private modeShown: DifficultyLevel | null = null;
   private hintLabel!: Phaser.GameObjects.Text;
@@ -244,6 +246,15 @@ export class HudScene extends Phaser.Scene {
     this.musicBtn = this.makeMusicButton();
     this.hint = this.makeHint();
     this.modeButtons = this.makeModeButtons();
+    this.multiBtn = new Button(this, 0, 0, {
+      label: t('multiplayer'),
+      variant: 'secondary',
+      width: 210,
+      height: 58,
+      onClick: () => {
+        if (!this.scene.isActive(SCENES.multiplayer)) this.scene.launch(SCENES.multiplayer);
+      },
+    });
     // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
     if (DEV_TOOLS && staleDropped.length > 0) {
       const note = this.add
@@ -294,7 +305,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline (paquet 2a pas arrivé)
     this.hint.setVisible(g.flow.state === 'ready');
     this.refreshModeButtons();
-    this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active); // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas
+    this.multiBtn.setVisible(g.flow.state === 'ready' && !s.online && !s.sim.tutorial?.active && !this.scene.isActive(SCENES.multiplayer)); // écran d'accueil solo seulement
+    this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active && !g.inLobby); // pas dans la salle d'attente : son écran a ses propres boutons // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas
     if (!this.latePackAsked && g.flow.state === 'ready') {
       // paquet 2 des visuels : chargé dès que le joueur est sur la scène de jeu avec l'indice des commandes affiché (pas pendant l'écran de choix d'upgrade)
       this.latePackAsked = true;
@@ -845,6 +857,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     devBtns.forEach((b, i) => b.setPosition(14 + 22 + Math.floor(i / rows) * (44 + 8), bottomY - (i % rows) * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.hint.setPosition(width / 2, height * 0.62);
+    this.multiBtn.setPosition(width - 14 - 105, height / 2 + 160);
     this.modeButtons.setPosition(width - 14 - 105, height / 2); // à droite, au centre verticalement, les uns au-dessus des autres
     this.respawnText.setPosition(width / 2, height * 0.22);
     this.hostText.setPosition(width / 2, height * 0.34);

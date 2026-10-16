@@ -522,9 +522,12 @@ try {
       sq.vel.x = 200;
       sq.vel.y = 0; // elle court vers l'est
       const saved = DIFFICULTY.ambushChance;
+      const savedRing = DIFFICULTY.ringChance;
       DIFFICULTY.ambushChance = chance;
+      DIFFICULTY.ringChance = 0; // le cercle est prioritaire : on l'écarte pour tester l'embuscade seule
       sim.waves.trigger(3);
       DIFFICULTY.ambushChance = saved;
+      DIFFICULTY.ringChance = savedRing;
       return { sq, aliens: sim.aliens.filter((a) => a.alive && !a.def.boss) };
     };
     const yes = run(1);
@@ -533,6 +536,92 @@ try {
     const no = run(0);
     const far = no.aliens.filter((a) => Math.hypot(a.x - no.sq.center.x, a.y - no.sq.center.y) > 600).length;
     check(no.aliens.length > 0 && far === no.aliens.length, 'embuscade : chance à 0, la vague apparaît hors écran comme avant', `${far}/${no.aliens.length} aliens à plus de 600 px`);
+  }
+
+  // ---- vague en cercle : toute la vague sort du sol en cercle autour de la squad d'un joueur
+  {
+    const { sim } = fresh(40);
+    if (sim.tutorial) sim.tutorial = null;
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance];
+    DIFFICULTY.ambushChance = 0;
+    DIFFICULTY.ringChance = 1;
+    sim.waves.trigger(3);
+    [DIFFICULTY.ambushChance, DIFFICULTY.ringChance] = saved;
+    const aliens = sim.aliens.filter((a) => a.alive && !a.def.boss);
+    const dists = aliens.map((a) => Math.hypot(a.x - sq.center.x, a.y - sq.center.y));
+    const quadrants = new Set(aliens.map((a) => `${a.x > sq.center.x}|${a.y > sq.center.y}`));
+    check(aliens.length >= 4 && dists.every((d) => d > 200 && d < 420) && quadrants.size >= 3 && aliens.every((a) => a.age < 0.1), 'cercle : la vague entière sort du sol en cercle autour de la squad', `${aliens.length} aliens à ${Math.min(...dists).toFixed(0)}-${Math.max(...dists).toFixed(0)} px, ${quadrants.size} quadrants`);
+  }
+
+  // ---- la toute première vague de la partie n'est jamais en cercle (même avec une chance à 1), la suivante l'est
+  {
+    const { sim } = fresh(41);
+    if (sim.tutorial) sim.tutorial = null;
+    const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance];
+    DIFFICULTY.ambushChance = 0;
+    DIFFICULTY.ringChance = 1;
+    sim.waves.reset(); // début de partie : aucune vague partie
+    const sq = sim.squadOf('p1');
+    const spread = () => {
+      const aliens = sim.aliens.filter((a) => a.alive && !a.def.boss);
+      return { n: aliens.length, d: aliens.map((a) => Math.hypot(a.x - sq.center.x, a.y - sq.center.y)) };
+    };
+    clearAliens(sim);
+    sim.waves.trigger(1);
+    const first = spread();
+    clearAliens(sim);
+    sim.waves.trigger(1);
+    const second = spread();
+    [DIFFICULTY.ambushChance, DIFFICULTY.ringChance] = saved;
+    check(first.n >= 3 && first.d.every((d) => d > 600), 'première vague : jamais en cercle (chance à 1), elle apparaît hors écran', `${first.n} aliens à plus de ${Math.min(...first.d).toFixed(0)} px`);
+    check(second.n >= 3 && second.d.every((d) => d > 200 && d < 420), 'deuxième vague : en cercle autour de la squad', `${second.n} aliens à ${Math.min(...second.d).toFixed(0)}-${Math.max(...second.d).toFixed(0)} px`);
+  }
+
+  // ---- vague en cercle rejouée pendant un boss : aussi en cercle, mais sans globe d'XP
+  {
+    const { sim } = fresh(40);
+    if (sim.tutorial) sim.tutorial = null;
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance];
+    DIFFICULTY.ambushChance = 0;
+    DIFFICULTY.ringChance = 1;
+    sim.waves._replaying = true;
+    sim.waves.trigger(3);
+    sim.waves._replaying = false;
+    [DIFFICULTY.ambushChance, DIFFICULTY.ringChance] = saved;
+    const aliens = sim.aliens.filter((a) => a.alive && !a.def.boss);
+    const dists = aliens.map((a) => Math.hypot(a.x - sq.center.x, a.y - sq.center.y));
+    check(aliens.length >= 4 && dists.every((d) => d > 200 && d < 420) && aliens.every((a) => a.noXp), 'cercle : un rejeu pendant un boss sort aussi en cercle, sans XP', `${aliens.length} aliens à ${Math.min(...dists).toFixed(0)}-${Math.max(...dists).toFixed(0)} px, tous sans XP`);
+  }
+
+  // ---- un alien qui sort du sol ou s'enterre n'est jamais repoussé (onde de choc du level up, explosion, recul des coups)
+  {
+    const { sim, step } = fresh(40);
+    if (sim.tutorial) sim.tutorial = null;
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    for (const s of sq.soldiers) s.invulnerable = 1e9;
+    const c = sq.center;
+    const make = (dy) => {
+      sim.horde.spawnAt('slime', c.x + 120, c.y + dy);
+      return sim.aliens[sim.aliens.length - 1];
+    };
+    const emerging = make(-60); // vient d'apparaître : sort de son trou
+    const sinking = make(0);
+    const free = make(60);
+    free.age = 5; // sorti depuis longtemps
+    sinking.age = 5;
+    sinking.sinkT = 0.6; // s'enfonce avant d'être recyclé
+    for (const al of [emerging, sinking, free]) al.px = al.x, al.py = al.y;
+    const before = [emerging, sinking, free].map((al) => ({ x: al.x, y: al.y }));
+    sim.shockwave(c.x, c.y, 640, 460, 0.5, 0.2); // onde de level up
+    sim.addBlast(c.x + 100, c.y, 160, 0, 'soldiers', 'p1', 400); // explosion qui repousse
+    step(6);
+    const moved = [emerging, sinking, free].map((al, i) => Math.hypot(al.x - before[i].x, al.y - before[i].y));
+    check(moved[0] < 1 && moved[1] < 1 && moved[2] > 20, "repoussement : un alien qui sort du sol ou s’enfonce n’est pas repoussé (onde de choc, explosion), un alien libre l’est", `sort ${moved[0].toFixed(1)} px · s'enfonce ${moved[1].toFixed(1)} px · libre ${moved[2].toFixed(1)} px`);
   }
 
   // ---- aimant (power-up) : aspire globes d'XP, recrues et power-ups de TOUTE la carte

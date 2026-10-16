@@ -381,6 +381,16 @@ export class Horde {
     return !this.isEmerging(a) && this.burial(a) !== 'full';
   }
 
+  /**
+   * Un alien peut être repoussé (onde de choc du level up / du revive, explosions, recul des coups) sauf quand il s'enterre ou se déterre : sortie de son trou d'apparition,
+   * enfoncement avant le recyclage (`sinkT`), lurker / Scarab enterrés ou en train de l'être (`lurkPhase` > 0).
+   */
+  knockable(a: AlienState): boolean {
+    if (this.isEmerging(a) || a.sinkT > 0) return false;
+    if ((a.def.lurk || a.def.burrow) && a.lurkPhase > 0) return false;
+    return true;
+  }
+
   isEmerging(a: AlienState): boolean {
     return !a.def.lurk && !a.revived && !a.instant && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
   }

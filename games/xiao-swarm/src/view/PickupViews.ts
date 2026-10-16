@@ -323,6 +323,9 @@ export class PickupViews {
    * Capsule bleu foncé « soldats / max » posée sur le barycentre de l'escouade. Le barycentre est la moyenne des positions
    * AFFICHÉES (interpolées) des soldats, puis lissée : le centre de la simulation (centroïde robuste) sautait d'un tick à l'autre.
    */
+  /** Capsules « soldats / max » masquées (écrans titre). */
+  hideCounts = false;
+
   private syncCounts(): void {
     const seen = new Set<PlayerId>();
     for (const sq of this.sim.squads) {
@@ -362,6 +365,7 @@ export class PickupViews {
         cap.g.fillStyle(0x0b1a4d, 0.92).fillRoundedRect(-w / 2, -13, w, 26, 13);
         cap.g.lineStyle(2, 0x3f6fe0, 0.9).strokeRoundedRect(-w / 2, -13, w, 26, 13);
       }
+      cap.box.setVisible(!this.hideCounts);
       cap.box.setPosition(cap.x, cap.y - CAPSULE_LIFT - (n === 1 ? CAPSULE_LIFT_ALONE : 0)).setScale(CAPSULE_SCALE);
     }
     for (const [owner, cap] of this.counts) {

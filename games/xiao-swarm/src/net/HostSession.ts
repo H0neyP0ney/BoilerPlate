@@ -125,7 +125,7 @@ export class HostSession implements Session {
   }
 
   /** Fin de partie (défaite ou victoire) : nouvelle run prête, monde figé, tous les joueurs retrouvent la salle d'attente (l'hôte relance avec Start). */
-  private backToLobby(): void {
+  backToLobby(): void {
     this.sim.restart();
     this.lobby ??= { started: true, humans: 1, bots: 0, public: this.isPublic };
     this.lobby.started = false;

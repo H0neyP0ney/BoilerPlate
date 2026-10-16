@@ -58,9 +58,15 @@ export class Button extends Phaser.GameObjects.Container {
         fontSize: `${Math.round(height * 0.4)}px`,
         color: textColor,
         fontStyle: 'bold',
+        align: 'center', // libellé sur plusieurs lignes : centré
       })
       .setOrigin(0.5);
     this.add(label);
+    if (variant !== 'rewarded') {
+      // texte trop long (ou sur plusieurs lignes) : réduit pour rentrer dans le bouton, en largeur comme en hauteur
+      const fit = Math.min(1, (width - 24) / label.width, (height - 8) / label.height);
+      if (fit < 1) label.setScale(fit);
+    }
 
     if (variant === 'rewarded') {
       // icône du jeu (texture `REWARDED_ICON`, si elle est chargée) ; sinon la caméra vidéo dessinée par défaut
@@ -106,9 +112,10 @@ export class Button extends Phaser.GameObjects.Container {
     this.onClick();
   }
 
-  setEnabled(value: boolean): this {
+  /** `dim` faux : un bouton désactivé garde son opacité pleine (ex. niveaux de difficulté verrouillés, déjà marqués d'un cadenas). */
+  setEnabled(value: boolean, dim = true): this {
     this.enabled = value;
-    this.setAlpha(value ? 1 : 0.5);
+    this.setAlpha(value || !dim ? 1 : 0.5);
     return this;
   }
 }

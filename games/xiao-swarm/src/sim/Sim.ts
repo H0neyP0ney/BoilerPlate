@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -132,7 +132,7 @@ export class Sim {
     this.tutorial = config.tutorial ? new Tutorial(this) : null;
     this.waves = new WaveRunner(
       config.mode.waves,
-      (type, count, ambush) => {
+      (type, count, arrival, ringRoll = 0) => {
         // Difficulté dynamique : chaque joueur de la partie en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75). Les joueurs
         // à terre comptent aussi (on peut les réanimer : la charge ne retombe pas quand un équipier tombe) ; ceux qui ont quitté la partie, non. Un boss,
         // lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de squads avant le 08/10).
@@ -148,9 +148,15 @@ export class Sim {
           // chaque joueur en plus ajoute `DIFFICULTY.extraPlayerAliens` (+75 %) d'aliens à la vague : le total est réparti entre les squads VIVANTES (seules à pouvoir en être entourées)
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
+          if (arrival === 'ring' && !this.tutorial?.active) {
+            // vague en cercle : toute la vague (les parts de toutes les squads) sort du sol autour de la squad d'UN joueur, tirée au hasard (`ringRoll`, le même pour tous les groupes de la vague)
+            const target = squads[Math.min(squads.length - 1, Math.floor(ringRoll * squads.length))];
+            this.horde.spawnRing(target.center, type, Math.min(cap, Math.round(count * playersMul)), RING.radius, this.rng.range(0, Math.PI * 2)); // même cercle que la dernière vague du tutoriel (`Horde.spawnRing`)
+            return;
+          }
           for (const sq of squads) {
             const n = Math.min(cap, Math.round(count * share));
-            if (ambush) this.horde.spawnAhead(sq, type, n); // vague en embuscade : sort du sol devant la squad
+            if (arrival) this.horde.spawnAhead(sq, type, n); // vague en embuscade : sort du sol devant la squad
             else this.horde.spawnNear(sq, type, n, dist);
           }
         }
@@ -582,8 +588,10 @@ export class Sim {
     if (sq) sq.dealt += effective;
     u.shieldT = 0; // tout coup relance le délai de régénération du bouclier
     u.hp -= this.absorb(u, amount);
-    u.kx += (dirX * 40) / u.mass;
-    u.ky += (dirY * 40) / u.mass;
+    if (this.horde.knockable(u)) {
+      u.kx += (dirX * 40) / u.mass;
+      u.ky += (dirY * 40) / u.mass;
+    }
     this.events.push({ t: 'hit', id: u.id });
     if (u.hp <= 0) this.killAlien(u, attacker, false, dirX, dirY);
   }
@@ -720,6 +728,7 @@ export class Sim {
           const d = Math.hypot(dx, dy) || 1;
           if (d > front) continue;
           h = { dx: dx / d, dy: dy / d, k: (1 - (d / w.r) * 0.6) * w.speed * (a.def.capture ? 0.35 : 1), left: w.duration }; // les bulles sont difficiles à repousser
+          if (!this.horde.knockable(a)) h.k = 0; // sort ou rentre dans le sol : jamais repoussé par cette onde (même s'il finit de sortir avant qu'elle ne s'éteigne)
           w.hit.set(a.id, h);
           if (w.lethal && !a.def.boss) {
             // revive gratuit : l'onde détruit ce qu'elle touche (les boss sont seulement repoussés)
@@ -1051,8 +1060,10 @@ export class Sim {
     const dy = u.y - b.y;
     const d = Math.hypot(dx, dy) || 1;
     if (d > b.r + u.radius) return;
-    u.kx += ((dx / d) * b.knock) / u.mass;
-    u.ky += ((dy / d) * b.knock) / u.mass;
+    if (u.kind !== 'alien' || this.horde.knockable(u)) {
+      u.kx += ((dx / d) * b.knock) / u.mass;
+      u.ky += ((dy / d) * b.knock) / u.mass;
+    }
     this.damage(u, b.dmg, b.owner);
     if (b.poison && u.kind === 'soldier' && u.alive) u.poison = Math.max(u.poison, b.poison); // empoisonné (ou durée remise à plein)
   }

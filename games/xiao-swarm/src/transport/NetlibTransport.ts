@@ -47,7 +47,7 @@ export class NetlibTransport implements Transport {
     await this.ready;
     const rooms = await this.net.list();
     return rooms
-      .filter((r) => r.public !== false && r.playerCount < r.maxPlayers && !r.hasPassword)
+      .filter((r) => r.public !== false && r.playerCount > 0 && r.playerCount < r.maxPlayers && !r.hasPassword)
       .map((r) => ({ code: r.code, playerCount: r.playerCount, maxPlayers: r.maxPlayers }));
   }
 

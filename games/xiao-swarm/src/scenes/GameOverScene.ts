@@ -61,7 +61,7 @@ export class GameOverScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(cx, cy - 130 - up, t('survived', { time: fmt(data.time), kills: data.kills }), {
+      .text(cx, cy - 130 - up, t('survived', { time: fmt(data.time) }), {
         fontFamily: theme.font,
         fontSize: '24px',
         color: PALETTE.textDim,
@@ -111,7 +111,9 @@ export class GameOverScene extends Phaser.Scene {
     if (this.busy) return;
     this.busy = true;
     this.scene.stop();
-    await this.gameScene.retry();
+    // « Play again » : retour à l'écran Solo (choix de la difficulté) ; en ligne (connexion perdue), au menu multijoueur
+    if (!this.gameScene.session.online) this.gameScene.registry.set('openScreen', SCENES.solo);
+    await this.gameScene.retry(true);
   }
 
   private async revive(button: Button, free = false): Promise<void> {

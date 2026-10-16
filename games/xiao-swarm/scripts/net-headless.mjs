@@ -224,7 +224,7 @@ try {
   const lobs = hs.combat.projectiles.active.filter((p) => p.lob); // les balles des soldats déjà en vol ne comptent pas
   check(lobs.length === 3 && lobs.every((p) => p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${lobs.length}`);
   // projectiles : identifiants stables, le client garde le MÊME objet d'un snapshot à l'autre (lissage) et le retrouve par id
-  for (let i = 0; i < 6 && client.sim.combat.projectiles.active.length < 3; i++) await tick(client); // le snapshot n'arrive pas à chaque tick
+  for (let i = 0; i < 8 && (client.sim.combat.projectiles.active.length < 3 || !client.sim.combat.projectiles.active.some((p) => p.lob)); i++) await tick(client); // le snapshot n'arrive pas à chaque tick (ni la même parité d'une partie à l'autre) : on attend de voir les boules en cloche
   const projBefore = new Map(client.sim.combat.projectiles.active.map((p) => [p.id, p]));
   await tick(client);
   const projSame = [...client.sim.combat.projectiles.active].filter((p) => projBefore.get(p.id) === p).length;
@@ -406,7 +406,11 @@ try {
     const names = [1, 1.4167, 1.8333, 2.25, 2.6667, 3.0833, 3.5].map((m) => damageTier(m).texture.replace('fx_blaster_', '')).join(' > ');
     check(names === 'blue > green > yellow > orange > purple > pink > red' && damageTier(0.9).texture === 'fx_blaster_blue' && projectileTexture('fx_bolt_green', 3) === 'fx_bolt_green', 'paliers de dégâts : bleu > vert > jaune > orangé > violet > rose > rouge', names); }
   // arrivée tardive : upgrades au hasard pour rejoindre le niveau commun, squad à 60 % de l'effectif max des autres (comme un revive)
-  { const lv = hs.sharedLevel;
+  { if (hs.sharedLevel <= 1) { // la partie s'est terminée et relancée en route (selon la trajectoire des aliens) : le niveau commun est reparti de 1, on le remonte
+      await ensureRunning(client);
+      a.gainXp(a.xpNeeded - a.xp + 0.01);
+      for (let i = 0; i < 60; i++) { resolveChoices(); await tick(client); } }
+    const lv = hs.sharedLevel;
     const peak = Math.max(...hs.squads.map((q) => q.peakComposition.length));
     hs.spawnLate('late1', ['trooper']);
     const ls = hs.squadOf('late1');
@@ -460,6 +464,7 @@ try {
   hs.aliens.length = 0;
   hs.horde.spawnAt('boss_crab', a.center.x - 300, a.center.y);
   const heavy = hs.aliens[0];
+  heavy.age = 5; // sorti de son trou depuis longtemps : un alien qui sort du sol n'est pas repoussé
   const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
   resolveChoices(); // plus de choix en attente
   for (let round = 0; round < 3; round++) {

@@ -9,5 +9,5 @@ import { settings } from './settings';
 export function startDifficulty(onboarding: boolean): DifficultyLevel {
   const url = poki.getURLParam('difficulty');
   if (url) return parseDifficultyLevel(url);
-  return onboarding ? 'normal' : settings.difficulty;
+  return onboarding ? 'normal' : settings.clampDifficulty(settings.difficulty); // un niveau pas encore débloqué retombe sur le dernier accessible
 }

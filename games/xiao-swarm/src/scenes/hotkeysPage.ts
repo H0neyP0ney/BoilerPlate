@@ -82,7 +82,7 @@ export function buildHotkeysPage(scene: Phaser.Scene, onBack: () => void): void 
     y += ROW_H;
   }
 
-  const note = text(0, y + 26, t('keysNote'), 17, PALETTE.textDim, [0.5, 0.5]);
+  const note = text(0, y + 26, '', 17, PALETTE.textDim, [0.5, 0.5]);
   box.add(note);
   const buttonsY = y + 82;
   const reset = new Button(scene, -128, buttonsY, {
@@ -118,7 +118,7 @@ export function buildHotkeysPage(scene: Phaser.Scene, onBack: () => void): void 
   function warn(message: string): void {
     warnTimer?.remove();
     note.setText(message).setColor('#ff7a6a');
-    warnTimer = scene.time.delayedCall(1800, () => note.setText(t('keysNote')).setColor(PALETTE.textDim));
+    warnTimer = scene.time.delayedCall(1800, () => note.setText('').setColor(PALETTE.textDim));
   }
 
   scene.input.keyboard!.on('keydown', (e: KeyboardEvent) => {

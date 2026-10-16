@@ -158,6 +158,11 @@ export class WorldView {
   private readonly colors = new Map<PlayerId, number>();
   /** Bulles d'upgrade, power-ups, globes, compteurs d'escouade. */
   private readonly pickups: PickupViews;
+
+  /** Cache les capsules d'effectif des squads (écrans titre). */
+  set hideSquadCounts(hidden: boolean) {
+    this.pickups.hideCounts = hidden;
+  }
   /** Coffres des boss et globes d'upgrade. */
   private readonly loot: LootViews;
   /** Halos d'apparition en cours : ils suivent leur soldat / leur squad au lieu de rester à l'endroit où ils sont nés. */
@@ -202,6 +207,8 @@ export class WorldView {
 
   /** Pas de colonne d'arrivée avant cet instant (ms) : départ de partie, réapparition, relance. */
   private quietUntil = 0;
+  /** Premier passage de `syncUnits` : les soldats déjà là à la création de la vue (début de partie, relance) n'ont jamais de colonne d'arrivée, quel que soit le temps que la scène a mis à démarrer. */
+  private firstUnitSync = true;
   /** Upgrades prises dont le texte flottant attend la fermeture de l'écran de choix. */
   private pickTexts: Extract<SimEvent, { t: 'upgradePicked' }>[] = [];
   /** Dernière position de chaque globe d'XP vu : à sa disparition, près de ma squad, on joue le bip de ramassage. */
@@ -675,7 +682,7 @@ export class WorldView {
             if (this.onScreen(x, y, 120)) this.fx.iceShards(x, y); // glaçon touché par un allié : éclats et petits blocs de glace
           };
           this.soldiers.set(s.id, v);
-          if (this.scene.time.now > this.quietUntil) {
+          if (!this.firstUnitSync && this.scene.time.now > this.quietUntil) {
             // nouvelle unité dans une squad : la colonne bleue suit le soldat
             const view = v;
             this.followers.push({ parts: this.fx.column(s.x, s.y, 0x4aa8ff, FX.gain.columnHeight, FX.gain.columnMs), pos: () => ({ x: view.rx, y: view.ry }) });
@@ -688,6 +695,7 @@ export class WorldView {
       }
     }
     this.prune(this.soldiers);
+    this.firstUnitSync = false;
 
     for (const v of this.aliens.values()) v.seen = false;
     for (const a of this.sim.aliens) {

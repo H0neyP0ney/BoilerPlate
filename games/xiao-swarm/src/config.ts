@@ -48,6 +48,8 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
 export const ALIEN_SPAWN_HOLD = 0.7;
 /** Vague en embuscade (chance : `DIFFICULTY.ambushChance`) : le groupe sort du sol à `ahead` px DEVANT la squad (dans son sens de course ; direction au hasard si elle est immobile), dispersé de ±`spread` px, avec l'animation d'apparition habituelle. */
 export const AMBUSH = { ahead: 330, spread: 60 };
+/** Vague en cercle (chance : `DIFFICULTY.ringChance`) : tous les aliens de la vague sortent du sol en CERCLE autour de la squad d'UN joueur, à `radius` px de son centre (juste hors écran), avec l'animation d'apparition habituelle (`Horde.spawnRing`, la même fonction que la dernière vague du tutoriel). */
+export const RING = { radius: 340 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -184,8 +186,10 @@ export const DIFFICULTY_DEFAULTS = {
   /** Plafond d'aliens à l'apparition par joueur vivant (survie). */
   maxAliensPerPlayer: 150, // 100 × 1,5 (l'ancien `alienCountMul` est intégré aux effectifs des vagues et à ce plafond, 09/10)
   // ---- vagues (`WaveRunner`)
-  /** Chance qu'une vague (hors boss et vagues rejouées) soit une embuscade : ses aliens sortent du sol juste devant la squad (`AMBUSH`, `Horde.spawnAhead`). 0 = jamais. */
+  /** Chance qu'une vague (hors boss et configurations forcées ; les vagues rejouées pendant un boss comprises) soit une embuscade : ses aliens sortent du sol juste devant la squad (`AMBUSH`, `Horde.spawnAhead`). 0 = jamais. */
   ambushChance: 0.1,
+  /** Chance qu'une vague (hors boss, configurations forcées et tutoriel ; les vagues rejouées pendant un combat de boss peuvent aussi sortir en cercle) sorte du sol en cercle autour de la squad d'UN joueur tiré au hasard (`RING`, `Horde.spawnRing`). Prioritaire sur l'embuscade. 0 = jamais. */
+  ringChance: 0.1,
   /** Mélange des vagues (`WaveRunner.trigger`) : une vague tirée au hasard (jamais un boss ni une configuration forcée) reçoit un groupe « invité » d'un niveau voisin (L−1 ou L+1). Chance de l'invité (1 = toujours, comme avant ; 0 = vagues exactement comme écrites dans le Gestionnaire). */
   waveGuestChance: 1,
   /** Part du groupe invité ajoutée à la vague : nombre du groupe tiré × cette valeur, arrondi, au moins 1. */
@@ -365,6 +369,8 @@ export const SCENES = {
   pause: 'Pause',
   lobby: 'Lobby',
   multiplayer: 'Multiplayer',
+  title: 'Title',
+  solo: 'SoloSetup',
   options: 'Options',
   viewer: 'Viewer',
   obstacles: 'Obstacles',

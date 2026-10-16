@@ -55,7 +55,8 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
   {
     title: 'Vagues',
     specs: [
-      { key: 'ambushChance', label: 'Chance de vague en embuscade', min: 0, max: 1, step: 0.01, hint: "Chance qu'une vague (hors boss et vagues rejouées) sorte du sol juste devant la squad, dans son sens de course" },
+      { key: 'ambushChance', label: 'Chance de vague en embuscade', min: 0, max: 1, step: 0.01, hint: "Chance qu'une vague (hors boss ; rejeux pendant un boss compris) sorte du sol juste devant la squad, dans son sens de course" },
+      { key: 'ringChance', label: 'Chance de vague en cercle', min: 0, max: 1, step: 0.01, hint: "Chance qu'une vague (hors boss et tutoriel ; rejeux pendant un boss compris) sorte du sol en cercle autour de la squad d'un joueur tiré au hasard" },
       { key: 'waveGuestChance', label: "Mélange : chance d'un invité", min: 0, max: 1, step: 0.05, hint: "Chance qu'une vague tirée au hasard (hors boss) reçoive un groupe invité d'un niveau voisin (L−1 ou L+1). 0 = vagues exactement comme dans le Gestionnaire" },
       { key: 'waveGuestShare', label: "Mélange : part de l'invité", min: 0.1, max: 1, step: 0.05, hint: "Nombre du groupe invité = nombre du groupe tiré × cette valeur (arrondi, au moins 1)" },
       { key: 'waveGuestReplayChance', label: 'Mélange : chance pendant un boss', min: 0, max: 1, step: 0.05, hint: "Même chance d'invité, pour les vagues rejouées pendant un combat de boss (0 = rejeux purs)" },

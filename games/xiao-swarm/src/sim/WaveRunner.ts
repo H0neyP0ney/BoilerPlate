@@ -42,6 +42,8 @@ export class WaveRunner {
   private capped = false;
   /** Vrai pendant un envoi rejoué (combat de boss) : ces aliens ne laissent pas de globes d'XP. */
   private _replaying = false;
+  /** La première vague de la partie (hors configuration forcée et rejeu) est déjà partie ? Elle ne sort JAMAIS en cercle autour d'une squad : le cercle ne vaut qu'à partir de la deuxième. */
+  firstWaveSent = false;
   /** Instant (timeline) de la dernière apparition de boss. */
   private bossAt: number | null = null;
   private fighting = false;
@@ -52,7 +54,8 @@ export class WaveRunner {
 
   constructor(
     private readonly script: WaveScript,
-    private readonly spawn: (type: AlienId, count: number, ambush?: boolean) => void,
+    /** `arrival` : `'ahead'` = embuscade devant chaque squad, `'ring'` = cercle autour de la squad que désigne `ringRoll` (0-1, le même pour tous les groupes de la vague). */
+    private readonly spawn: (type: AlienId, count: number, arrival?: 'ahead' | 'ring', ringRoll?: number) => void,
     private readonly rng: Rng,
     private readonly hooks?: WaveRunnerHooks,
   ) {
@@ -97,6 +100,7 @@ export class WaveRunner {
   }
 
   reset(): void {
+    this.firstWaveSent = false; // nouvelle partie : la première vague ne sera de nouveau jamais en cercle
     this._time = 0;
     this._cursor = 0;
     this.capped = false;
@@ -208,9 +212,16 @@ export class WaveRunner {
       const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
       if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
-    // embuscade : tirée une fois par vague (toujours, pour que le rng avance pareil), jamais pour une configuration forcée (boss, panneau Triche) ni un rejeu pendant un boss
-    const ambush = this.rng.next() < DIFFICULTY.ambushChance && !forced && !this._replaying;
-    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul), ambush && !ALIENS[g.type].boss);
+    // embuscade : tirée une fois par vague (toujours, pour que le rng avance pareil), jamais pour une configuration forcée (boss, panneau Triche) ; les rejeux pendant un boss en font partie (leurs aliens restent sans XP : `Horde.create`)
+    const ambush = this.rng.next() < DIFFICULTY.ambushChance && !forced;
+    // cercle : tiré une fois par vague, aussi (l'embuscade, tirée avant, passe après lui s'il sort) ; le tirage de la squad visée n'a lieu que quand il sort
+    const firstWave = !forced && !this._replaying && !this.firstWaveSent;
+    if (!forced && !this._replaying) this.firstWaveSent = true;
+    const ringRoll0 = this.rng.next() < DIFFICULTY.ringChance && !forced; // les rejeux pendant un boss peuvent aussi sortir en cercle (leurs aliens restent sans XP : `Horde.create`)
+    const ring = ringRoll0 && !firstWave; // la toute première vague n'est jamais en cercle (le tirage a lieu quand même : même suite aléatoire)
+    const ringRoll = ring ? this.rng.next() : 0;
+    const arrival = ring ? 'ring' : ambush ? 'ahead' : undefined;
+    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul), ALIENS[g.type].boss ? undefined : arrival, ringRoll);
     return { ...config, groups };
   }
 }

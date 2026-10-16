@@ -25,6 +25,7 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   create(data: OptionsData): void {
+    this.scene.bringToTop(); // le menu Réglages passe par-dessus tout (HUD, écrans titre, pause…)
     this.resumeGame = data?.resumeGame === true;
     if (data?.page === 'hotkeys') {
       buildHotkeysPage(this, () => this.scene.restart({ resumeGame: this.resumeGame })); // « Retour » : le menu, sans toucher à la partie en pause

@@ -2,17 +2,17 @@ import Phaser from 'phaser';
 import { playSfx } from '../playSfx';
 import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
-import { Button, device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
+import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
 import { defaultMoveLabels } from '../hotkeys';
-import { DIFFICULTY_LABEL_KEYS, DIFFICULTY_LEVELS, type DifficultyLevel } from '../data/difficultyLevels';
+import { DIFFICULTY_LABEL_KEYS, type DifficultyLevel } from '../data/difficultyLevels';
 import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
 import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
 import { BAR_GHOST_SPEED, ghostHit, type BarGhost } from '../view/WorldView';
-import { HUD_ART, makeHudButton } from '../view/HudButtons';
+import { drawGear, HUD_ART, makeHudButton } from '../view/HudButtons';
 import { TimelineHud, timelineBottom } from '../view/TimelineHud';
 import { UPGRADE_PINK } from '../view/GlobeGlitter';
 import { staleDropped } from '../dev/staleOverrides';
@@ -74,7 +74,10 @@ const HAND_EIGHT = { width: 70, height: 18 };
  */
 export class HudScene extends Phaser.Scene {
   private game_!: GameScene;
+  /** Bouton pause en haut à droite (en jeu). */
   private pauseBtn!: Phaser.GameObjects.Container;
+  /** Sur les écrans titre, à la même place : roue crantée « réglages », qui ouvre l'écran Options. */
+  private settingsBtn!: Phaser.GameObjects.Container;
   /** Haut gauche : bouton son et bouton musique, chacun coupe / rétablit (mute) ; le volume se règle dans Options. */
   private soundBtn!: Phaser.GameObjects.Container;
   private soundSlash!: Phaser.GameObjects.Graphics;
@@ -85,12 +88,6 @@ export class HudScene extends Phaser.Scene {
   /** Boutons de dev visibles (mode debug du menu Options) ? */
   private debugShown = false;
   private hint!: Phaser.GameObjects.Container;
-  /** Les trois boutons de niveau (Normal / Expert / Impossible), en colonne à droite de l'écran d'arrivée : visibles tant que le joueur n'a pas bougé. Seul Normal est actif pour l'instant. */
-  private modeButtons!: Phaser.GameObjects.Container;
-  /** Écran d'accueil solo : ouvre le menu multijoueur (`MultiplayerScene`). */
-  private multiBtn!: Button;
-  /** Niveau dont les boutons sont dessinés (pour les reconstruire quand il change). */
-  private modeShown: DifficultyLevel | null = null;
   private hintLabel!: Phaser.GameObjects.Text;
   private latePackAsked = false;
   /** Entrée des barres du haut (timeline) et du bas (XP) : 0 = hors de l'écran, 1 = en place. Cachées tant que le joueur n'a pas commencé, puis elles glissent (Quad.Out). */
@@ -241,20 +238,13 @@ export class HudScene extends Phaser.Scene {
       this.game_.events.off('boss', this.onBoss);
       this.game_.events.off('netEnd', this.onNetEnd);
     });
-    this.pauseBtn = this.makePauseButton().setVisible(!this.game_.session.online);
+    this.pauseBtn = makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
+    this.settingsBtn = makeHudButton(this, 60, (g, size) => drawGear(g, size * 0.75), () => this.game_.openOptions()).container; // même bouton que la pause ; seule la roue crantée est 25 % plus petite
     this.soundBtn = this.makeSoundButton();
     this.musicBtn = this.makeMusicButton();
     this.hint = this.makeHint();
-    this.modeButtons = this.makeModeButtons();
-    this.multiBtn = new Button(this, 0, 0, {
-      label: t('multiplayer'),
-      variant: 'secondary',
-      width: 210,
-      height: 58,
-      onClick: () => {
-        if (!this.scene.isActive(SCENES.multiplayer)) this.scene.launch(SCENES.multiplayer);
-      },
-    });
+    // pause (menu pause, Options) : le HUD est mis en pause avec la partie, son `update` ne tourne plus : l'indice des commandes se cache tout de suite
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => this.hint.setVisible(false));
     // dev : des réglages mémorisés dans le navigateur masquaient des valeurs du code qui ont changé ; ils ont été supprimés, on le dit
     if (DEV_TOOLS && staleDropped.length > 0) {
       const note = this.add
@@ -298,15 +288,14 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const g = this.game_;
     const s = g.session;
     this.roomText.setText(
-      !s.online ? '' : s.connection === 'lost' ? t('connectionLost') : `${t('room', { code: s.roomCode ?? '', players: g.playerCount })} · ${t(DIFFICULTY_LABEL_KEYS[s.sim.difficulty])}`, // le niveau de la room, visible de tous les joueurs
+      !s.online || g.inLobby ? '' : s.connection === 'lost' ? t('connectionLost') : `${t('room', { code: s.roomCode ?? '', players: g.playerCount })} · ${t(DIFFICULTY_LABEL_KEYS[s.sim.difficulty])}`, // le niveau de la room, visible de tous les joueurs ; pas dans la salle d'attente (elle affiche déjà ces infos), seulement en jeu
     );
     this.hostText.setVisible(s.online && s.hostStalled);
-    this.pauseBtn.setVisible(!s.online && !s.sim.tutorial?.active); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
+    this.pauseBtn.setVisible(!s.sim.tutorial?.active && !g.titleOpen && !g.inLobby); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin) ; sur les écrans titre, la roue crantée prend sa place
+    this.settingsBtn.setVisible(g.titleOpen); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline (paquet 2a pas arrivé)
-    this.hint.setVisible(g.flow.state === 'ready');
-    this.refreshModeButtons();
-    this.multiBtn.setVisible(g.flow.state === 'ready' && !s.online && !s.sim.tutorial?.active && !this.scene.isActive(SCENES.multiplayer)); // écran d'accueil solo seulement
-    this.modeButtons.setVisible(g.flow.state === 'ready' && s.isHost && !s.sim.tutorial?.active && !g.inLobby); // pas dans la salle d'attente : son écran a ses propres boutons // écran d'accueil, pour qui choisit le niveau (solo ou hôte), hors onboarding : un joueur qui rejoint ne les voit pas
+    this.hint.setVisible(g.flow.state === 'ready' && !g.titleOpen && !g.inLobby && !this.scene.isActive(SCENES.pause) && !this.scene.isActive(SCENES.options)); // l'indice des commandes n'apparaît ni sur les écrans titre ni pendant le menu pause
+    for (const counter of [this.fpsText, this.alienText, this.levelText]) counter.setVisible(!g.titleOpen && !g.inLobby); // compteurs du bas à droite cachés pendant les écrans titre et la salle d'attente
     if (!this.latePackAsked && g.flow.state === 'ready') {
       // paquet 2 des visuels : chargé dès que le joueur est sur la scène de jeu avec l'indice des commandes affiché (pas pendant l'écran de choix d'upgrade)
       this.latePackAsked = true;
@@ -747,46 +736,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     this.iconState = `${settings.sfxOn()}|${settings.musicOn()}`;
   }
 
-  private makePauseButton(): Phaser.GameObjects.Container {
-    return makeHudButton(this, 60, HUD_ART.pause, () => this.game_.pauseGame()).container;
-  }
-
-  /**
-   * Boutons Normal / Expert / Impossible (colonne à droite de l'écran d'accueil) : choisissent le niveau de difficulté de la run. Le niveau en cours est plein (jaune / orange / rouge), les autres
-   * sont discrets. Le choix est mémorisé (`settings.difficulty`) : la run suivante démarre dans ce niveau ; en ligne, l'hôte l'annonce à tous les joueurs (`Session.setDifficulty`).
-   * Reconstruits quand le niveau change (`refreshModeButtons`).
-   */
-  private makeModeButtons(): Phaser.GameObjects.Container {
-    const c = this.add.container(0, 0);
-    this.modeShown = null;
-    return c;
-  }
-
-  private refreshModeButtons(): void {
-    const level = this.game_.session.sim.difficulty;
-    if (level === this.modeShown) return;
-    this.modeShown = level;
-    for (const b of this.modeButtons.list.slice()) b.destroy();
-    const fills: Record<DifficultyLevel, number | undefined> = { normal: undefined, expert: 0xe8892b, impossible: 0xc63b3b };
-    DIFFICULTY_LEVELS.forEach((l, i) => {
-      const on = l === level;
-      const b = new Button(this, 0, (i - 1) * 74, {
-        label: t(DIFFICULTY_LABEL_KEYS[l]),
-        variant: on ? 'primary' : 'secondary',
-        fill: on ? fills[l] : undefined,
-        textColor: on && fills[l] !== undefined ? '#ffffff' : undefined,
-        width: 210,
-        height: 58,
-        onClick: () => {
-          if (l === this.game_.session.sim.difficulty) return;
-          settings.setDifficulty(l); // mémorisé : la prochaine run démarre dans ce niveau
-          this.game_.session.setDifficulty(l);
-        },
-      });
-      this.modeButtons.add(b);
-    });
-  }
-
   private makeHint(): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const label = this.add
@@ -856,9 +805,8 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const rows = Math.max(1, Math.floor((bottomY - (top + 22 + 44 + 8 + 44)) / (44 + 8)) + 1);
     devBtns.forEach((b, i) => b.setPosition(14 + 22 + Math.floor(i / rows) * (44 + 8), bottomY - (i % rows) * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
+    this.settingsBtn.setPosition(width - 44, top + 34); // même place que le bouton pause
     this.hint.setPosition(width / 2, height * 0.62);
-    this.multiBtn.setPosition(width - 14 - 105, height / 2 + 160);
-    this.modeButtons.setPosition(width - 14 - 105, height / 2); // à droite, au centre verticalement, les uns au-dessus des autres
     this.respawnText.setPosition(width / 2, height * 0.22);
     this.hostText.setPosition(width / 2, height * 0.34);
     this.endText.setPosition(width / 2, height * 0.4);

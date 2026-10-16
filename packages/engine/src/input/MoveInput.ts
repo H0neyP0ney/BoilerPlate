@@ -43,10 +43,23 @@ export class MoveInput {
     this.keys = kb.addKeys(KEYS.join(',')) as typeof this.keys;
     kb.on('keydown', (e: KeyboardEvent) => this.pressed.add(e.code));
     kb.on('keyup', (e: KeyboardEvent) => this.pressed.delete(e.code));
-    // fenêtre qui perd le focus : les « keyup » ne viendront jamais, aucune touche ne doit rester enfoncée
-    const release = (): void => this.pressed.clear();
+    // fenêtre qui perd le focus (ou scène mise en pause le temps d'une pub, d'un menu, d'un revive) : les « keyup » / « pointerup » ne viendront jamais,
+    // aucune touche ni aucun doigt ne doit rester enfoncé : la squad avancerait toute seule à la reprise
+    const release = (): void => this.reset();
     scene.game.events.on(Phaser.Core.Events.BLUR, release);
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.game.events.off(Phaser.Core.Events.BLUR, release));
+    scene.events.on(Phaser.Scenes.Events.RESUME, release);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.game.events.off(Phaser.Core.Events.BLUR, release);
+      scene.events.off(Phaser.Scenes.Events.RESUME, release);
+    });
+  }
+
+  /** Oublie toutes les touches enfoncées (rebindables et flèches) et relâche le joystick : plus aucune direction tant qu'une touche n'est pas appuyée de nouveau. */
+  reset(): void {
+    this.pressed.clear();
+    for (const key of Object.values(this.keys)) key.reset();
+    this.joystick.release();
+    this.vector.reset();
   }
 
   /** À appeler une fois par frame. */

@@ -1,6 +1,6 @@
-import { parseDifficultyLevel, type DifficultyLevel } from './data/difficultyLevels';
+import { DIFFICULTY_LEVELS, parseDifficultyLevel, type DifficultyLevel } from './data/difficultyLevels';
 import { SFX_TUNING } from './data/sfxTuning';
-import { clamp, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
+import { clamp, poki, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
 import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
 import { i18n, LANGS, type Lang } from './i18n';
 
@@ -207,6 +207,28 @@ export const settings = {
 
   /** Dernier niveau de difficulté choisi avec les boutons de l'écran d'accueil (mémorisé) : la run suivante démarre dans ce niveau. */
   difficulty: parseDifficultyLevel(storage.get<string>('settings.difficulty', 'normal')),
+
+  /** Niveaux débloqués : `normal` d'emblée ; finir `normal` débloque `expert`, finir `expert` débloque `impossible` (mémorisé). `?unlockall=1` les débloque tous (test). */
+  unlocked: DIFFICULTY_LEVELS.filter((l) => storage.get<boolean>(`settings.unlocked.${l}`, l === 'normal') === true),
+
+  isUnlocked(level: DifficultyLevel): boolean {
+    return this.unlocked.includes(level) || poki.getURLParam('unlockall') !== undefined;
+  },
+
+  /** Plus haut niveau débloqué dont `level` est au plus : un niveau verrouillé retombe sur le dernier accessible. */
+  clampDifficulty(level: DifficultyLevel): DifficultyLevel {
+    for (let i = DIFFICULTY_LEVELS.indexOf(level); i > 0; i--) if (this.isUnlocked(DIFFICULTY_LEVELS[i])) return DIFFICULTY_LEVELS[i];
+    return 'normal';
+  },
+
+  /** Victoire au niveau `level` : débloque le suivant. Renvoie le niveau débloqué (null si rien de nouveau). */
+  unlockAfterWin(level: DifficultyLevel): DifficultyLevel | null {
+    const next = DIFFICULTY_LEVELS[DIFFICULTY_LEVELS.indexOf(level) + 1];
+    if (!next || this.unlocked.includes(next)) return null;
+    this.unlocked.push(next);
+    storage.set(`settings.unlocked.${next}`, true);
+    return next;
+  },
 
   setDifficulty(level: DifficultyLevel): void {
     this.difficulty = level;

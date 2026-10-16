@@ -31,7 +31,7 @@ export class OnlineError extends Error {
 
 /**
  * Paramètres d'URL (pas d'écran titre sur Poki) :
- *   ?net=host                 crée une salle publique (le code s'affiche dans le HUD) ; &public=0 la rend privée (par code seulement), &lobby=1 ouvre la salle d'attente
+ *   ?net=host                 crée une salle publique (le code s'affiche dans le HUD) ; &public=0 la rend privée (par code seulement), &lobby=0 la lance sans salle d'attente
  *   ?net=join&room=CODE       rejoint une salle (en cours de partie possible)
  *   ?net=auto                 rejoint une salle publique, sinon en crée une
  *   ?net=host&bot=2&botlevel=expert   (dev) l'hôte démarre avec 2 coéquipiers IA, niveau standard (défaut) ou expert
@@ -39,7 +39,7 @@ export class OnlineError extends Error {
 export function readOnlineRequest(): OnlineRequest | null {
   const net = poki.getURLParam('net');
   const room = poki.getURLParam('room');
-  if (net === 'host') return { kind: 'host', public: poki.getURLParam('public') !== '0', lobby: poki.getURLParam('lobby') === '1' };
+  if (net === 'host') return { kind: 'host', public: poki.getURLParam('public') !== '0', lobby: poki.getURLParam('lobby') !== '0' };
   if (net === 'auto') return { kind: 'auto' };
   if (net === 'join' || room) return room ? { kind: 'join', code: room } : null;
   return null;

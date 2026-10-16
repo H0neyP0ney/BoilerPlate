@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Button, poki, theme } from '@xiao/engine';
 import { DIFFICULTY_LABEL_KEYS, DIFFICULTY_LEVELS, type DifficultyLevel } from '../data/difficultyLevels';
 import { SCENES } from '../config';
+import { hudOnTop } from './hudOnTop';
 import { t } from '../i18n';
 import { HostSession } from '../net/HostSession';
 import { settings } from '../settings';
@@ -26,6 +27,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    hudOnTop(this); // boutons debug et son / musique du HUD au-dessus du calque sombre de cet écran
     this.game_ = this.scene.get(SCENES.game) as GameScene;
     this.shown = '';
     this.flash = '';
@@ -59,61 +61,106 @@ export class LobbyScene extends Phaser.Scene {
     };
     const text = (x: number, y: number, str: string, size: number, color = '#ffffff'): Phaser.GameObjects.Text =>
       add(this.add.text(x, y, str, { ...TEXT, fontSize: `${size}px`, color, align: 'center' }).setOrigin(0.5));
+    // même mise en page que le menu multijoueur : une colonne de 420 px (largeur de Partie rapide), boutons alignés dessus, 16 px entre les blocs
+    const colW = 420;
+    const gap = 16;
 
-    add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.78).setOrigin(0).setInteractive());
-    let y = Math.max(34, h / 2 - 205);
-    text(cx, y, t('lobbyTitle'), 46);
-    y += 52;
-    text(cx, y, t('lobbyCode'), 18, '#9fb4cf');
-    y += 34;
-    text(cx, y, s.roomCode ?? '', 52, '#ffd84a');
-    y += 40;
-    text(cx, y, lobby.public ? t('lobbyPublic') : t('lobbyPrivate'), 18, '#9fb4cf');
-    y += 40;
-    add(new Button(this, cx - 170, y, { label: this.flash === 'code' ? t('lobbyCopied') : t('lobbyCopy'), variant: 'secondary', width: 320, height: 48, onClick: () => void this.copy('code') }));
-    add(new Button(this, cx + 170, y, { label: this.flash === 'link' ? t('lobbyCopied') : t('lobbyInvite'), variant: 'secondary', width: 320, height: 48, onClick: () => void this.copy('link') }));
-    y += 54;
-    text(cx, y, t('lobbyPlayers', { humans: lobby.humans, bots: lobby.bots }), 26);
-    y += 44;
+    const dim = add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.85).setOrigin(0)); // calque sombre semi-transparent
+    const tight = h < 720; // petit écran : sans les lignes d'explication, tableau plus serré
+    let y = tight ? 28 : 100; // position de départ provisoire : tout l'écran est recentré verticalement en fin de construction
+    const topY = y - 20; // haut du contenu
+
+    // une ligne : « Public game » / « Private game » collé au bord gauche de la colonne, le code de la salle collé au bord droit ; puis « Copy code » et « Copy invite link » côte à côte
+    const label = add(this.add.text(cx - colW / 2, y, lobby.public ? t('lobbyPublic') : t('lobbyPrivate'), { ...TEXT, fontSize: `${tight ? 26 : 32}px`, color: '#ffffff' }).setOrigin(0, 0.5));
+    const code = add(this.add.text(cx + colW / 2, y, s.roomCode ?? '', { ...TEXT, fontSize: `${tight ? 22 : 26}px`, color: '#ffd84a' }).setOrigin(1, 0.5));
+    const room = colW - label.width - 16; // place laissée au code
+    if (code.width > room) code.setScale(room / code.width); // un long code est réduit pour ne pas toucher le libellé
+    y += tight ? 44 : 54;
+    const halfW = (colW - gap) / 2;
+    add(new Button(this, cx - halfW / 2 - gap / 2, y, { label: this.flash === 'link' ? t('lobbyCopied') : t('lobbyInvite'), variant: 'secondary', width: halfW, height: 56, onClick: () => void this.copy('link') })); // lien d'invitation à gauche
+    add(new Button(this, cx + halfW / 2 + gap / 2, y, { label: this.flash === 'code' ? t('lobbyCopied') : t('lobbyCopy'), variant: 'secondary', width: halfW, height: 56, onClick: () => void this.copy('code') })); // code à droite, sous le code de la salle
+    y += 28 + 24;
+
+    // tableau des joueurs (même style que celui des parties publiques : en-tête bleu clair plus haut, corps bleu foncé à contour bleu)
+    const HEAD = 40;
+    const ROW = tight ? 30 : 36; // assez haute pour loger les boutons « Add bot » / « Remove bot » de l'hôte
+    const SLOTS = 4;
+    const ph = HEAD + SLOTS * ROW;
+    const left = cx - colW / 2;
+    const panel = add(this.add.graphics());
+    panel.fillStyle(0x0b1a4d, 0.85).fillRoundedRect(left, y, colW, ph, 8);
+    panel.fillStyle(0x2f5bc4, 1).fillRoundedRect(left, y, colW, HEAD, { tl: 8, tr: 8, bl: 0, br: 0 });
+    panel.lineStyle(2, 0x3f6fe0, 1).strokeRoundedRect(left, y, colW, ph, 8);
+    add(this.add.text(left + 14, y + HEAD / 2, t('lobbyPlayersHead'), { ...TEXT, fontSize: '16px', color: '#e6efff' }).setOrigin(0, 0.5));
+    add(this.add.text(left + colW - 14, y + HEAD / 2, `${lobby.humans + lobby.bots}/${SLOTS}`, { ...TEXT, fontSize: '16px', color: '#e6efff' }).setOrigin(1, 0.5));
+    const names: { label: string; color: string }[] = [];
+    for (let i = 0; i < lobby.humans; i++) names.push({ label: i === 0 ? t('lobbyHost') : t('scorePlayer', { value: i + 1 }), color: '#ffffff' });
+    for (let i = 0; i < lobby.bots; i++) names.push({ label: t('lobbyBot', { value: i + 1 }), color: '#9fd4ff' });
+    // bouton sans texture : juste le texte blanc dans un cadre blanc arrondi (comme « Refresh » du menu multijoueur)
+    const outlineButton = (x: number, yy: number, bw: number, bh: number, label: string, onClick: () => void): void => {
+      const frame = add(this.add.graphics());
+      frame.lineStyle(2, 0xffffff, 1).strokeRoundedRect(x - bw / 2, yy - bh / 2, bw, bh, 8);
+      const txt = add(this.add.text(x, yy, label, { ...TEXT, fontSize: '15px' }).setOrigin(0.5));
+      if (txt.width > bw - 12) txt.setScale((bw - 12) / txt.width);
+      const hit = add(this.add.zone(x, yy, bw, bh).setInteractive({ useHandCursor: true }));
+      let pressed = false;
+      hit.on('pointerdown', () => (pressed = true));
+      hit.on('pointerout', () => (pressed = false));
+      hit.on('pointerup', () => {
+        if (!pressed) return;
+        pressed = false;
+        Button.clickHook?.(this);
+        onClick();
+      });
+    };
+    const botIds = host ? [...host.bots.keys()] : [];
+    const btnW = 120;
+    const btnH = ROW - 8;
+    for (let i = 0; i < SLOTS; i++) {
+      const row = names[i];
+      const rowY = y + HEAD + i * ROW + ROW / 2;
+      add(this.add.text(left + 14, rowY, row ? row.label : t('lobbyEmptySlot'), { ...TEXT, fontSize: '17px', color: row ? row.color : '#5f7396' }).setOrigin(0, 0.5));
+      if (!host) continue;
+      const bx = left + colW - 10 - btnW / 2;
+      if (!row) outlineButton(bx, rowY, btnW, btnH, t('lobbyAddBot'), () => host.addBot()); // place libre : « Add bot » à droite de la ligne
+      else if (i >= lobby.humans) outlineButton(bx, rowY, btnW, btnH, t('lobbyRemoveBot'), () => host.removeBot(botIds[i - lobby.humans])); // ligne d'un bot : « Remove bot » à droite
+    }
+    const blockGap = tight ? 12 : 70; // gros espace entre le haut (code, copie, joueurs) et le bloc du bas (difficulté, Play, Back)
+    y += ph + blockGap + (host ? 28 : 0); // le bouton suivant est centré sur y
 
     if (host) {
+      // difficulté : trois boutons sur une ligne, de la largeur de la colonne (comme l'écran Solo)
+      const dw = (colW - 2 * 10) / 3;
       DIFFICULTY_LEVELS.forEach((l: DifficultyLevel, i) => {
         const on = l === s.sim.difficulty;
+        const locked = !settings.isUnlocked(l);
         add(
-          new Button(this, cx + (i - 1) * 190, y, {
-            label: t(DIFFICULTY_LABEL_KEYS[l]),
+          new Button(this, cx + (i - 1) * (dw + 10), y, {
+            label: locked ? `🔒 ${t(DIFFICULTY_LABEL_KEYS[l])}` : t(DIFFICULTY_LABEL_KEYS[l]),
             variant: on ? 'primary' : 'secondary',
-            width: 176,
-            height: 46,
+            width: dw,
+            height: 56,
             onClick: () => {
+              if (locked) return;
               settings.setDifficulty(l);
               s.setDifficulty(l);
             },
-          }),
+          }).setEnabled(!locked, false),
         );
       });
-      y += 56;
-      add(new Button(this, cx - 170, y, { label: t('lobbyAddBot'), variant: 'secondary', width: 320, height: 46, onClick: () => host.addBot() })); // `addBot` refuse tout seul quand la salle est pleine
-      add(
-        new Button(this, cx + 170, y, {
-          label: t('lobbyRemoveBot'),
-          variant: 'secondary',
-          width: 320,
-          height: 46,
-          onClick: () => {
-            const last = [...host.bots.keys()].pop();
-            if (last) host.removeBot(last);
-          },
-        }),
-      );
-      y += 66;
-      add(new Button(this, cx, y, { label: t('lobbyStart'), width: 360, height: 62, onClick: () => host.startGame() }));
+      y += 28 + 18 + 55;
+      add(new Button(this, cx, y, { label: t('play'), width: colW, height: 110, onClick: () => host.startGame() })); // « Play », grand bouton comme sur l'écran Solo
+      y += 55 + 18 + 28;
     } else {
-      text(cx, y + 14, s.connection === 'lost' ? t('connectionLost') : t('lobbyWaitHost'), 26, '#9fb4cf');
-      y += 66;
+      text(cx, y, `${t(DIFFICULTY_LABEL_KEYS[s.sim.difficulty])}`, 24, '#ffd84a');
+      y += 38;
+      text(cx, y, s.connection === 'lost' ? t('connectionLost') : t('lobbyWaitHost'), 22, '#9fb4cf');
+      y += 30 + 28;
     }
-    y += 60;
-    add(new Button(this, cx, y, { label: t('lobbyLeave'), variant: 'secondary', width: 240, height: 44, onClick: () => this.leave() }));
+    add(new Button(this, cx, y, { label: t('mpBack'), variant: 'secondary', width: colW, height: 56, onClick: () => this.leave() }));
+    // recentre tout le contenu verticalement (comme l'écran d'avant, le menu multijoueur) : on décale tout ce qui a été posé, hors calque sombre
+    const dy = Math.max(12 - topY, (h - (y + 28 - topY)) / 2 - topY);
+    for (const o of this.objects) if (o !== dim) (o as Phaser.GameObjects.GameObject & { y: number }).y += dy;
   };
 
   private clear(): void {
@@ -137,9 +184,8 @@ export class LobbyScene extends Phaser.Scene {
     this.time.delayedCall(1500, () => (this.flash = ''));
   }
 
-  /** Quitter la salle : retour à une partie solo (la page se recharge sans paramètre de salle). */
+  /** « Back » : quitte la salle et revient à l'écran d'avant, le menu multijoueur (plus de rechargement de la page). */
   private leave(): void {
-    this.game_.session.close();
-    window.location.href = `${window.location.origin}${window.location.pathname}`;
+    void this.game_.leaveOnline();
   }
 }

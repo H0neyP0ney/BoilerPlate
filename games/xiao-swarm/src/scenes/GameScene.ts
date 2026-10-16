@@ -116,6 +116,11 @@ export class GameScene extends Phaser.Scene {
     }
     const online = this.registry.get('session') as Session | undefined;
     this.registry.remove('session');
+    const skipTitle = !!this.registry.get('skipTitle'); // « Rejouer » : la run repart directement, sans repasser par l'écran titre
+    this.registry.remove('skipTitle');
+    const openScreen = (this.registry.get('openScreen') as string | undefined) ?? SCENES.title; // « Quitter » du menu pause : SoloScreen
+    this.registry.remove('openScreen');
+    this.titleOpen = false;
     if (online) {
       this.session = online;
     } else {
@@ -141,6 +146,8 @@ export class GameScene extends Phaser.Scene {
         : undefined;
       if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer, jump)); // test : partie avancée dès le lancement
       if (endTest) this.prepareEndTest();
+      // hors onboarding (le tutoriel arrive directement sur la partie, indice des commandes affiché) : écran titre Solo / Multiplayer d'abord
+      this.titleOpen = !skipTitle && !this.session.sim.tutorial && !jump && !test && mode.id === 'survival';
     }
     // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
     this.freeRevive = !online && !!this.session.sim.tutorial;
@@ -165,17 +172,19 @@ export class GameScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', this.pauseGame);
     kb.on('keydown-P', this.pauseGame);
-    this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseGame);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseOnHidden);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', onClick);
-      this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseGame);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseOnHidden);
       this.session.close();
       this.view.arena.destroy();
       this.scene.stop(SCENES.hud);
       this.scene.stop(SCENES.lobby);
+      for (const key of [SCENES.title, SCENES.solo, SCENES.multiplayer]) this.scene.stop(key);
     });
 
     this.scene.launch(SCENES.hud);
+    if (this.titleOpen) this.scene.launch(openScreen);
     if (this.inLobby) this.scene.launch(SCENES.lobby); // salle d'attente du coop en ligne : le monde reste figé jusqu'au Start de l'hôte
     this.setupDebug();
     sfx.setVolume(settings.sfxGain());
@@ -187,9 +196,13 @@ export class GameScene extends Phaser.Scene {
     return !!lobby && !lobby.started;
   }
 
+  /** Écran titre (`TitleScene`, `SoloScene`, menu multijoueur) ouvert par-dessus le monde : personne ne bouge, pas d'indice des commandes, pas de pause. */
+  titleOpen = false;
+
   update(time: number, delta: number): void {
     const secs = time / 1000;
     const dt = Math.min(delta, 50) / 1000;
+    this.move.joystick.enabled = !(this.inLobby || this.titleOpen); // pas de joystick sur les écrans d'entrée
     const dir = this.move.update();
     if (this.moveLocked) {
       // après le choix d'upgrade : le joystick (souris / tactile) est ignoré jusqu'à ce qu'il ait été relâché ; le clavier passe toujours
@@ -201,9 +214,9 @@ export class GameScene extends Phaser.Scene {
       dir.set(d.x, d.y);
     }
     if (this.inLobby && !this.scene.isActive(SCENES.lobby)) this.scene.launch(SCENES.lobby); // retour à la salle d'attente après une partie
-    if (this.inLobby) dir.set(0, 0); // salle d'attente : personne ne bouge (et le client ne prédit rien)
+    if (this.inLobby || this.titleOpen || (this.session.online && this.scene.isActive(SCENES.pause))) dir.set(0, 0); // menu pause en ligne : la squad reste sans ordre pendant que le jeu continue // salle d'attente : personne ne bouge (et le client ne prédit rien)
     this.session.setLocalInput(dir.x, dir.y);
-    if (this.flow.state === 'ready' && !this.inLobby && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
+    if (this.flow.state === 'ready' && !this.inLobby && !this.titleOpen && (this.move.active || this.alienTest) && !poki.isAdPlaying) this.beginRun(); // pas pendant une pub : le gameplayStart serait perdu
 
     // Montée de niveau : la simulation est en PAUSE le temps du choix (`sim.choiceT`, le même chez tous les joueurs). On affiche
     // ses propositions, ou, en ligne, l'attente des autres joueurs une fois son choix fait.
@@ -232,6 +245,7 @@ export class GameScene extends Phaser.Scene {
       this.trackProgress();
     }
     // choix d'upgrade : le monde est figé ; on dessine l'état à son dernier pas (alpha 1), sinon l'interpolation fait trembler les projectiles
+    this.view.hideSquadCounts = this.titleOpen; // pas de bulle d'effectif sur les écrans titre
     this.view.render(running && sim.choiceT <= 0 ? this.session.alpha : 1, dt, secs);
     this.updateCamera(dt);
 
@@ -355,6 +369,7 @@ export class GameScene extends Phaser.Scene {
     // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
     if (e.t === 'gameEnd') {
       this.saveRun(e.victory);
+      if (e.victory) settings.unlockAfterWin(this.session.sim.difficulty);
       if (e.victory) this.flow.win();
       else this.flow.fail();
     }
@@ -423,8 +438,19 @@ export class GameScene extends Phaser.Scene {
     this.session.rerollUpgrade();
   }
 
+  /** L'onglet passe en arrière-plan : pause automatique en solo seulement (en ligne le jeu continue). */
+  private readonly pauseOnHidden = (): void => {
+    if (!this.session.online) this.pauseGame();
+  };
+
   readonly pauseGame =(): void => {
-    if (this.session.online || this.upgradeOpen || this.ending) return; // pause impossible : les autres joueurs continuent
+    if (this.upgradeOpen || this.ending || this.titleOpen || this.inLobby) return; // pas de pause sur un écran titre ; le choix d'upgrade a son propre écran
+    if (this.session.online) {
+      // en ligne le jeu ne se met jamais en pause (les autres joueurs continuent) : le menu s'ouvre par-dessus, la squad n'a plus d'ordre, ESC / P le referment
+      if (this.scene.isActive(SCENES.pause)) this.scene.stop(SCENES.pause);
+      else if (!this.scene.isActive(SCENES.options)) this.scene.launch(SCENES.pause);
+      return;
+    }
     if (!this.scene.isActive()) return;
     // avant le premier input (état « prêt ») le gameplay n'a pas démarré : rien à interrompre côté Poki, mais la pause reste possible
     if (this.flow.state !== 'ready' && !this.flow.interrupt()) return;
@@ -435,7 +461,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Reprise après une pause : `ad` = pub de sortie de pause (désactivée : les interstitielles ne passent qu'entre deux parties). */
   async resumeGame({ ad = false }: { ad?: boolean } = {}): Promise<void> {
+    if (this.session.online) return; // rien n'a été mis en pause
     await this.flow.resume({ ad });
+    this.move.reset(); // une touche relâchée / un doigt levé pendant la pause n'a pas été vu : sans ça, la squad avance toute seule
     this.scene.resume();
     this.scene.resume(SCENES.hud);
   }
@@ -482,6 +510,7 @@ export class GameScene extends Phaser.Scene {
   private startEnding(): void {
     this.ended = true;
     this.saveRun(true);
+    settings.unlockAfterWin(this.session.sim.difficulty); // finir un niveau débloque le suivant
     if (!this.session.online) storage.set('bestTime', Math.max(Math.floor(this.runTime), storage.get('bestTime', 0)));
     this.session.sim.beginEnding();
     this.ending = new Ending(this, this.session.sim, this.session.localPlayer, () => {
@@ -536,23 +565,37 @@ export class GameScene extends Phaser.Scene {
     this.revived = true;
     this.ended = false;
     this.session.reviveLocal(free);
+    this.move.reset(); // idem : le revive (pub, écran de fin) fait perdre les relâchements de touches ; on repart sans direction
     this.scene.resume();
     this.scene.resume(SCENES.hud);
     return true;
   }
 
-  async retry(toHome = false): Promise<void> {
-    if (this.session.online) return this.retryOnline();
+  async retry(toHome = false, waitForInput = false): Promise<void> {
+    if (this.session.online) return this.leaveOnline();
     await this.flow.restart({ ad: this.adBeforeNextGame() });
     this.scene.restart();
-    // "Rejouer" est un input du joueur : le run démarre directement. `toHome` (Recommencer du menu pause) : retour à l'écran d'accueil, où les boutons de niveau permettent de choisir la run ; elle démarre au premier input.
-    if (!toHome) this.events.once(Phaser.Scenes.Events.CREATE, () => this.beginRun());
+    // "Rejouer" est un input du joueur : le run démarre directement. `toHome` (Recommencer du menu pause) : retour à l'écran titre (Solo / Multiplayer) ; la run démarre au premier input après Play.
+    if (!toHome) {
+      this.registry.set('skipTitle', true);
+      if (!waitForInput) this.events.once(Phaser.Scenes.Events.CREATE, () => this.beginRun()); // « Restart » du menu pause : la run attend le premier input (indice des commandes affiché)
+    }
   }
 
-  /** En ligne, le seul écran de fin est « connexion perdue » : retour au solo. */
-  private retryOnline(): void {
-    window.location.assign(window.location.pathname);
+  /** « Quit » du menu pause en ligne : l'hôte ramène tous les joueurs à la salle d'attente ; un joueur quitte la salle et revient au menu multijoueur. */
+  async quitOnline(): Promise<void> {
+    if (this.session instanceof HostSession) return this.session.backToLobby();
+    return this.leaveOnline();
   }
+
+  /** Quitte la salle (connexion perdue, « Quit » d'un joueur) : retour au menu multijoueur. */
+  async leaveOnline(): Promise<void> {
+    this.session.close();
+    this.registry.set('openScreen', SCENES.multiplayer);
+    await this.flow.restart({ ad: false });
+    this.scene.restart();
+  }
+
 
   // ---------- Caméra ----------
 
@@ -641,7 +684,7 @@ export class GameScene extends Phaser.Scene {
   /** Bouton Options du HUD : en solo la partie se met en pause le temps du menu (en ligne, impossible : le jeu continue). */
   openOptions(): void {
     if (this.scene.isActive(SCENES.options) || this.scene.isActive(SCENES.pause)) return;
-    const paused = !this.session.online && !this.upgradeOpen && this.scene.isActive() && this.flow.interrupt();
+    const paused = !this.session.online && !this.titleOpen && !this.upgradeOpen && this.scene.isActive() && this.flow.interrupt(); // sur un écran titre, rien à mettre en pause
     if (paused) {
       this.scene.pause();
       this.scene.pause(SCENES.hud);

@@ -5,6 +5,7 @@ import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
 import { CardTilt } from '../view/CardTilt';
 import { createButtonShine } from '../view/ButtonShine';
+import { starTexture } from '../art/upgradeOrbs';
 import { powerUpIconKey } from '../view/PickupViews';
 import { playSfx } from '../playSfx';
 import { createPrismRain, setPrismZone } from '../view/PrismFx';
@@ -142,8 +143,37 @@ export class LevelUpScene extends Phaser.Scene {
         if (this.pressed === REROLL_PRESSED) this.reroll();
         this.pressed = -1;
       });
-      const shine = createButtonShine(this, 'ui_reroll', k); // reflet blanc qui traverse le bouton de gauche à droite toutes les 3 s
-      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, shine, hit] : [bg, label, shine, hit]);
+      const shine = createButtonShine(this, 'ui_reroll', k, { echo: true }); // reflet blanc qui traverse le bouton de gauche à droite toutes les 3 s
+      // étoile blanche en haut à droite : elle scintille (tourne, grossit puis rétrécit) juste après le passage du reflet, qui finit sa course de ce côté.
+      // Texture : l'étoile du power-up magnet (`starTexture`), remplie de blanc ; à défaut (pièces de la recrue pas chargées), une étoile à quatre branches dessinée.
+      const corner = bg.displayHeight * 0.42; // repère de position dans le coin (inchangé)
+      const R = corner * 0.7; // rayon de l'étoile : 30 % plus petite
+      const starKey = starTexture(this, 'magnet');
+      let star: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics;
+      let full = 1; // échelle maximale du scintillement
+      if (starKey) {
+        const img = this.add.image(0, 0, starKey);
+        img.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL); // remplie de blanc
+        full = (R * 2) / img.width;
+        star = img;
+      } else {
+        const g = this.add.graphics();
+        const pts: Phaser.Math.Vector2[] = [];
+        for (let i = 0; i < 8; i++) pts.push(new Phaser.Math.Vector2(Math.sin((i * Math.PI) / 4) * (i % 2 === 0 ? R : R * 0.26), -Math.cos((i * Math.PI) / 4) * (i % 2 === 0 ? R : R * 0.26)));
+        g.fillStyle(0xffffff, 1).fillPoints(pts, true);
+        star = g;
+      }
+      star.setScale(0).setVisible(false);
+      star.setPosition(bg.displayWidth / 2 - corner * 0.55 - 5, -bg.displayHeight / 2 + corner * 0.45 + 5); // décalée de 5 px vers la gauche et de 5 px vers le bas
+      const SHINE = { period: 3000, first: 700, sweep: 550 }; // réglages par défaut de `createButtonShine` : le reflet part toutes les 3 s et traverse le bouton en 550 ms
+      const sparkle = (): void => {
+        if (!star.active) return;
+        star.setVisible(true).setScale(0).setRotation(0);
+        this.tweens.add({ targets: star, rotation: Math.PI / 2, duration: 650, ease: 'Sine.InOut' });
+        this.tweens.add({ targets: star, scale: full, duration: 325, ease: 'Sine.Out', yoyo: true, onComplete: () => star.setVisible(false) }); // grossit puis rétrécit
+      };
+      this.time.addEvent({ delay: SHINE.period, loop: true, startAt: SHINE.period - (SHINE.first + SHINE.sweep * 0.8), callback: sparkle });
+      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, shine, star, hit] : [bg, label, shine, star, hit]);
     }
 
     const layout = () => {

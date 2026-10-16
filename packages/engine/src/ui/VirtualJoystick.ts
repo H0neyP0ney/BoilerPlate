@@ -11,6 +11,16 @@ export class VirtualJoystick {
   /** Direction normalisée (longueur 0 → 1). */
   readonly vector = new Phaser.Math.Vector2();
 
+  /** Faux : le joystick n'apparaît plus (écrans d'entrée du jeu) ; en passant à faux, un joystick actif est relâché. */
+  get enabled(): boolean {
+    return this._enabled;
+  }
+  set enabled(value: boolean) {
+    this._enabled = value;
+    if (!value) this.release();
+  }
+  private _enabled = true;
+
   private readonly base: Phaser.GameObjects.Arc;
   private readonly knob: Phaser.GameObjects.Arc;
   private pointerId: number | null = null;
@@ -67,7 +77,7 @@ export class VirtualJoystick {
   }
 
   private readonly onDown = (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void => {
-    if (this.pointerId !== null || over.length > 0) return; // ignore les clics sur l'UI
+    if (!this._enabled || this.pointerId !== null || over.length > 0) return; // ignore les clics sur l'UI
     this.begin(p);
   }
 

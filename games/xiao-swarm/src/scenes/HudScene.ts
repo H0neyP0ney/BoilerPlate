@@ -95,6 +95,13 @@ export class HudScene extends Phaser.Scene {
   private barsSlide = 0;
   private barsShown = false;
   private barsTween?: Phaser.Tweens.Tween;
+  /** « Pop » d'un compteur : de `base × boost` revient à son échelle de base (un tween vers 1 agrandissait l'icône pour de bon) ; le pop précédent est arrêté, sinon ils s'empilent. */
+  private pop(target: Phaser.GameObjects.Image | Phaser.GameObjects.Text, base: number, boost: number, duration: number): void {
+    this.tweens.killTweensOf(target);
+    target.setScale(base * boost);
+    this.tweens.add({ targets: target, scale: base, duration, ease: 'Quad.Out' });
+  }
+
   private roomText!: Phaser.GameObjects.Text;
   private debugBtn?: Phaser.GameObjects.Container;
   /** Boutons des visionneuses de dev (unités, particules, obstacles, divers), dans l'ordre d'affichage. */
@@ -298,14 +305,16 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.gemShown = settings.gems;
       this.gemText.setText(String(settings.gems));
       this.placeGems();
-      if (gain) this.tweens.add({ targets: [this.gemIcon, this.gemText], scale: { from: 1.35, to: 1 }, duration: 220, ease: 'Quad.Out' }); // petit « pop » à chaque diamant ramassé
+      if (gain) this.pop(this.gemIcon, 0.5, 1.35, 220); // petit « pop » à chaque diamant ramassé
+      if (gain) this.pop(this.gemText, 1, 1.35, 220);
     }
     if (settings.coins !== this.coinShown) {
       const gain = this.coinShown >= 0 && settings.coins > this.coinShown;
       this.coinShown = settings.coins;
       this.coinText.setText(String(settings.coins));
       this.placeGems();
-      if (gain) this.tweens.add({ targets: [this.coinIcon, this.coinText], scale: { from: 1.25, to: 1 }, duration: 160, ease: 'Quad.Out' });
+      if (gain) this.pop(this.coinIcon, 0.42, 1.25, 160);
+      if (gain) this.pop(this.coinText, 1, 1.25, 160);
     }
     if (aliens !== this.alienShown) {
       this.alienShown = aliens;

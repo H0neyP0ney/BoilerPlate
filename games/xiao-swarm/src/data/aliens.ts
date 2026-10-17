@@ -3,7 +3,7 @@
  */
 import type { DifficultyLevel } from './difficultyLevels';
 
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg' | 'powerup_box' | 'coin_crate' | 'tnt_crate';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -129,6 +129,11 @@ export interface AlienDef {
   dash?: { range: number; speedMul: number };
   /** Œuf laissé par un boss tué (sauf le final) : immobile, inoffensif, PV fixes ; le détruire libère les globes d'upgrade (`UpgradeOrbs.burst`). Jamais recyclé, épargné par le clear screen d'un boss. */
   egg?: boolean;
+  /**
+   * Caisse destructible (même mécanique que l'œuf : immobile, inoffensive, PV exacts, jamais recyclée, épargnée par le clear screen) : `powerup` = boîte de power-up
+   * (le power-up caché en sort à sa destruction), `coins` = caisse de pièces d'or qui jaillissent. Sans ce champ, un `egg` libère les globes d'upgrade d'un boss.
+   */
+  crate?: 'powerup' | 'coins' | 'tnt';
   /** Son attaque de contact tue un soldat d'un coup (les quatre boss). */
   oneShot?: boolean;
   /** Bulle : au contact d'un soldat, le capture et le dévore (`dps` PV par seconde) en restant immobile ; la détruire le libère. */
@@ -649,6 +654,63 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xb8e060,
     goo: 0xc8f070,
     hpBarWidth: 60,
+  },
+  /** Boîte de power-up : 200 PV, le power-up qu'elle cache (tiré à sa destruction) jaillit quand on la casse. Ajoutée en DERNIER (index réseau). */
+  powerup_box: {
+    id: 'powerup_box',
+    hp: 200,
+    speed: 0,
+    radius: 24,
+    mass: 60,
+    damage: 0,
+    attackCooldown: 99,
+    target: 'nearest',
+    egg: true,
+    crate: 'powerup',
+    xp: 0,
+    recruitChance: 0,
+    color: 0x4aa8ff,
+    goo: 0x4aa8ff,
+    hpBarWidth: 44,
+  },
+  /** Caisse de pièces : 200 PV, des pièces d'or jaillissent quand on la casse. */
+  coin_crate: {
+    id: 'coin_crate',
+    hp: 200,
+    speed: 0,
+    radius: 24,
+    mass: 60,
+    damage: 0,
+    attackCooldown: 99,
+    target: 'nearest',
+    egg: true,
+    crate: 'coins',
+    xp: 0,
+    recruitChance: 0,
+    color: 0xc98a3d,
+    goo: 0xc98a3d,
+    hpBarWidth: 44,
+  },
+  /**
+   * Caisse de TNT : le premier coup (n'importe quel dégât, explosion voisine comprise) allume une mèche de `TNT.fuse` s (elle clignote en rouge), puis elle explose :
+   * grosse explosion (`TNT.radius`, environ 3-4 soldats de large) qui inflige `TNT.damage` aux aliens, pas aux soldats. Elle n'encaisse aucun dégât (pas de PV à entamer).
+   */
+  tnt_crate: {
+    id: 'tnt_crate',
+    hp: 200,
+    speed: 0,
+    radius: 24,
+    mass: 60,
+    damage: 0,
+    attackCooldown: 99,
+    target: 'nearest',
+    egg: true,
+    crate: 'tnt',
+    xp: 0,
+    recruitChance: 0,
+    color: 0xd9422b,
+    goo: 0xd9422b,
+    hpBarWidth: 44,
   },
 };
 

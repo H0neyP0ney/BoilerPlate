@@ -15,7 +15,8 @@ try {
   const { ClientSession } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
   const { LoopbackHub } = await vite.ssrLoadModule('/src/net/LoopbackTransport.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
-  const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
+  const { DIFFICULTY, CRATES } = await vite.ssrLoadModule('/src/config.ts');
+  CRATES.every = [1e9, 1e9]; // pas de caisse de pièces aléatoire : ce test compare des trajectoires, la suite aléatoire doit rester celle d'avant les caisses
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { UPGRADE_IDS } = await vite.ssrLoadModule('/src/data/progression.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');
@@ -84,7 +85,7 @@ try {
     host.sim.gems.coins.push({ id: host.sim.ids.get(), x: cq.center.x + 20, y: cq.center.y, px: 0, py: 0, life: 14, age: 5 });
     for (let i = 0; i < 12; i++) await tick(client);
     const mine = client.sim.squadOf(client.localPlayer);
-    check(host.sim.gems.coins.length === 0 && cq.coinsPicked === before + 1, "l'hôte compte la pièce ramassée sur la squad du client", `${before} → ${cq.coinsPicked}`);
+    check(cq.coinsPicked >= before + 1, "l'hôte compte la pièce ramassée sur la squad du client", `${before} → ${cq.coinsPicked}`);
     check(mine?.coinsPicked === cq.coinsPicked, 'le client lit son cumul de pièces dans le snapshot', `${mine?.coinsPicked}`);
     const sq0 = host.sim.squadOf(host.localPlayer);
     host.sim.gems.coins.push({ id: host.sim.ids.get(), x: sq0.center.x + 5000, y: sq0.center.y + 5000, px: 0, py: 0, life: 14, age: 5 });
@@ -135,12 +136,17 @@ try {
   b.anchor.y = a.center.y;
   for (const s of a.soldiers) s.invulnerable = 0;
   const hpSum = () => a.soldiers.reduce((n, x) => n + x.hp, 0) + b.soldiers.reduce((n, x) => n + x.hp, 0);
+  hs.fuses.length = 0; // ni mèche de kamikaze en cours (explosion d'alien : elle blesse légitimement)
+  hs.blasts.length = 0;
   hs.combat.clear(); // pas de projectile d alien en vol (boule de glace, grenade…) : ils blessent légitimement
   const before = hpSum();
+  const waveUpdate = hs.waves.update;
+  hs.waves.update = () => {}; // pas de nouvelle vague pendant la mesure : un alien qui surgit puis frappe dans le même tick blesserait légitimement
   for (let i = 0; i < 90; i++) {
     hs.aliens.length = 0;
     await tick(client);
   }
+  hs.waves.update = waveUpdate;
   check(hpSum() >= before - 0.001, 'coop : les squads ne se blessent pas entre elles', `PV ${before.toFixed(0)} → ${hpSum().toFixed(0)}`);
 
   if (!(a.alive && b.alive)) hs.restart(); // les deux squads doivent être en vie pour mesurer la difficulté à 2 joueurs

@@ -1255,6 +1255,85 @@ try {
     }
   }
 
+  // ---- boîtes de power-up et caisses de pièces : 200 PV, le butin jaillit à la destruction
+  {
+    const { session, sim, step } = fresh(23);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const box = sim.horde.spawnBox('powerup_box', sq.center.x + 400, sq.center.y);
+    box.contents = 'heal';
+    sim.damage(box, 1e6, 'p1');
+    check(box.alive && box.hp === 200, "boîte de power-up : encore en l'air, elle est intouchable");
+    box.age = 1; // posée
+    check(box.maxHp === 200 && box.hp === 200 && ALIENS.powerup_box.egg && ALIENS.powerup_box.crate === 'powerup', 'boîte de power-up : 200 PV exacts, destructible comme un œuf');
+    sim.damage(box, 199, 'p1');
+    check(box.alive && sim.powerups.items.length === 0, 'boîte de power-up : debout à 1 PV, rien n\'en est sorti');
+    sim.damage(box, 5, 'p1');
+    const out = sim.powerups.items.find((p) => p.kind === 'heal');
+    check(!box.alive && !!out && !!out.hop, 'boîte de power-up : cassée, le power-up caché (heal) jaillit', out ? out.kind : 'rien');
+    const crate = sim.horde.spawnBox('coin_crate', sq.center.x + 400, sq.center.y + 100);
+    const before = sim.gems.coins.length;
+    crate.age = 1; // posée
+    sim.damage(crate, 1e6, 'p1');
+    const n = sim.gems.coins.length - before;
+    check(!crate.alive && n >= 8 && n <= 12, 'caisse de pièces : cassée, 8 à 12 pièces d\'or jaillissent', `${n} pièces`);
+    // les power-ups n'apparaissent plus à nu : le minuteur pose des boîtes
+    clearAliens(sim);
+    sim.powerups.items.length = 0;
+    let boxesSeen = 0;
+    let bare = 0;
+    for (let i = 0; i < 30 * 120; i++) {
+      session.advance(34, () => {});
+      if (sim.choiceT > 0) sim.choiceT = 0;
+      for (const a of sim.aliens) if (a.alive && a.def.crate) boxesSeen = Math.max(boxesSeen, 1);
+      bare += sim.powerups.items.filter((p) => p.age === undefined).length;
+    }
+    check(boxesSeen === 1 && bare === 0, 'les power-ups apparaissent dans des boîtes, jamais à nu', `boîtes vues ${boxesSeen}, power-ups à nu ${bare}`);
+    const crates = sim.aliens.filter((a) => a.alive && a.def.crate === 'coins').length;
+    check(crates <= 3, 'caisses de pièces : au plus 3 à la fois', `${crates}`);
+  }
+
+  // ---- caisse de TNT : un coup allume la mèche (3 s), puis grosse explosion qui blesse les aliens, jamais les soldats
+  {
+    const { session, sim, step } = fresh(24);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const cx = sq.center.x + 1250; // loin de la squad : les aliens du test n'ont pas le temps de l'atteindre
+    const cy = sq.center.y;
+    const tnt = sim.horde.spawnBox('tnt_crate', cx, cy);
+    sim.damage(tnt, 100, 'p1');
+    check(tnt.fuseT === undefined, 'TNT : encore en l\'air, un coup ne l\'allume pas');
+    tnt.age = 1; // posée
+    // des aliens dans le rayon (et un hors rayon), pour voir les dégâts
+    const place = (type, dx) => {
+      sim.horde.spawnAt(type, cx + dx, cy + 60, 1, false, true);
+      const a = sim.aliens[sim.aliens.length - 1];
+      a.age = 1;
+      return a;
+    };
+    const near = place('gling', 60);
+    const nearBig = place('charger', -90);
+    const far = sim.horde.spawnBox('coin_crate', cx + 380, cy + 60); // immobile, hors du rayon
+    far.age = 1;
+    const farHp = far.hp;
+    nearBig.hp = nearBig.maxHp = 300;
+    const hpSq = sq.soldiers.reduce((n, x) => n + x.hp, 0);
+    sim.damage(tnt, 100, 'p1');
+    check(tnt.alive && tnt.fuseT === 3 && tnt.hp === 200, 'TNT : le premier coup allume une mèche de 3 s, sans l\'endommager', `mèche ${tnt.fuseT}`);
+    let fuseEvents = 0;
+    for (let i = 0; i < 30 * 2.7; i++) session.advance(34, (e) => { if (e.t === 'fuse') fuseEvents++; });
+    check(tnt.alive && tnt.fuseT > 0 && tnt.fuseT < 1, 'TNT : la mèche brûle, elle n\'a pas encore explosé à 2,7 s', `${tnt.fuseT?.toFixed(2)} s`);
+    // les aliens courent vers la squad : on les ramène dans le rayon juste avant l'explosion
+    for (let i = 0; i < 30 * 0.6; i++) {
+      for (const [al, dx] of [[near, 60], [nearBig, -90]]) if (al.alive) { al.x = al.px = cx + dx; al.y = al.py = cy + 60; } // ils courent vers la squad : on les garde dans le rayon
+      session.advance(34, () => {});
+    }
+    check(!tnt.alive, 'TNT : explose au bout de 3 s');
+    check(!near.alive && (!nearBig.alive || nearBig.hp < 300 - 400), 'TNT : les aliens dans le rayon encaissent de très gros dégâts', `gling ${near.alive ? near.hp.toFixed(0) : 'mort'}, charger ${nearBig.alive ? nearBig.hp.toFixed(0) : 'mort'}`);
+    check(far.alive && far.hp >= farHp - 1, 'TNT : un alien hors du rayon n\'est pas touché', `${far.hp.toFixed(0)}/${farHp.toFixed(0)}`);
+    check(sq.soldiers.reduce((n, x) => n + x.hp, 0) >= hpSq - 0.001, 'TNT : jamais de dégâts aux soldats');
+  }
+
   // ---- grand rayon d'aimant : un globe d'XP ou une recrue lâchés dans le rayon de ramassage ne sont pas avalés au tick de leur création
   {
     const { sim, step } = fresh(16);

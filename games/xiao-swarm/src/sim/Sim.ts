@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, TNT, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -588,6 +588,13 @@ export class Sim {
       return;
     }
     if (!u.alive || !this.horde.targetable(u)) return; // dans son trou d'apparition ou totalement enterré : intouchable
+    if (u.def.crate === 'tnt') {
+      // caisse de TNT : n'encaisse rien, mais le premier coup allume la mèche (`TNT.fuse` s) ; la vue fait clignoter la caisse (événement `fuse`)
+      u.fuseT = TNT.fuse;
+      u.fuseOwner = attacker && attacker !== 'aliens' ? attacker : this.nearestSquad(u.x, u.y)?.owner;
+      this.events.push({ t: 'fuse', x: u.x, y: u.y, r: TNT.radius, delay: TNT.fuse, alien: u.def.id });
+      return;
+    }
     if (this.horde.burial(u) === 'semi') amount *= BURIED.semiDmg; // semi-enterré (lurker en embuscade)
     if (u.captive && u.def.capture) amount *= CAPTIVE_VULN; // une bulle qui digère un soldat est super vulnérable
     const sq = attacker ? this.squadOf(attacker) : undefined;
@@ -889,6 +896,13 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
+  /** La mèche d'une caisse de TNT est consumée : elle disparaît dans une grosse explosion qui blesse les aliens (l'XP revient à qui l'a allumée), jamais les soldats. */
+  detonate(a: AlienState): void {
+    a.alive = false;
+    const owner = a.fuseOwner ?? this.nearestSquad(a.x, a.y)?.owner;
+    if (owner) this.addBlast(a.x, a.y, TNT.radius, TNT.damage, owner, owner, TNT.knock);
+  }
+
   addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0): void {
     this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison });
   }
@@ -925,7 +939,9 @@ export class Sim {
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
-    if (a.def.egg) this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
+    if (a.def.crate === 'powerup') this.powerups.dropFromBox(a.x, a.y, a.contents); // boîte de power-up cassée : le power-up caché jaillit
+    else if (a.def.crate === 'coins') this.gems.crateBurst(a.x, a.y); // caisse de pièces cassée : les pièces d'or jaillissent
+    else if (a.def.egg) this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
     if (a.def.boss) {
       // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul fait un clear screen, laisse l'œuf, compte pour l'escalade et le bandeau.
       // Le premier tombé (`firstTwin`) est un alien comme les autres (ses drops normaux, aucun effet de fin de boss) ; son jumeau continue le combat.

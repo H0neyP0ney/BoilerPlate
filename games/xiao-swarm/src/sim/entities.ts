@@ -137,6 +137,11 @@ export interface AlienState extends Body {
   noXp: boolean;
   /** Invoqué ou ressuscité : ne laisse jamais de recrue (les aliens des vagues rejouées pendant un boss, eux, en laissent). */
   noRecruit: boolean;
+  /** Boîte de power-up : le power-up caché (tiré à son apparition, jamais envoyé aux clients). */
+  contents?: string;
+  /** Caisse de TNT allumée : secondes avant l'explosion (undefined = pas encore touchée) et joueur à qui revient l'XP des kills. Jamais envoyés aux clients. */
+  fuseT?: number;
+  fuseOwner?: string;
   /** Apparaît sur place, sans trou ni délai d'émergence (araignées qui surgissent du cadavre d'un chaman). */
   instant: boolean;
   /** Lurker : phase (0 en route, 1 s'enterre, 2 enterré, 3 vise, 4 lance les pics, 5 ressort), temps restant dans la phase (s) et direction des pics. */

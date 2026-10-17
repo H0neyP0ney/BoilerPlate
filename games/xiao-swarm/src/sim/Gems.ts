@@ -1,5 +1,5 @@
-import { clamp } from '@xiao/engine/sim';
-import { COINS, GEM_CHEST, RECRUIT } from '../config';
+import { clamp, Rng } from '@xiao/engine/sim';
+import { COINS, CRATES, GEM_CHEST, RECRUIT } from '../config';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -25,7 +25,20 @@ export class Gems {
    */
   finalPending = false;
 
-  constructor(private readonly sim: Sim) {}
+  /** Compte à rebours (s) avant la prochaine caisse de pièces. */
+  private crateTimer = 8;
+  /** Idem pour la caisse de TNT (plus rare). */
+  private tntTimer = 24;
+
+  /**
+   * Aléatoire PROPRE aux diamants, pièces et caisses : il ne touche jamais la suite aléatoire de la simulation (`sim.rng`), donc ajouter ou régler ces butins ne change
+   * pas les vagues ni les tirages du reste de la partie.
+   */
+  private readonly rng: Rng;
+
+  constructor(private readonly sim: Sim) {
+    this.rng = new Rng((sim.config.seed ^ 0x5bd1e995) >>> 0);
+  }
 
   private get enabled(): boolean {
     return !this.sim.config.online && !this.sim.ending;
@@ -38,7 +51,7 @@ export class Gems {
     const cx = clamp(x, minX + 60, maxX - 60);
     const cy = clamp(y - GEM_CHEST.offsetY, minY + 60, maxY - 60);
     this.chests.push({ id: this.sim.ids.get(), x: cx, y: cy, charge: 0, state: 'idle', cool: 0, age: 0 });
-    const rng = this.sim.rng;
+    const rng = this.rng;
     const n = Math.floor(rng.range(GEM_CHEST.free[0], GEM_CHEST.free[1] + 1));
     for (let i = 0; i < n; i++) this.drop(cx, cy, rng.range(0, Math.PI * 2), rng.range(60, 130));
   }
@@ -46,7 +59,7 @@ export class Gems {
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
   spawnFinalBurst(x: number, y: number): void {
     if (!this.enabled) return;
-    const rng = this.sim.rng;
+    const rng = this.rng;
     const n = Math.floor(rng.range(GEM_CHEST.burst[0], GEM_CHEST.burst[1] + 1));
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200));
@@ -62,12 +75,12 @@ export class Gems {
   /** Un alien vient de mourir : il peut lâcher une pièce d'or (plus souvent s'il est costaud), un boss en lâche une poignée. Solo seulement. */
   dropCoins(a: AlienState): void {
     if (this.sim.ending) return; // les pièces tombent aussi en multi (contrairement aux diamants)
-    const rng = this.sim.rng;
+    const rng = this.rng;
     const n = a.def.boss ? COINS.bossCoins : rng.chance(a.maxHp >= COINS.strongHp ? COINS.strongChance : COINS.chance) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const hop = n > 1 ? rng.range(50, 150) : rng.range(15, 45);
       const ang = rng.range(0, Math.PI * 2);
-      this.coins.push({ id: this.sim.ids.get(), x: a.x, y: a.y, px: a.x, py: a.y, life: COINS.life, age: 0, hop: { vx: (Math.cos(ang) * hop) / GEM_FALL_TIME, vy: (Math.sin(ang) * hop) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
+      this.pushCoin(a.x, a.y, ang, hop);
     }
   }
 
@@ -97,7 +110,7 @@ export class Gems {
       return;
     }
     this.chests.splice(i, 1);
-    const rng = this.sim.rng;
+    const rng = this.rng;
     const n = Math.floor(rng.range(GEM_CHEST.burst[0], GEM_CHEST.burst[1] + 1));
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(c.x, c.y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 230)); // explosion : en couronne, plus loin que les diamants du début
@@ -120,8 +133,66 @@ export class Gems {
         this.sim.events.push({ t: 'gemChestReady', id: c.id, x: c.x, y: c.y });
       }
     }
+    this.updateCrates(dt);
     this.updateList(this.items, dt, 'gem');
     this.updateList(this.coins, dt, 'coin');
+  }
+
+  /**
+   * Caisses de pièces : toutes les `CRATES.every` s, une apparaît près d'une squad vivante au hasard (jamais sur une squad, sur un point libre, au plus `CRATES.max`
+   * à la fois). Boîtes et caisses restées trop loin de toutes les squads disparaissent (elles libèrent leur place).
+   */
+  private updateCrates(dt: number): void {
+    if (this.sim.tutorial?.active || this.sim.ending) return;
+    const squads = this.sim.aliveSquads;
+    if (squads.length === 0) return;
+    let crates = 0;
+    let tnts = 0;
+    for (const a of this.sim.aliens) {
+      if (!a.alive || !a.def.crate) continue;
+      if (squads.every((s) => Math.hypot(s.center.x - a.x, s.center.y - a.y) > CRATES.farDist)) a.alive = false; // trop loin : retirée sans butin
+      else if (a.def.crate === 'coins') crates++;
+      else if (a.def.crate === 'tnt') tnts++;
+    }
+    const { rng } = this;
+    this.crateTimer -= dt;
+    if (this.crateTimer <= 0) {
+      this.crateTimer = rng.range(CRATES.every[0], CRATES.every[1]);
+      if (crates < CRATES.max) this.dropCrate('coin_crate', squads);
+    }
+    this.tntTimer -= dt;
+    if (this.tntTimer <= 0) {
+      this.tntTimer = rng.range(CRATES.tntEvery[0], CRATES.tntEvery[1]);
+      if (tnts < CRATES.tntMax) this.dropCrate('tnt_crate', squads);
+    }
+  }
+
+  /** Pose une caisse près d'une squad vivante au hasard (jamais sur une squad, sur un point libre de la carte). */
+  private dropCrate(type: 'coin_crate' | 'tnt_crate', squads: Squad[]): void {
+    const { rng } = this;
+    const { arena } = this.sim;
+    const sq = rng.pick(squads);
+    for (let tries = 0; tries < 20; tries++) {
+      const ang = rng.range(0, Math.PI * 2);
+      const d = rng.range(CRATES.minDist, CRATES.maxDist);
+      const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d };
+      const b = arena.bounds;
+      if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60 || !arena.isFree(p, 30)) continue;
+      if (squads.some((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) < o.radius + 50)) continue;
+      this.sim.horde.spawnBox(type, p.x, p.y);
+      return;
+    }
+  }
+
+  /** Une caisse de pièces est détruite en (x, y) : `CRATES.coins` pièces d'or jaillissent tout autour. */
+  crateBurst(x: number, y: number): void {
+    const rng = this.rng;
+    const n = Math.floor(rng.range(CRATES.coins[0], CRATES.coins[1] + 1));
+    for (let i = 0; i < n; i++) this.pushCoin(x, y, rng.range(0, Math.PI * 2), rng.range(50, 140));
+  }
+
+  private pushCoin(x: number, y: number, ang: number, dist: number): void {
+    this.coins.push({ id: this.sim.ids.get(), x, y, px: x, py: y, life: COINS.life, age: 0, hop: { vx: (Math.cos(ang) * dist) / GEM_FALL_TIME, vy: (Math.sin(ang) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
   }
 
   /** Fait vivre une liste d'objets au sol (diamants ou pièces) : chute, durée de vie, aimant, ramassage. */

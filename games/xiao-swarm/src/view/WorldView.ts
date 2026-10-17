@@ -273,6 +273,15 @@ export class WorldView {
           break;
         }
         const def = ALIENS[e.alien];
+        if (def.crate) {
+          // boîte / caisse cassée : éclats de la couleur de la boîte, onde, petit bruit ; pas de flaque ni de secousse
+          if (nearCam(e.x, e.y)) {
+            this.fx.burst(e.x, e.y - 14, def.color, 18);
+            this.fx.ring(e.x, e.y, 70, def.crate === 'coins' ? 0xffc83d : 0x7fc8ff);
+            playSfx(this.scene, 'rock_break');
+          }
+          break;
+        }
         if (nearCam(e.x, e.y)) playSfx(this.scene, def.egg ? 'egg_break' : def.boss || def.hp >= BIG_KILL_HP ? 'alien_die_l' : def.hp >= 100 ? 'alien_die_m' : 'alien_die_s');
         const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
         const oyA = alienOffsetY(e.alien); // restes posés sous le sprite décalé

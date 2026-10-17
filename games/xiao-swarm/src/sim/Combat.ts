@@ -1,5 +1,6 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
+import { CRIT_GLASSES_MUL, SNIPER_POWER_MUL } from '../data/armory';
 import { ALIENS, zombieStats } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
@@ -116,7 +117,7 @@ export class Combat {
         s.aim = Math.atan2(t.y - 10 - (s.y - 17), t.x - s.x);
         s.facing = Math.cos(s.aim) >= 0 ? 1 : -1;
         if (s.cooldown <= 0) {
-          this.fire(s, t, weapon, damageMul, rangeMul, Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
+          this.fire(s, t, weapon, damageMul * (s.def.id === 'sniper' && squad.perks.has('sniperPower') ? SNIPER_POWER_MUL : 1), rangeMul, Math.min(CRIT_MAX, squad.stats.get('crit')) / 100, squad.perks.has('critGlasses') ? CRIT_MUL * CRIT_GLASSES_MUL : CRIT_MUL);
           s.cooldown += weapon.cooldown;
           if (s.cooldown < 0) s.cooldown = 0;
         }
@@ -136,7 +137,7 @@ export class Combat {
     return chance > 0 && this.sim.rng.chance(Math.min(1, chance));
   }
 
-  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1, critChance = 0): void {
+  private fire(s: SoldierState, target: Unit, weapon: WeaponDef, damageMul: number, rangeMul = 1, critChance = 0, critMul = CRIT_MUL): void {
     const { rng } = this.sim;
     const damage = weapon.damage * damageMul;
     // bouche du canon à 30 px devant le soldat ; si la cible est plus près (mêlée), elle est ramenée en deçà de la cible : sinon la balle
@@ -149,14 +150,14 @@ export class Combat {
     if (weapon.kind === 'beam') {
       const crit = this.rollCrit(critChance);
       this.sim.events.push({ t: 'beam', x1: mx, y1: my, x2: target.x, y2: target.y - 10 });
-      if (crit) this.sim.events.push({ t: 'crit', x: target.x, y: target.y - 10, dmg: damage * CRIT_MUL });
-      this.sim.damage(target, crit ? damage * CRIT_MUL : damage, s.owner, Math.cos(s.aim), Math.sin(s.aim));
+      if (crit) this.sim.events.push({ t: 'crit', x: target.x, y: target.y - 10, dmg: damage * critMul });
+      this.sim.damage(target, crit ? damage * critMul : damage, s.owner, Math.cos(s.aim), Math.sin(s.aim));
       return;
     }
 
     if (weapon.kind === 'grenade') {
       const crit = this.rollCrit(critChance);
-      this.lob(s, target, weapon, crit ? damage * CRIT_MUL : damage, mx, my, crit);
+      this.lob(s, target, weapon, crit ? damage * critMul : damage, mx, my, crit);
       return;
     }
 
@@ -175,7 +176,7 @@ export class Combat {
       p.vy = Math.sin(a) * speed * k;
       p.life = p.maxLife = life;
       p.crit = this.rollCrit(critChance);
-      p.damage = p.crit ? damage * CRIT_MUL : damage;
+      p.damage = p.crit ? damage * critMul : damage;
       p.pierce = weapon.pierce ?? 0;
       p.flame = weapon.kind === 'flame';
       p.lob = false;
@@ -348,7 +349,7 @@ export class Combat {
     p.life = p.maxLife = flight;
     // comme les tirs : Damage + Esprit d'équipe + Dernier rempart, et chance de critique de la squad (dégâts × `CRIT_MUL` ; le chiffre de critique sort à l'explosion)
     p.crit = this.rollCrit(Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
-    p.damage = 20 * this.damageMulOf(squad) * (p.crit ? CRIT_MUL : 1);
+    p.damage = 20 * this.damageMulOf(squad) * (p.crit ? (squad.perks.has('critGlasses') ? CRIT_MUL * CRIT_GLASSES_MUL : CRIT_MUL) : 1);
     p.pierce = 0;
     p.flame = false;
     p.lob = false;

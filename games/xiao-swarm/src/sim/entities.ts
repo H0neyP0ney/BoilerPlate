@@ -334,6 +334,35 @@ export interface UpgradeOrbState {
   pullV?: number;
 }
 
+/** Diamant vert (ressource des skins) au sol : il retombe en cloche autour du coffre, attend, puis est aspiré comme un globe. Solo seulement, jamais dans le snapshot. */
+export interface GemState {
+  id: number;
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  /** Jamais décompté (le type est celui des objets attirables, `Pickup.catchItem`). */
+  life: number;
+  age: number;
+  hop?: { vx: number; vy: number; t: number };
+  pulled?: string;
+  caught?: boolean;
+  pullV?: number;
+}
+
+/** Coffre à diamants laissé par un boss (solo) : rester autour charge la jauge, pleine = vidéo récompensée, puis il explose en diamants. */
+export interface GemChestState {
+  id: number;
+  x: number;
+  y: number;
+  /** Jauge de charge, 0 → 1 (`GEM_CHEST.chargeTime` s de présence). */
+  charge: number;
+  /** `idle` : se charge ; `ad` : la vidéo est demandée (la vue répond par `Gems.adResult`) ; `cooldown` : vidéo ratée, pause avant de pouvoir recommencer. */
+  state: 'idle' | 'ad' | 'cooldown';
+  cool: number;
+  age: number;
+}
+
 export interface RecruitState {
   id: number;
   cls: SoldierClassId;

@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { canvasTexture, sprites } from '@xiao/engine';
 import { PLAYER_HUE_SHIFT } from '../config';
+import { SKIN_SLOT_BASE, slotShift } from '../data/skins';
 import { FX } from '../fxParams';
 import { ensurePlayerSlot, madePlayerSlots, registerSlotMaker, shiftBlues } from './playerHue';
 
@@ -28,7 +29,7 @@ const composed = new Set<string>();
 
 /** Id de visuel d'une recrue pour un emplacement de joueur (tête recolorée comme ses soldats, fabriquée à la première demande ; repli : la recrue bleue d'origine). */
 export function recruitSpriteId(cls: string, slot: number): string {
-  const s = slot % PLAYER_HUE_SHIFT.length;
+  const s = slot >= SKIN_SLOT_BASE ? slot : slot % PLAYER_HUE_SHIFT.length; // emplacement de skin (boutique) : tel quel
   if (s > 0) ensurePlayerSlot(s);
   return s > 0 && sprites.has(`recruit_${cls}#s${s}`) ? `recruit_${cls}#s${s}` : `recruit_${cls}`;
 }
@@ -43,7 +44,7 @@ function recolorHead(head: HTMLImageElement, slot: number): HTMLImageElement | H
   if (!ctx) return head;
   ctx.drawImage(head, 0, 0);
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  shiftBlues(data.data, PLAYER_HUE_SHIFT[slot]);
+  shiftBlues(data.data, slotShift(slot));
   ctx.putImageData(data, 0, 0);
   return canvas;
 }

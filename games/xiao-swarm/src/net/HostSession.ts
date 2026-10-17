@@ -1,6 +1,6 @@
 import { FixedStep } from '@xiao/engine/sim';
 import { MAX_BOTS, type BotLevel } from '../data/bots';
-import { START_SQUADS } from '../data/classes';
+import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { DifficultyLevel } from '../data/difficultyLevels';
 import type { ModeDef } from '../data/modes';
 import { CoopBot } from '../sim/CoopBot';
@@ -17,6 +17,9 @@ import {
   type LobbyInfo,
   type Snapshot,
 } from './Protocol';
+import { skinById } from '../data/skins';
+import { perkById, unitUnlockById } from '../data/armory';
+import { trailById } from '../data/trails';
 import { TICK_RATE, type Session } from './Session';
 import type { Payload, Transport } from './Transport';
 
@@ -43,6 +46,12 @@ export interface HostSessionOptions {
   lobby?: boolean;
   /** Salle listée dans les parties publiques (information du lobby ; la visibilité réelle est décidée à la création par le transport). */
   public?: boolean;
+  /** Cosmétiques équipés par l'hôte (ids de skin et de trail), diffusés à tous les joueurs. */
+  skin?: string;
+  trail?: string;
+  /** Armurerie de l'hôte (unités débloquées, upgrades). */
+  units?: string[];
+  perks?: string[];
 }
 
 interface RemotePlayer {
@@ -98,6 +107,8 @@ export class HostSession implements Session {
     this.localPlayer = opts.transport.localId;
     this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players: [this.localPlayer], xp: true, choiceTimeout: true, online: true, difficulty: opts.difficulty });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
+    this.setCosmetics(this.localPlayer, opts.skin, opts.trail);
+    this.setLoadout(this.localPlayer, opts.units, opts.perks);
     this.inputs.set(this.localPlayer, this.local);
 
     this.transport.onMessage = this.onMessage;
@@ -271,7 +282,7 @@ export class HostSession implements Session {
     if (!msg) return;
     switch (msg.t) {
       case 'hello':
-        return this.onHello(peer, msg.v);
+        return this.onHello(peer, msg.v, msg.skin, msg.trail, msg.units, msg.perks);
       case 'upgrade':
         if (this.remotes.has(peer) && typeof msg.index === 'number') this.sim.chooseUpgrade(peer, Math.floor(msg.index));
         return;
@@ -292,7 +303,24 @@ export class HostSession implements Session {
     }
   };
 
-  private onHello(peer: PlayerId, version: number): void {
+  /** Skin et trail annoncés par un joueur (cosmétiques : ids inconnus ignorés) ; l'hôte les diffuse à tous dans le snapshot. */
+  private setCosmetics(owner: PlayerId, skin: unknown, trail: unknown): void {
+    const sq = this.sim.squadOf(owner);
+    if (!sq) return;
+    sq.skin = typeof skin === 'string' && skinById(skin) ? skin : '';
+    sq.trail = typeof trail === 'string' && trailById(trail) ? trail : '';
+  }
+
+  /** Armurerie annoncée par un joueur : seuls les ids connus sont retenus (le Trooper est toujours là) ; elle règle SES recrues et ses bonus, pas ceux des autres. */
+  private setLoadout(owner: PlayerId, units: unknown, perks: unknown): void {
+    const sq = this.sim.squadOf(owner);
+    if (!sq) return;
+    const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    sq.unlocked = ['trooper', ...list(units).filter((u): u is SoldierClassId => u !== 'trooper' && !!unitUnlockById(u))];
+    sq.perks = new Set(list(perks).filter((p) => perkById(p)));
+  }
+
+  private onHello(peer: PlayerId, version: number, skin?: string, trail?: string, units?: string[], perks?: string[]): void {
     if (version !== PROTOCOL_VERSION) return this.send(peer, { t: 'refused', reason: 'version' });
     if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS && this.bots.size > 0) this.removeBot([...this.bots.keys()][this.bots.size - 1]); // un humain prend la place d'un bot
     if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS) return this.send(peer, { t: 'refused', reason: 'full' });
@@ -301,6 +329,8 @@ export class HostSession implements Session {
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));
       if (this.lobby) this.lobby.humans = 1 + this.remotes.size;
     }
+    this.setCosmetics(peer, skin, trail);
+    this.setLoadout(peer, units, perks);
     const lobby = this.lobby ?? { started: true, humans: 1 + this.remotes.size, bots: this.bots.size, public: false };
     this.send(peer, { t: 'welcome', v: PROTOCOL_VERSION, mode: this.sim.mode.id, seed: this.sim.config.seed, you: peer, host: this.localPlayer, difficulty: this.sim.difficulty, lobby });
     this.updateLobby();

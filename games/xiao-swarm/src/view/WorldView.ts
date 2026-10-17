@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
+import { CROWD, DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
@@ -9,7 +9,9 @@ import { CLASSES, type SoldierClassId } from '../data/classes';
 import { tierOfTexture, tierScale } from '../data/damageTiers';
 import { TUTORIAL } from '../data/tutorial';
 import { t } from '../i18n';
-import { SFX } from '../settings';
+import { SFX, settings } from '../settings';
+import { skinById, skinSlot } from '../data/skins';
+import { GEM_GREEN } from '../art/gems';
 import { playPowerUpSfx, playSfx } from '../playSfx';
 import { UPGRADES, type UpgradeId } from '../data/progression';
 import type { Projectile } from '../sim/entities';
@@ -23,6 +25,10 @@ import { FX } from '../fxParams';
 import { teleColor, teleInner, teleOuter } from './telegraph';
 import { ROCKET_TEXTURE } from '../sim/Combat';
 import { CHEST_GOLD, LootViews } from './LootViews';
+import { GemViews } from './GemViews';
+import { MEDIC_RANGE_UNITS } from '../data/armory';
+import { TrailFx } from './TrailFx';
+import { onSkinSheetReady, retainSkinSheets } from '../assets/skinSheets';
 import { drawPickupSpot, drawReviveZone, PickupViews, POWERUP_INFO, powerUpIconKey, RECRUIT_COLOR } from './PickupViews';
 import { upgradeIconKey } from './upgradeIcons';
 import { AlienView, RecruitView, SoldierView } from './UnitViews';
@@ -165,6 +171,10 @@ export class WorldView {
   }
   /** Coffres des boss et globes d'upgrade. */
   private readonly loot: LootViews;
+  private readonly gems: GemViews;
+  private readonly trails = new TrailFx();
+  private skinSheetOff?: () => void;
+  private skinCheckAt = 0;
   /** Halos d'apparition en cours : ils suivent leur soldat / leur squad au lieu de rester à l'endroit où ils sont nés. */
   private readonly followers: { parts: { img: Phaser.GameObjects.Image; dy: number }[]; pos: () => { x: number; y: number } | null }[] = [];
   /** Barres de vie : part blanche qui traîne derrière la part colorée (voir `bar`), par id d'unité ; `barsSeen` = ids dessinés cette frame. */
@@ -201,6 +211,8 @@ export class WorldView {
       this.fx,
     );
     this.loot = new LootViews(scene, sim, localPlayer);
+    this.gems = new GemViews(scene, sim);
+    this.skinSheetOff = onSkinSheetReady(() => this.refreshSkins()); // une planche de skin vient d'arriver : les soldats la prennent
     for (const sq of sim.squads) this.colorOf(sq.owner);
     this.quietUntil = scene.time.now + 1000; // les soldats déjà présents au chargement n'ont pas de colonne d'arrivée
   }
@@ -288,7 +300,7 @@ export class WorldView {
       }
       case 'soldierDied': {
         if (nearCam(e.x, e.y)) playSfx(this.scene, 'soldier_die');
-        this.corpse(e.id, e.cls, e.x, e.y, this.sim.squadOf(e.owner)?.slot ?? 0);
+        this.corpse(e.id, e.cls, e.x, e.y, this.visualSlot(e.owner, this.sim.squadOf(e.owner)?.slot ?? 0));
         this.fx.death(e.x, e.y + soldierOffsetY(e.cls), CLASSES[e.cls].color);
         if (e.owner === this.localPlayer && !CLASSES[e.cls].deathBlast) this.scene.cameras.main.shake(FX.shake.deathMs, FX.shake.deathAmount);
         break;
@@ -492,6 +504,21 @@ export class WorldView {
         this.fx.column(e.x, e.y, CHEST_GOLD, 170, 700);
         if (this.onScreen(e.x, e.y, 200)) this.scene.cameras.main.shake(140, 0.004);
         break;
+      case 'gemChestOpen':
+        // le coffre à diamants explose : gerbe verte, onde, colonne de lumière, secousse ; les diamants retombent autour
+        this.fx.burst(e.x, e.y - 30, GEM_GREEN, 50);
+        this.fx.ring(e.x, e.y, 170, GEM_GREEN);
+        this.fx.column(e.x, e.y, GEM_GREEN, 190, 800);
+        if (this.onScreen(e.x, e.y, 200)) this.scene.cameras.main.shake(160, 0.005);
+        playSfx(this.scene, 'egg_break');
+        break;
+      case 'coinPicked':
+        if (e.owner === this.localPlayer) playSfx(this.scene, 'xp'); // le gain, lui, passe par `Squad.coinsPicked` (snapshot)
+        break;
+      case 'gemPicked':
+        this.fx.burst(e.x, e.y - 20, GEM_GREEN, 6);
+        playSfx(this.scene, 'xp');
+        break;
       case 'upgradePicked': {
         const col = e.prism ? 0xfff3a0 : 0x7fc8ff;
         this.fx.burst(e.x, e.y - 20, col, 30);
@@ -636,6 +663,7 @@ export class WorldView {
     this.syncFires();
     this.pickups.sync(time, alpha);
     this.loot.sync(time, alpha);
+    this.gems.sync(time, alpha);
     this.followHalos();
     this.updateFuses(dt, time);
     this.updateFires(time);
@@ -646,6 +674,9 @@ export class WorldView {
   destroyPickups(): void {
     this.pickups.destroy();
     this.loot.destroy();
+    this.gems.destroy();
+    this.trails.clear();
+    this.skinSheetOff?.();
     for (const tag of this.bossTags.values()) tag.destroy();
     this.bossTags.clear();
   }
@@ -677,7 +708,7 @@ export class WorldView {
       for (const s of sq.soldiers) {
         let v = this.soldiers.get(s.id);
         if (!v) {
-          v = new SoldierView(this.scene, s, this.colorOf(s.owner), sq.slot);
+          v = new SoldierView(this.scene, s, this.colorOf(s.owner), this.visualSlot(s.owner, sq.slot));
           v.onIceHit = (x, y) => {
             if (this.onScreen(x, y, 120)) this.fx.iceShards(x, y); // glaçon touché par un allié : éclats et petits blocs de glace
           };
@@ -690,6 +721,7 @@ export class WorldView {
         }
         v.seen = true;
         v.sync(alpha, dt, time);
+        if (s.alive && this.onScreen(v.rx, v.ry, 100)) this.trails.track(s.id, v.rx, v.ry, this.trailOf(s.owner));
         if (v.healTick(dt)) this.fx.heal(v.rx, v.ry - 30);
         if (s.stun > 0 && s.alive && this.onScreen(v.rx, v.ry, 60)) this.electric.crackle(v.rx, v.ry - 18 + soldierOffsetY(s.def.id), 18, 24, 16, dt); // étourdi : il crépite
       }
@@ -722,7 +754,7 @@ export class WorldView {
     for (const r of this.sim.recruits.items) {
       let v = this.recruits.get(r.id);
       if (!v) {
-        v = new RecruitView(this.scene, r, CLASSES[r.cls].color, this.sim.squadOf(this.localPlayer)?.slot ?? 0);
+        v = new RecruitView(this.scene, r, CLASSES[r.cls].color, this.visualSlot(this.localPlayer, this.sim.squadOf(this.localPlayer)?.slot ?? 0));
         this.recruits.set(r.id, v);
       }
       v.seen = true;
@@ -746,6 +778,36 @@ export class WorldView {
       }
     }
     return best;
+  }
+
+  /** Trail équipée d'un joueur ('' = aucune) : la mienne vient des réglages (tout de suite), celle des autres de leur squad (snapshot). */
+  private trailOf(owner: PlayerId): string {
+    return (owner === this.localPlayer ? settings.trail : this.sim.squadOf(owner)?.trail) ?? '';
+  }
+
+  /** Skins affichés : les planches chargées à la demande qui ne servent plus à personne sont déchargées (vérifié toutes les 5 s). */
+  private releaseSkinSheets(): void {
+    if (this.scene.time.now < this.skinCheckAt) return;
+    this.skinCheckAt = this.scene.time.now + 5000;
+    const keep = new Set<string>();
+    for (const sq of this.sim.squads) keep.add(sq.owner === this.localPlayer ? (settings.skin ?? '') : sq.skin);
+    retainSkinSheets(keep);
+  }
+
+  /**
+   * Emplacement visuel d'un joueur : son skin équipé (boutique) s'il en a un, sinon la couleur de son emplacement.
+   */
+  private visualSlot(owner: PlayerId, slot: number): number {
+    const skin = skinById(owner === this.localPlayer ? settings.skin : this.sim.squadOf(owner)?.skin); // le mien : réglages ; les autres : leur squad (snapshot)
+    return skin ? skinSlot(skin) : slot;
+  }
+
+  /** Skin changé dans la boutique : les soldats sont recréés (au prochain affichage) avec la nouvelle couleur. */
+  refreshSkins(): void {
+    for (const v of this.soldiers.values()) v.destroy();
+    this.soldiers.clear();
+    for (const v of this.recruits.values()) v.destroy();
+    this.recruits.clear();
   }
 
   private prune<V extends { seen: boolean; destroy(): void }>(map: Map<number, V>): void {
@@ -1105,6 +1167,10 @@ export class WorldView {
     g.clear();
     this.pickups.drawGround(g, time);
     this.loot.drawGround(g, time);
+    this.gems.drawGround(g, time);
+    this.trails.update(dt);
+    this.trails.draw(g, time, (x, y) => this.onScreen(x, y, 80)); // trails des soldats, sous eux
+    this.releaseSkinSheets();
     // recrues : la même zone qui pulse que sous les power-ups, en jaune, posée sur la position au sol de la recrue
     for (const r of this.recruits.values()) drawPickupSpot(g, r.rx, r.ry, RECRUIT_COLOR, time, r.state.id, r.dim ? 0.3 : 1);
     this.drawTutorialMarker(g, time);
@@ -1130,7 +1196,7 @@ export class WorldView {
         const heal = s.def.heal;
         const v = this.soldiers.get(s.id);
         if (!heal || !v) continue;
-        const r = heal.radius * (0.95 + Math.sin(time * 4) * 0.05);
+        const r = (heal.radius + (sq.perks.has('medicRange') ? MEDIC_RANGE_UNITS * CROWD.spacing : 0)) * (0.95 + Math.sin(time * 4) * 0.05); // upgrade d'armurerie : aura plus large
         g.fillStyle(0x5eff8a, 0.08).fillEllipse(v.rx, v.ry, r * 2, r * 1.4);
         g.lineStyle(2, 0x5eff8a, 0.35).strokeEllipse(v.rx, v.ry, r * 2, r * 1.4);
       }

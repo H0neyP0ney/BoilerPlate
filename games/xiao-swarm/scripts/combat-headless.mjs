@@ -1180,6 +1180,81 @@ try {
     check(before >= 5 && after === 0 && sq.buffs.stim === 0 && !sim.aliens.some((a) => a.alive && a.def.egg), 'fin du jeu : recrues, power-ups, loots, globes d\'upgrade et d\'XP, œufs et bonus actifs effacés', `${before} avant, ${after} après`);
   }
 
+  // ---- boss final : l'équivalent d'un coffre à diamants explose, la séquence de fin attend que les diamants soient ramassés (ou disparus après 10 s)
+  {
+    // a) rien ramassé : les diamants disparaissent au bout de 10 s, alors seulement la fin peut démarrer
+    const { sim, step } = fresh(17);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('boss_crab', sq.center.x + 900, sq.center.y, 1, false);
+    const boss = sim.aliens.find((a) => a.alive && a.def.boss);
+    boss.age = 1; // sorti de son trou d'apparition (invulnérable avant)
+    sim.damage(boss, 1e12, 'p1');
+    step(1);
+    const n = sim.gems.items.length;
+    check(sim.finalBossDead && n >= 20 && n <= 25 && sim.gems.finalPending && !sim.gems.endingReady, 'boss final tué : 20-25 diamants au sol, la fin attend', `${n} diamants`);
+    const waves0 = sim.waves.time;
+    step(60); // ~2 s
+    check(sim.waves.time === waves0, 'boss final tué : les vagues sont suspendues le temps de ramasser');
+    step(30 * 9); // ~9 s de plus, la squad reste loin
+    check(sim.gems.items.length === 0 && sim.gems.endingReady, 'les diamants non ramassés disparaissent après 10 s : la fin peut démarrer');
+  }
+  {
+    // b) tout ramassé : la fin démarre dès que le dernier est pris (sans attendre les 10 s)
+    const { sim, step } = fresh(18);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sq.stats.add('magnet', { flat: 20 });
+    sim.horde.spawnAt('boss_crab', sq.center.x + 60, sq.center.y, 1, false);
+    const boss = sim.aliens.find((a) => a.alive && a.def.boss);
+    boss.age = 1; // sorti de son trou d'apparition (invulnérable avant)
+    sim.damage(boss, 1e12, 'p1');
+    let ticks = 0;
+    for (; ticks < 30 * 9 && !sim.gems.endingReady; ticks++) {
+      step(1);
+    }
+    check(sim.gems.endingReady && sim.gems.items.length === 0 && ticks < 30 * 9, 'tous les diamants ramassés : la fin peut démarrer avant les 10 s', `${(ticks / 30).toFixed(1)} s`);
+  }
+
+  // ---- armurerie : unités débloquées dans le tirage des recrues, pièces d'or lâchées puis ramassées
+  {
+    const { session, sim, step } = fresh(19);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const only = new Set();
+    for (let i = 0; i < 200; i++) only.add(sim.recruits.chooseClass(sq));
+    check(only.size === 1 && only.has('trooper'), 'armurerie : sans achat, seul le Trooper est recruté', [...only].join(','));
+    session.setLoadout({ units: ['trooper', 'medic', 'sniper'], perks: ['critGlasses'] });
+    const counts = { trooper: 0, medic: 0, sniper: 0 };
+    for (let i = 0; i < 2000; i++) counts[sim.recruits.chooseClass(sq)]++;
+    const special = (counts.medic + counts.sniper) / 2000;
+    check(Math.abs(special - 0.2) < 0.04 && counts.medic > 0 && counts.sniper > 0 && Math.abs(counts.medic - counts.sniper) < 120 && sq.perks.has('critGlasses'), "armurerie : 20 % des bonus recrue sont spéciaux, à égalité parmi les unités débloquées ; l'upgrade est posée", `spéciales ${(special * 100).toFixed(1)} % (medic ${counts.medic}, sniper ${counts.sniper})`);
+    // pièces d'or : ~15 % des aliens en lâchent, un boss une poignée, jamais un alien sans XP
+    for (let i = 0; i < 400; i++) {
+      sim.horde.spawnAt('slime', sq.center.x + 60, sq.center.y, 1, false);
+    }
+    const slimes = sim.aliens.filter((a) => a.alive);
+    for (const a of slimes) { a.age = 1; a.noXp = false; } // `spawnAt` (invocation) marque ses aliens sans XP : on les rend normaux
+    const noXp = slimes.slice(0, 50);
+    for (const a of noXp) a.noXp = true;
+    for (const a of slimes) sim.damage(a, 1e9, 'p1');
+    const coins = sim.gems.coins.length;
+    check(coins > 5 && coins < 40, 'pièces d\'or : environ 15 % des aliens tués en lâchent (hors aliens sans XP)', `${coins} pièces pour ${slimes.length - noXp.length} aliens`);
+    // ramassage
+    sq.stats.add('magnet', { flat: 30 });
+    let picked = 0;
+    for (let i = 0; i < 60; i++) session.advance(34, (e) => { if (e.t === 'coinPicked') picked += e.n; });
+    check(picked === coins && sim.gems.coins.length === 0, 'pièces d\'or : toutes ramassées par l\'aimant (événement coinPicked)', `${picked}/${coins}`);
+    // expiration
+    {
+      const f = fresh(20); // sim neuve : la montée de niveau des kills ci-dessus met le monde en pause (choix d'upgrade)
+      clearAliens(f.sim);
+      f.sim.gems.coins.push({ id: 1, x: f.sim.squadOf('p1').center.x + 3000, y: f.sim.squadOf('p1').center.y, px: 0, py: 0, life: 14, age: 5 });
+      for (let i = 0; i < 30 * 15; i++) f.session.advance(34, () => {});
+      check(!f.sim.gems.coins.some((c) => c.id === 1), "pièces d'or : une pièce non ramassée disparaît après 14 s", JSON.stringify(f.sim.gems.coins.map((c) => [c.life, c.caught, c.x])) + ' tick ' + f.sim.tick + ' ending ' + f.sim.ending);
+    }
+  }
+
   // ---- grand rayon d'aimant : un globe d'XP ou une recrue lâchés dans le rayon de ramassage ne sont pas avalés au tick de leur création
   {
     const { sim, step } = fresh(16);

@@ -178,6 +178,7 @@ export class PowerUps {
         this.sim.xp.magnetize(squad, MAGNET_RADIUS); // coup unique : aspire tout l'XP, les recrues et les autres power-ups alentour, ne reste pas actif
         this.sim.recruits.magnetize(squad, MAGNET_RADIUS);
         this.sim.upgradeOrbs.magnetize(squad, MAGNET_RADIUS);
+        this.sim.gems.magnetize(squad, MAGNET_RADIUS);
         this.magnetize(squad, MAGNET_RADIUS);
         break;
       case 'heal':

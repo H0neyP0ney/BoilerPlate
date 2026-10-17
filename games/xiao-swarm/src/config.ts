@@ -50,6 +50,20 @@ export const ALIEN_SPAWN_HOLD = 0.7;
 export const AMBUSH = { ahead: 330, spread: 60 };
 /** Vague en cercle (chance : `DIFFICULTY.ringChance`) : tous les aliens de la vague sortent du sol en CERCLE autour de la squad d'UN joueur, à `radius` px de son centre (juste hors écran), avec l'animation d'apparition habituelle (`Horde.spawnRing`, la même fonction que la dernière vague du tutoriel). */
 export const RING = { radius: 340 };
+
+/**
+ * Coffre à diamants des boss (solo, `sim/Gems.ts`) : posé `offsetY` px au-dessus de l'œuf ; rester à moins de `radius` px d'un soldat pendant `chargeTime` s remplit
+ * sa jauge (elle redescend `decay` fois plus vite quand la squad s'éloigne), pleine = vidéo récompensée, puis il explose en `burst` diamants. En plus, `free` diamants
+ * retombent tout de suite autour du coffre, ramassables sans vidéo. Un diamant au sol disparaît après `life` s (il clignote pendant les `blink` dernières secondes ;
+ * attrapé par l'aimant, il ne disparaît plus). `cooldown` : pause (s) après une vidéo ratée / refusée.
+ */
+/**
+ * Pièces d'or (solo, `sim/Gems.ts`) : lâchées par les aliens comme les globes d'XP (jamais par un alien sans XP : invoqué, rejeu de vague, œuf, orbe). `chance` par alien
+ * (`strongChance` si ses PV max atteignent `strongHp`), `bossCoins` pièces pour un boss ; elles disparaissent après `life` s (clignotent les `blink` dernières).
+ */
+export const COINS = { chance: 0.15, strongHp: 200, strongChance: 0.5, bossCoins: 15, life: 14, blink: 5 };
+
+export const GEM_CHEST = { offsetY: 130, radius: 120, chargeTime: 2, decay: 2, burst: [20, 25] as [number, number], free: [1, 5] as [number, number], cooldown: 4, grace: 0.6, life: 10, blink: 3 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -107,6 +121,8 @@ export const INTERSTITIALS_ENABLED = false;
  * Recrues : durée de vie au sol (s). À l'apparition, elle fait un saut en cloche (`hopTime` s, `hopHeight` px de haut dans l'affichage)
  * vers la squad du tueur : distance tirée dans `hopDist` (px, sans dépasser la squad), direction écartée au hasard de ± `hopSpread` rad.
  */
+/** Chance qu'un bonus recrue soit une recrue SPÉCIALE (unité débloquée à l'armurerie, tirée à égalité parmi celles du joueur ; rien si aucune n'est débloquée). */
+export const SPECIAL_RECRUIT_CHANCE = 0.2;
 export const RECRUIT = { life: 18, hopTime: 0.55, hopDist: [110, 154] as [number, number], hopSpread: 0.5, hopHeight: 70 };
 /**
  * Ramassage des recrues et des power-ups : rayon de ramassage (px) et vitesse max (px/s) d'un objet attiré, multipliés par la stat
@@ -371,6 +387,8 @@ export const SCENES = {
   multiplayer: 'Multiplayer',
   title: 'Title',
   solo: 'SoloSetup',
+  shop: 'Shop',
+  armory: 'Armory',
   options: 'Options',
   viewer: 'Viewer',
   obstacles: 'Obstacles',

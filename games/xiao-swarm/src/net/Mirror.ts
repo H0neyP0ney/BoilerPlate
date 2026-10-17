@@ -1,9 +1,11 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
+import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD } from '../config';
 import { ALIENS, shieldOf } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
+import { skinFromIndex } from '../data/skins';
+import { trailFromIndex } from '../data/trails';
 import { CLASSES } from '../data/classes';
-import type { AlienState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
+import type { AlienState, GemState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
@@ -57,6 +59,7 @@ export class Mirror {
   private readonly recruits = new Map<number, RecruitState>();
   /** Globes d'upgrade des coffres (par id) : lissés comme les recrues, chute en cloche comprise. */
   private readonly upgradeOrbs = new Map<number, UpgradeOrbState>();
+  private readonly coins = new Map<number, GemState>();
   private readonly powerups = new Map<number, PowerUpState>();
   /** Globes d'XP persistants (par id) : lissés vers leur position hôte comme les recrues, au lieu de sauter à chaque snapshot. */
   private readonly orbs = new Map<number, XpOrb>();
@@ -105,6 +108,9 @@ export class Mirror {
       const squad = sim.addPlayer(sq.owner);
       squad.kills = sq.kills;
       squad.slot = sq.slot;
+      squad.coinsPicked = sq.coins;
+      squad.skin = skinFromIndex(sq.skin);
+      squad.trail = trailFromIndex(sq.trail);
       squad.dealt = sq.dealt;
       squad.level = sq.level;
       squad.xp = sq.xp;
@@ -174,6 +180,14 @@ export class Mirror {
       sim.upgradeOrbs.items.push(this.upsertUpgradeOrb(o));
     }
     prune(this.upgradeOrbs, seenUpOrbs);
+
+    const seenCoins = new Set<number>();
+    sim.gems.coins.length = 0;
+    for (const c of snap.coins) {
+      seenCoins.add(c.id);
+      sim.gems.coins.push(this.upsertCoin(c));
+    }
+    prune(this.coins, seenCoins);
 
     sim.reviveZones.length = 0;
     for (const z of snap.zones) sim.reviveZones.push({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress * REVIVE_TIME });
@@ -272,6 +286,13 @@ export class Mirror {
       if (o.hop) o.hop.t = Math.max(0.001, o.hop.t - dt); // chute : le compteur décroît entre deux snapshots (arc fluide)
       const g = this.goals.get(o);
       if (g) this.approach(o, this.advance(g, dt)); // chute depuis le coffre, puis envol vers sa squad : glisse au lieu de sauter
+    }
+    for (const o of sim.gems.coins) {
+      o.px = o.x;
+      o.py = o.y;
+      if (o.hop) o.hop.t = Math.max(0.001, o.hop.t - dt); // chute : le compteur décroît entre deux snapshots
+      const g = this.goals.get(o);
+      if (g) this.approach(o, this.advance(g, dt));
     }
     for (const o of sim.xp.orbs) {
       o.px = o.x;
@@ -521,6 +542,18 @@ export class Mirror {
     s.owner = o.owner;
     s.hop = o.fall > 0 ? { vx: 0, vy: 0, t: o.fall } : undefined;
     this.retarget(s, o.x, o.y);
+    return s;
+  }
+
+  private upsertCoin(c: { id: number; x: number; y: number; fall: number; blink: boolean }): GemState {
+    let s = this.coins.get(c.id);
+    if (!s) {
+      s = { id: c.id, x: c.x, y: c.y, px: c.x, py: c.y, life: COINS.life, age: 9 };
+      this.coins.set(c.id, s);
+    }
+    s.life = c.blink ? COINS.blink / 2 : COINS.life; // seul compte « sous le seuil de clignotement ou non » : l'hôte le décide
+    s.hop = c.fall > 0 ? { vx: 0, vy: 0, t: c.fall } : undefined;
+    this.retarget(s, c.x, c.y);
     return s;
   }
 

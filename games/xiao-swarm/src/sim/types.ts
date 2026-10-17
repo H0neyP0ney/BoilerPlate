@@ -62,6 +62,14 @@ export type SimEvent =
   | { t: 'stalactite'; x: number; y: number; r: number }
   /** Un coffre de boss vient de s'ouvrir (éclat doré, secousse) : les globes d'upgrade en sortent. */
   | { t: 'chestOpened'; x: number; y: number }
+  /** Coffre à diamants (solo) : la jauge est pleine, la vue lance la vidéo récompensée puis répond par `Gems.adResult(id, ok)`. */
+  | { t: 'gemChestReady'; id: number; x: number; y: number }
+  /** Le coffre à diamants explose (vidéo regardée) : gerbe verte, les diamants en sortent. */
+  | { t: 'gemChestOpen'; x: number; y: number }
+  /** Un diamant est ramassé : la vue l'ajoute au porte-monnaie du joueur (`settings.addGems`). */
+  | { t: 'gemPicked'; x: number; y: number; n: number }
+  /** Une pièce d'or est ramassée : la vue l'ajoute au porte-monnaie (`settings.addCoins`). */
+  | { t: 'coinPicked'; x: number; y: number; n: number; owner: PlayerId }
   | { t: 'recruited'; owner: PlayerId; cls: SoldierClassId; x: number; y: number }
   | { t: 'upgradePicked'; owner: PlayerId; x: number; y: number; id: string; prism: boolean }
   | { t: 'powerup'; owner: PlayerId; kind: string; x: number; y: number }

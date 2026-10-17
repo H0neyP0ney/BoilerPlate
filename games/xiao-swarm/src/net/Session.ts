@@ -1,6 +1,7 @@
 import { FixedStep } from '@xiao/engine/sim';
 import { DIFFICULTY } from '../config';
-import { START_SQUADS } from '../data/classes';
+import { CLASSES, START_SQUADS, type SoldierClassId } from '../data/classes';
+import { perkById } from '../data/armory';
 import type { DifficultyLevel } from '../data/difficultyLevels';
 import type { ModeDef } from '../data/modes';
 import { BotBrain } from '../sim/bots';
@@ -67,6 +68,8 @@ export interface LocalSessionOptions {
   tutorial?: boolean;
   /** Niveau de difficulté (`normal` par défaut). */
   difficulty?: DifficultyLevel;
+  /** Armurerie du joueur local (unités débloquées, upgrades). */
+  loadout?: { units: SoldierClassId[]; perks: string[] };
 }
 
 export class LocalSession implements Session {
@@ -93,8 +96,17 @@ export class LocalSession implements Session {
     for (let i = 0; i < opts.bots; i++) players.push(`bot${i + 1}`);
     this.sim = new Sim({ mode: opts.mode, seed: opts.seed, players, xp: true, tutorial: opts.tutorial, difficulty: opts.difficulty });
     this.sim.spawnSquads(() => this.sim.rng.pick(START_SQUADS));
+    this.setLoadout(opts.loadout);
     this.inputs.set(this.localPlayer, this.local);
     players.slice(1).forEach((id, i) => this.bots.push(new BotBrain(id, opts.seed + 101 * (i + 1))));
+  }
+
+  /** Armurerie du joueur local : appliquée à sa squad (aussi quand il achète pendant l'écran d'accueil). */
+  setLoadout(l?: { units: SoldierClassId[]; perks: string[] }): void {
+    const sq = this.sim.squadOf(this.localPlayer);
+    if (!sq || !l) return;
+    sq.unlocked = l.units.filter((u) => u in CLASSES);
+    sq.perks = new Set(l.perks.filter((p) => perkById(p)));
   }
 
   get alpha(): number {

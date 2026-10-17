@@ -1,6 +1,6 @@
 import { clamp, Rng, type Point } from '@xiao/engine/sim';
-import { DIFFICULTY, RECRUIT } from '../config';
-import { ACTIVE_CLASSES, TARGET_MIX, type SoldierClassId } from '../data/classes';
+import { DIFFICULTY, RECRUIT, SPECIAL_RECRUIT_CHANCE } from '../config';
+import type { SoldierClassId } from '../data/classes';
 import type { AlienState, RecruitState, SoldierState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -135,11 +135,14 @@ export class Recruits {
     }
   }
 
-  /** Classe qui comble le mieux l'écart à TARGET_MIX (avec un peu d'aléatoire). */
+  /**
+   * Classe de la recrue : un Trooper, sauf une chance `SPECIAL_RECRUIT_CHANCE` (20 %) que ce bonus soit une recrue spéciale : une unité débloquée par ce joueur à
+   * l'armurerie (`Squad.unlocked`), à égalité de chances entre elles. Sans unité débloquée, aucun tirage (la suite aléatoire de la partie ne change pas).
+   */
   private chooseClass(squad: Squad): SoldierClassId {
-    const n = Math.max(1, squad.size);
-    const ids = ACTIVE_CLASSES;
-    return this.sim.rng.weighted(ids, (id) => Math.max(0, TARGET_MIX[id] - squad.countOf(id) / n) + 0.04) ?? 'trooper';
+    const specials = squad.unlocked.filter((c) => c !== 'trooper');
+    if (specials.length > 0 && this.sim.rng.chance(SPECIAL_RECRUIT_CHANCE)) return this.sim.rng.pick(specials);
+    return 'trooper';
   }
 
   /** Aimant (power-up, coup unique) : toute recrue à moins de `radius` px de la squad est aspirée vers elle (si elle peut en profiter). */

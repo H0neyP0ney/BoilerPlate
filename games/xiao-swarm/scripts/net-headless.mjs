@@ -26,7 +26,7 @@ try {
   const hub = new LoopbackHub();
   const hostT = hub.createTransport();
   const code = await hostT.host();
-  const host = new HostSession({ mode: MODES.survival, seed: 42, transport: hostT, roomCode: code });
+  const host = new HostSession({ mode: MODES.survival, seed: 42, transport: hostT, roomCode: code, skin: 'gold', trail: 'fire' });
   const hostEvents = [];
   const clientEvents = [];
   const lag = async (client) => {
@@ -56,7 +56,7 @@ try {
   check(host.sim.squads.length === 1, 'hôte seul au départ');
 
   const clientT = hub.createTransport();
-  const pending = ClientSession.connect(clientT, code);
+  const pending = ClientSession.connect(clientT, code, { skin: 'violet', trail: 'rainbow', units: ['trooper', 'medic', 'nope'], perks: ['medicRange', 'nope'] });
   let client = null;
   pending.then((c) => (client = c));
   for (let i = 0; i < 30 && !client; i++) await tick();
@@ -64,6 +64,34 @@ try {
   check(host.sim.squads.length === 2, 'l\'hôte a une 2e squad', host.sim.squads.map((s) => `${s.owner}:${s.size}`).join(' '));
   check(client.localPlayer === clientT.localId, 'le client connaît son id');
   check(client.sim.squadOf(client.localPlayer)?.alive === true, 'le client voit sa squad');
+
+  // cosmétiques (skin et trail) : annoncés dans le hello, validés par l'hôte, diffusés à tous dans le snapshot
+  {
+    const mine = host.sim.squadOf(clientT.localId);
+    check(mine?.skin === 'violet' && mine?.trail === 'rainbow', "l'hôte retient le skin et la trail annoncés par le client", `${mine?.skin}/${mine?.trail}`);
+    for (let i = 0; i < 10; i++) await tick(client);
+    check(mine?.unlocked.join(',') === 'trooper,medic' && mine?.perks.has('medicRange') && mine?.perks.size === 1, "l'hôte retient l'armurerie annoncée par le client (ids inconnus ignorés)", `${mine?.unlocked}/${[...mine.perks]}`);
+    const theirs = client.sim.squadOf(host.localPlayer);
+    check(theirs?.skin === 'gold' && theirs?.trail === 'fire', "le client voit le skin et la trail de l'hôte (snapshot)", `${theirs?.skin}/${theirs?.trail}`);
+    const own = client.sim.squadOf(client.localPlayer);
+    check(own?.skin === 'violet' && own?.trail === 'rainbow', 'le client retrouve les siens dans le snapshot', `${own?.skin}/${own?.trail}`);
+  }
+
+  // pièces d'or en multi : posées par l'hôte (une pièce près de la squad du client), vues par le client, ramassées et comptées sur SA squad (cumul du snapshot)
+  {
+    const cq = host.sim.squadOf(clientT.localId);
+    const before = cq.coinsPicked;
+    host.sim.gems.coins.push({ id: host.sim.ids.get(), x: cq.center.x + 20, y: cq.center.y, px: 0, py: 0, life: 14, age: 5 });
+    for (let i = 0; i < 12; i++) await tick(client);
+    const mine = client.sim.squadOf(client.localPlayer);
+    check(host.sim.gems.coins.length === 0 && cq.coinsPicked === before + 1, "l'hôte compte la pièce ramassée sur la squad du client", `${before} → ${cq.coinsPicked}`);
+    check(mine?.coinsPicked === cq.coinsPicked, 'le client lit son cumul de pièces dans le snapshot', `${mine?.coinsPicked}`);
+    const sq0 = host.sim.squadOf(host.localPlayer);
+    host.sim.gems.coins.push({ id: host.sim.ids.get(), x: sq0.center.x + 5000, y: sq0.center.y + 5000, px: 0, py: 0, life: 14, age: 5 });
+    for (let i = 0; i < LAG_TICKS + 4; i++) await tick(client);
+    check(client.sim.gems.coins.length >= 1, 'le client voit les pièces au sol', `${client.sim.gems.coins.length}`);
+    host.sim.gems.coins.length = 0;
+  }
 
   // 2) Régime établi : comparaison hôte / client.
   client.setLocalInput(-1, 0);

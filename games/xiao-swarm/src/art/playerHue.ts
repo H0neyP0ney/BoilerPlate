@@ -30,6 +30,9 @@ export function initPlayerHue(s: Phaser.Scene): void {
   scene = s;
 }
 
+/** Scène qui sert à créer les textures / charger les fichiers à la demande (null avant `initPlayerHue`). */
+export const textureScene = (): Phaser.Scene | null => scene;
+
 /** Fabrique, si ce n'est pas déjà fait, les visuels recolorés de cet emplacement de joueur (sans effet pour le 0 : visuels d'origine). */
 export function ensurePlayerSlot(slot: number): void {
   if (slot <= 0 || made.has(slot) || !scene) return;

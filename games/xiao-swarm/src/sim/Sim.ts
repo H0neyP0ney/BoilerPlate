@@ -8,6 +8,7 @@ import type { MapDef } from '../data/maps';
 import type { ModeDef } from '../data/modes';
 import { Arena } from './Arena';
 import { UpgradeOrbs } from './Chests';
+import { Gems } from './Gems';
 import { Combat } from './Combat';
 import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
@@ -100,6 +101,8 @@ export class Sim {
   readonly recruits: Recruits;
   /** Coffres des boss tués et globes d'upgrade qui en sortent (réservés à leur joueur). */
   readonly upgradeOrbs: UpgradeOrbs;
+  /** Diamants verts et coffres à diamants des boss (solo seulement, voir `Gems`). */
+  readonly gems: Gems;
   readonly powerups: PowerUps;
   readonly xp: Xp;
   /** Tampon réutilisé pour les requêtes de voisinage (évite les allocations). */
@@ -125,6 +128,7 @@ export class Sim {
     this.combat = new Combat(this);
     this.recruits = new Recruits(this);
     this.upgradeOrbs = new UpgradeOrbs(this);
+    this.gems = new Gems(this);
     this.powerups = new PowerUps(this);
     this.xp = new Xp(this);
     this.squads = config.players.map((id) => new Squad(this, id));
@@ -191,6 +195,7 @@ export class Sim {
     this.combat.clear();
     this.recruits.clear();
     this.upgradeOrbs.clear();
+    this.gems.clear();
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
@@ -228,6 +233,7 @@ export class Sim {
     this.combat.clear();
     this.recruits.clear();
     this.upgradeOrbs.clear();
+    this.gems.clear();
     this.powerups.clear();
     this.xp.clear();
     this.choiceT = 0;
@@ -248,6 +254,7 @@ export class Sim {
     // on finit le jeu : plus aucun bonus ni loot au sol (recrues, globes d'XP et d'upgrade, power-ups, zones, relance, booster, œufs de boss) ni bonus actif
     this.recruits.clear();
     this.upgradeOrbs.clear();
+    this.gems.clear();
     this.powerups.clear();
     this.xp.clear();
     for (const a of this.aliens) if (a.def.egg) a.alive = false; // œuf détruit sans ses globes (pas de `killAlien`)
@@ -499,13 +506,14 @@ export class Sim {
       return;
     }
 
-    if (!this.tutorial?.active && !this.ending) this.waves.update(dt); // onboarding : la timeline normale attend la fin du tutoriel
+    if (!this.tutorial?.active && !this.ending && !this.gems.finalPending) this.waves.update(dt); // onboarding : la timeline normale attend la fin du tutoriel
     this.rebuildHashes();
     for (const sq of this.squads) sq.update(dt, inputs.get(sq.owner) ?? NO_INPUT);
     this.horde.update(dt);
     this.combat.update(dt);
     this.recruits.update(dt);
     this.upgradeOrbs.update(dt);
+    this.gems.update(dt);
     if (this.xpEnabled) this.xp.update(dt);
     this.updateCorpsesAndRocks(dt);
     this.updateFires(dt);
@@ -923,10 +931,13 @@ export class Sim {
       // Le premier tombé (`firstTwin`) est un alien comme les autres (ses drops normaux, aucun effet de fin de boss) ; son jumeau continue le combat.
       const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
       const firstTwin = !!a.def.boss.twin && this.aliens.some((o) => o !== a && o.alive && o.def.boss?.twin);
-      if (a.def.boss.kind === 'final') this.finalBossDead = true;
+      if (a.def.boss.kind === 'final') {
+        this.finalBossDead = true;
+        this.gems.spawnFinalBurst(a.x, a.y); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
+      }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
-        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (a.def.boss.kind !== 'final') { this.horde.spawnEgg(a.x, a.y); this.gems.spawnChest(a.x, a.y); } // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
           this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
@@ -952,6 +963,7 @@ export class Sim {
       return;
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
+    if (!a.noXp && !a.def.egg && !a.def.projectile) this.gems.dropCoins(a); // pièces d'or (solo) : jamais par un alien sans XP (invoqué, rejeu de vague), un œuf ou un orbe
     this.powerups.maybeDropReroll(a, squad); // loot rare : ~5 relances par partie, au nombre d'aliens tués (DIFFICULTY.rerollLootFirst / rerollLootEvery)
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y), dirX, dirY); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }

@@ -50,7 +50,7 @@ const KEYS = {
 /** Texture canvas de la jauge circulaire : l'anneau découpé à l'angle courant (redessinée seulement quand l'angle change). */
 const RING_LIVE = 'ui_tl_ring_live';
 /** Échelle maximale (pixels d'écran par pixel de planche) : la barre fait alors ~390 px (0,58 réduit de 15 %). */
-const U_MAX = 0.493;
+const U_MAX = 0.42; // 0,493 avant le 17/10 : timeline réduite d’environ 15 %
 /** La jauge jaune dépasse de la zone sombre de ce nombre de pixels d'écran à gauche et à droite. */
 const FILL_GROW = 1;
 /** Précision de l'angle de la jauge circulaire (pas par tour). */

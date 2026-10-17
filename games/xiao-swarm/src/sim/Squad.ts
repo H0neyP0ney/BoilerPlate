@@ -1,6 +1,7 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
 import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
+import { MEDIC_RANGE_UNITS } from '../data/armory';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
 import type { Arena } from './Arena';
 import type { SoldierState } from './entities';
@@ -55,6 +56,14 @@ export class Squad {
   /** Upgrades propres à ce joueur. */
   /** Emplacement du joueur (0, 1, 2…) : détermine sa couleur chez tous les joueurs ; attribué par `Sim`. */
   slot = 0;
+  /** Skin et trail équipés (ids de `data/skins.ts` / `data/trails.ts`, '' = aucun) : cosmétiques, jamais utilisés par la simulation ; ils voyagent par le snapshot pour que tous les joueurs les voient. */
+  skin = '';
+  trail = '';
+  /** Armurerie (`data/armory.ts`, achats permanents du joueur) : unités débloquées (tirage des recrues ; le Trooper d'office) et upgrades possédées. Posés par la session, jamais dans le snapshot. */
+  /** Pièces d'or ramassées par cette squad depuis la création de la partie (cumul, jamais remis à zéro) : dans le snapshot, chaque joueur en tire son gain pour son porte-monnaie. */
+  coinsPicked = 0;
+  unlocked: SoldierClassId[] = ['trooper'];
+  perks = new Set<string>();
   readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
@@ -642,8 +651,9 @@ export class Squad {
     for (const m of this.soldiers) {
       const heal = m.def.heal;
       if (!heal) continue;
+      const radius = heal.radius + (this.perks.has('medicRange') ? MEDIC_RANGE_UNITS * CROWD.spacing : 0); // upgrade d'armurerie : l'aura couvre 2 unités de plus autour du medic
       for (const s of this.soldiers) {
-        if (s.hp >= s.maxHp || Math.hypot(s.x - m.x, s.y - m.y) > heal.radius) continue;
+        if (s.hp >= s.maxHp || Math.hypot(s.x - m.x, s.y - m.y) > radius) continue;
         s.hp = Math.min(s.maxHp, s.hp + heal.perSecond * dt);
         if (fx && this.sim.rng.chance(0.5)) this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
       }

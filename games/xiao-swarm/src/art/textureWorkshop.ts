@@ -1,8 +1,7 @@
 import type Phaser from 'phaser';
-import { DEV_TOOLS, TextureFactory, devLog, log, type AssetEntry } from '@xiao/engine';
+import { TextureFactory, devLog, log, type AssetEntry } from '@xiao/engine';
 import { ACTIVE_CLASSES } from '../data/classes';
 import { LATE_ASSETS, LATE_B_ASSETS } from '../assets/manifest';
-import type { SoldierClassId } from '../data/classes';
 import { proceduralKey, makeAlienTextures } from './aliens';
 import { makeRecruitTextures } from './recruits';
 import { makeFxTextures } from './fx';
@@ -62,12 +61,11 @@ export function setupTextureWorkshop(scene: Phaser.Scene, loaded: readonly Asset
   const priority = makePriority();
   // Un repli ne sert qu'en attendant le fichier : jamais fabriqué pour un visuel dont le fichier est chargé dès le démarrage (paquet 1, ou tout chargé : dev, en ligne, ?jump).
   const hasFile = lateSpriteIds(loaded);
-  const active = new Set<string>(ACTIVE_CLASSES);
   const skip = (key: string): boolean => {
     if (hasFile.has(key)) return true;
     const m = /^(soldier|gun|recruit)_(\w+)$/.exec(key);
     if (m && hasFile.has(`${m[1]}_${m[2]}`)) return true;
-    if (m && !active.has(m[2] as SoldierClassId) && !DEV_TOOLS) return true; // classes désactivées : seulement en dev (panneau Triche)
+    // toutes les classes sont déclarées (fabriquées en dernier, `makePriority`) : un équipier peut avoir débloqué une unité à l'armurerie
     return false;
   };
   f.declare(() => makeRecruitTextures(scene), priority); // recrue assemblée à partir de ses pièces (paquet 1) : déclarée AVANT les soldats, dont la recrue procédurale de même clé est alors ignorée

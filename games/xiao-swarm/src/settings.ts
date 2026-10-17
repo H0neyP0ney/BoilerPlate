@@ -1,5 +1,9 @@
 import { DIFFICULTY_LEVELS, parseDifficultyLevel, type DifficultyLevel } from './data/difficultyLevels';
 import { SFX_TUNING } from './data/sfxTuning';
+import { skinById, skinPrice } from './data/skins';
+import { trailById, trailPrice } from './data/trails';
+import { perkById, unitUnlockById, UNIT_UNLOCKS } from './data/armory';
+import type { SoldierClassId } from './data/classes';
 import { clamp, poki, storage, type MoveKeyCodes, DEV_TOOLS } from '@xiao/engine';
 import { HOTKEY_DEFAULTS, parseHotkeys, type HotkeyAction, type HotkeyBind } from './hotkeys';
 import { i18n, LANGS, type Lang } from './i18n';
@@ -235,6 +239,95 @@ export const settings = {
     storage.set('settings.difficulty', level);
   },
 
+  /** Diamants verts du joueur (ramassés près des coffres des boss, dépensés dans la boutique de skins) : mémorisés, jamais remis à zéro par `SAVE_VERSION`. */
+  gems: Math.max(0, Math.floor(storage.get<number>('gems', 0))),
+  /** Skins achetés (ids de `data/skins.ts`) et skin équipé (null : soldats bleus d'origine). */
+  ownedSkins: storage.get<string[]>('skins.owned', []).filter((id) => skinById(id)),
+  skin: ((id) => (skinById(id) ? id : null))(storage.get<string | null>('skins.equipped', null)) as string | null,
+
+  /** Trails achetées et trail équipée (ids de `data/trails.ts`, null : aucune). */
+  ownedTrails: storage.get<string[]>('trails.owned', []).filter((id) => trailById(id)),
+  trail: ((id) => (trailById(id) ? id : null))(storage.get<string | null>('trails.equipped', null)) as string | null,
+
+  buyTrail(id: string): boolean {
+    const tr = trailById(id);
+    if (!tr || this.ownedTrails.includes(id) || this.gems < trailPrice(tr)) return false;
+    this.addGems(-trailPrice(tr));
+    this.ownedTrails.push(id);
+    storage.set('trails.owned', this.ownedTrails);
+    this.equipTrail(id);
+    return true;
+  },
+
+  equipTrail(id: string | null): void {
+    if (id !== null && !this.ownedTrails.includes(id)) return;
+    this.trail = id;
+    storage.set('trails.equipped', id);
+  },
+
+  /** Pièces d'or (lâchées par les aliens, solo) : monnaie de l'armurerie ; mémorisées comme les diamants. */
+  coins: Math.max(0, Math.floor(storage.get<number>('coins', 0))),
+  /** Armurerie : unités débloquées (le Trooper l'est d'office) et upgrades achetées, permanentes. */
+  ownedUnits: storage.get<string[]>('armory.units', []).filter((id) => unitUnlockById(id)),
+  ownedPerks: storage.get<string[]>('armory.perks', []).filter((id) => perkById(id)),
+
+  addCoins(n: number): void {
+    this.coins = Math.max(0, this.coins + Math.floor(n));
+    storage.set('coins', this.coins);
+  },
+
+  hasUnit(id: string): boolean {
+    return id === 'trooper' || this.ownedUnits.includes(id);
+  },
+
+  /** Débloque une unité contre des pièces d'or. Faux : déjà débloquée ou pas assez de pièces. */
+  buyUnit(id: string): boolean {
+    const u = unitUnlockById(id);
+    if (!u || this.ownedUnits.includes(id) || this.coins < u.price) return false;
+    this.addCoins(-u.price);
+    this.ownedUnits.push(id);
+    storage.set('armory.units', this.ownedUnits);
+    return true;
+  },
+
+  /** Achète une upgrade (permanente) : il faut avoir débloqué son unité. */
+  buyPerk(id: string): boolean {
+    const p = perkById(id);
+    if (!p || this.ownedPerks.includes(id) || !this.hasUnit(p.unit) || this.coins < p.price) return false;
+    this.addCoins(-p.price);
+    this.ownedPerks.push(id);
+    storage.set('armory.perks', this.ownedPerks);
+    return true;
+  },
+
+  /** Ce que le joueur envoie à l'hôte (et applique à sa squad hors ligne) : unités débloquées (Trooper compris) et upgrades. */
+  loadout(): { units: SoldierClassId[]; perks: string[] } {
+    return { units: ['trooper', ...UNIT_UNLOCKS.filter((u) => this.ownedUnits.includes(u.id)).map((u) => u.id)], perks: [...this.ownedPerks] };
+  },
+
+  addGems(n: number): void {
+    this.gems = Math.max(0, this.gems + Math.floor(n));
+    storage.set('gems', this.gems);
+  },
+
+  /** Achète un skin avec les diamants du joueur (et l'équipe). Faux : déjà acheté ou pas assez de diamants. */
+  buySkin(id: string): boolean {
+    const s = skinById(id);
+    if (!s || this.ownedSkins.includes(id) || this.gems < skinPrice(s)) return false;
+    this.addGems(-skinPrice(s));
+    this.ownedSkins.push(id);
+    storage.set('skins.owned', this.ownedSkins);
+    this.equipSkin(id);
+    return true;
+  },
+
+  /** Équipe un skin acheté (null : retour aux soldats d'origine). */
+  equipSkin(id: string | null): void {
+    if (id !== null && !this.ownedSkins.includes(id)) return;
+    this.skin = id;
+    storage.set('skins.equipped', id);
+  },
+
   setTutorialDone(done: boolean): void {
     this.tutorialDone = done;
     storage.set('settings.tutorialDone', done);
@@ -270,3 +363,11 @@ export const settings = {
     storage.set('settings.hotkeys', this.hotkeys);
   },
 };
+
+// dev / `?debug=1` : `?gems=500` ajoute 500 diamants à chaque chargement (test de la boutique de skins)
+if (DEV_TOOLS) {
+  const extra = Number(poki.getURLParam('gems'));
+  if (extra > 0) settings.addGems(extra);
+  const coins = Number(poki.getURLParam('coins')); // `?coins=2000` : pièces d'or pour tester l'armurerie
+  if (coins > 0) settings.addCoins(coins);
+}

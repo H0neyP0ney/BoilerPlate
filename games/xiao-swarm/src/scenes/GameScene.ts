@@ -136,6 +136,7 @@ export class GameScene extends Phaser.Scene {
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
         tutorial: mode.id === 'survival' && !settings.tutorialDone && !poki.getURLParam('notuto') && !jump && !test, // onboarding scripté à la première partie solo
+        loadout: settings.loadout(),
         difficulty: startDifficulty(!settings.tutorialDone), // dernier niveau choisi avec les boutons (normal pendant le tutoriel) ; ?difficulty=expert|impossible pour un test
       });
       this.alienTest = test
@@ -244,6 +245,7 @@ export class GameScene extends Phaser.Scene {
       this.checkEnd();
       this.trackProgress();
     }
+    this.trackCoins();
     // choix d'upgrade : le monde est figé ; on dessine l'état à son dernier pas (alpha 1), sinon l'interpolation fait trembler les projectiles
     this.view.hideSquadCounts = this.titleOpen; // pas de bulle d'effectif sur les écrans titre
     this.view.render(running && sim.choiceT <= 0 ? this.session.alpha : 1, dt, secs);
@@ -365,6 +367,8 @@ export class GameScene extends Phaser.Scene {
       if (e.phase === 'done') settings.setTutorialDone(true); // terminé : les parties suivantes sautent l'onboarding
     }
     if (e.t === 'upgradePicked' && e.owner === this.session.localPlayer) poki.measure('upgrade', e.id, 'picked'); // prismatique ou non : une seule ligne par upgrade
+    if (e.t === 'gemPicked') settings.addGems(e.n); // porte-monnaie du joueur (mémorisé tout de suite : quitter la partie ne perd rien)
+    if (e.t === 'gemChestReady') void this.chestAd(e.id);
     if (e.t === 'gameEnd' || e.t === 'restart') this.events.emit('netEnd', e); // écran de fin coop
     // Écran de fin coop : le gameplay s'arrête (gameplayStop) ; à la relance, retour à l'état « prêt » (le prochain input fait repartir gameplayStart)
     if (e.t === 'gameEnd') {
@@ -387,7 +391,7 @@ export class GameScene extends Phaser.Scene {
     // En ligne, une squad anéantie réapparaît toute seule (voir HostSession) : jamais d'écran de fin.
     if (this.session.online || this.alienTest) return; // test d'un alien : la squad anéantie revient (dev/alienTest.ts)
     if (!this.localSquad.alive) return this.endRun(false);
-    if (this.mode.id === 'survival' && sim.finalBossDead) return this.startEnding(); // victoire : le boss final est tombé
+    if (this.mode.id === 'survival' && sim.finalBossDead && sim.gems.endingReady) return this.startEnding(); // victoire : le boss final est tombé et ses diamants sont ramassés (ou disparus après 10 s)
     if (this.mode.id === 'royale' && sim.squads.length > 1 && sim.aliveSquads.length === 1) return this.endRun(true);
   }
 
@@ -558,6 +562,45 @@ export class GameScene extends Phaser.Scene {
       title: connectionLost ? t('connectionLost') : undefined,
     };
     this.scene.launch(SCENES.gameOver, data);
+  }
+
+  /**
+   * Coffre à diamants rempli : vidéo récompensée sur ce choix explicite du joueur (il est resté autour du coffre), le jeu est interrompu pendant la vidéo
+   * (`gameplayStop`, puis `gameplayStart` à la reprise). Vidéo vue : le coffre explose en diamants ; sinon il se met en pause avant de pouvoir se recharger.
+   */
+  /** Pièces d'or ramassées par ma squad (compteur du snapshot, fiable contrairement aux événements) : le gain va dans mon porte-monnaie ; la première lecture ne crédite rien (arrivée en cours de partie). */
+  private coinSeen = -1;
+  private trackCoins(): void {
+    const sq = this.localSquad;
+    if (!sq) return;
+    const n = sq.coinsPicked;
+    if (this.coinSeen >= 0 && n > this.coinSeen) settings.addCoins(n - this.coinSeen);
+    this.coinSeen = n;
+  }
+
+  private async chestAd(id: number): Promise<void> {
+    const gems = this.session.sim.gems;
+    if (this.session.online || !this.flow.interrupt()) return gems.adResult(id, false);
+    poki.measure('reward', 'gem_chest', 'interact');
+    let ok = false;
+    try {
+      ok = await poki.rewardedBreak();
+    } finally {
+      await this.flow.resume();
+      this.move.reset(); // les relâchements de touches pendant la vidéo sont perdus : on repart sans direction
+    }
+    if (ok) poki.measure('reward', 'gem_chest', 'complete');
+    gems.adResult(id, ok);
+  }
+
+  /** Armurerie : un achat vient d'être fait (écran d'accueil) : la squad locale prend ses unités et ses upgrades. */
+  refreshLoadout(): void {
+    (this.session as { setLoadout?: (l: ReturnType<typeof settings.loadout>) => void }).setLoadout?.(settings.loadout());
+  }
+
+  /** Skin changé dans la boutique : les soldats affichés sont recréés à la nouvelle couleur. */
+  refreshSkins(): void {
+    this.view.refreshSkins();
   }
 
   async revive(free = false): Promise<boolean> {

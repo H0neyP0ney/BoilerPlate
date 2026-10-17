@@ -100,12 +100,12 @@ export class ClientSession implements Session {
    * le premier snapshot : la session est alors prête à afficher. Rejette si refusé.
    * Les handlers sont posés AVANT `join` pour ne manquer aucune connexion.
    */
-  static connect(transport: Transport, code: string): Promise<ClientSession> {
+  static connect(transport: Transport, code: string, cosmetics: { skin?: string; trail?: string; units?: string[]; perks?: string[] } = {}): Promise<ClientSession> {
     return new Promise((resolve, reject) => {
       let welcome: Welcome | null = null;
       let done = false;
       transport.onPeerConnected = (peer) => {
-        const hello: ClientMessage = { t: 'hello', v: PROTOCOL_VERSION };
+        const hello: ClientMessage = { t: 'hello', v: PROTOCOL_VERSION, skin: cosmetics.skin, trail: cosmetics.trail, units: cosmetics.units, perks: cosmetics.perks };
         transport.send(peer, 'reliable', JSON.stringify(hello));
       };
       transport.onClosed = (reason) => reject(new Error(reason ?? 'closed'));

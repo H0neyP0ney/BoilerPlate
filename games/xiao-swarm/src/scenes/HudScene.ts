@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { playSfx } from '../playSfx';
 import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
+import { COIN_KEY, ensureGemTextures, GEM_KEY } from '../art/gems';
 import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
 import { PALETTE, SCENES } from '../config';
 import type { AlienId } from '../data/aliens';
@@ -112,6 +113,14 @@ export class HudScene extends Phaser.Scene {
   /** Niveau de difficulté de la run (Normal / Expert / Impossible), en bas à droite au-dessus du nombre d'aliens. */
   private levelText!: Phaser.GameObjects.Text;
   private levelShown: DifficultyLevel | null = null;
+  /** Compteur de diamants verts (haut droite, à gauche du bouton pause) : icône + total mémorisé (`settings.gems`). */
+  private gemIcon!: Phaser.GameObjects.Image;
+  private gemText!: Phaser.GameObjects.Text;
+  private gemShown = -1;
+  /** Compteur de pièces d'or, sous le bouton pause (haut droite). */
+  private coinIcon!: Phaser.GameObjects.Image;
+  private coinText!: Phaser.GameObjects.Text;
+  private coinShown = -1;
   /** Timeline des vagues et « Next boss » (haut centre). */
   private timeline?: TimelineHud; // timeline et barre de vie du boss : images du paquet 2, construites à son arrivée (`buildBars`) ; la barre d'XP est au paquet 1 (`buildXpBar`)
   /** Barre d'XP en bas de l'écran (hors ligne). */
@@ -170,6 +179,13 @@ export class HudScene extends Phaser.Scene {
     this.alienShown = -1; // la scène est réutilisée : le texte est à refaire
     this.levelText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
     this.levelShown = null;
+    ensureGemTextures(this);
+    this.gemIcon = this.add.image(0, 0, GEM_KEY).setScale(0.5);
+    this.gemText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#9bffc8', stroke: '#13233a', strokeThickness: 5 }).setOrigin(0, 0.5);
+    this.gemShown = -1; // la scène est réutilisée : le texte est à refaire
+    this.coinIcon = this.add.image(0, 0, COIN_KEY).setScale(0.42);
+    this.coinText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '24px', fontStyle: 'bold', color: '#ffe08a', stroke: '#13233a', strokeThickness: 5 }).setOrigin(0, 0.5);
+    this.coinShown = -1;
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
       .setOrigin(0.5)
@@ -277,6 +293,24 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.levelShown = level;
       this.levelText.setText(t(DIFFICULTY_LABEL_KEYS[level])).setColor(level === 'expert' ? '#ffb347' : level === 'impossible' ? '#ff6a6a' : '#ffe14a');
     }
+    if (settings.gems !== this.gemShown) {
+      const gain = this.gemShown >= 0 && settings.gems > this.gemShown;
+      this.gemShown = settings.gems;
+      this.gemText.setText(String(settings.gems));
+      this.placeGems();
+      if (gain) this.tweens.add({ targets: [this.gemIcon, this.gemText], scale: { from: 1.35, to: 1 }, duration: 220, ease: 'Quad.Out' }); // petit « pop » à chaque diamant ramassé
+    }
+    if (settings.coins !== this.coinShown) {
+      const gain = this.coinShown >= 0 && settings.coins > this.coinShown;
+      this.coinShown = settings.coins;
+      this.coinText.setText(String(settings.coins));
+      this.placeGems();
+      if (gain) this.tweens.add({ targets: [this.coinIcon, this.coinText], scale: { from: 1.25, to: 1 }, duration: 160, ease: 'Quad.Out' });
+    }
+    this.coinIcon.setVisible(!this.game_.inLobby);
+    this.coinText.setVisible(!this.game_.inLobby);
+    this.gemIcon.setVisible(!this.game_.inLobby);
+    this.gemText.setVisible(!this.game_.inLobby);
     if (aliens !== this.alienShown) {
       this.alienShown = aliens;
       this.alienText.setText(t('aliensCount', { value: aliens }));
@@ -368,7 +402,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     if (!boss) this.twinSeen.clear();
     if (!boss || !this.bossFrame || !this.bossGhost || !this.bossFill) return;
     const { width, height } = this.scale;
-    const w = Math.min(364, width - 60); // grosse barre (520 × 0,7), à la place de la timeline (en haut, centrée)
+    const w = Math.min(310, width - 60); // grosse barre (364 avant le 17/10, réduite d’environ 15 % comme la timeline), à la place de la timeline (en haut, centrée)
     const k = w / BOSS_ART.W;
     const cx = width / 2;
     const top = hudTop() + 2 + BOSS_NAME_H; // la barre descend d'une ligne : le titre du boss est au-dessus
@@ -786,15 +820,27 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     return c;
   }
 
+  /** Compteur de diamants : texte aligné à droite, icône à sa gauche. */
+  /** Haut gauche : pièces d'or, puis les diamants juste en dessous (icône à gauche, total à sa droite). */
+  private placeGems(): void {
+    const top = device.isTouch ? 70 : 12;
+    this.coinIcon.setPosition(14 + 18, top + 22);
+    this.coinText.setPosition(14 + 18 + 22, top + 22);
+    this.gemIcon.setPosition(14 + 18, top + 22 + 36);
+    this.gemText.setPosition(14 + 18 + 22, top + 22 + 36);
+  }
+
   private readonly layout = (): void => {
     this.placeBossBanner();
+    this.placeGems();
     const { width, height } = this.scale;
     // Décalé sous la pill Poki sur mobile
     const top = device.isTouch ? 70 : 12;
-    // haut gauche : son, puis la musique en dessous ; le code de salle se place à droite du bouton son
-    this.soundBtn.setPosition(14 + 22, top + 22);
-    this.musicBtn.setPosition(14 + 22, top + 22 + 44 + 8); // la musique juste en dessous du son
-    this.roomText.setPosition(14 + 44 + 8 + 10, top + 10);
+    // haut gauche : compteurs ; haut droite : pause, son, musique
+    // haut droite : le bouton pause, puis en dessous le son et la musique (les compteurs d'or et de diamants sont en haut à gauche)
+    this.soundBtn.setPosition(width - 44, top + 34 + 30 + 8 + 22);
+    this.musicBtn.setPosition(width - 44, top + 34 + 30 + 8 + 22 + 44 + 8);
+    this.roomText.setPosition(14, top + 22 + 36 + 28); // code de salle sous les compteurs
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
     this.alienText.setOrigin(1, 1).setPosition(width - 14, height - 34); // nombre d'aliens juste au-dessus
     this.levelText.setOrigin(1, 1).setPosition(width - 14, height - 56); // niveau de difficulté au-dessus du nombre d'aliens
@@ -802,7 +848,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const bottomY = height - 14 - 22;
     const devBtns = [...(this.debugBtn ? [this.debugBtn] : []), ...this.panelBtns, ...this.viewerBtns];
     // la colonne passe à la suivante (vers la droite) quand elle atteindrait les boutons de son / musique du haut (écran bas)
-    const rows = Math.max(1, Math.floor((bottomY - (top + 22 + 44 + 8 + 44)) / (44 + 8)) + 1);
+    const rows = Math.max(1, Math.floor((bottomY - (top + 22 + 36 + 30 + 44)) / (44 + 8)) + 1);
     devBtns.forEach((b, i) => b.setPosition(14 + 22 + Math.floor(i / rows) * (44 + 8), bottomY - (i % rows) * (44 + 8)));
     this.pauseBtn.setPosition(width - 44, top + 34);
     this.settingsBtn.setPosition(width - 44, top + 34); // même place que le bouton pause

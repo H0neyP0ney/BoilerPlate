@@ -81,13 +81,13 @@ async function host(mode: ModeDef, isPublic: boolean, lobby: boolean): Promise<H
   const transport = makeTransport();
   const { bots, botLevel } = readBots();
   const roomCode = await withTimeout(transport.host({ public: isPublic }), transport);
-  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode, bots, botLevel, difficulty: startDifficulty(!settings.tutorialDone), lobby, public: isPublic });
+  return new HostSession({ mode, seed: (Math.random() * 2 ** 31) | 0, transport, roomCode, bots, botLevel, difficulty: startDifficulty(!settings.tutorialDone), lobby, public: isPublic, skin: settings.skin ?? undefined, trail: settings.trail ?? undefined, ...settings.loadout() });
 }
 
 async function join(code: string): Promise<ClientSession> {
   const transport = makeTransport();
   try {
-    return await withTimeout(ClientSession.connect(transport, code), transport);
+    return await withTimeout(ClientSession.connect(transport, code, { skin: settings.skin ?? undefined, trail: settings.trail ?? undefined, ...settings.loadout() }), transport);
   } catch (e) {
     transport.close();
     if (e instanceof OnlineError) throw e;

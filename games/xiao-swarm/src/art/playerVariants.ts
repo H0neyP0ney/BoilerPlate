@@ -2,6 +2,8 @@ import type Phaser from 'phaser';
 import { recolorTexture, sprites } from '@xiao/engine';
 import { PLAYER_HUE_SHIFT } from '../config';
 import { CLASSES } from '../data/classes';
+import { requestSkinSheet, skinSpriteId } from '../assets/skinSheets';
+import { SKINS, SKIN_SLOT_BASE, slotShift } from '../data/skins';
 import type { SoldierClassId } from '../data/classes';
 import { BLUES, ensurePlayerSlot, registerSlotMaker } from './playerHue';
 
@@ -15,7 +17,16 @@ const slotKey = (id: string, slot: number): string => `${id}#s${slot}`;
 
 /** Id de visuel d'un soldat pour un emplacement de joueur (fabriqué à la première demande ; repli : le soldat bleu d'origine). */
 export function soldierSpriteId(cls: SoldierClassId, slot: number): string {
-  const s = slot % PLAYER_HUE_SHIFT.length;
+  const s = slot >= SKIN_SLOT_BASE ? slot : slot % PLAYER_HUE_SHIFT.length; // emplacement de skin (boutique) : tel quel
+  if (s >= SKIN_SLOT_BASE) {
+    // skin à planche dédiée (`assets/skinSheets.ts`) : chargée à la demande ; en attendant (ou sans planche), la copie recolorée ci-dessous
+    const skin = SKINS[s - SKIN_SLOT_BASE];
+    if (skin) {
+      const sheet = skinSpriteId(cls, skin.id);
+      if (sheet) return sheet;
+      requestSkinSheet(skin.id);
+    }
+  }
   if (s > 0) ensurePlayerSlot(s);
   const id = `soldier_${cls}`;
   return s > 0 && sprites.has(slotKey(id, s)) ? slotKey(id, s) : id;
@@ -27,7 +38,7 @@ function makeSoldierSlot(scene: Phaser.Scene, slot: number): void {
     const id = `soldier_${cls}`;
     const def = sprites.get(id);
     const key = slotKey(def.texture, slot);
-    if (!recolorTexture(scene, def.texture, key, { ...BLUES, shift: PLAYER_HUE_SHIFT[slot] })) continue;
+    if (!recolorTexture(scene, def.texture, key, { ...BLUES, shift: slotShift(slot) })) continue;
     // mêmes animations, sur la texture recolorée
     const anims: Record<string, string> = {};
     for (const [name, animKey] of Object.entries(def.anims ?? {})) {

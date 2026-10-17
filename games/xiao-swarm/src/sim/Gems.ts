@@ -32,6 +32,9 @@ export class Gems {
    */
   private readonly rng: Rng;
 
+  /** Compte à rebours (s) avant la prochaine caisse de pièces. */
+  private crateTimer = 8;
+
   constructor(private readonly sim: Sim) {
     this.rng = new Rng((sim.config.seed ^ 0x5bd1e995) >>> 0);
   }
@@ -129,19 +132,49 @@ export class Gems {
         this.sim.events.push({ t: 'gemChestReady', id: c.id, x: c.x, y: c.y });
       }
     }
-    this.cullFarBoxes();
+    this.updateCrates(dt);
     this.updateList(this.items, dt, 'gem');
     this.updateList(this.coins, dt, 'coin');
   }
 
-  /** Boîtes de power-up restées trop loin de toutes les squads : retirées sans butin (elles libèrent leur place). */
-  private cullFarBoxes(): void {
+  /**
+   * Caisses de pièces : toutes les `CRATES.every` s, une apparaît près d'une squad vivante au hasard (jamais sur une squad, sur un point libre, au plus `CRATES.max` à la fois).
+   * Une caisse restée trop loin de toutes les squads disparaît (elle libère sa place).
+   */
+  private updateCrates(dt: number): void {
     if (this.sim.tutorial?.active || this.sim.ending) return;
     const squads = this.sim.aliveSquads;
     if (squads.length === 0) return;
+    let crates = 0;
     for (const a of this.sim.aliens) {
-      if (a.alive && a.def.crate && squads.every((s) => Math.hypot(s.center.x - a.x, s.center.y - a.y) > CRATES.farDist)) a.alive = false;
+      if (!a.alive || !a.def.crate) continue;
+      if (squads.every((s) => Math.hypot(s.center.x - a.x, s.center.y - a.y) > CRATES.farDist)) a.alive = false; // trop loin : retirée sans butin
+      else crates++;
     }
+    this.crateTimer -= dt;
+    if (this.crateTimer > 0) return;
+    const { rng } = this;
+    const { arena } = this.sim;
+    this.crateTimer = rng.range(CRATES.every[0], CRATES.every[1]);
+    if (crates >= CRATES.max) return;
+    const sq = rng.pick(squads);
+    for (let tries = 0; tries < 20; tries++) {
+      const ang = rng.range(0, Math.PI * 2);
+      const d = rng.range(CRATES.minDist, CRATES.maxDist);
+      const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d };
+      const b = arena.bounds;
+      if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60 || !arena.isFree(p, 30)) continue;
+      if (squads.some((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) < o.radius + 50)) continue;
+      this.sim.horde.spawnBox('coin_crate', p.x, p.y);
+      return;
+    }
+  }
+
+  /** Une caisse de pièces est détruite en (x, y) : `CRATES.coins` pièces d'or jaillissent tout autour. */
+  crateBurst(x: number, y: number): void {
+    const rng = this.rng;
+    const n = Math.floor(rng.range(CRATES.coins[0], CRATES.coins[1] + 1));
+    for (let i = 0; i < n; i++) this.pushCoin(x, y, rng.range(0, Math.PI * 2), rng.range(50, 140));
   }
 
   private pushCoin(x: number, y: number, ang: number, dist: number): void {

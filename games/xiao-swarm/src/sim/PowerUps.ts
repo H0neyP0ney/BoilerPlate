@@ -148,18 +148,9 @@ export class PowerUps {
     }
   }
 
-  /** Une boîte de power-up est détruite en (x, y) : le power-up caché (`contents`) saute sur place. */
-  dropFromBox(x: number, y: number, kind?: string): void {
-    const { rng } = this.sim;
-    const p = this.drop((KINDS.find((k) => k === kind) ?? rng.pick(KINDS)), x, y);
-    p.age = 0; // imprenable la première seconde : on le voit d'abord retomber
-    p.hop = { vx: 0, vy: 0, t: RECRUIT.hopTime }; // saute sur place (même endroit que la boîte)
-  }
-
   /** Apparition près d'une squad vivante au hasard, à distance de marche, sur un point libre. */
   private spawn(): void {
-    const boxes = this.sim.aliens.reduce((n, a) => n + (a.alive && a.def.crate === 'powerup' ? 1 : 0), 0);
-    if (this.items.length + boxes >= Math.round(DIFFICULTY.powerupMax)) return; // les boîtes comptent comme des power-ups à venir
+    if (this.items.length >= Math.round(DIFFICULTY.powerupMax)) return;
     const { rng, arena } = this.sim;
     const squads = this.sim.aliveSquads;
     if (squads.length === 0) return;
@@ -172,7 +163,8 @@ export class PowerUps {
       if (squads.some((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) < o.radius + SPAWN_CLEARANCE)) continue; // jamais sur une escouade (la sienne ou une autre) : au moins 50 px au-delà de son rayon
       const b = arena.bounds;
       if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60) continue;
-      this.sim.horde.spawnBox('powerup_box', p.x, p.y).contents = rng.pick(KINDS); // boîte fermée : le power-up caché est tiré maintenant (même suite aléatoire qu'avant les boîtes), il jaillit à sa destruction (`dropFromBox`)
+      // apparaît avec un saut en cloche SUR PLACE (la vue dessine l'arc ; imprenable le temps du saut)
+      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE, hop: { vx: 0, vy: 0, t: RECRUIT.hopTime } });
       return;
     }
   }

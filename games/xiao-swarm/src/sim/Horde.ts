@@ -311,8 +311,8 @@ export class Horde {
     this.sim.aliens.push(egg);
   }
 
-  /** Boîte de power-up (200 PV exacts, immobile, sans XP ni recrue), posée sur place ; ne dépend pas du plafond d'aliens. */
-  spawnBox(type: 'powerup_box', x: number, y: number): AlienState {
+  /** Caisse de pièces (200 PV exacts, immobile, sans XP ni recrue), posée sur place ; ne dépend pas du plafond d'aliens. */
+  spawnBox(type: 'coin_crate', x: number, y: number): AlienState {
     const def = ALIENS[type];
     const box = this.create(def, x, y, 1, false);
     box.maxHp = box.hp = def.hp; // exacts : ni escalade ni multiplicateur

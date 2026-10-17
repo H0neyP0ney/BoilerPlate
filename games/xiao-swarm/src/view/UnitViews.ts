@@ -276,7 +276,7 @@ export class SoldierView {
 /** Silhouettes fantômes de la charge (chargeur, rhinocéros) : intervalle (s), durée d'effacement (s), opacité de départ, teinte. */
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
-/** Chute d'une boîte de power-up / caisse de pièces à son apparition (hauteur px, durée s, amplitude du rebond écrasé à l'atterrissage). */
+/** Chute de la caisse de pièces à son apparition (hauteur px, durée s, amplitude du rebond écrasé à l'atterrissage). */
 const CRATE_FALL = { height: CRATES.height, time: CRATES.fall, bump: 0.3 };
 
 export class AlienView {
@@ -307,9 +307,9 @@ export class AlienView {
   private ghostT = 0;
   /** Abscisse vers laquelle il regarde, quoi qu'il fasse (lurker enterré : sa proie, posée par `WorldView`) ; null : il regarde où il va. */
   lookAt: number | null = null;
-  /** Boîte / caisse (`def.crate`) : temps écoulé depuis son apparition (s) ; elle tombe de `CRATE_FALL.height` px en `CRATE_FALL.time` s, rebondit à l'atterrissage (écrasement amorti) et lève un peu de poussière. */
+  /** Caisse (`def.crate`) : temps écoulé depuis son apparition (s) ; elle tombe de `CRATE_FALL.height` px en `CRATE_FALL.time` s, rebondit à l'atterrissage (écrasement amorti) et lève un peu de poussière. */
   private crateT = 0;
-  /** Parachute de la boîte de power-up : flotte au-dessus d'elle pendant la descente, se replie à l'atterrissage puis disparaît. */
+  /** Parachute de la caisse de pièces : flotte au-dessus d'elle pendant la descente, se replie à l'atterrissage puis disparaît. */
   private parachute?: Phaser.GameObjects.Image;
   /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : opacité de son ombre portée (fondu). */
   outOfGround = 1;

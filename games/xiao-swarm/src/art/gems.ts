@@ -6,9 +6,9 @@ export const GEM_GREEN = 0x3ddc84;
 export const GEM_KEY = 'gem_green';
 export const GEM_CHEST_KEY = 'gem_chest';
 export const COIN_KEY = 'coin_gold';
-/** Boîte de power-up : visuel de l'« alien » `powerup_box` (`alien_<id>`, la clé de texture procédurale par défaut). */
-export const BOX_KEY = 'alien_powerup_box';
-/** Parachute de la boîte de power-up (flotte au-dessus d'elle pendant sa descente). */
+/** Caisse de pièces : visuel de l'« alien » `coin_crate` (`alien_<id>`, la clé de texture procédurale par défaut). */
+export const CRATE_KEY = 'alien_coin_crate';
+/** Parachute de la caisse de pièces (flotte au-dessus d'elle pendant sa descente). */
 export const PARACHUTE_KEY = 'fx_parachute';
 /** Or des pièces (rond au sol, compteur du HUD). */
 export const COIN_GOLD = 0xffc83d;
@@ -57,29 +57,39 @@ function paintGem(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: numb
 /** Fabrique (une fois) les textures du diamant vert et du coffre à diamants (dessinées par le code : aucun fichier). */
 export function ensureGemTextures(scene: Phaser.Scene): void {
   make(scene, GEM_KEY, 64, 64, (ctx) => paintGem(ctx, 32, 32, 60));
-  // boîte de power-up : coffret bleu fermé, bandes claires et gros « ? » (contenu inconnu)
-  make(scene, BOX_KEY, 72, 72, (ctx) => {
+  // caisse de pièces : caisse de bois cerclée de fer, pièce d'or sur la façade
+  make(scene, CRATE_KEY, 72, 72, (ctx) => {
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.roundRect(8, 14, 56, 52, 8);
-    const g = ctx.createLinearGradient(0, 14, 0, 66);
-    g.addColorStop(0, '#6cc1ff');
-    g.addColorStop(1, '#2a74d8');
-    ctx.fillStyle = g;
+    ctx.roundRect(8, 14, 56, 52, 5);
+    ctx.fillStyle = '#b9772f';
     ctx.fill();
     ctx.lineWidth = 4;
-    ctx.strokeStyle = '#143c7a';
+    ctx.strokeStyle = '#4a2a0c';
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.fillRect(12, 18, 48, 8);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#143c7a';
-    ctx.lineWidth = 4;
-    ctx.font = 'bold 34px sans-serif';
+    ctx.strokeStyle = 'rgba(74,42,12,0.55)'; // planches
+    ctx.lineWidth = 2;
+    for (const y of [27, 40, 53]) {
+      ctx.beginPath();
+      ctx.moveTo(10, y);
+      ctx.lineTo(62, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#6b6f78'; // cerclage
+    ctx.fillRect(12, 14, 6, 52);
+    ctx.fillRect(54, 14, 6, 52);
+    ctx.beginPath();
+    ctx.arc(36, 40, 12, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffc83d';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#8a5a05';
+    ctx.stroke();
+    ctx.fillStyle = '#8a5a05';
+    ctx.font = 'bold 15px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.strokeText('?', 36, 42);
-    ctx.fillText('?', 36, 42);
+    ctx.fillText('★', 36, 41);
   });
   // parachute : calotte rouge et blanche, lignes de suspension qui se rejoignent en bas (la boîte s'y accroche)
   make(scene, PARACHUTE_KEY, 96, 80, (ctx) => {

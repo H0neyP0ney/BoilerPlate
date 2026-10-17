@@ -1255,34 +1255,36 @@ try {
     }
   }
 
-  // ---- boîtes de power-up : 200 PV, intouchables en l'air, le power-up caché saute sur place à la destruction
+  // ---- caisse de pièces : intouchable en l'air, 200 PV, les pièces jaillissent à la casse ; power-ups à nu avec un saut en cloche sur place
   {
-    const { session, sim, step } = fresh(23);
+    const { session, sim } = fresh(23);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
-    const box = sim.horde.spawnBox('powerup_box', sq.center.x + 400, sq.center.y);
-    box.contents = 'heal';
-    sim.damage(box, 1e6, 'p1');
-    check(box.alive && box.hp === 200, "boîte de power-up : encore en l'air, elle est intouchable");
-    box.age = 1; // posée
-    check(box.maxHp === 200 && box.hp === 200 && ALIENS.powerup_box.egg && ALIENS.powerup_box.crate === 'powerup', 'boîte de power-up : 200 PV exacts, destructible comme un œuf');
-    sim.damage(box, 199, 'p1');
-    check(box.alive && sim.powerups.items.length === 0, 'boîte de power-up : debout à 1 PV, rien n\'en est sorti');
-    sim.damage(box, 5, 'p1');
-    const out = sim.powerups.items.find((p) => p.kind === 'heal');
-    check(!box.alive && !!out && !!out.hop && out.x === box.x && out.y === box.y && out.hop.vx === 0 && out.hop.vy === 0, 'boîte de power-up : cassée, le power-up caché (heal) saute sur place', out ? out.kind : 'rien');
-    // les power-ups n'apparaissent plus à nu : le minuteur pose des boîtes
+    const crate = sim.horde.spawnBox('coin_crate', sq.center.x + 400, sq.center.y + 100);
+    sim.damage(crate, 1e6, 'p1');
+    check(crate.alive && crate.hp === 200, 'caisse de pièces : encore en l\'air (parachute), elle est intouchable');
+    crate.age = 1; // posée
+    check(crate.maxHp === 200 && ALIENS.coin_crate.egg && ALIENS.coin_crate.crate === 'coins', 'caisse de pièces : 200 PV exacts, destructible comme un œuf');
+    sim.damage(crate, 199, 'p1');
+    check(crate.alive, 'caisse de pièces : debout à 1 PV');
+    const before = sim.gems.coins.length;
+    sim.damage(crate, 5, 'p1');
+    const n = sim.gems.coins.length - before;
+    check(!crate.alive && n >= 8 && n <= 12, 'caisse de pièces : cassée, 8 à 12 pièces d\'or jaillissent', `${n} pièces`);
+    // les power-ups apparaissent à nu, avec un saut en cloche sur place
     clearAliens(sim);
     sim.powerups.items.length = 0;
-    let boxesSeen = 0;
-    let bare = 0;
-    for (let i = 0; i < 30 * 120; i++) {
+    let seen = 0;
+    let inPlace = true;
+    let crates = 0;
+    for (let i = 0; i < 30 * 150; i++) {
       session.advance(34, () => {});
       if (sim.choiceT > 0) sim.choiceT = 0;
-      for (const a of sim.aliens) if (a.alive && a.def.crate) boxesSeen = Math.max(boxesSeen, 1);
-      bare += sim.powerups.items.filter((p) => p.age === undefined).length;
+      for (const p of sim.powerups.items) if (p.hop) { seen++; if (p.hop.vx !== 0 || p.hop.vy !== 0) inPlace = false; }
+      crates = Math.max(crates, sim.aliens.filter((a) => a.alive && a.def.crate === 'coins').length);
     }
-    check(boxesSeen === 1 && bare === 0, 'les power-ups apparaissent dans des boîtes, jamais à nu', `boîtes vues ${boxesSeen}, power-ups à nu ${bare}`);
+    check(seen > 0 && inPlace, 'les power-ups apparaissent à nu avec un saut en cloche sur place', `${seen} tick(s) en saut`);
+    check(crates >= 1 && crates <= 3, 'caisses de pièces : il en apparaît, au plus 3 à la fois', `${crates}`);
   }
 
   // ---- grand rayon d'aimant : un globe d'XP ou une recrue lâchés dans le rayon de ramassage ne sont pas avalés au tick de leur création

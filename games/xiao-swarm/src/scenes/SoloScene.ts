@@ -43,7 +43,6 @@ export class SoloScene extends Phaser.Scene {
       this.objects.push(o);
       return o;
     };
-    add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.55).setOrigin(0)); // calque sombre semi-transparent
     // les trois niveaux sur une ligne, juste au-dessus du bouton Play
     const playW = Math.min(440, w - 40);
     const gap = 10;

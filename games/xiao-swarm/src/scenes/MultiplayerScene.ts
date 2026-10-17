@@ -75,7 +75,6 @@ export class MultiplayerScene extends Phaser.Scene {
     const text = (x: number, y: number, str: string, size: number, color = '#ffffff'): Phaser.GameObjects.Text =>
       add(this.add.text(x, y, str, { ...TEXT, fontSize: `${size}px`, color, align: 'center' }).setOrigin(0.5));
 
-    add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.85).setOrigin(0)); // calque sombre semi-transparent
 
     // pas de titre : Partie rapide en tête. Le bloc du haut (Quick Play + « créer ») et le tableau montent de `lift` ; le tableau grandit d'autant pour que « Join with a code » et « Back » restent où ils étaient
     const lift = 30;

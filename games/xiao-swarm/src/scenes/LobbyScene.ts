@@ -65,7 +65,7 @@ export class LobbyScene extends Phaser.Scene {
     const colW = 420;
     const gap = 16;
 
-    const dim = add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.85).setOrigin(0)); // calque sombre semi-transparent
+    const dim = add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0).setOrigin(0)); // calque sombre retiré (alpha 0 : gardé pour exclure le fond du défilement)
     const tight = h < 720; // petit écran : sans les lignes d'explication, tableau plus serré
     let y = tight ? 28 : 100; // position de départ provisoire : tout l'écran est recentré verticalement en fin de construction
     const topY = y - 20; // haut du contenu

@@ -34,7 +34,6 @@ export class TitleScene extends Phaser.Scene {
     const w = Math.min(280, (width - 3 * gap) / 2); // 30 % plus petits qu'à l'origine (400 × 180)
     const h = 126;
     const y = height * 0.8; // à 20 % du bas de l'écran
-    this.objects.push(this.add.rectangle(0, 0, width, height, 0x0a1422, 0.55).setOrigin(0)); // calque sombre semi-transparent
     const solo = new Button(this, width / 2 - w / 2 - gap / 2, y, { label: t('solo'), width: w, height: h, onClick: () => this.go(SCENES.solo) });
     const multi = new Button(this, width / 2 + w / 2 + gap / 2, y, { label: t('multiplayer'), variant: 'secondary', width: w, height: h, onClick: () => this.go(SCENES.multiplayer) });
     this.addHeads(solo, 1, w); // Solo : une tête de recrue

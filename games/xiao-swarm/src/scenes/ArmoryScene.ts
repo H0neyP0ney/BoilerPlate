@@ -46,7 +46,6 @@ export class ArmoryScene extends Phaser.Scene {
       this.objects.push(o);
       return o;
     };
-    add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.85).setOrigin(0));
     const top = hudTop();
     add(this.add.text(w / 2, top + 30, t('armoryTitle'), { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 }).setOrigin(0.5));
 

@@ -130,7 +130,6 @@ export class ShopScene extends Phaser.Scene {
       this.objects.push(o);
       return o;
     };
-    add(this.add.rectangle(0, 0, w, h, 0x0a1422, 0.82).setOrigin(0)); // calque sombre
     const top = hudTop();
     add(this.add.text(w / 2, top + 30, t('shopTitle'), { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 }).setOrigin(0.5));
 

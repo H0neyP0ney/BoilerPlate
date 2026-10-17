@@ -15,6 +15,8 @@ export interface ButtonOptions {
   fill?: number;
   /** Remplace la couleur du texte de la variante. */
   textColor?: string;
+  /** Pulse : un contour de la forme du bouton (rectangle arrondi) s'étend en s'effaçant, en boucle, derrière lui (gros boutons d'action : Solo, Quick Play, Play). */
+  pulse?: boolean;
   onClick: () => void;
 }
 
@@ -80,6 +82,25 @@ export class Button extends Phaser.GameObjects.Container {
       icon.setPosition(-total / 2 + iconWidth / 2, 0);
       label.setX(-total / 2 + iconWidth + gap + label.width / 2);
       this.add(icon);
+    }
+
+    if (opts.pulse) {
+      // pulse « carré » : le contour du bouton grandit de 24 px de chaque côté en s'effaçant, puis repart (pause entre deux pulsations)
+      const ring = scene.add.graphics();
+      this.addAt(ring, 0);
+      const tween = scene.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: 1100,
+        repeat: -1,
+        repeatDelay: 500,
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          const e = p * 24;
+          ring.clear().lineStyle(5, 0xffffff, (1 - p) * 0.75).strokeRoundedRect(-width / 2 - e, -height / 2 - e, width + 2 * e, height + 2 * e, r + e);
+        },
+      });
+      this.once(Phaser.GameObjects.Events.DESTROY, () => tween.remove());
     }
 
     this.setSize(width, height);

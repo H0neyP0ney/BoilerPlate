@@ -93,7 +93,7 @@ export class SoloScene extends Phaser.Scene {
     const armX = shopW / 2 + 14;
     add(new Button(this, armX, h / 2, { label: t('armoryBtn'), variant: 'secondary', fill: 0x8a5a05, textColor: '#ffffff', width: shopW, height: shopH, onClick: () => this.armory() }));
     add(this.add.image(armX, h / 2 - shopH / 2 + 4, COIN_KEY).setScale(0.7).setDepth(2)); // pièce d'or qui dépasse en haut du bouton
-    add(new Button(this, cx, playY, { label: t('play'), width: playW, height: 110, onClick: () => this.play() }));
+    add(new Button(this, cx, playY, { label: t('play'), width: playW, height: 110, pulse: true, onClick: () => this.play() }));
     // « Back » sous Play : même largeur que lui, collé comme les trois boutons de niveau (18 px d'écart)
     const backH = 56;
     add(new Button(this, cx, playY + 55 + 18 + backH / 2, { label: t('mpBack'), variant: 'secondary', width: playW, height: backH, onClick: () => this.back() }));

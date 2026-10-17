@@ -33,6 +33,7 @@ try {
     for (let i = 0; i < LAG_TICKS; i++) await tick(client);
   };
   const sizes = (s) => s.squads.map((q) => `${q.owner}:${q.size}`).join(' ');
+  const aliensHistory = []; // nombre d'aliens de l'hôte aux derniers ticks : une vague qui vient de surgir n'est pas encore chez le client (tampon d'interpolation)
   const sizeHistory = []; // tailles des squads de l'hôte aux derniers ticks : le client affiche l'état d'il y a LAG_TICKS ticks
   let autoStart = true; // une partie qui se termine en route ramène à la salle d'attente : sauf test dédié, l'hôte relance aussitôt
   const tick = async (client) => {
@@ -40,6 +41,8 @@ try {
     host.advance(1000 / 30, (e) => hostEvents.push(e));
     sizeHistory.push(sizes(host.sim));
     if (sizeHistory.length > LAG_TICKS + 2) sizeHistory.shift();
+    aliensHistory.push(host.sim.aliens.length);
+    if (aliensHistory.length > LAG_TICKS + 2) aliensHistory.shift();
     client?.advance(1000 / 30, (e) => clientEvents.push(e));
     hub.pump();
     await new Promise((r) => setImmediate(r));
@@ -99,7 +102,7 @@ try {
   const hs = host.sim;
   const cs = client.sim;
   check(sizeHistory.includes(sizes(cs)), 'mêmes squads et tailles (à l’interpolation près)', `hôte [${sizes(hs)}] client [${sizes(cs)}]`);
-  check(Math.abs(hs.aliens.length - cs.aliens.length) <= 3, 'même nombre d\'aliens (±3)', `${hs.aliens.length} vs ${cs.aliens.length}`);
+  check(aliensHistory.some((n) => Math.abs(n - cs.aliens.length) <= 3), "même nombre d'aliens (±3, à l'interpolation près)", `${hs.aliens.length} vs ${cs.aliens.length}`);
   check(Math.abs(hs.time - cs.time) < 0.2, 'même horloge de jeu', `${hs.time.toFixed(2)} vs ${cs.time.toFixed(2)}`);
   let maxErr = 0;
   for (const q of hs.squads) {

@@ -6,9 +6,7 @@ export const GEM_GREEN = 0x3ddc84;
 export const GEM_KEY = 'gem_green';
 export const GEM_CHEST_KEY = 'gem_chest';
 export const COIN_KEY = 'coin_gold';
-/** Caisse de pièces : visuel de l'« alien » `coin_crate` (`alien_<id>`, la clé de texture procédurale par défaut). */
-export const CRATE_KEY = 'alien_coin_crate';
-/** Parachute de la caisse de pièces (flotte au-dessus d'elle pendant sa descente). */
+/** Parachute du coffre à diamants (flotte au-dessus de lui pendant sa descente). */
 export const PARACHUTE_KEY = 'fx_parachute';
 /** Or des pièces (rond au sol, compteur du HUD). */
 export const COIN_GOLD = 0xffc83d;
@@ -57,40 +55,6 @@ function paintGem(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: numb
 /** Fabrique (une fois) les textures du diamant vert et du coffre à diamants (dessinées par le code : aucun fichier). */
 export function ensureGemTextures(scene: Phaser.Scene): void {
   make(scene, GEM_KEY, 64, 64, (ctx) => paintGem(ctx, 32, 32, 60));
-  // caisse de pièces : caisse de bois cerclée de fer, pièce d'or sur la façade
-  make(scene, CRATE_KEY, 72, 72, (ctx) => {
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.roundRect(8, 14, 56, 52, 5);
-    ctx.fillStyle = '#b9772f';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#4a2a0c';
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(74,42,12,0.55)'; // planches
-    ctx.lineWidth = 2;
-    for (const y of [27, 40, 53]) {
-      ctx.beginPath();
-      ctx.moveTo(10, y);
-      ctx.lineTo(62, y);
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#6b6f78'; // cerclage
-    ctx.fillRect(12, 14, 6, 52);
-    ctx.fillRect(54, 14, 6, 52);
-    ctx.beginPath();
-    ctx.arc(36, 40, 12, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffc83d';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#8a5a05';
-    ctx.stroke();
-    ctx.fillStyle = '#8a5a05';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('★', 36, 41);
-  });
   // parachute : calotte rouge et blanche, lignes de suspension qui se rejoignent en bas (la boîte s'y accroche)
   make(scene, PARACHUTE_KEY, 96, 80, (ctx) => {
     ctx.lineJoin = 'round';

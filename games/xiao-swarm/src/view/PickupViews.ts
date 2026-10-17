@@ -265,7 +265,7 @@ export class PickupViews {
         if (landed) beam.setPosition(x, y, DEPTH.fx + 1.5, time);
       }
       // loot de relance : saut en cloche à la sortie de l'alien, comme une recrue (le déplacement au sol vient de la simulation)
-      const hk = (time - born) / RECRUIT.hopTime; // tout power-up saute en cloche quand il apparaît (sur place pour ceux qui sortent d'une boîte, vers le côté pour les loots de relance : le déplacement vient de la simulation)
+      const hk = loot ? (time - born) / RECRUIT.hopTime : 1; // loot de relance / booster : saut en cloche à la sortie de l'alien ; les autres power-ups apparaissent par un petit scale « Back.Out » (créé plus haut), sans saut
       const hop = hk >= 0 && hk < 1 ? 4 * RECRUIT.hopHeight * hk * (1 - hk) : 0;
       const cy = y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(time * 4 + p.id) * 4 - hop;
       box.setPosition(x, cy).setDepth(DEPTH.fx + 2).setAlpha(blink ? 0.3 : 1);

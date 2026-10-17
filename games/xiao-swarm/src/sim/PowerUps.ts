@@ -163,8 +163,8 @@ export class PowerUps {
       if (squads.some((o) => Math.hypot(o.center.x - p.x, o.center.y - p.y) < o.radius + SPAWN_CLEARANCE)) continue; // jamais sur une escouade (la sienne ou une autre) : au moins 50 px au-delà de son rayon
       const b = arena.bounds;
       if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60) continue;
-      // apparaît avec un saut en cloche SUR PLACE (la vue dessine l'arc ; imprenable le temps du saut)
-      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE, hop: { vx: 0, vy: 0, t: RECRUIT.hopTime } });
+      // apparaît tel quel : la vue joue un petit scale « Back.Out » (pas de saut)
+      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE });
       return;
     }
   }

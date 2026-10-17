@@ -1255,36 +1255,37 @@ try {
     }
   }
 
-  // ---- caisse de pièces : intouchable en l'air, 200 PV, les pièces jaillissent à la casse ; power-ups à nu avec un saut en cloche sur place
+  // ---- boss tué : diamants autour de l'œuf, puis le coffre descend en parachute (jauge seulement une fois posé) ; power-ups à nu avec un saut en cloche sur place
   {
     const { session, sim } = fresh(23);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
-    const crate = sim.horde.spawnBox('coin_crate', sq.center.x + 400, sq.center.y + 100);
-    sim.damage(crate, 1e6, 'p1');
-    check(crate.alive && crate.hp === 200, 'caisse de pièces : encore en l\'air (parachute), elle est intouchable');
-    crate.age = 1; // posée
-    check(crate.maxHp === 200 && ALIENS.coin_crate.egg && ALIENS.coin_crate.crate === 'coins', 'caisse de pièces : 200 PV exacts, destructible comme un œuf');
-    sim.damage(crate, 199, 'p1');
-    check(crate.alive, 'caisse de pièces : debout à 1 PV');
-    const before = sim.gems.coins.length;
-    sim.damage(crate, 5, 'p1');
-    const n = sim.gems.coins.length - before;
-    check(!crate.alive && n >= 8 && n <= 12, 'caisse de pièces : cassée, 8 à 12 pièces d\'or jaillissent', `${n} pièces`);
-    // les power-ups apparaissent à nu, avec un saut en cloche sur place
-    clearAliens(sim);
-    sim.powerups.items.length = 0;
+    const bx = sq.center.x + 700;
+    const by = sq.center.y + 100;
+    sim.gems.spawnChest(bx, by);
+    const chest = sim.gems.chests[0];
+    check(!!chest && sim.gems.items.length >= 1 && sim.gems.items.length <= 5 && sim.gems.items.every((g) => Math.hypot(g.x - bx, g.y - by) < 10), 'boss tué : 1 à 5 diamants jaillissent autour de l\'œuf', `${sim.gems.items.length} diamants`);
+    // soldats posés contre le coffre : la jauge ne se charge pas tant qu'il est en l'air
+    for (const s of sq.soldiers) { s.x = s.px = chest.x; s.y = s.py = chest.y; }
+    sq.anchor.x = chest.x;
+    sq.anchor.y = chest.y;
+    for (let i = 0; i < 30 * 0.6; i++) session.advance(34, () => {});
+    check(chest.age < 0.9 && chest.charge === 0, 'coffre à diamants : en l\'air (parachute), la jauge ne se charge pas', `âge ${chest.age.toFixed(2)} s, charge ${chest.charge}`);
+    let ready = false;
+    for (let i = 0; i < 30 * 4 && !ready; i++) session.advance(34, (e) => { if (e.t === 'gemChestReady') ready = true; });
+    check(ready, 'coffre à diamants : posé, rester autour remplit la jauge (vidéo demandée)');
+    // les power-ups apparaissent à nu (pas de boîte), sans saut : la vue joue un petit scale
+    const f = fresh(25);
+    clearAliens(f.sim);
+    f.sim.powerups.items.length = 0;
     let seen = 0;
-    let inPlace = true;
-    let crates = 0;
+    let hopped = false;
     for (let i = 0; i < 30 * 150; i++) {
-      session.advance(34, () => {});
-      if (sim.choiceT > 0) sim.choiceT = 0;
-      for (const p of sim.powerups.items) if (p.hop) { seen++; if (p.hop.vx !== 0 || p.hop.vy !== 0) inPlace = false; }
-      crates = Math.max(crates, sim.aliens.filter((a) => a.alive && a.def.crate === 'coins').length);
+      f.session.advance(34, () => {});
+      if (f.sim.choiceT > 0) f.sim.choiceT = 0;
+      for (const p of f.sim.powerups.items) { seen = Math.max(seen, 1); if (p.hop) hopped = true; }
     }
-    check(seen > 0 && inPlace, 'les power-ups apparaissent à nu avec un saut en cloche sur place', `${seen} tick(s) en saut`);
-    check(crates >= 1 && crates <= 3, 'caisses de pièces : il en apparaît, au plus 3 à la fois', `${crates}`);
+    check(seen === 1 && !hopped, "les power-ups apparaissent à nu, sans saut (petit scale à l'affichage)");
   }
 
   // ---- grand rayon d'aimant : un globe d'XP ou une recrue lâchés dans le rayon de ramassage ne sont pas avalés au tick de leur création

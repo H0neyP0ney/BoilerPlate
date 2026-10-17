@@ -212,6 +212,9 @@ export class WorldView {
     );
     this.loot = new LootViews(scene, sim, localPlayer);
     this.gems = new GemViews(scene, sim);
+    this.gems.onLand = (x, y, r) => {
+      if (this.onScreen(x, y, 120)) this.fx.dust(x, y, r); // le coffre à diamants atterrit : poussière
+    };
     this.skinSheetOff = onSkinSheetReady(() => this.refreshSkins()); // une planche de skin vient d'arriver : les soldats la prennent
     for (const sq of sim.squads) this.colorOf(sq.owner);
     this.quietUntil = scene.time.now + 1000; // les soldats déjà présents au chargement n'ont pas de colonne d'arrivée
@@ -273,15 +276,6 @@ export class WorldView {
           break;
         }
         const def = ALIENS[e.alien];
-        if (def.crate) {
-          // boîte / caisse cassée : éclats de la couleur de la boîte, onde, petit bruit ; pas de flaque ni de secousse
-          if (nearCam(e.x, e.y)) {
-            this.fx.burst(e.x, e.y - 14, def.color, 18);
-            this.fx.ring(e.x, e.y, 70, 0xffc83d);
-            playSfx(this.scene, 'rock_break');
-          }
-          break;
-        }
         if (nearCam(e.x, e.y)) playSfx(this.scene, def.egg ? 'egg_break' : def.boss || def.hp >= BIG_KILL_HP ? 'alien_die_l' : def.hp >= 100 ? 'alien_die_m' : 'alien_die_s');
         const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
         const oyA = alienOffsetY(e.alien); // restes posés sous le sprite décalé

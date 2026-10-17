@@ -62,11 +62,10 @@ export const RING = { radius: 340 };
  * (`strongChance` si ses PV max atteignent `strongHp`), `bossCoins` pièces pour un boss ; elles disparaissent après `life` s (clignotent les `blink` dernières).
  */
 /**
- * Caisse de pièces d'or (`coin_crate`, 200 PV, `data/aliens.ts`) : une apparaît toutes les `every` s près d'une squad (au plus `max` à la fois, à `minDist`-`maxDist` px) et libère
- * `coins` pièces quand on la casse. Elle descend du ciel en parachute (de `height` px, en `fall` s : elle grossit, son ombre marque l'endroit d'atterrissage, le parachute se replie
- * à l'atterrissage) et n'est destructible qu'une fois au sol. Une caisse restée à plus de `farDist` px de toutes les squads disparaît.
+ * Arrivée du coffre à diamants d'un boss tué : il descend du ciel en parachute (de `height` px, en `fall` s : il grossit, son ombre marque l'endroit d'atterrissage, le parachute
+ * se replie à l'atterrissage, rebond écrasé et poussière). La jauge de présence ne se charge qu'une fois posé.
  */
-export const CRATES = { fall: 0.9, height: 260, farDist: 1800, every: [16, 28] as [number, number], max: 3, coins: [8, 12] as [number, number], minDist: 240, maxDist: 480 };
+export const CRATES = { fall: 0.9, height: 260 };
 
 export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
 

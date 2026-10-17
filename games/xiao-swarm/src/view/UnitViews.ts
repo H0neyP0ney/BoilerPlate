@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
 import { alienOffsetY } from './spriteOffset';
-import { ensureGemTextures, PARACHUTE_KEY } from '../art/gems';
-import { BURIED, CRATES, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
+import { BURIED, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
@@ -276,9 +275,6 @@ export class SoldierView {
 /** Silhouettes fantômes de la charge (chargeur, rhinocéros) : intervalle (s), durée d'effacement (s), opacité de départ, teinte. */
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
-/** Chute de la caisse de pièces à son apparition (hauteur px, durée s, amplitude du rebond écrasé à l'atterrissage). */
-const CRATE_FALL = { height: CRATES.height, time: CRATES.fall, bump: 0.3 };
-
 export class AlienView {
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
   private attackStarted = false;
@@ -307,10 +303,6 @@ export class AlienView {
   private ghostT = 0;
   /** Abscisse vers laquelle il regarde, quoi qu'il fasse (lurker enterré : sa proie, posée par `WorldView`) ; null : il regarde où il va. */
   lookAt: number | null = null;
-  /** Caisse (`def.crate`) : temps écoulé depuis son apparition (s) ; elle tombe de `CRATE_FALL.height` px en `CRATE_FALL.time` s, rebondit à l'atterrissage (écrasement amorti) et lève un peu de poussière. */
-  private crateT = 0;
-  /** Parachute de la caisse de pièces : flotte au-dessus d'elle pendant la descente, se replie à l'atterrissage puis disparaît. */
-  private parachute?: Phaser.GameObjects.Image;
   /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : opacité de son ombre portée (fondu). */
   outOfGround = 1;
 
@@ -324,10 +316,6 @@ export class AlienView {
     // sort d'un trou d'apparition : il monte hors du sol (sprite rogné de 0 à 100 %, `groundCut`) au lieu de surgir en grossissant
     if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
-    if (state.def.crate) {
-      ensureGemTextures(scene);
-      this.parachute = scene.add.image(state.x, state.y, PARACHUTE_KEY).setOrigin(0.5, 1);
-    }
     latePack.request(scene, this.id); // visuel d'un paquet pas encore chargé : on le demande (dessin procédural d'ici là, `refreshSprite`)
     if (latePack.has(this.id) && sprites.get(this.id).texture === proceduralKey(this.id)) fallbackSeen('alien'); // analytics : ce joueur a vu un alien en dessin procédural
     this.body = sprites.add(scene, this.id, state.x, state.y);
@@ -426,21 +414,8 @@ export class AlienView {
 
     // Squash / lévitation procéduraux seulement sans planche animée.
     const t = time * 7 + this.phase;
-    const squash = this.animated || a.def.floats || a.def.crate ? 0 : Math.sin(t) * 0.06;
+    const squash = this.animated || a.def.floats ? 0 : Math.sin(t) * 0.06;
     let lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
-    // boîte / caisse : chute de quelques pixels (accélérée), poussière et rebond écrasé à l'atterrissage
-    let bump = 0;
-    if (a.def.crate) {
-      const before = this.crateT;
-      this.crateT += dt;
-      const F = CRATE_FALL.time;
-      if (this.crateT < F) lift -= CRATE_FALL.height * (1 - this.crateT / F) ** 2; // descente en parachute : rapide au début, elle ralentit en arrivant
-      else {
-        if (before < F) this.onPop?.(this.rx, this.ry + alienOffsetY(a.def.id), a.radius * 1.5); // atterrit : poussière
-        const tau = this.crateT - F;
-        if (tau < 0.4) bump = CRATE_FALL.bump * Math.exp(-9 * tau) * Math.cos(22 * tau); // écrasée, puis rebondit en s'amortissant
-      }
-    }
     // saut écrasant : pendant le vol, le sprite monte en arc (l'ombre et la position restent au sol)
     const L = a.def.leap;
     if (L?.height && a.leapT > 0) {
@@ -456,9 +431,9 @@ export class AlienView {
       else if (!this.attackStarted) this.attackStarted = sprites.play(this.body, this.id, 'attack');
       if (!(attackNow && this.attackStarted)) sprites.play(this.body, this.id, 'walk') || sprites.play(this.body, this.id, 'idle'); // pas d'idle dédié : toujours la marche (l'idle n'est qu'un repli)
     }
-    if (!hidden) this.spawnT = a.def.crate ? Math.min(1, this.crateT / CRATE_FALL.time) : Math.min(1, this.spawnT + dt * 4); // une caisse grossit pendant qu'elle tombe
+    if (!hidden) this.spawnT = Math.min(1, this.spawnT + dt * 4);
     const pop = Phaser.Math.Easing.Back.Out(this.spawnT) * sprites.scaleOf(this.id); // relue chaque frame : réglable dans la visionneuse
-    this.body.setScale(pop * (1 + squash + bump + wind * 0.12), pop * (1 - squash - bump - wind * 0.1));
+    this.body.setScale(pop * (1 + squash + wind * 0.12), pop * (1 - squash - wind * 0.1));
     // Procédural : seule la bête a un côté ; une planche fournie se retourne toujours.
     const flips = this.animated || a.def.id === 'charger' || a.def.id === 'boss_rhino';
     this.body
@@ -466,17 +441,6 @@ export class AlienView {
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
-    if (this.parachute) {
-      // parachute accroché au-dessus de la boîte ; à l'atterrissage il s'affaisse (écrasé en hauteur) en 0,3 s puis disparaît
-      const k = this.crateT < CRATE_FALL.time ? 1 : 1 - (this.crateT - CRATE_FALL.time) / 0.3;
-      if (k <= 0) {
-        this.parachute.destroy();
-        this.parachute = undefined;
-      } else {
-        const sc = this.body.scaleX * 0.9;
-        this.parachute.setPosition(this.body.x, this.body.y - 58 * this.body.scaleY + (1 - k) * 30).setScale(sc, sc * k).setDepth(this.body.depth + 1).setAlpha(Math.min(1, k * 1.5));
-      }
-    }
     // Charge : silhouettes fantômes bleutées derrière lui (une toutes les `GHOST.every` s, chacune s'efface en `GHOST.life` s : ~5 visibles)
     if (a.def.rush && a.rushT > 0 && this.body.visible) {
       if ((this.ghostT -= dt) <= 0) {
@@ -484,7 +448,7 @@ export class AlienView {
         this.spawnGhost();
       }
     } else this.ghostT = 0;
-    this.outOfGround = hidden ? 0 : a.def.crate ? 0.55 + 0.45 * Math.min(1, this.crateT / CRATE_FALL.time) : this.spawnT; // trou d'apparition : dehors une fois sorti (pop terminé) ; caisse : l'ombre marque dès le début l'endroit d'atterrissage, puis s'assombrit
+    this.outOfGround = hidden ? 0 : this.spawnT; // trou d'apparition : dehors une fois sorti (pop terminé)
     if (a.def.capture) {
       // bulle : au-dessus du soldat qu'elle porte (qu'on voit à travers), elle palpite quand elle digère
       this.body.setDepth(DEPTH.actors + this.ry + 1).setAlpha(a.captive ? 0.85 : 0.95);
@@ -549,7 +513,6 @@ export class AlienView {
   }
 
   destroy(): void {
-    this.parachute?.destroy();
     this.body.destroy();
     this.zombieFx?.destroy();
   }

@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { AMBUSH, CHASE, CRATES, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
 import { ALIENS, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
@@ -311,18 +311,6 @@ export class Horde {
     this.sim.aliens.push(egg);
   }
 
-  /** Caisse de pièces (200 PV exacts, immobile, sans XP ni recrue), posée sur place ; ne dépend pas du plafond d'aliens. */
-  spawnBox(type: 'coin_crate', x: number, y: number): AlienState {
-    const def = ALIENS[type];
-    const box = this.create(def, x, y, 1, false);
-    box.maxHp = box.hp = def.hp; // exacts : ni escalade ni multiplicateur
-    box.instant = true; // pas de trou d'apparition, ni de délai avant d'être ciblable
-    box.noXp = true;
-    box.noRecruit = true;
-    this.sim.aliens.push(box);
-    return box;
-  }
-
   /** `count` aliens enragés (niveau 1 : plus rapides, attaquent plus vite) qui surgissent sur place en cercle autour de (x, y) : araignées des boules du Giant Crab. */
   spawnEnragedRing(type: AlienId, x: number, y: number, count: number, hpMul = 1): void {
     const start = this.sim.rng.range(0, Math.PI * 2);
@@ -390,7 +378,6 @@ export class Horde {
 
   /** Les soldats peuvent le viser et le toucher : ni dans son trou d'apparition, ni totalement enterré. */
   targetable(a: AlienState): boolean {
-    if (a.def.crate && a.age < CRATES.fall) return false; // encore en l'air : ni visée ni touchée
     return !this.isEmerging(a) && this.burial(a) !== 'full';
   }
 
@@ -419,7 +406,6 @@ export class Horde {
       // Œuf de boss : immobile et inoffensif, il attend d'être détruit
       if (def.egg) {
         a.vx = a.vy = a.kx = a.ky = 0;
-        a.age += dt; // les boîtes et caisses comptent leur chute (`CRATES.fall`)
         continue;
       }
 

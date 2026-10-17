@@ -8,8 +8,10 @@ import type { RoomInfo } from '../net/Transport';
 import { createOnlineSession, listPublicRooms, OnlineError, type OnlineRequest } from '../online';
 
 const TEXT = { fontFamily: theme.font, color: '#ffffff', fontStyle: 'bold' } as const;
-/** Tableau des parties publiques : hauteur d'une ligne (px du jeu) ; il prend toute la place libre entre le champ du code et les boutons (au-delà : barre de défilement). */
+/** Tableau des parties publiques : hauteur d'une ligne (px du jeu) ; il est centré entre le champ du code et les boutons. */
 const ROW_H = 30;
+/** Nombre de parties visibles au plus dans le tableau. */
+const MAX_ROWS = 8;
 /** Hauteur de la ligne d'en-tête (ligne principale du tableau, un peu plus haute que les autres). */
 const HEAD_H = 40;
 
@@ -76,36 +78,39 @@ export class MultiplayerScene extends Phaser.Scene {
       add(this.add.text(x, y, str, { ...TEXT, fontSize: `${size}px`, color, align: 'center' }).setOrigin(0.5));
 
 
-    // de haut en bas : code de salle + Join, tableau des parties publiques (au centre, prend la place qui reste), Créer publique / privée, Partie rapide, Back tout en bas
+    // de haut en bas : tableau des parties publiques, champ du code + Join, SÉPARATION (c'est là que s'affichent les messages d'erreur), puis Créer publique / privée, Partie rapide, Back tout en bas
     const quickW = 420;
     const gap = 16;
     const bw = (quickW - gap) / 2; // les deux boutons « créer » côte à côte occupent exactement la largeur de Partie rapide
     const backH = 56;
     const backY = h - 24 - backH / 2;
     add(new Button(this, cx, backY, { label: t('mpBack'), variant: 'secondary', width: quickW, height: backH, onClick: () => this.back() }));
-    const quickY = backY - backH / 2 - 14 - 34;
-    add(new Button(this, cx, quickY, { label: t('mpQuickPlay'), width: quickW, height: 68, onClick: () => void this.start({ kind: 'auto' }) }));
-    const createY = quickY - 34 - 14 - 28;
+    const quickH = 92; // gros bouton
+    const quickY = backY - backH / 2 - 14 - quickH / 2;
+    add(new Button(this, cx, quickY, { label: t('mpQuickPlay'), width: quickW, height: quickH, onClick: () => void this.start({ kind: 'auto' }) }));
+    const createY = quickY - quickH / 2 - 14 - 28;
     add(new Button(this, cx - bw / 2 - gap / 2, createY, { label: t('mpCreatePublic'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: true, lobby: true }) }));
     add(new Button(this, cx + bw / 2 + gap / 2, createY, { label: t('mpCreatePrivate'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: false, lobby: true }) }));
 
-    // tout en haut : « Join with a code » (titre, champ du code et Join, ensemble exactement la largeur de Partie rapide)
-    const top = Math.max(16, hudTop());
-    text(cx, top + 12, t('mpJoinCode'), 22, '#9fb4cf');
-    const inputY = top + 12 + 44;
+    // séparation entre le bloc « rejoindre » (tableau + code) et le bloc « créer / partie rapide / back » : une ligne, et au-dessus d'elle le message d'erreur / de connexion
+    const sepH = 44;
+    const sepTop = createY - 28 - 10 - sepH;
+    const line = add(this.add.graphics());
+    line.lineStyle(3, 0xffffff, 0.35).lineBetween(cx - quickW / 2, sepTop + sepH - 4, cx + quickW / 2, sepTop + sepH - 4);
+    if (this.message) text(cx, sepTop + sepH / 2 - 6, this.message, 22, '#ff8a8a');
+
+    // bloc « rejoindre » : champ du code et Join (ensemble exactement la largeur de Partie rapide), sous le tableau
+    const joinY = sepTop - 8 - 28;
     const joinW = 154;
     const inputW = quickW - joinW - gap;
-    this.placeInput(cx - quickW / 2 + inputW / 2, inputY, inputW);
-    add(new Button(this, cx + quickW / 2 - joinW / 2, inputY, { label: t('mpJoin'), width: joinW, height: 56, onClick: () => this.joinTyped() }));
-    // message d'erreur / de connexion (« Can't connect… ») : sous la ligne du code, avant le tableau
-    let tableTop = inputY + 28 + 16;
-    if (this.message) {
-      text(cx, tableTop + 14, this.message, 22, '#ff8a8a');
-      tableTop += 32;
-    }
-    // tableau au centre : de sous le code jusqu'au-dessus des boutons « créer »
-    const tableH = Math.max(HEAD_H + ROW_H * 2, createY - 28 - 16 - tableTop);
-    this.placeTable(cx, tableTop, quickW, tableH); // même largeur que Partie rapide
+    this.placeInput(cx - quickW / 2 + inputW / 2, joinY, inputW);
+    add(new Button(this, cx + quickW / 2 - joinW / 2, joinY, { label: t('mpJoin'), width: joinW, height: 56, onClick: () => this.joinTyped() }));
+
+    // tableau tout en haut : de la marge du haut jusqu'au champ du code (8 parties visibles au plus, au-delà : défilement ; centré dans la place libre)
+    const top = Math.max(16, hudTop());
+    const free = joinY - 28 - 14 - top;
+    const tableH = Math.max(HEAD_H + ROW_H * 2, Math.min(HEAD_H + ROW_H * MAX_ROWS, free));
+    this.placeTable(cx, top + Math.max(0, (free - tableH) / 2), quickW, tableH); // même largeur que Partie rapide
   };
 
   /** Tableau DOM (code · joueurs) : une ligne par partie publique, clic = rejoindre ; en-tête fixe, lignes défilantes. */

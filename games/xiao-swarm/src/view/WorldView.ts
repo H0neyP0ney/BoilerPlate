@@ -277,7 +277,7 @@ export class WorldView {
           // boîte / caisse cassée : éclats de la couleur de la boîte, onde, petit bruit ; pas de flaque ni de secousse
           if (nearCam(e.x, e.y)) {
             this.fx.burst(e.x, e.y - 14, def.color, 18);
-            this.fx.ring(e.x, e.y, 70, def.crate === 'coins' ? 0xffc83d : 0x7fc8ff);
+            this.fx.ring(e.x, e.y, 70, 0x7fc8ff);
             playSfx(this.scene, 'rock_break');
           }
           break;

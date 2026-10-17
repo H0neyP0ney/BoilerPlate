@@ -311,8 +311,8 @@ export class Horde {
     this.sim.aliens.push(egg);
   }
 
-  /** Boîte de power-up ou caisse de pièces (200 PV exacts, immobile, sans XP ni recrue), posée sur place ; ne dépend pas du plafond d'aliens. */
-  spawnBox(type: 'powerup_box' | 'coin_crate' | 'tnt_crate', x: number, y: number): AlienState {
+  /** Boîte de power-up (200 PV exacts, immobile, sans XP ni recrue), posée sur place ; ne dépend pas du plafond d'aliens. */
+  spawnBox(type: 'powerup_box', x: number, y: number): AlienState {
     const def = ALIENS[type];
     const box = this.create(def, x, y, 1, false);
     box.maxHp = box.hp = def.hp; // exacts : ni escalade ni multiplicateur
@@ -390,7 +390,7 @@ export class Horde {
 
   /** Les soldats peuvent le viser et le toucher : ni dans son trou d'apparition, ni totalement enterré. */
   targetable(a: AlienState): boolean {
-    if (a.def.crate && (a.age < CRATES.fall || a.fuseT !== undefined)) return false; // encore en l'air, ou caisse de TNT déjà allumée : ni visée ni touchée
+    if (a.def.crate && a.age < CRATES.fall) return false; // encore en l'air : ni visée ni touchée
     return !this.isEmerging(a) && this.burial(a) !== 'full';
   }
 
@@ -420,7 +420,6 @@ export class Horde {
       if (def.egg) {
         a.vx = a.vy = a.kx = a.ky = 0;
         a.age += dt; // les boîtes et caisses comptent leur chute (`CRATES.fall`)
-        if (a.fuseT !== undefined && (a.fuseT -= dt) <= 0) this.sim.detonate(a); // caisse de TNT : mèche consumée
         continue;
       }
 

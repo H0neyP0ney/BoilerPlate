@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
 import { alienOffsetY } from './spriteOffset';
+import { ensureGemTextures, PARACHUTE_KEY } from '../art/gems';
 import { BURIED, CRATES, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
@@ -276,7 +277,7 @@ export class SoldierView {
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
 /** Chute d'une boîte de power-up / caisse de pièces à son apparition (hauteur px, durée s, amplitude du rebond écrasé à l'atterrissage). */
-const CRATE_FALL = { height: 60, time: CRATES.fall, bump: 0.3 };
+const CRATE_FALL = { height: CRATES.height, time: CRATES.fall, bump: 0.3 };
 
 export class AlienView {
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
@@ -308,6 +309,8 @@ export class AlienView {
   lookAt: number | null = null;
   /** Boîte / caisse (`def.crate`) : temps écoulé depuis son apparition (s) ; elle tombe de `CRATE_FALL.height` px en `CRATE_FALL.time` s, rebondit à l'atterrissage (écrasement amorti) et lève un peu de poussière. */
   private crateT = 0;
+  /** Parachute de la boîte de power-up : flotte au-dessus d'elle pendant la descente, se replie à l'atterrissage puis disparaît. */
+  private parachute?: Phaser.GameObjects.Image;
   /** Part de l'alien sortie du sol (0 = enterré / pas encore sorti de son trou, 1 = dehors) : opacité de son ombre portée (fondu). */
   outOfGround = 1;
 
@@ -321,6 +324,10 @@ export class AlienView {
     // sort d'un trou d'apparition : il monte hors du sol (sprite rogné de 0 à 100 %, `groundCut`) au lieu de surgir en grossissant
     if (this.emergeT === 0) this.spawnT = 1;
     this.id = `alien_${state.def.id}`;
+    if (state.def.crate) {
+      ensureGemTextures(scene);
+      this.parachute = scene.add.image(state.x, state.y, PARACHUTE_KEY).setOrigin(0.5, 1);
+    }
     latePack.request(scene, this.id); // visuel d'un paquet pas encore chargé : on le demande (dessin procédural d'ici là, `refreshSprite`)
     if (latePack.has(this.id) && sprites.get(this.id).texture === proceduralKey(this.id)) fallbackSeen('alien'); // analytics : ce joueur a vu un alien en dessin procédural
     this.body = sprites.add(scene, this.id, state.x, state.y);
@@ -427,7 +434,7 @@ export class AlienView {
       const before = this.crateT;
       this.crateT += dt;
       const F = CRATE_FALL.time;
-      if (this.crateT < F) lift -= CRATE_FALL.height * (1 - (this.crateT / F) ** 2);
+      if (this.crateT < F) lift -= CRATE_FALL.height * (1 - this.crateT / F) ** 2; // descente en parachute : rapide au début, elle ralentit en arrivant
       else {
         if (before < F) this.onPop?.(this.rx, this.ry + alienOffsetY(a.def.id), a.radius * 1.5); // atterrit : poussière
         const tau = this.crateT - F;
@@ -459,6 +466,17 @@ export class AlienView {
       .setFlipX(flips ? sprites.flipFor(this.id, this.facing) : false)
       .setDepth(DEPTH.actors + this.ry);
     sprites.place(this.body, this.id);
+    if (this.parachute) {
+      // parachute accroché au-dessus de la boîte ; à l'atterrissage il s'affaisse (écrasé en hauteur) en 0,3 s puis disparaît
+      const k = this.crateT < CRATE_FALL.time ? 1 : 1 - (this.crateT - CRATE_FALL.time) / 0.3;
+      if (k <= 0) {
+        this.parachute.destroy();
+        this.parachute = undefined;
+      } else {
+        const sc = this.body.scaleX * 0.9;
+        this.parachute.setPosition(this.body.x, this.body.y - 58 * this.body.scaleY + (1 - k) * 30).setScale(sc, sc * k).setDepth(this.body.depth + 1).setAlpha(Math.min(1, k * 1.5));
+      }
+    }
     // Charge : silhouettes fantômes bleutées derrière lui (une toutes les `GHOST.every` s, chacune s'efface en `GHOST.life` s : ~5 visibles)
     if (a.def.rush && a.rushT > 0 && this.body.visible) {
       if ((this.ghostT -= dt) <= 0) {
@@ -531,6 +549,7 @@ export class AlienView {
   }
 
   destroy(): void {
+    this.parachute?.destroy();
     this.body.destroy();
     this.zombieFx?.destroy();
   }

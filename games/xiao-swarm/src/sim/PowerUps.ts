@@ -148,14 +148,12 @@ export class PowerUps {
     }
   }
 
-  /** Une boîte de power-up est détruite en (x, y) : le power-up caché (`contents`) jaillit et retombe en cloche à côté. */
+  /** Une boîte de power-up est détruite en (x, y) : le power-up caché (`contents`) saute sur place. */
   dropFromBox(x: number, y: number, kind?: string): void {
     const { rng } = this.sim;
     const p = this.drop((KINDS.find((k) => k === kind) ?? rng.pick(KINDS)), x, y);
     p.age = 0; // imprenable la première seconde : on le voit d'abord retomber
-    const ang = rng.range(0, Math.PI * 2);
-    const dist = rng.range(30, 70);
-    p.hop = { vx: (Math.cos(ang) * dist) / RECRUIT.hopTime, vy: (Math.sin(ang) * dist) / RECRUIT.hopTime, t: RECRUIT.hopTime };
+    p.hop = { vx: 0, vy: 0, t: RECRUIT.hopTime }; // saute sur place (même endroit que la boîte)
   }
 
   /** Apparition près d'une squad vivante au hasard, à distance de marche, sur un point libre. */

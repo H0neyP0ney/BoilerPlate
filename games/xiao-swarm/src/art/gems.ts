@@ -6,11 +6,10 @@ export const GEM_GREEN = 0x3ddc84;
 export const GEM_KEY = 'gem_green';
 export const GEM_CHEST_KEY = 'gem_chest';
 export const COIN_KEY = 'coin_gold';
-/** Boîte de power-up et caisse de pièces : visuels des « aliens » `powerup_box` / `coin_crate` (`alien_<id>`, la clé de texture procédurale par défaut). */
+/** Boîte de power-up : visuel de l'« alien » `powerup_box` (`alien_<id>`, la clé de texture procédurale par défaut). */
 export const BOX_KEY = 'alien_powerup_box';
-export const CRATE_KEY = 'alien_coin_crate';
-/** Caisse de TNT (`tnt_crate`). */
-export const TNT_KEY = 'alien_tnt_crate';
+/** Parachute de la boîte de power-up (flotte au-dessus d'elle pendant sa descente). */
+export const PARACHUTE_KEY = 'fx_parachute';
 /** Or des pièces (rond au sol, compteur du HUD). */
 export const COIN_GOLD = 0xffc83d;
 
@@ -82,75 +81,39 @@ export function ensureGemTextures(scene: Phaser.Scene): void {
     ctx.strokeText('?', 36, 42);
     ctx.fillText('?', 36, 42);
   });
-  // caisse de pièces : caisse de bois cerclée de fer, pièce d'or sur la façade
-  make(scene, CRATE_KEY, 72, 72, (ctx) => {
+  // parachute : calotte rouge et blanche, lignes de suspension qui se rejoignent en bas (la boîte s'y accroche)
+  make(scene, PARACHUTE_KEY, 96, 80, (ctx) => {
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.roundRect(8, 14, 56, 52, 5);
-    ctx.fillStyle = '#b9772f';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#4a2a0c';
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(74,42,12,0.55)'; // planches
-    ctx.lineWidth = 2;
-    for (const y of [27, 40, 53]) {
+    const panels = ['#e8413a', '#ffffff', '#e8413a', '#ffffff', '#e8413a'];
+    for (let i = 0; i < 5; i++) {
+      const x0 = 6 + i * 16.8;
       ctx.beginPath();
-      ctx.moveTo(10, y);
-      ctx.lineTo(62, y);
+      ctx.moveTo(x0, 40);
+      ctx.quadraticCurveTo(x0 + 2, 6, 48, 4);
+      ctx.quadraticCurveTo(90 - x0 + 6, 6, x0 + 16.8, 40);
+      ctx.closePath();
+      ctx.fillStyle = panels[i];
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#7a1a16';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(6, 40);
+    ctx.quadraticCurveTo(10, 6, 48, 4);
+    ctx.quadraticCurveTo(86, 6, 90, 40);
+    for (let i = 0; i < 5; i++) {
+      const x = 6 + i * 21;
+      ctx.quadraticCurveTo(x + 10, 46, x + 21 > 90 ? 90 : x + 21, 40); // bord festonné
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(40,30,20,0.85)';
+    ctx.lineWidth = 2;
+    for (const x of [8, 28, 48, 68, 88]) {
+      ctx.beginPath();
+      ctx.moveTo(x, 42);
+      ctx.lineTo(48, 78);
       ctx.stroke();
     }
-    ctx.fillStyle = '#6b6f78'; // cerclage
-    ctx.fillRect(12, 14, 6, 52);
-    ctx.fillRect(54, 14, 6, 52);
-    ctx.beginPath();
-    ctx.arc(36, 40, 12, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffc83d';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#8a5a05';
-    ctx.stroke();
-    ctx.fillStyle = '#8a5a05';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('★', 36, 41);
-  });
-  // caisse de TNT : caisse rouge, bâtons de dynamite liés et lettres « TNT »
-  make(scene, TNT_KEY, 72, 72, (ctx) => {
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.roundRect(8, 14, 56, 52, 5);
-    const g = ctx.createLinearGradient(0, 14, 0, 66);
-    g.addColorStop(0, '#f0644a');
-    g.addColorStop(1, '#b32a1a');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#4a1008';
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fillRect(12, 18, 48, 6);
-    ctx.fillStyle = '#ffe9b0'; // plaque
-    ctx.fillRect(14, 31, 44, 22);
-    ctx.strokeStyle = '#4a1008';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(14, 31, 44, 22);
-    ctx.fillStyle = '#b32a1a';
-    ctx.font = 'bold 19px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('TNT', 36, 43);
-    ctx.strokeStyle = '#3a2a10'; // mèche
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(36, 14);
-    ctx.quadraticCurveTo(40, 6, 48, 8);
-    ctx.stroke();
-    ctx.fillStyle = '#ffd24a';
-    ctx.beginPath();
-    ctx.arc(49, 8, 3, 0, Math.PI * 2);
-    ctx.fill();
   });
   make(scene, COIN_KEY, 64, 64, (ctx) => {
     // pièce d'or : disque doré cerclé, reflet et petite étoile gravée

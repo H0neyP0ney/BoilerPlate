@@ -58,20 +58,17 @@ export const RING = { radius: 340 };
  * attrapé par l'aimant, il ne disparaît plus). `cooldown` : pause (s) après une vidéo ratée / refusée.
  */
 /**
- * Pièces d'or (solo, `sim/Gems.ts`) : lâchées par les aliens comme les globes d'XP (jamais par un alien sans XP : invoqué, rejeu de vague, œuf, orbe). `chance` par alien
+ * Pièces d'or (solo, `sim/Gems.ts`) : lâchées par les aliens comme les globes d'XP (jamais par un alien sans XP : invoqué, rejeu de vague, œuf, orbe). `chance` par alien (0,3 : doublé le 17/10)
  * (`strongChance` si ses PV max atteignent `strongHp`), `bossCoins` pièces pour un boss ; elles disparaissent après `life` s (clignotent les `blink` dernières).
  */
 /**
- * Boîtes et caisses destructibles (200 PV, `data/aliens.ts` : `powerup_box`, `coin_crate`). Les power-ups n'apparaissent plus à nu : le minuteur existant (`DIFFICULTY.powerupEvery…`)
- * pose une boîte dont on ignore le contenu. Des caisses de pièces apparaissent aussi toutes les `every` s près d'une squad (au plus `max` à la fois) et libèrent `coins` pièces.
- * Elle apparaît en l'air (elle grossit en tombant, son ombre marque l'endroit d'atterrissage) et n'est destructible qu'une fois au sol (`fall` s). Une boîte / caisse restée à plus de `farDist` px de toutes les squads disparaît (elle libère sa place).
+ * Boîte de power-up (`powerup_box`, 200 PV, `data/aliens.ts`). Les power-ups n'apparaissent plus à nu : le minuteur existant (`DIFFICULTY.powerupEvery…`) pose une boîte dont on
+ * ignore le contenu. Elle descend du ciel en parachute (de `height` px, en `fall` s : elle grossit, son ombre marque l'endroit d'atterrissage, le parachute se replie à
+ * l'atterrissage) et n'est destructible qu'une fois au sol ; casser la boîte fait SAUTER le power-up sur place. Une boîte restée à plus de `farDist` px de toutes les squads disparaît.
  */
-/** Caisse de TNT (`tnt_crate`) : mèche (s), rayon de l'explosion (px, ~3-4 soldats de large), dégâts aux aliens et recul. */
-export const TNT = { fuse: 3, radius: 150, damage: 450, knock: 450 };
+export const CRATES = { fall: 0.9, height: 260, farDist: 1800 };
 
-export const CRATES = { tntEvery: [38, 66] as [number, number], tntMax: 1, fall: 0.38, every: [16, 28] as [number, number], max: 3, coins: [8, 12] as [number, number], farDist: 1800, minDist: 240, maxDist: 480 };
-
-export const COINS = { chance: 0.15, strongHp: 200, strongChance: 0.5, bossCoins: 15, life: 14, blink: 5 };
+export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
 
 export const GEM_CHEST = { offsetY: 130, radius: 120, chargeTime: 2, decay: 2, burst: [20, 25] as [number, number], free: [1, 5] as [number, number], cooldown: 4, grace: 0.6, life: 10, blink: 3 };
 /**

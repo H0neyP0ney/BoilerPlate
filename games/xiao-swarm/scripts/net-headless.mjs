@@ -15,8 +15,7 @@ try {
   const { ClientSession } = await vite.ssrLoadModule('/src/net/ClientSession.ts');
   const { LoopbackHub } = await vite.ssrLoadModule('/src/net/LoopbackTransport.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
-  const { DIFFICULTY, CRATES } = await vite.ssrLoadModule('/src/config.ts');
-  CRATES.every = [1e9, 1e9]; // pas de caisse de pièces aléatoire : ce test compare des trajectoires, la suite aléatoire doit rester celle d'avant les caisses
+  const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { UPGRADE_IDS } = await vite.ssrLoadModule('/src/data/progression.ts');
   const { takeSnapshot, encodeSnapshot, decodeSnapshot } = await vite.ssrLoadModule('/src/net/Protocol.ts');

@@ -38,9 +38,9 @@ export class MultiplayerScene extends Phaser.Scene {
     this.rooms = null;
     this.busy = false;
     this.message = '';
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuild);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off(Phaser.Scale.Events.RESIZE, this.rebuild);
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize);
       this.clear();
       this.input_?.remove();
       this.input_ = null;
@@ -66,7 +66,24 @@ export class MultiplayerScene extends Phaser.Scene {
     this.rebuild();
   }
 
+  /** Champ du code sélectionné (clavier virtuel ouvert) et largeur de la dernière mise en page. */
+  private typing = false;
+  private lastW = 0;
+  private lastH = 0;
+
+  /**
+   * Redimensionnement : sur mobile, le clavier virtuel réduit la hauteur de la fenêtre et décalait toute la mise en page (tableau, champ) à son apparition. Tant que le champ du code est
+   * sélectionné, un simple changement de hauteur est donc ignoré ; la mise en page est refaite à la fermeture du clavier (`blur`). (La balise viewport `interactive-widget=resizes-visual`
+   * évite déjà ce redimensionnement sur Chrome Android.)
+   */
+  private readonly onResize = (): void => {
+    if (this.typing && this.scale.width === this.lastW) return;
+    this.rebuild();
+  };
+
   private readonly rebuild = (): void => {
+    this.lastW = this.scale.width;
+    this.lastH = this.scale.height;
     this.clear();
     const { width: w, height: h } = this.scale;
     const cx = w / 2;
@@ -165,6 +182,11 @@ export class MultiplayerScene extends Phaser.Scene {
       el.placeholder = t('mpCodePlaceholder');
       el.style.cssText = `position:fixed;transform:translate(-50%,-50%);height:56px;font:700 22px ${theme.font};box-sizing:border-box;text-align:center;border-radius:10px;border:3px solid #0a1422;background:#fff;color:#13233a;z-index:10;`;
       el.addEventListener('input', () => this.fitInputText());
+      el.addEventListener('focus', () => (this.typing = true));
+      el.addEventListener('blur', () => {
+        this.typing = false;
+        window.setTimeout(() => this.scene.isActive() && this.scale.height !== this.lastH && this.rebuild(), 150); // clavier refermé : mise en page refaite seulement si la taille a changé (sinon un clic sur Join serait coupé)
+      });
       el.addEventListener('keydown', (e) => {
         e.stopPropagation(); // pas de déplacement de squad ni de pause pendant la saisie
         if (e.key === 'Enter') this.joinTyped();

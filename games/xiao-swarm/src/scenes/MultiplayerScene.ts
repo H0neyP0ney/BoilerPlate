@@ -2,16 +2,16 @@ import Phaser from 'phaser';
 import { Button, theme } from '@xiao/engine';
 import { SCENES } from '../config';
 import { hudOnTop } from './hudOnTop';
+import { hudTop } from '../view/hudLayout';
 import { t } from '../i18n';
 import type { RoomInfo } from '../net/Transport';
 import { createOnlineSession, listPublicRooms, OnlineError, type OnlineRequest } from '../online';
 
 const TEXT = { fontFamily: theme.font, color: '#ffffff', fontStyle: 'bold' } as const;
-/** Tableau des parties publiques : hauteur d'une ligne (px du jeu) et nombre de lignes visibles au plus (au-delà : barre de défilement). */
+/** Tableau des parties publiques : hauteur d'une ligne (px du jeu) ; il prend toute la place libre entre le champ du code et les boutons (au-delà : barre de défilement). */
 const ROW_H = 30;
 /** Hauteur de la ligne d'en-tête (ligne principale du tableau, un peu plus haute que les autres). */
 const HEAD_H = 40;
-const MAX_ROWS = 10;
 
 /**
  * Menu multijoueur (overlay de l'écran d'accueil solo) : Partie rapide, créer une partie publique / privée,
@@ -76,36 +76,36 @@ export class MultiplayerScene extends Phaser.Scene {
       add(this.add.text(x, y, str, { ...TEXT, fontSize: `${size}px`, color, align: 'center' }).setOrigin(0.5));
 
 
-    // pas de titre : Partie rapide en tête. Le bloc du haut (Quick Play + « créer ») et le tableau montent de `lift` ; le tableau grandit d'autant pour que « Join with a code » et « Back » restent où ils étaient
-    const lift = 30;
-    const baseY = Math.max(60, h / 2 - 300) + 40;
-    let y = baseY - lift;
+    // de haut en bas : code de salle + Join, tableau des parties publiques (au centre, prend la place qui reste), Créer publique / privée, Partie rapide, Back tout en bas
     const quickW = 420;
     const gap = 16;
     const bw = (quickW - gap) / 2; // les deux boutons « créer » côte à côte occupent exactement la largeur de Partie rapide
-    add(new Button(this, cx, y, { label: t('mpQuickPlay'), width: quickW, height: 68, onClick: () => void this.start({ kind: 'auto' }) }));
-    y += 82;
-    add(new Button(this, cx - bw / 2 - gap / 2, y, { label: t('mpCreatePublic'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: true, lobby: true }) }));
-    add(new Button(this, cx + bw / 2 + gap / 2, y, { label: t('mpCreatePrivate'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: false, lobby: true }) }));
-    y += 88; // haut du tableau (sous les boutons « créer », avec un espace de 60 px)
+    const backH = 56;
+    const backY = h - 24 - backH / 2;
+    add(new Button(this, cx, backY, { label: t('mpBack'), variant: 'secondary', width: quickW, height: backH, onClick: () => this.back() }));
+    const quickY = backY - backH / 2 - 14 - 34;
+    add(new Button(this, cx, quickY, { label: t('mpQuickPlay'), width: quickW, height: 68, onClick: () => void this.start({ kind: 'auto' }) }));
+    const createY = quickY - 34 - 14 - 28;
+    add(new Button(this, cx - bw / 2 - gap / 2, createY, { label: t('mpCreatePublic'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: true, lobby: true }) }));
+    add(new Button(this, cx + bw / 2 + gap / 2, createY, { label: t('mpCreatePrivate'), variant: 'secondary', width: bw, height: 56, onClick: () => void this.start({ kind: 'host', public: false, lobby: true }) }));
 
-    // tableau des parties publiques, puis en dessous « Join with a code » : titre, champ du code et Join (ensemble, exactement la largeur de Partie rapide)
-    const rows = Math.max(3, Math.min(MAX_ROWS, Math.floor((h - (y + lift) - 230) / ROW_H) - 1)); // autant de lignes que la place le permet, 10 au plus
-    const tableH = rows * ROW_H + HEAD_H + lift; // + la ligne d'en-tête, + la hauteur gagnée en montant son bord haut
-    this.placeTable(cx, y, quickW, tableH); // même largeur que Partie rapide
-    y += tableH + 26;
-    text(cx, y, t('mpJoinCode'), 22, '#9fb4cf');
-    y += 44;
+    // tout en haut : « Join with a code » (titre, champ du code et Join, ensemble exactement la largeur de Partie rapide)
+    const top = Math.max(16, hudTop());
+    text(cx, top + 12, t('mpJoinCode'), 22, '#9fb4cf');
+    const inputY = top + 12 + 44;
     const joinW = 154;
     const inputW = quickW - joinW - gap;
-    this.placeInput(cx - quickW / 2 + inputW / 2, y, inputW);
-    add(new Button(this, cx + quickW / 2 - joinW / 2, y, { label: t('mpJoin'), width: joinW, height: 56, onClick: () => this.joinTyped() }));
-    // « Back » sous la ligne du code : même largeur que le tableau et Partie rapide, collé (18 px d'écart)
-    const backH = 56;
-    const backY = y + 28 + 18 + backH / 2;
-    add(new Button(this, cx, backY, { label: t('mpBack'), variant: 'secondary', width: quickW, height: backH, onClick: () => this.back() }));
-    // message d'erreur / de connexion (« Can't connect… ») : sous « Back »
-    if (this.message) text(cx, backY + backH / 2 + 38, this.message, 24, '#ff8a8a');
+    this.placeInput(cx - quickW / 2 + inputW / 2, inputY, inputW);
+    add(new Button(this, cx + quickW / 2 - joinW / 2, inputY, { label: t('mpJoin'), width: joinW, height: 56, onClick: () => this.joinTyped() }));
+    // message d'erreur / de connexion (« Can't connect… ») : sous la ligne du code, avant le tableau
+    let tableTop = inputY + 28 + 16;
+    if (this.message) {
+      text(cx, tableTop + 14, this.message, 22, '#ff8a8a');
+      tableTop += 32;
+    }
+    // tableau au centre : de sous le code jusqu'au-dessus des boutons « créer »
+    const tableH = Math.max(HEAD_H + ROW_H * 2, createY - 28 - 16 - tableTop);
+    this.placeTable(cx, tableTop, quickW, tableH); // même largeur que Partie rapide
   };
 
   /** Tableau DOM (code · joueurs) : une ligne par partie publique, clic = rejoindre ; en-tête fixe, lignes défilantes. */
@@ -119,7 +119,7 @@ export class MultiplayerScene extends Phaser.Scene {
     const sx = rect.width / this.scale.width;
     const sy = rect.height / this.scale.height;
     const px = (v: number): string => `${Math.round(v * sy)}px`;
-    el.style.cssText = `position:fixed;left:${rect.left + (cx - width / 2) * sx}px;top:${rect.top + top * sy}px;width:${width * sx}px;height:${height * sy}px;overflow-y:auto;box-sizing:border-box;border-radius:${px(8)};background:rgba(11,26,77,0.85);border:2px solid #3f6fe0;font:700 ${px(17)} ${theme.font};color:#fff;z-index:10;`;
+    el.style.cssText = `position:fixed;left:${rect.left + (cx - width / 2) * sx}px;top:${rect.top + top * sy}px;width:${width * sx}px;height:${height * sy}px;overflow-y:auto;box-sizing:border-box;border-radius:${px(8)};background:#0b1a4d;border:2px solid #3f6fe0;font:700 ${px(17)} ${theme.font};color:#fff;z-index:10;`;
     const row = (code: string, players: string, head: boolean, onClick?: () => void): HTMLDivElement => {
       const r = document.createElement('div');
       r.style.cssText = `display:flex;justify-content:space-between;align-items:center;height:${px(head ? HEAD_H : ROW_H)};padding:0 ${px(12)};box-sizing:border-box;${head ? `position:sticky;top:0;background:#2f5bc4;color:#e6efff;font-size:${px(15)};` : onClick ? 'cursor:pointer;' : ''}`;
@@ -138,7 +138,7 @@ export class MultiplayerScene extends Phaser.Scene {
       }
       if (onClick) {
         r.onclick = onClick;
-        r.onmouseenter = () => (r.style.background = 'rgba(255,255,255,0.15)');
+        r.onmouseenter = () => (r.style.background = '#2a4a9a');
         r.onmouseleave = () => (r.style.background = '');
       }
       return r;

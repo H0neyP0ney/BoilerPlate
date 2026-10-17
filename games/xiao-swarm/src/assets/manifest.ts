@@ -545,13 +545,13 @@ export const ASSETS: AssetEntry[] = [
   {
     type: 'sheet',
     url: 'soldiers/gunner.png',
-    frameWidth: 67,
-    frameHeight: 52,
+    frameWidth: 134, // 67 × 52 avant le 17/10 : planche assemblée au double de résolution (`art-src/gunner.pack.json`, scale 0,44), échelle d'affichage divisée par 2 pour garder la même taille à l'écran
+    frameHeight: 103,
     sprites: {
       soldier_trooper: {
         originX: 0.3671,
         originY: 0.8946,
-        scale: 1.25,
+        scale: 0.625,
         muzzleFlash: true,
         muzzle: [0.8561, 0.6376],
         anchors: { 'idle:right': [0.3515, 0.8854], 'idle:left': [0.6463, 0.8854], 'walk:left': [0.6514, 0.9127], 'walk:right': [0.339, 0.9127] },

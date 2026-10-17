@@ -39,6 +39,14 @@ export class TitleScene extends Phaser.Scene {
     this.addHeads(solo, 1, w); // Solo : une tête de recrue
     this.addHeads(multi, 4, w); // Multiplayer : quatre têtes, une par couleur de joueur
     this.objects.push(solo, multi);
+    // Armory (pièce d'or) à gauche et Skins (diamant vert) à droite, mêmes boutons que sur l'écran Solo, au milieu de la hauteur
+    const sw = Math.min(190, Math.max(110, width * 0.26));
+    const sh = 128;
+    const side = (x: number, label: string, fill: number, scene: string): void => {
+      this.objects.push(new Button(this, x, height / 2, { label, variant: 'secondary', fill, textColor: '#ffffff', width: sw, height: sh, onClick: () => this.go(scene, true) }));
+    };
+    side(sw / 2 + 14, t('armoryBtn'), 0x8a5a05, SCENES.armory);
+    side(width - sw / 2 - 14, t('skinsBtn'), 0x1f7a4d, SCENES.shop);
   }
 
   /**
@@ -63,7 +71,8 @@ export class TitleScene extends Phaser.Scene {
     }
   }
 
-  private go(key: string): void {
+  private go(key: string, menu = false): void {
+    if (menu) this.registry.set('menuFrom', 'title');
     this.scene.stop();
     this.scene.launch(key);
   }

@@ -355,6 +355,10 @@ export interface GemChestState {
   id: number;
   x: number;
   y: number;
+  px: number;
+  py: number;
+  /** Saut en cloche depuis l'œuf jusqu'à sa place (`t` = temps restant) : pas de jauge pendant le saut. */
+  hop?: { vx: number; vy: number; t: number };
   /** Jauge de charge, 0 → 1 (`GEM_CHEST.chargeTime` s de présence). */
   charge: number;
   /** `idle` : se charge ; `ad` : la vidéo est demandée (la vue répond par `Gems.adResult`) ; `cooldown` : vidéo ratée, pause avant de pouvoir recommencer. */

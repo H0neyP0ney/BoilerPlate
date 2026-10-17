@@ -254,7 +254,35 @@ function saveImageEntry(id: string, props: SpriteProps, rel: string, src: string
   return { ok: true, message: `${id} enregistré dans ${rel}` };
 }
 
+/**
+ * Save d'un skin (id `soldier_trooper#k<skin>` de la visionneuse d'unités) : réécrit le bloc `sprite: { … }` de l'entrée `<skin>: { … }` de `SKIN_SHEETS`
+ * dans `assets/skinSheets.ts` (mêmes lignes que pour une entrée du manifeste).
+ */
+function saveSkinSprite(skin: string, props: SpriteProps): Result {
+  if (!/^[a-z_]+$/.test(skin)) return { ok: false, message: `Id de skin invalide : ${skin}` };
+  const rel = 'assets/skinSheets.ts';
+  const src = readSrc(rel);
+  const m = new RegExp(`^([ \\t]*)${skin}:\\s*\\{`, 'm').exec(src);
+  if (!m) return { ok: false, message: `Skin ${skin} introuvable dans ${rel}` };
+  const entryOpen = m.index + m[0].length - 1;
+  const entryClose = matchingBrace(src, entryOpen);
+  if (entryClose < 0) return { ok: false, message: `${skin} : accolade non fermée dans ${rel}` };
+  const entry = src.slice(entryOpen, entryClose + 1);
+  const sm = /^([ \t]*)sprite:\s*\{/m.exec(entry);
+  if (!sm) return { ok: false, message: `${skin} : bloc \`sprite\` introuvable dans ${rel}` };
+  const sOpen = sm.index + sm[0].length - 1;
+  const sClose = matchingBrace(entry, sOpen);
+  if (sClose < 0) return { ok: false, message: `${skin} : accolade du bloc \`sprite\` non fermée` };
+  const indent = sm[1] + '  ';
+  const body = `{\n${spriteLines(props).map((l) => indent + l).join('\n')}\n${sm[1]}}`;
+  const next = entry.slice(0, sOpen) + body + entry.slice(sClose + 1);
+  writeSrc(rel, src, src.slice(0, entryOpen) + next + src.slice(entryClose + 1));
+  return { ok: true, message: `Skin ${skin} enregistré dans ${rel}` };
+}
+
 function saveSprite(id: string, props: SpriteProps): Result {
+  const skin = /^soldier_trooper#k([a-z_]+)$/.exec(id);
+  if (skin) return saveSkinSprite(skin[1], props);
   const rel = 'assets/manifest.ts';
   const src = readSrc(rel);
   const m = new RegExp(`^([ \\t]*)${id}:\\s*\\{`, 'm').exec(src);

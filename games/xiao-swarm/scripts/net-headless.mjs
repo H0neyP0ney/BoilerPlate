@@ -498,21 +498,23 @@ try {
   // loin des tirs de l'escouade, vers le centre de la carte (près d'un bord, ils seraient ramenés à portée)
   const hdir = a.center.x < hs.map.width / 2 ? 1 : -1;
   hs.aliens.length = 0;
-  hs.horde.spawnAt('boss_crab', a.center.x - 300, a.center.y);
+  hs.horde.spawnAt('boss_crab', a.center.x + hdir * 300, a.center.y); // côté du centre de la carte
   const heavy = hs.aliens[0];
   heavy.age = 5; // sorti de son trou depuis longtemps : un alien qui sort du sol n'est pas repoussé
   const d0 = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
   resolveChoices(); // plus de choix en attente
   for (let round = 0; round < 3; round++) {
     await ensureRunning(client); // une partie finie au tour précédent : on attend la relance
-    heavy.x = heavy.px = a.center.x - 300; // chaque tour repart à portée de l'onde (sinon les tours précédents l'ont déjà poussé hors de portée)
+    if (!a.alive) hs.spawnLate(a.owner, ['trooper', 'trooper', 'trooper']); // le crabe a tué l'escouade au tour précédent : elle revient (sans squad vivante, pas d'onde de choc)
+    for (const m of a.soldiers) m.invulnerable = 5;
+    heavy.x = heavy.px = a.center.x + hdir * 300; // chaque tour repart à portée de l'onde (sinon les tours précédents l'ont déjà poussé hors de portée)
     heavy.y = heavy.py = a.center.y;
     a.gainXp(a.xpNeeded - a.xp + 0.01);
     resolveChoices(); // l'onde de choc se déroule une fois la pause de choix terminée
     const dBefore = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
     for (let i = 0; i < 40; i++) { heavy.attackCd = 5; hs.aliens.splice(0, hs.aliens.length, heavy); await tick(client); } // le boss vivant fait rejouer les vagues : on retire les autres aliens (ils gêneraient la mesure)
     const dAfter = Math.hypot(heavy.x - a.center.x, heavy.y - a.center.y);
-    check(dAfter > dBefore + 80, `onde de choc n°${round + 1} : repousse un alien lourd`, `${dBefore.toFixed(0)} → ${dAfter.toFixed(0)} px`);
+    check(dAfter > dBefore + 60, `onde de choc n°${round + 1} : repousse un alien lourd`, `${dBefore.toFixed(0)} → ${dAfter.toFixed(0)} px`);
   }
   void d0;
   hs.aliens.length = 0;

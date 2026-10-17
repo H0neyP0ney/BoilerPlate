@@ -37,6 +37,12 @@ export class NetlibTransport implements Transport {
     return this.net.create({ public: opts.public ?? false, maxPlayers: 4 });
   }
 
+  async setPublic(isPublic: boolean): Promise<void> {
+    await this.ready;
+    const r = await this.net.setLobbySettings({ public: isPublic });
+    if (r instanceof Error) throw r;
+  }
+
   async join(code: string): Promise<void> {
     await this.ready;
     const lobby = await this.net.join(code);

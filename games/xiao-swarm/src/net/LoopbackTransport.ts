@@ -31,6 +31,12 @@ export class LoopbackHub {
   }
 
   /** @internal */
+  setRoomPublic(code: string, isPublic: boolean): void {
+    if (isPublic) this.publicCodes.add(code);
+    else this.publicCodes.delete(code);
+  }
+
+  /** @internal */
   joinRoom(code: string, t: LoopbackTransport): LoopbackTransport[] {
     const room = this.rooms.get(code);
     if (!room) throw new Error(`room not found: ${code}`);
@@ -96,7 +102,14 @@ export class LoopbackTransport implements Transport {
   ) {}
 
   async host(opts: { public?: boolean } = {}): Promise<string> {
-    return this.hub.createRoom(this, opts.public ?? false);
+    this.code = this.hub.createRoom(this, opts.public ?? false);
+    return this.code;
+  }
+
+  private code: string | null = null;
+
+  async setPublic(isPublic: boolean): Promise<void> {
+    if (this.code) this.hub.setRoomPublic(this.code, isPublic);
   }
 
   async listRooms(): Promise<RoomInfo[]> {

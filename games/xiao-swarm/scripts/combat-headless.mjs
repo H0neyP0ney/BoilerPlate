@@ -14,7 +14,7 @@ try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
-  const { DIFFICULTY, RELOCATE } = await vite.ssrLoadModule('/src/config.ts');
+  const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE } = await vite.ssrLoadModule('/src/config.ts');
 
   const fresh = (seed) => {
     const session = new LocalSession({ mode: MODES.survival, seed, bots: 0 });
@@ -1228,7 +1228,10 @@ try {
     const counts = { trooper: 0, medic: 0, sniper: 0 };
     for (let i = 0; i < 2000; i++) counts[sim.recruits.chooseClass(sq)]++;
     const special = (counts.medic + counts.sniper) / 2000;
-    check(Math.abs(special - 0.2) < 0.04 && counts.medic > 0 && counts.sniper > 0 && Math.abs(counts.medic - counts.sniper) < 120 && sq.perks.has('critGlasses'), "armurerie : 20 % des bonus recrue sont spéciaux, à égalité parmi les unités débloquées ; l'upgrade est posée", `spéciales ${(special * 100).toFixed(1)} % (medic ${counts.medic}, sniper ${counts.sniper})`);
+    // recrues spéciales désactivées (SPECIAL_RECRUIT_CHANCE = 0) : aucune spéciale ; sinon 20 % à égalité parmi les unités débloquées
+    const wanted = SPECIAL_RECRUIT_CHANCE;
+    const spread = wanted === 0 ? counts.medic + counts.sniper === 0 : counts.medic > 0 && counts.sniper > 0 && Math.abs(counts.medic - counts.sniper) < 120;
+    check(Math.abs(special - wanted) < 0.04 && spread && sq.perks.has('critGlasses'), `armurerie : ${wanted * 100} % des bonus recrue sont spéciaux (désactivé si 0), à égalité parmi les unités débloquées ; l'upgrade est posée`, `spéciales ${(special * 100).toFixed(1)} % (medic ${counts.medic}, sniper ${counts.sniper})`);
     // pièces d'or : ~15 % des aliens en lâchent, un boss une poignée, jamais un alien sans XP
     for (let i = 0; i < 400; i++) {
       sim.horde.spawnAt('slime', sq.center.x + 60, sq.center.y, 1, false);
@@ -1265,15 +1268,39 @@ try {
     sim.gems.spawnChest(bx, by);
     const chest = sim.gems.chests[0];
     check(!!chest && sim.gems.items.length >= 1 && sim.gems.items.length <= 5 && sim.gems.items.every((g) => Math.hypot(g.x - bx, g.y - by) < 10), 'boss tué : 1 à 5 diamants jaillissent autour de l\'œuf', `${sim.gems.items.length} diamants`);
+    // le coffre saute de l'œuf vers le sommet d'un triangle équilatéral : place d'arrivée = départ + vitesse × durée
+    const tx = chest.x + chest.hop.vx * chest.hop.t;
+    const ty = chest.y + chest.hop.vy * chest.hop.t;
+    // les deux globes d'upgrade forment la base (même centre : l'œuf)
+    sim.upgradeOrbs.burst(bx, by);
+    const orbs = sim.upgradeOrbs.items.filter((o) => o.owner === 'p1').map((o) => ({ x: o.x + o.hop.vx * o.hop.t, y: o.y + o.hop.vy * o.hop.t }));
+    const L = GEM_CHEST.triangle;
+    const d = (u, v) => Math.hypot(u.x - v.x, u.y - v.y);
+    const top = { x: tx, y: ty };
+    const [oa, ob] = orbs.sort((u, v) => u.x - v.x);
+    check(orbs.length === 2 && ty < by && oa.y > by && ob.y > by && oa.x < bx && ob.x > bx, 'œuf détruit : coffre au-dessus, globes d\'upgrade en bas à gauche et en bas à droite', `coffre y ${Math.round(ty - by)}, globes (${Math.round(oa.x - bx)}, ${Math.round(oa.y - by)}) / (${Math.round(ob.x - bx)}, ${Math.round(ob.y - by)})`);
+    const sides = [d(top, oa), d(top, ob), d(oa, ob)];
+    check(sides.every((s) => s > L * 0.87 && s < L * 1.13), 'coffre et globes forment un triangle équilatéral (± 10 % par branche)', sides.map((s) => `${Math.round((s / L) * 100)} %`).join(' / '));
     // soldats posés contre le coffre : la jauge ne se charge pas tant qu'il est en l'air
-    for (const s of sq.soldiers) { s.x = s.px = chest.x; s.y = s.py = chest.y; }
-    sq.anchor.x = chest.x;
-    sq.anchor.y = chest.y;
-    for (let i = 0; i < 30 * 0.6; i++) session.advance(34, () => {});
-    check(chest.age < 0.9 && chest.charge === 0, 'coffre à diamants : en l\'air (parachute), la jauge ne se charge pas', `âge ${chest.age.toFixed(2)} s, charge ${chest.charge}`);
+    for (const s of sq.soldiers) { s.x = s.px = tx; s.y = s.py = ty; }
+    sq.anchor.x = tx;
+    sq.anchor.y = ty;
+    for (let i = 0; i < 30 * 0.3; i++) session.advance(34, () => {});
+    check(!!chest.hop && chest.charge === 0, 'coffre à diamants : en l\'air (saut), la jauge ne se charge pas', `âge ${chest.age.toFixed(2)} s, charge ${chest.charge}`);
     let ready = false;
     for (let i = 0; i < 30 * 4 && !ready; i++) session.advance(34, (e) => { if (e.t === 'gemChestReady') ready = true; });
     check(ready, 'coffre à diamants : posé, rester autour remplit la jauge (vidéo demandée)');
+    // un coffre que personne n'ouvre disparaît au bout de 10 s
+    {
+      const f2 = fresh(26);
+      clearAliens(f2.sim);
+      const q = f2.sim.squadOf('p1');
+      f2.sim.gems.spawnChest(q.center.x + 1200, q.center.y);
+      for (let i = 0; i < 30 * 9; i++) f2.session.advance(34, () => {});
+      const still = f2.sim.gems.chests.length;
+      for (let i = 0; i < 30 * 2; i++) f2.session.advance(34, () => {});
+      check(still === 1 && f2.sim.gems.chests.length === 0, 'coffre à diamants : disparaît au bout de 10 s s\'il n\'est pas pris', `${still} à 9 s, ${f2.sim.gems.chests.length} à 11 s`);
+    }
     // les power-ups apparaissent à nu (pas de boîte), sans saut : la vue joue un petit scale
     const f = fresh(25);
     clearAliens(f.sim);

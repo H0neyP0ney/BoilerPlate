@@ -307,10 +307,6 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.placeGems();
       if (gain) this.tweens.add({ targets: [this.coinIcon, this.coinText], scale: { from: 1.25, to: 1 }, duration: 160, ease: 'Quad.Out' });
     }
-    this.coinIcon.setVisible(!this.game_.inLobby);
-    this.coinText.setVisible(!this.game_.inLobby);
-    this.gemIcon.setVisible(!this.game_.inLobby);
-    this.gemText.setVisible(!this.game_.inLobby);
     if (aliens !== this.alienShown) {
       this.alienShown = aliens;
       this.alienText.setText(t('aliensCount', { value: aliens }));
@@ -322,11 +318,12 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     const g = this.game_;
     const s = g.session;
     this.roomText.setText(
-      !s.online || g.inLobby ? '' : s.connection === 'lost' ? t('connectionLost') : `${t('room', { code: s.roomCode ?? '', players: g.playerCount })} · ${t(DIFFICULTY_LABEL_KEYS[s.sim.difficulty])}`, // le niveau de la room, visible de tous les joueurs ; pas dans la salle d'attente (elle affiche déjà ces infos), seulement en jeu
+      !s.online || g.inLobby ? '' : s.connection === 'lost' ? t('connectionLost') : `${t('room', { code: s.roomCode ?? '' })}
+${t('roomPlayers', { players: g.playerCount })}`, // sur deux lignes, en bas à gauche : le niveau de la room, visible de tous les joueurs ; pas dans la salle d'attente (elle affiche déjà ces infos), seulement en jeu
     );
     this.hostText.setVisible(s.online && s.hostStalled);
     this.pauseBtn.setVisible(!s.sim.tutorial?.active && !g.titleOpen && !g.inLobby); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin) ; sur les écrans titre, la roue crantée prend sa place
-    this.settingsBtn.setVisible(g.titleOpen); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
+    this.settingsBtn.setVisible(g.titleOpen || g.inLobby); // onboarding : l'interface se limite au strict nécessaire (réaffichée à la fin)
     if (g.flow.state !== 'ready' && !latePack.ready) fallbackSeen('other'); // analytics : partie lancée sans timeline (paquet 2a pas arrivé)
     this.hint.setVisible(g.flow.state === 'ready' && !g.titleOpen && !g.inLobby && !this.scene.isActive(SCENES.pause) && !this.scene.isActive(SCENES.options)); // l'indice des commandes n'apparaît ni sur les écrans titre ni pendant le menu pause
     for (const counter of [this.fpsText, this.alienText, this.levelText]) counter.setVisible(!g.titleOpen && !g.inLobby); // compteurs du bas à droite cachés pendant les écrans titre et la salle d'attente
@@ -840,7 +837,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
     // haut droite : le bouton pause, puis en dessous le son et la musique (les compteurs d'or et de diamants sont en haut à gauche)
     this.soundBtn.setPosition(width - 44, top + 34 + 30 + 8 + 22);
     this.musicBtn.setPosition(width - 44, top + 34 + 30 + 8 + 22 + 44 + 8);
-    this.roomText.setPosition(14, top + 22 + 36 + 28); // code de salle sous les compteurs
+    this.roomText.setOrigin(0, 1).setPosition(14, height - 12); // infos de la room sur deux lignes, en bas à gauche
     this.fpsText.setOrigin(1, 1).setPosition(width - 14, height - 12); // compteur de FPS en bas à droite
     this.alienText.setOrigin(1, 1).setPosition(width - 14, height - 34); // nombre d'aliens juste au-dessus
     this.levelText.setOrigin(1, 1).setPosition(width - 14, height - 56); // niveau de difficulté au-dessus du nombre d'aliens

@@ -1,3 +1,5 @@
+import { onSkinSheetReady, pinSkinSheets, requestSkinSheet, setSkinLoader, SKIN_SHEETS } from '../assets/skinSheets';
+import type { SkinId } from '../data/skins';
 import Phaser from 'phaser';
 import { getName, nameKey } from '../debugNames';
 import { clamp, sprites, theme } from '@xiao/engine';
@@ -60,10 +62,12 @@ const MAX_PER_ROW = 6;
 const INACTIVE_ALPHA = 0.25;
 
 const GROUPS: { kind: Kind; prefix: string; ids: string[] }[] = [
-  { kind: 'soldier', prefix: 'soldier_', ids: Object.keys(CLASSES) },
+  { kind: 'soldier', prefix: 'soldier_', ids: [...Object.keys(CLASSES), ...Object.keys(SKIN_SHEETS).map((id) => `trooper#k${id}`)] }, // + les skins à planche dédiée (`assets/skinSheets.ts`) : même Trooper, planche du skin
   { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_') || id === 'boss_egg') }, // l'œuf n'est pas un boss : il rejoint les aliens (la ligne des boss est pleine)
   { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => id.startsWith('boss_') && id !== 'boss_egg') }, // boss : ligne à part
 ];
+/** Classe de base d'une unité de la liste (`trooper#kninja` → `trooper`) : un skin se règle comme le Trooper (stats, hitbox) mais avec sa propre planche. */
+const baseUnit = (unit: string): string => unit.split('#')[0];
 const ZOOMS = [0.5, 1, 1.5, 2, 3, 4];
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 
@@ -135,6 +139,15 @@ export class UnitViewerScene extends Phaser.Scene {
 
   create(): void {
     this.scaleRef = new ScaleRef(this);
+    // planches de skins : demandées à l'ouverture (chargées à la demande comme en jeu) ; la vue se refait quand l'une arrive
+    pinSkinSheets(Object.keys(SKIN_SHEETS)); // affichées dans la vue : jamais déchargées pendant qu'elle est ouverte
+    setSkinLoader(this); // la scène de jeu est arrêtée ici : son chargeur ne tournerait pas, celui de la visionneuse si
+    for (const id of Object.keys(SKIN_SHEETS)) requestSkinSheet(id as SkinId);
+    const offSkins = onSkinSheetReady(() => this.rebuild());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offSkins();
+      pinSkinSheets([]);
+    });
     this.selected = ALL; // la scène est réutilisée : toujours rouvrir sur la vue de toutes les unités
     this.facing = 1; // et regardant à droite
     this.cameras.main.setBackgroundColor(VIEW_BG);
@@ -187,7 +200,7 @@ export class UnitViewerScene extends Phaser.Scene {
     }
     this.entries = [];
 
-    const groups = GROUPS.map((g) => ({ ...g, ids: g.ids.filter((u) => this.selected === ALL || `${g.prefix}${u}` === this.selected) })).filter(
+    const groups = GROUPS.map((g) => ({ ...g, ids: g.ids.filter((u) => (!u.includes('#k') || sprites.has(`${g.prefix}${u}`)) && (this.selected === ALL || `${g.prefix}${u}` === this.selected)) })).filter(
       (g) => g.ids.length,
     );
     // au plus MAX_PER_ROW unités par ligne : un groupe plus long passe à la ligne
@@ -248,7 +261,7 @@ ${id}` : id;
   /** Unité définie mais écartée du jeu (hors ACTIVE_CLASSES / ACTIVE_ALIENS ; les boss, pilotés par la timeline, comptent comme actifs). */
   private isInactive(kind: Kind, unit: string): boolean {
     if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ALIENS[unit as AlienId].egg && !ACTIVE_ALIENS.includes(unit as AlienId); // l'œuf des boss est en jeu
-    return !ACTIVE_CLASSES.includes(unit as SoldierClassId);
+    return !ACTIVE_CLASSES.includes(baseUnit(unit) as SoldierClassId);
   }
 
   /** Texte d'une entrée de la liste « Unité » : nom anglais puis id. */
@@ -273,7 +286,7 @@ ${id}` : id;
   private makeEntry(kind: Kind, prefix: string, unit: string, x: number, y: number): Entry {
     const id = `${prefix}${unit}`;
     // mêmes proportions qu'en jeu (WorldView.drawOverlay) ; la taille réglable s'applique en échelle
-    const radius = kind === 'alien' ? ALIENS[unit as AlienId].radius : CLASSES[unit as keyof typeof CLASSES].radius;
+    const radius = kind === 'alien' ? ALIENS[unit as AlienId].radius : CLASSES[baseUnit(unit) as keyof typeof CLASSES].radius;
     const shadow =
       kind === 'alien'
         ? this.add.ellipse(x, y, radius * 2.1, radius * 0.9, 0x000000, SHADOW_ALPHA)
@@ -284,7 +297,7 @@ ${id}` : id;
     if (this.isInactive(kind, unit)) sprite.setAlpha(INACTIVE_ALPHA);
     // vue d'ensemble : un clic sur une unité ouvre sa vue détaillée
     if (this.selected === ALL) sprite.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.select_(id));
-    const gunId = kind === 'soldier' ? `gun_${unit}` : undefined;
+    const gunId = kind === 'soldier' ? `gun_${baseUnit(unit)}` : undefined;
     const gun = gunId && !sprites.get(gunId).hidden ? sprites.add(this, gunId, x, y) : undefined;
     if (gun && this.isInactive(kind, unit)) gun.setAlpha(INACTIVE_ALPHA); // l'arme d'une classe inactive est transparente comme son soldat
     const label = this.add
@@ -397,7 +410,7 @@ ${id}` : id;
     if (e.gun) {
       const aim = this.facing > 0 ? 0 : Math.PI;
       e.gun
-        .setPosition(e.x + this.facing * 4, e.y - 17 * (e.unit === 'bruiser' ? 1.15 : 1) + bob)
+        .setPosition(e.x + this.facing * 4, e.y - 17 * (baseUnit(e.unit) === 'bruiser' ? 1.15 : 1) + bob)
         .setRotation(aim)
         .setFlipY(Math.cos(aim) < 0);
     }
@@ -730,7 +743,7 @@ ${id}` : id;
       const t = this.target;
       if (!t || t.kind === 'recruit') return;
       const r = Math.max(2, Math.round(Math.abs(p.worldX - t.x) * 2) / 2); // au demi-pixel
-      setStat(t.kind === 'alien' ? 'alien' : 'soldier', t.unit, 'radius', r);
+      setStat(t.kind === 'alien' ? 'alien' : 'soldier', baseUnit(t.unit), 'radius', r);
       for (const sy of this.statSyncs) sy();
     });
     this.handles.shadow.on('drag', (p: Phaser.Input.Pointer) => {
@@ -769,7 +782,7 @@ ${id}` : id;
 
   /** Rayon de collision courant (stat `radius`, modifiable avec la poignée rouge ou le panneau Stats). */
   private radiusOf(e: Entry): number {
-    return getStat(e.kind === 'alien' ? 'alien' : 'soldier', e.unit, 'radius');
+    return getStat(e.kind === 'alien' ? 'alien' : 'soldier', baseUnit(e.unit), 'radius');
   }
 
   /** L'unité éditée a-t-elle un muzzle flash (case cochée) ? */
@@ -1083,7 +1096,7 @@ ${id}` : id;
     const t = this.target;
     if (!t || t.kind === 'recruit') return;
     const kind = t.kind === 'alien' ? 'alien' : 'soldier';
-    const id = t.unit;
+    const id = baseUnit(t.unit);
     const p = document.createElement('div');
     p.style.cssText =
       'position:fixed;top:8px;left:330px;z-index:99999;width:270px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +

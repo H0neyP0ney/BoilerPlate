@@ -1,5 +1,5 @@
 import { clamp, Rng } from '@xiao/engine/sim';
-import { COINS, CRATES, GEM_CHEST, RECRUIT } from '../config';
+import { COINS, GEM_CHEST, RECRUIT } from '../config';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -41,18 +41,23 @@ export class Gems {
   }
 
   /**
-   * Un boss (ni final ni premier jumeau) vient de tomber en (x, y) : quelques diamants jaillissent tout de suite autour de l'œuf, puis son coffre descend du ciel en parachute
-   * au-dessus de l'œuf (`CRATES.fall` s) ; la jauge de présence ne se charge qu'une fois le coffre posé.
+   * Un boss (ni final ni premier jumeau) vient de tomber, son œuf est en (x, y) : quelques diamants jaillissent tout de suite autour de l'œuf, et le coffre saute de l'œuf vers le
+   * sommet d'un triangle équilatéral (côté `GEM_CHEST.triangle`, ± `triangleJitter`) dont les deux globes d'upgrade (`UpgradeOrbs.burst`, en bas à gauche et à droite) sont la base.
+   * Pas de jauge pendant le saut.
    */
   spawnChest(x: number, y: number): void {
     if (!this.enabled || this.sim.tutorial?.active) return;
     const { minX, maxX, minY, maxY } = this.sim.arena.bounds;
-    const cx = clamp(x, minX + 60, maxX - 60);
-    const cy = clamp(y - GEM_CHEST.offsetY, minY + 60, maxY - 60);
-    this.chests.push({ id: this.sim.ids.get(), x: cx, y: cy, charge: 0, state: 'idle', cool: 0, age: 0 });
     const rng = this.rng;
+    const R = GEM_CHEST.triangle / Math.sqrt(3); // rayon du cercle circonscrit : le centre du triangle est l'œuf
+    const j = GEM_CHEST.triangleJitter;
+    const ang = -Math.PI / 2 + rng.range(-0.05, 0.05); // sommet = au-dessus de l'œuf
+    const dist = R * (1 + rng.range(-j, j));
+    const tx = clamp(x + Math.cos(ang) * dist, minX + 60, maxX - 60);
+    const ty = clamp(y + Math.sin(ang) * dist, minY + 60, maxY - 60);
+    this.chests.push({ id: this.sim.ids.get(), x, y, px: x, py: y, charge: 0, state: 'idle', cool: 0, age: 0, hop: { vx: (tx - x) / GEM_FALL_TIME, vy: (ty - y) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
     const n = Math.floor(rng.range(GEM_CHEST.free[0], GEM_CHEST.free[1] + 1));
-    for (let i = 0; i < n; i++) this.drop(x, y, rng.range(0, Math.PI * 2), rng.range(60, 130)); // autour de l'œuf (la position du boss mort)
+    for (let i = 0; i < n; i++) this.drop(x, y, rng.range(0, Math.PI * 2), rng.range(60, 130)); // autour de l'œuf
   }
 
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
@@ -117,9 +122,22 @@ export class Gems {
   }
 
   update(dt: number): void {
-    for (const c of this.chests) {
+    for (let i = this.chests.length - 1; i >= 0; i--) {
+      const c = this.chests[i];
+      c.px = c.x;
+      c.py = c.y;
       c.age += dt;
-      if (c.age < CRATES.fall) continue; // encore en l'air (parachute) : pas de jauge
+      if (c.state !== 'ad' && c.age >= GEM_CHEST.chestLife) {
+        this.chests.splice(i, 1); // pas pris au bout de `chestLife` s : il disparaît (jamais pendant la vidéo)
+        continue;
+      }
+      if (c.hop) {
+        c.x += c.hop.vx * dt;
+        c.y += c.hop.vy * dt;
+        c.hop.t -= dt;
+        if (c.hop.t <= 0) c.hop = undefined;
+        continue; // en l'air : pas de jauge
+      }
       if (c.state === 'ad') continue; // la vidéo tourne : le monde est de toute façon figé
       if (c.state === 'cooldown') {
         c.cool -= dt;

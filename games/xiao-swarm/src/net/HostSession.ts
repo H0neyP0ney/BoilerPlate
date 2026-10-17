@@ -97,7 +97,7 @@ export class HostSession implements Session {
   private frame = 0;
   /** Salle d'attente (null = partie lancée sans attente). */
   lobby: LobbyInfo | null = null;
-  private readonly isPublic: boolean;
+  private isPublic: boolean;
 
   constructor(opts: HostSessionOptions) {
     this.transport = opts.transport;
@@ -140,6 +140,22 @@ export class HostSession implements Session {
     this.sim.restart();
     this.lobby ??= { started: true, humans: 1, bots: 0, public: this.isPublic };
     this.lobby.started = false;
+    this.updateLobby();
+  }
+
+  /**
+   * Salle d'attente : passe la partie en publique / privée (visible dans la liste des parties publiques, ou seulement par son code). Le serveur est prévenu d'abord ; si il refuse, rien ne change.
+   * Les joueurs déjà dans la salle y restent.
+   */
+  async setPublic(isPublic: boolean): Promise<void> {
+    if (!this.lobby || this.lobby.started || this.isPublic === isPublic) return;
+    try {
+      await this.transport.setPublic(isPublic);
+    } catch {
+      return; // refusé (ou réseau perdu) : on garde l'ancienne visibilité
+    }
+    this.isPublic = isPublic;
+    if (this.lobby) this.lobby.public = isPublic;
     this.updateLobby();
   }
 

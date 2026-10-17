@@ -1,3 +1,4 @@
+import { setSkinLoader } from '../assets/skinSheets';
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS } from '@xiao/engine';
 import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../config';
@@ -97,6 +98,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    setSkinLoader(this); // les planches de skins se téléchargent à la demande par le chargeur de cette scène (toujours active)
     this.revived = false;
     this.freeRevive = false;
     this.ended = false;
@@ -181,7 +183,7 @@ export class GameScene extends Phaser.Scene {
       this.view.arena.destroy();
       this.scene.stop(SCENES.hud);
       this.scene.stop(SCENES.lobby);
-      for (const key of [SCENES.title, SCENES.solo, SCENES.multiplayer]) this.scene.stop(key);
+      for (const key of [SCENES.title, SCENES.solo, SCENES.multiplayer, SCENES.join]) this.scene.stop(key);
     });
 
     this.scene.launch(SCENES.hud);
@@ -806,6 +808,7 @@ export class GameScene extends Phaser.Scene {
       setTimeScale: (v) => (this.timeScale = v),
       bots: this.botControl(),
     });
-    if (this.session instanceof HostSession) this.botOverlay = new BotOverlay(this, this.session);
+    this.botOverlay?.destroy(); // l'ancienne partie (avec bots) : plus d'étiquettes « BOT standard » sur l'écran titre
+    this.botOverlay = this.session instanceof HostSession ? new BotOverlay(this, this.session) : undefined;
   }
 }

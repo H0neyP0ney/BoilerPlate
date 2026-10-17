@@ -6,8 +6,6 @@ export const GEM_GREEN = 0x3ddc84;
 export const GEM_KEY = 'gem_green';
 export const GEM_CHEST_KEY = 'gem_chest';
 export const COIN_KEY = 'coin_gold';
-/** Parachute du coffre à diamants (flotte au-dessus de lui pendant sa descente). */
-export const PARACHUTE_KEY = 'fx_parachute';
 /** Or des pièces (rond au sol, compteur du HUD). */
 export const COIN_GOLD = 0xffc83d;
 
@@ -55,40 +53,6 @@ function paintGem(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: numb
 /** Fabrique (une fois) les textures du diamant vert et du coffre à diamants (dessinées par le code : aucun fichier). */
 export function ensureGemTextures(scene: Phaser.Scene): void {
   make(scene, GEM_KEY, 64, 64, (ctx) => paintGem(ctx, 32, 32, 60));
-  // parachute : calotte rouge et blanche, lignes de suspension qui se rejoignent en bas (la boîte s'y accroche)
-  make(scene, PARACHUTE_KEY, 96, 80, (ctx) => {
-    ctx.lineJoin = 'round';
-    const panels = ['#e8413a', '#ffffff', '#e8413a', '#ffffff', '#e8413a'];
-    for (let i = 0; i < 5; i++) {
-      const x0 = 6 + i * 16.8;
-      ctx.beginPath();
-      ctx.moveTo(x0, 40);
-      ctx.quadraticCurveTo(x0 + 2, 6, 48, 4);
-      ctx.quadraticCurveTo(90 - x0 + 6, 6, x0 + 16.8, 40);
-      ctx.closePath();
-      ctx.fillStyle = panels[i];
-      ctx.fill();
-    }
-    ctx.strokeStyle = '#7a1a16';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(6, 40);
-    ctx.quadraticCurveTo(10, 6, 48, 4);
-    ctx.quadraticCurveTo(86, 6, 90, 40);
-    for (let i = 0; i < 5; i++) {
-      const x = 6 + i * 21;
-      ctx.quadraticCurveTo(x + 10, 46, x + 21 > 90 ? 90 : x + 21, 40); // bord festonné
-    }
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(40,30,20,0.85)';
-    ctx.lineWidth = 2;
-    for (const x of [8, 28, 48, 68, 88]) {
-      ctx.beginPath();
-      ctx.moveTo(x, 42);
-      ctx.lineTo(48, 78);
-      ctx.stroke();
-    }
-  });
   make(scene, COIN_KEY, 64, 64, (ctx) => {
     // pièce d'or : disque doré cerclé, reflet et petite étoile gravée
     const g = ctx.createRadialGradient(24, 22, 4, 32, 32, 30);

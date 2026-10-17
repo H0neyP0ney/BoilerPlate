@@ -1,0 +1,8 @@
+{
+  "output": "../../public/assets/skins/ninja.png",
+  "scale": 0.268,
+  "sheets": [
+    { "name": "idle", "input": "ninja_idle.png", "cols": 4, "rows": 4 },
+    { "name": "walk", "input": "ninja_walk.png", "cols": 4, "rows": 4 }
+  ]
+}

@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { Button, sprites, theme } from '@xiao/engine';
+import { Button, theme } from '@xiao/engine';
 import { ensureGemTextures, GEM_KEY } from '../art/gems';
-import { soldierSpriteId } from '../art/playerVariants';
+import { skinThumb } from '../art/skinThumbs';
 import { onSkinSheetReady, retainSkinSheets } from '../assets/skinSheets';
 import { SCENES } from '../config';
-import { SKINS, skinPrice, skinSlot, type SkinTier } from '../data/skins';
+import { SKINS, skinPrice, type SkinDef, type SkinTier } from '../data/skins';
 import { TRAILS, trailPrice, type TrailDef } from '../data/trails';
 import { t } from '../i18n';
 import { settings } from '../settings';
@@ -57,7 +57,7 @@ export class ShopScene extends Phaser.Scene {
     ensureGemTextures(this);
     this.rebuild();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuild, this);
-    const off = onSkinSheetReady(() => this.rebuild()); // une planche de skin arrive : l'aperçu prend le vrai visuel
+    const off = onSkinSheetReady(() => this.rebuild()); // une planche de skin arrive : on en tire la vignette
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.rebuild, this);
       off();
@@ -77,7 +77,7 @@ export class ShopScene extends Phaser.Scene {
         equipped: settings.skin === null,
         buy: () => true,
         equip: () => settings.equipSkin(null),
-        preview: (cx, cy, _cw, ch, k) => this.skinPreview(0, cx, cy, ch, k),
+        preview: (cx, cy, _cw, ch) => this.skinPreview(null, cx, cy, ch),
       };
       return [classic, ...SKINS.map((s): Item => ({
         id: s.id,
@@ -88,7 +88,7 @@ export class ShopScene extends Phaser.Scene {
         equipped: settings.skin === s.id,
         buy: () => settings.buySkin(s.id),
         equip: () => settings.equipSkin(s.id),
-        preview: (cx, cy, _cw, ch, k) => this.skinPreview(skinSlot(s), cx, cy, ch, k),
+        preview: (cx, cy, _cw, ch) => this.skinPreview(s, cx, cy, ch),
       }))];
     }
     const none: Item = {
@@ -166,22 +166,20 @@ export class ShopScene extends Phaser.Scene {
     items.forEach((it, i) => {
       const cx = x0 + (i % cols) * (cardW + gap);
       const cy = areaTop + cardH / 2 + Math.floor(i / cols) * (cardH + gap);
-      this.card(add, it, tab, cx, cy, cardW, cardH, k, i, mine);
+      this.card(add, it, cx, cy, cardW, cardH, k, mine);
     });
 
     add(new Button(this, w / 2, h - 36 - backH / 2 + 8, { label: t('mpBack'), variant: 'secondary', width: Math.min(300, w - 40), height: backH, onClick: () => this.back() }));
     this.toast = add(this.add.text(w / 2, areaBottom + 10, '', { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ff8a8a', stroke: '#13233a', strokeThickness: 5 }).setOrigin(0.5, 0).setAlpha(0).setDepth(5));
   }
 
-  /** Aperçu d'un skin : le soldat (fabriqué à l'affichage, l'un après l'autre : 12 recolorations d'un coup feraient saccader ; sa planche, si elle existe, se charge à la demande). */
-  private skinPreview(slot: number, cx: number, cy: number, ch: number, k: number): void {
-    const sid = soldierSpriteId('trooper', slot);
-    if (!sprites.has(sid)) return;
-    const sp = sprites.add(this, sid, cx, cy + ch * 0.1);
-    this.objects.push(sp);
-    if (sprites.hasAnim(sid, 'idle')) sprites.play(sp, sid, 'idle');
-    sprites.place(sp, sid);
-    sp.setScale(sp.scaleX * 1.3 * k, sp.scaleY * 1.3 * k);
+  /** Aperçu d'un skin : la vignette (première frame de l'idle, une seule image : voir `art/skinThumbs.ts`), posée sur ses pieds ; absente tant que la planche dédiée n'est pas arrivée. */
+  private skinPreview(skin: SkinDef | null, cx: number, cy: number, ch: number): void {
+    const th = skinThumb(this, skin);
+    if (!th) return;
+    const img = this.add.image(cx, cy + ch * 0.28, th.key).setOrigin(th.originX, th.originY);
+    img.setScale(((ch * 0.5) / 65) * th.scale); // tailles relatives de la vraie partie (hauteur de référence 65 px = case du Trooper × 1,25)
+    this.objects.push(img);
   }
 
   /** Aperçu d'une trail : un ruban ondulé qui s'effile, aux couleurs de la trail (tête à droite). */
@@ -202,15 +200,13 @@ export class ShopScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 0.9).fillCircle(cx + len / 2, cy, 5 * k); // la « tête » du ruban
   }
 
-  private card(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T, it: Item, tab: Tab, cx: number, cy: number, cw: number, ch: number, k: number, index: number, mine: number): void {
+  private card(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T, it: Item, cx: number, cy: number, cw: number, ch: number, k: number, mine: number): void {
     const g = add(this.add.graphics());
     g.fillStyle(0x16264a, 0.96).fillRoundedRect(cx - cw / 2, cy - ch / 2, cw, ch, 16);
     g.lineStyle(it.equipped ? 5 : 3, it.equipped ? 0x7dff9a : TIER_COLORS[it.tier], 0.95).strokeRoundedRect(cx - cw / 2, cy - ch / 2, cw, ch, 16);
     add(this.add.text(cx, cy - ch / 2 + 18 * k, it.name, { fontFamily: theme.font, fontSize: `${Math.round(22 * k)}px`, fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
-    // aperçu : un après l'autre (les skins se fabriquent / se chargent à ce moment-là)
-    this.time.delayedCall(tab === 'skins' ? index * 35 : 0, () => {
-      if (mine === this.build) it.preview(cx, cy, cw, ch, k);
-    });
+    // aperçu tout de suite (une simple vignette : plus rien à fabriquer, donc plus de réapparition un à un quand la boutique se redessine après un achat / un équipement)
+    if (mine === this.build) it.preview(cx, cy, cw, ch, k);
     // bas de carte : prix + achat, ou équiper / équipé
     const by = cy + ch / 2 - 30 * k;
     const bw = cw - 20;
@@ -264,7 +260,7 @@ export class ShopScene extends Phaser.Scene {
 
   private back(): void {
     this.scene.stop();
-    this.scene.launch(SCENES.solo);
+    this.scene.launch(({ title: SCENES.title, multiplayer: SCENES.multiplayer } as Record<string, string>)[this.registry.get('menuFrom')] ?? SCENES.solo); // retour là d'où on est venu (écran titre ou Solo)
   }
 
   private clear(): void {

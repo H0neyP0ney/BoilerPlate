@@ -242,8 +242,8 @@ export const settings = {
   /** Diamants verts du joueur (ramassés près des coffres des boss, dépensés dans la boutique de skins) : mémorisés, jamais remis à zéro par `SAVE_VERSION`. */
   gems: Math.max(0, Math.floor(storage.get<number>('gems', 0))),
   /** Skins achetés (ids de `data/skins.ts`) et skin équipé (null : soldats bleus d'origine). */
-  ownedSkins: storage.get<string[]>('skins.owned', []).filter((id) => skinById(id)),
-  skin: ((id) => (skinById(id) ? id : null))(storage.get<string | null>('skins.equipped', null)) as string | null,
+  ownedSkins: storage.get<string[]>('skins.owned', []).map((id) => (id === 'cyan' ? 'ninja' : id)).filter((id) => skinById(id)), // l'ancien skin « cyan » est devenu le ninja
+  skin: ((id) => (skinById(id) ? id : null))(((v) => (v === 'cyan' ? 'ninja' : v))(storage.get<string | null>('skins.equipped', null))) as string | null,
 
   /** Trails achetées et trail équipée (ids de `data/trails.ts`, null : aucune). */
   ownedTrails: storage.get<string[]>('trails.owned', []).filter((id) => trailById(id)),

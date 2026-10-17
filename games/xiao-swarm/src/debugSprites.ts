@@ -130,6 +130,11 @@ export function loadSpriteOverrides(): void {
   for (const [id, p] of Object.entries(overrides)) if (sprites.has(id)) apply(id, p);
 }
 
+/** Réapplique le réglage mémorisé d'un sprite défini après le démarrage (planche de skin chargée à la demande) ; sans effet hors dev. */
+export function applySavedPlacement(id: string): void {
+  if (DEV_TOOLS && overrides[id]) apply(id, overrides[id]);
+}
+
 export function setPlacement(id: string, patch: Placement): void {
   apply(id, patch);
   overrides[id] = { ...overrides[id], ...patch };

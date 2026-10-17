@@ -10,7 +10,7 @@ export type SkinTier = 0 | 1 | 2;
 /** Prix (diamants) de chaque rang. Un boss tué rapporte ~3 diamants au sol, et ~22 de plus avec la vidéo du coffre. */
 export const SKIN_PRICES: Record<SkinTier, number> = { 0: 50, 1: 125, 2: 250 };
 
-export type SkinId = 'cyan' | 'indigo' | 'mint' | 'lime' | 'violet' | 'jade' | 'rose' | 'emerald' | 'crimson' | 'ember' | 'gold' | 'magenta';
+export type SkinId = 'ninja' | 'indigo' | 'mint' | 'lime' | 'violet' | 'jade' | 'rose' | 'emerald' | 'crimson' | 'ember' | 'gold' | 'magenta';
 
 export interface SkinDef {
   id: SkinId;
@@ -21,7 +21,7 @@ export interface SkinDef {
 
 export const SKINS: readonly SkinDef[] = [
   // rang 0
-  { id: 'cyan', shift: 336, tier: 0 },
+  { id: 'ninja', shift: 0, tier: 0 }, // planche dédiée (`assets/skinSheets.ts`) ; en attendant son chargement, le soldat bleu d'origine
   { id: 'indigo', shift: 28, tier: 0 },
   { id: 'mint', shift: 308, tier: 0 },
   { id: 'lime', shift: 224, tier: 0 },

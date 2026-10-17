@@ -1,6 +1,6 @@
 {
   "output": "../public/assets/soldiers/gunner.png",
-  "scale": 0.22,
+  "scale": 0.44,
   "sheets": [
     { "name": "idle", "input": "gunner_idle_2.png", "cols": 4, "rows": 4 },
     { "name": "walk", "input": "gunner_walk_2.png", "cols": 4, "rows": 4 }

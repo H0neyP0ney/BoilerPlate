@@ -36,6 +36,11 @@ try {
   const hostT = hub.createTransport();
   const code = await hostT.host({ public: false });
   const host = new HostSession({ mode: MODES.survival, seed: 7, transport: hostT, roomCode: code, lobby: true, public: false });
+  // visibilité changée dans la salle d'attente : privée → publique → privée
+  await host.setPublic(true);
+  check(host.lobby.public === true && (await hub.createTransport().listRooms()).some((r) => r.code === code), "salle d'attente : passée en publique, elle est listée");
+  await host.setPublic(false);
+  check(host.lobby.public === false && !(await hub.createTransport().listRooms()).some((r) => r.code === code), "salle d'attente : repassée en privée, elle n'est plus listée");
   host.setLocalInput(1, 0);
   for (let i = 0; i < 90; i++) await tick(host);
   check(host.sim.tick === 0, 'monde figé dans la salle d\'attente', `tick ${host.sim.tick}`);

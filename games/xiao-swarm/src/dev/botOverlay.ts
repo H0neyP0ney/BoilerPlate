@@ -16,11 +16,15 @@ export class BotOverlay {
     private readonly host: HostSession,
   ) {
     this.g = scene.add.graphics().setDepth(DEPTH);
-    scene.events.once('shutdown', () => {
-      this.g.destroy();
-      for (const t of this.labels.values()) t.destroy();
-      this.labels.clear();
-    });
+    scene.events.once('shutdown', () => this.destroy());
+  }
+
+  /** Retire le dessin et toutes les étiquettes (fin de la partie avec bots : la scène de jeu est réutilisée, l'ancien survol ne doit plus rester). */
+  destroy(): void {
+    if (!this.g.scene) return; // déjà détruit (arrêt de la scène)
+    this.g.destroy();
+    for (const t of this.labels.values()) t.destroy();
+    this.labels.clear();
   }
 
   update(): void {

@@ -299,7 +299,7 @@ export class Horde {
   }
 
   /** Œuf d'un boss tué : sur le cadavre (ramené hors des obstacles), sur place, 1000 PV exacts, sans XP ni recrue. Ne dépend pas du plafond d'aliens. */
-  spawnEgg(x: number, y: number): void {
+  spawnEgg(x: number, y: number): AlienState {
     const def = ALIENS.boss_egg;
     const p = { x, y, radius: def.radius };
     this.sim.arena.constrain(p);
@@ -309,6 +309,7 @@ export class Horde {
     egg.noXp = true;
     egg.noRecruit = true;
     this.sim.aliens.push(egg);
+    return egg;
   }
 
   /** `count` aliens enragés (niveau 1 : plus rapides, attaquent plus vite) qui surgissent sur place en cercle autour de (x, y) : araignées des boules du Giant Crab. */

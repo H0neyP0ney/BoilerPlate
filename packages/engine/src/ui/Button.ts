@@ -85,22 +85,28 @@ export class Button extends Phaser.GameObjects.Container {
     }
 
     if (opts.pulse) {
-      // pulse « carré » : le contour du bouton grandit de 24 px de chaque côté en s'effaçant, puis repart (pause entre deux pulsations)
-      const ring = scene.add.graphics();
-      this.addAt(ring, 0);
+      // pulse « carré » : le contour du bouton grandit de 24 px de chaque côté en s'effaçant, puis repart aussitôt (aucune pause entre deux pulsations).
+      // Dessiné en dehors du bouton, à une profondeur très haute : il passe PAR-DESSUS tout l'écran (le bouton lui-même, ses voisins, les têtes…).
+      const ring = scene.add.graphics().setDepth(100000);
       const tween = scene.tweens.addCounter({
         from: 0,
         to: 1,
         duration: 1100,
         repeat: -1,
-        repeatDelay: 500,
         onUpdate: (tw) => {
           const p = tw.getValue() ?? 0;
+          const k = this.scaleX; // le contour suit l'échelle du bouton (agrandi au survol, réduit à l'appui)
+          const w = width * k;
+          const h = height * k;
           const e = p * 24;
-          ring.clear().lineStyle(5, 0xffffff, (1 - p) * 0.75).strokeRoundedRect(-width / 2 - e, -height / 2 - e, width + 2 * e, height + 2 * e, r + e);
+          ring.setVisible(this.visible);
+          ring.clear().lineStyle(5, 0xffffff, (1 - p) * 0.75).strokeRoundedRect(this.x - w / 2 - e, this.y - h / 2 - e, w + 2 * e, h + 2 * e, r * k + e);
         },
       });
-      this.once(Phaser.GameObjects.Events.DESTROY, () => tween.remove());
+      this.once(Phaser.GameObjects.Events.DESTROY, () => {
+        tween.remove();
+        ring.destroy();
+      });
     }
 
     this.setSize(width, height);

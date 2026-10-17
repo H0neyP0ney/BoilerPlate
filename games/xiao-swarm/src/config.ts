@@ -52,7 +52,7 @@ export const AMBUSH = { ahead: 330, spread: 60 };
 export const RING = { radius: 340 };
 
 /**
- * Coffre à diamants des boss (solo, `sim/Gems.ts`) : posé `offsetY` px au-dessus de l'œuf ; rester à moins de `radius` px d'un soldat pendant `chargeTime` s remplit
+ * Coffre à diamants des boss (solo, `sim/Gems.ts`) : il saute de l'œuf (comme les globes d'upgrade) jusqu'au SOMMET d'un triangle équilatéral de côté `triangle` px (± `triangleJitter` sur chaque branche) dont les deux globes d'upgrade roses (en bas à gauche et en bas à droite) forment la base, centré sur l'œuf ; il disparaît `chestLife` s après son apparition s'il n'a pas été pris (pas pendant la vidéo) ; rester à moins de `radius` px (67, réduit de 20 % le 17/10) d'un soldat pendant `chargeTime` s remplit
  * sa jauge (elle redescend `decay` fois plus vite quand la squad s'éloigne), pleine = vidéo récompensée, puis il explose en `burst` diamants. En plus, `free` diamants
  * retombent tout de suite autour du coffre, ramassables sans vidéo. Un diamant au sol disparaît après `life` s (il clignote pendant les `blink` dernières secondes ;
  * attrapé par l'aimant, il ne disparaît plus). `cooldown` : pause (s) après une vidéo ratée / refusée.
@@ -61,15 +61,9 @@ export const RING = { radius: 340 };
  * Pièces d'or (solo, `sim/Gems.ts`) : lâchées par les aliens comme les globes d'XP (jamais par un alien sans XP : invoqué, rejeu de vague, œuf, orbe). `chance` par alien (0,3 : doublé le 17/10)
  * (`strongChance` si ses PV max atteignent `strongHp`), `bossCoins` pièces pour un boss ; elles disparaissent après `life` s (clignotent les `blink` dernières).
  */
-/**
- * Arrivée du coffre à diamants d'un boss tué : il descend du ciel en parachute (de `height` px, en `fall` s : il grossit, son ombre marque l'endroit d'atterrissage, le parachute
- * se replie à l'atterrissage, rebond écrasé et poussière). La jauge de présence ne se charge qu'une fois posé.
- */
-export const CRATES = { fall: 0.9, height: 260 };
-
 export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
 
-export const GEM_CHEST = { offsetY: 130, radius: 84, chargeTime: 2, decay: 2, burst: [20, 25] as [number, number], free: [1, 5] as [number, number], cooldown: 4, grace: 0.6, life: 10, blink: 3 };
+export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, burst: [20, 25] as [number, number], free: [1, 5] as [number, number], cooldown: 4, grace: 0.6, life: 10, blink: 3 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -128,7 +122,7 @@ export const INTERSTITIALS_ENABLED = false;
  * vers la squad du tueur : distance tirée dans `hopDist` (px, sans dépasser la squad), direction écartée au hasard de ± `hopSpread` rad.
  */
 /** Chance qu'un bonus recrue soit une recrue SPÉCIALE (unité débloquée à l'armurerie, tirée à égalité parmi celles du joueur ; rien si aucune n'est débloquée). */
-export const SPECIAL_RECRUIT_CHANCE = 0.2;
+export const SPECIAL_RECRUIT_CHANCE = 0; // DÉSACTIVÉES pour l'instant (17/10) : remettre 0.2 pour réactiver les recrues spéciales
 export const RECRUIT = { life: 18, hopTime: 0.55, hopDist: [110, 154] as [number, number], hopSpread: 0.5, hopHeight: 70 };
 /**
  * Ramassage des recrues et des power-ups : rayon de ramassage (px) et vitesse max (px/s) d'un objet attiré, multipliés par la stat
@@ -391,6 +385,7 @@ export const SCENES = {
   pause: 'Pause',
   lobby: 'Lobby',
   multiplayer: 'Multiplayer',
+  join: 'JoinGame',
   title: 'Title',
   solo: 'SoloSetup',
   shop: 'Shop',

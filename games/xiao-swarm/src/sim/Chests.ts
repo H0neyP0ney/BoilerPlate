@@ -1,5 +1,5 @@
 import { clamp } from '@xiao/engine/sim';
-import { DIFFICULTY, RECRUIT } from '../config';
+import { DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
 import type { UpgradeId } from '../data/progression';
 import type { UpgradeOrbState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
@@ -19,9 +19,9 @@ export class UpgradeOrbs {
   constructor(private readonly sim: Sim) {}
 
   /** Globe de `owner` (qui donnera `upgrade`) qui retombe en (x, y) + distance dans la direction `angle`. */
-  drop(owner: string, upgrade: UpgradeId, x: number, y: number, angle: number): UpgradeOrbState {
+  drop(owner: string, upgrade: UpgradeId, x: number, y: number, angle: number, distance?: number): UpgradeOrbState {
     const rng = this.sim.rng;
-    const dist = rng.range(ORB_FALL_DIST[0], ORB_FALL_DIST[1]);
+    const dist = distance ?? rng.range(ORB_FALL_DIST[0], ORB_FALL_DIST[1]);
     const o: UpgradeOrbState = {
       id: this.sim.ids.get(),
       owner,
@@ -38,20 +38,26 @@ export class UpgradeOrbs {
     return o;
   }
 
-  /** Un œuf de boss est détruit en (x, y) : `chestOrbs` globes par squad vivante tombent autour de lui, chacun réservé à son joueur. */
+  /**
+   * Un œuf de boss est détruit en (x, y) : `chestOrbs` globes par squad vivante tombent en BAS à gauche et en BAS à droite de l'œuf (base d'un triangle équilatéral dont le coffre
+   * à diamants est le sommet, voir `Gems.spawnChest` : côté `GEM_CHEST.triangle`, ± 7 % sur chaque branche), chacun réservé à son joueur ; ceux des autres joueurs occupent les
+   * mêmes places (chacun ne voit que les siens).
+   */
   burst(x: number, y: number): void {
     const squads = this.sim.aliveSquads;
     const each = Math.max(0, Math.round(DIFFICULTY.chestOrbs));
-    const total = squads.length * each;
-    const turn = this.sim.rng.range(0, Math.PI * 2);
-    let k = 0;
+    const R = GEM_CHEST.triangle / Math.sqrt(3);
+    const rng = this.sim.rng;
     for (const sq of squads) {
       const given: UpgradeId[] = []; // des upgrades différentes pour un même joueur tant que possible
       for (let n = 0; n < each; n++) {
         const upgrade = sq.pickRandomUpgrade(given);
         if (!upgrade) break; // tout est déjà au maximum
         given.push(upgrade);
-        this.drop(sq.owner, upgrade, x, y, turn + ((k++ + this.sim.rng.range(-0.2, 0.2)) / total) * Math.PI * 2);
+        // 2 globes : bas gauche (150°) et bas droit (30°), y vers le bas ; 1 : en bas ; plus : répartis entre les deux
+        const deg = each === 1 ? 90 : 150 - (n * 120) / (each - 1);
+        const angle = ((deg + rng.range(-3, 3)) * Math.PI) / 180;
+        this.drop(sq.owner, upgrade, x, y, angle, R * (1 + rng.range(-GEM_CHEST.triangleJitter, GEM_CHEST.triangleJitter)));
       }
     }
     this.sim.events.push({ t: 'chestOpened', x, y });

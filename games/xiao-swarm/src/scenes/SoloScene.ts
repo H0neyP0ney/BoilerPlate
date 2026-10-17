@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { Button, theme } from '@xiao/engine';
-import { COIN_KEY, ensureGemTextures, GEM_KEY } from '../art/gems';
 import { SCENES } from '../config';
 import { hudOnTop } from './hudOnTop';
 import { DIFFICULTY_LABEL_KEYS, DIFFICULTY_LEVELS, type DifficultyLevel } from '../data/difficultyLevels';
@@ -25,7 +24,6 @@ export class SoloScene extends Phaser.Scene {
   create(): void {
     hudOnTop(this); // boutons debug et son / musique du HUD au-dessus du calque sombre de cet écran
     this.game_ = this.scene.get(SCENES.game) as GameScene;
-    ensureGemTextures(this);
     this.rebuild();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuild, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -88,11 +86,9 @@ export class SoloScene extends Phaser.Scene {
     const shopH = 128;
     const shopX = w - shopW / 2 - 14;
     add(new Button(this, shopX, h / 2, { label: t('skinsBtn'), variant: 'secondary', fill: 0x1f7a4d, textColor: '#ffffff', width: shopW, height: shopH, onClick: () => this.shop() }));
-    add(this.add.image(shopX, h / 2 - shopH / 2 + 4, GEM_KEY).setScale(0.7).setDepth(2)); // diamant vert qui dépasse en haut du bouton
     // « Armory » (market) en face, au milieu à gauche : unités à débloquer et upgrades payées en pièces d'or
     const armX = shopW / 2 + 14;
     add(new Button(this, armX, h / 2, { label: t('armoryBtn'), variant: 'secondary', fill: 0x8a5a05, textColor: '#ffffff', width: shopW, height: shopH, onClick: () => this.armory() }));
-    add(this.add.image(armX, h / 2 - shopH / 2 + 4, COIN_KEY).setScale(0.7).setDepth(2)); // pièce d'or qui dépasse en haut du bouton
     add(new Button(this, cx, playY, { label: t('play'), width: playW, height: 110, pulse: true, onClick: () => this.play() }));
     // « Back » sous Play : même largeur que lui, collé comme les trois boutons de niveau (18 px d'écart)
     const backH = 56;
@@ -138,11 +134,13 @@ export class SoloScene extends Phaser.Scene {
   }
 
   private armory(): void {
+    this.registry.set('menuFrom', 'solo');
     this.scene.stop();
     this.scene.launch(SCENES.armory);
   }
 
   private shop(): void {
+    this.registry.set('menuFrom', 'solo');
     this.scene.stop();
     this.scene.launch(SCENES.shop);
   }

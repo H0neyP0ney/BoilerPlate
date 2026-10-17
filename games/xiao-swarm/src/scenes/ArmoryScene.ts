@@ -185,7 +185,7 @@ export class ArmoryScene extends Phaser.Scene {
 
   private back(): void {
     this.scene.stop();
-    this.scene.launch(SCENES.solo);
+    this.scene.launch(({ title: SCENES.title, multiplayer: SCENES.multiplayer } as Record<string, string>)[this.registry.get('menuFrom')] ?? SCENES.solo); // retour là d'où on est venu (écran titre ou Solo)
   }
 
   private clear(): void {

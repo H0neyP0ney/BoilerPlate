@@ -407,8 +407,16 @@ export class Sim {
 
   /** Place chaque squad à son point de départ avec une composition de départ. */
   spawnSquads(pickComposition: () => SoldierClassId[]): void {
-    const points = this.mode.spawnPoints(this.map, this.squads.length, this.rng);
-    this.squads.forEach((sq, i) => sq.spawn(pickComposition(), points[i]));
+    if (this.mode.pvp) {
+      const points = this.mode.spawnPoints(this.map, this.squads.length, this.rng);
+      this.squads.forEach((sq, i) => sq.spawn(pickComposition(), points[i]));
+      return;
+    }
+    // survie : la squad de l'hôte (emplacement 0) au centre, les autres à leur place autour d'elle (comme à leur arrivée dans la salle d'attente)
+    const lead = this.squads.find((q) => q.slot === 0) ?? this.squads[0];
+    const centre = this.mode.spawnPoints(this.map, 1, this.rng)[0];
+    lead.spawn(pickComposition(), centre);
+    for (const sq of this.squads) if (sq !== lead) sq.spawn(pickComposition(), this.placeBeside(sq, lead));
   }
 
   // ---------- Joueurs en cours de partie (réseau) ----------
@@ -457,9 +465,27 @@ export class Sim {
     }
     // coop : on arrive à côté de ses équipiers ; sinon (PvP) à l'écart des autres squads
     const mate = this.mode.pvp ? undefined : this.aliveSquads[0];
-    const at = mate ? { x: mate.center.x + 90, y: mate.center.y } : this.randomSpawnPoint();
+    const at = mate ? this.placeBeside(sq, mate) : this.randomSpawnPoint();
     sq.spawn(composition, at);
     for (const s of sq.soldiers) s.invulnerable = invulnerable;
+  }
+
+  /**
+   * Place d'une squad autour d'un équipier : chaque arrivant a sa place au-dessus de lui (le 1er en haut à droite, le 2e en haut à gauche, le 3e plus haut au centre, les suivants plus haut encore à droite / à gauche),
+   * sans tirage aléatoire (mêmes places chez tous) ; place occupée par un obstacle : la suivante de la liste.
+   */
+  private placeBeside(sq: Squad, mate: Squad): Point {
+    const OFFSETS = [[90, -70], [-90, -70], [0, -140], [150, -130], [-150, -130], [0, 120]];
+    const pick = (i: number): Point => {
+      const o = OFFSETS[i % OFFSETS.length];
+      return { x: mate.center.x + o[0], y: mate.center.y + o[1] };
+    };
+    const first = Math.max(0, sq.slot - 1); // l'emplacement 0 est celui de l'hôte
+    for (let k = 0; k < OFFSETS.length; k++) {
+      const p = pick(first + k);
+      if (this.arena.isFree(p, 40)) return p;
+    }
+    return pick(first);
   }
 
   /** Point libre tiré au hasard, idéalement hors de vue (> SAFE_SPAWN_DISTANCE) des squads vivantes. */
@@ -937,7 +963,7 @@ export class Sim {
       }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
-        if (a.def.boss.kind !== 'final') { this.horde.spawnEgg(a.x, a.y); this.gems.spawnChest(a.x, a.y); } // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (a.def.boss.kind !== 'final') { const egg = this.horde.spawnEgg(a.x, a.y); this.gems.spawnChest(egg.x, egg.y); } // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
           this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });

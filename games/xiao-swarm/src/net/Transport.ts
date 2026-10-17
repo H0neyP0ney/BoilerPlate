@@ -30,6 +30,8 @@ export interface Transport {
 
   /** Crée une salle et renvoie son code. `public` la rend visible dans `listRooms` ; sinon on ne la rejoint que par son code. */
   host(opts?: { public?: boolean }): Promise<string>;
+  /** Change la visibilité de la salle déjà créée (publique : visible dans `listRooms` ; privée : par son code seulement). Rejette si le serveur refuse. */
+  setPublic(isPublic: boolean): Promise<void>;
   /** Rejoint une salle existante. */
   join(code: string): Promise<void>;
   /** Salles publiques non pleines et sans mot de passe. */

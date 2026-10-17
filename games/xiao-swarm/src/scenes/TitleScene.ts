@@ -48,7 +48,7 @@ export class TitleScene extends Phaser.Scene {
   private addHeads(button: Button, count: number, buttonWidth: number): void {
     const src = 'recruit_part_gunner';
     if (!this.textures.exists(src)) return;
-    const label = button.list[1] as Phaser.GameObjects.Text;
+    const label = button.list.find((o) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text; // pas d'index fixe : le pulse ajoute un objet en tête de liste
     label.setY(24).setScale(label.scale * 0.9); // texte 10 % plus petit
     const spacing = Math.min(62, (buttonWidth - 40) / count);
     for (let i = 0; i < count; i++) {

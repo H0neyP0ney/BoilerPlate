@@ -210,6 +210,8 @@ export const DIFFICULTY_DEFAULTS = {
   gemFreeShare: 0.2,
   /** Boss final : part (du contenu d'un coffre de ce boss) qui explose à sa mort, ramassable avant la séquence de fin (`GEM_CHEST.finalWait` s, remis à `finalReset` s à chaque diamant ramassé). */
   gemFinalShare: 0.5,
+  /** Boss final : multiplicateur de son or (`COINS.bossCoins` pièces pour un boss ordinaire). */
+  coinFinalMul: 3,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).

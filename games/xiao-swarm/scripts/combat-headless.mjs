@@ -510,6 +510,27 @@ try {
     check(f2.sim.gems.coins.length - c0 >= G.deathCoins && f2.sim.gems.items.length - i0 === G.deathGems, 'alien doré tué : grosse quantité de pièces et quelques diamants', `${f2.sim.gems.coins.length - c0} pièces, ${f2.sim.gems.items.length - i0} diamants`);
   }
 
+  // ---- or des boss : un boss ordinaire lâche COINS.bossCoins pièces, le boss final × DIFFICULTY.coinFinalMul
+  {
+    const { COINS } = await vite.ssrLoadModule('/src/config.ts');
+    const coinsOf = (level, id) => {
+      const { sim } = fresh(37, level);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt(id, sq.center.x + 900, sq.center.y, 1, false);
+      const b = sim.aliens[0];
+      b.age = 1;
+      b.noXp = false; // `spawnAt` marque l'alien « invoqué » : un boss de vague, lui, laisse son butin
+      const c0 = sim.gems.coins.length;
+      sim.damage(b, 1e12, 'p1');
+      sim.step(1 / 30, new Map());
+      return sim.gems.coins.length - c0;
+    };
+    const mini = coinsOf('normal', 'boss_gling');
+    const fin = coinsOf('normal', 'boss_scarab');
+    check(mini === COINS.bossCoins && fin === Math.round(COINS.bossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

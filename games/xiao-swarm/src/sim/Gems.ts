@@ -1,6 +1,6 @@
 import { clamp, Rng } from '@xiao/engine/sim';
 import { COINS, DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
-import { ALIENS, type AlienId } from '../data/aliens';
+import { ALIENS, bossKindAt, type AlienId } from '../data/aliens';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -92,7 +92,8 @@ export class Gems {
   dropCoins(a: AlienState): void {
     if (this.sim.ending) return; // les pièces tombent aussi en multi (contrairement aux diamants)
     const rng = this.rng;
-    const n = a.def.boss ? COINS.bossCoins : rng.chance(a.maxHp >= COINS.strongHp ? COINS.strongChance : COINS.chance) ? 1 : 0;
+    const final = !!a.def.boss && bossKindAt(a.def, this.sim.difficulty) === 'final';
+    const n = a.def.boss ? Math.round(COINS.bossCoins * (final ? DIFFICULTY.coinFinalMul : 1)) : rng.chance(a.maxHp >= COINS.strongHp ? COINS.strongChance : COINS.chance) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const hop = n > 1 ? rng.range(50, 150) : rng.range(15, 45);
       const ang = rng.range(0, Math.PI * 2);

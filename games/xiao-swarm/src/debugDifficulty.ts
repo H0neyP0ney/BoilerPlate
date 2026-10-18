@@ -37,6 +37,7 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
       { key: 'gemMulHard', label: 'Hard : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Hard' },
       { key: 'gemMulExpert', label: 'Expert : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Expert' },
       { key: 'gemFinalShare', label: 'Diamants du boss final', min: 0, max: 2, step: 0.05, hint: 'Part du contenu d\'un coffre (moyenne du boss × multiplicateur du niveau) qui explose à la mort du boss final ; on a quelques secondes pour la ramasser avant la fin (chaque diamant ramassé retarde la fin de 2 s)' },
+      { key: 'coinFinalMul', label: 'Or du boss final ×', min: 0, max: 10, step: 0.25, hint: "Multiplie la quantité d'or (pièces) que lâche le boss final par rapport à un boss ordinaire (30 pièces)" },
       { key: 'gemFreeShare', label: 'Diamants jaillis de l\'œuf', min: 0, max: 1, step: 0.01, hint: 'Part du contenu du coffre qui jaillit tout de suite autour de l\'œuf à son ouverture (0,2 = 20 %), en plus du coffre' },
     ],
   },

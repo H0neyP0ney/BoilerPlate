@@ -99,9 +99,15 @@ export class GemViews {
     ensureGemTextures(scene);
   }
 
-  /** Rond vert sous chaque diamant posé. */
+  /** Ombre sous chaque pièce, rond vert sous chaque diamant posé. */
   drawGround(g: Phaser.GameObjects.Graphics, time: number): void {
     for (const [, v] of this.chests) g.fillStyle(0x2a1d2e, 0.18 + 0.22 * v.fall).fillEllipse(v.state.x, v.state.y, 62 + 16 * v.fall, 26 + 6 * v.fall); // ombre portée au sol (suit le saut)
+    for (const it of this.sim.gems.coins) {
+      // ombre portée de la pièce (elle se resserre et s'éclaircit quand la pièce est en l'air) ; clignote avec elle avant de disparaître
+      const air = it.hop ? Math.sin(Math.PI * Math.max(0, Math.min(1, 1 - it.hop.t / GEM_FALL_TIME))) : 0;
+      const blink = it.life < COINS.blink && Math.sin(time * 18) > 0;
+      g.fillStyle(0x2a1d2e, (0.3 - 0.14 * air) * (blink ? 0.35 : 1)).fillEllipse(it.x, it.y + 2, 30 * (1 - 0.3 * air), 11 * (1 - 0.3 * air));
+    }
     for (const it of this.sim.gems.items) if (!it.hop) drawPickupSpot(g, it.x, it.y, GEM_GREEN, time, it.id, 0.8, 0.45);
   }
 

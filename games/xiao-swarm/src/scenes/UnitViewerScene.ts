@@ -58,6 +58,8 @@ interface Entry {
 const ALL = '*';
 /** Nombre maximal d'unités affichées sur une ligne (vue « toutes les unités »). */
 const MAX_PER_ROW = 6;
+/** Vue d'ensemble : au plus `ROWS_PER_PAGE` lignes de `MAX_PER_ROW` unités par page (boutons ◀ ▶ ou flèches du clavier). */
+const ROWS_PER_PAGE = 3;
 /** Opacité des unités inactives (hors ACTIVE_CLASSES / ACTIVE_ALIENS). */
 const INACTIVE_ALPHA = 0.25;
 
@@ -79,6 +81,11 @@ export class UnitViewerScene extends Phaser.Scene {
   private selected = ALL;
   private unitSelect?: HTMLSelectElement;
   private closeBtn?: HTMLButtonElement;
+  /** Pagination de la vue d'ensemble : page courante (0…), nombre de pages, barre ◀ Page n / N ▶. */
+  private page = 0;
+  private pageCount = 1;
+  private pageBar?: HTMLDivElement;
+  private pageLabel?: HTMLSpanElement;
   /** Second panneau (vue détaillée) : statistiques de l'unité pour l'équilibrage. */
   private statsPanel?: HTMLDivElement;
   /** Vue d'ensemble : hauteur du contenu (monde) et barre de défilement (DOM) à droite. */
@@ -177,6 +184,7 @@ export class UnitViewerScene extends Phaser.Scene {
       this.panel?.remove();
       this.scaleRef?.destroy();
       this.closeBtn?.remove();
+      this.pageBar?.remove();
       this.statsPanel?.remove();
       this.scrollBar?.remove();
     });
@@ -211,6 +219,13 @@ export class UnitViewerScene extends Phaser.Scene {
       for (let i = 0; i < g.ids.length; i += MAX_PER_ROW) lines.push({ ...g, ids: g.ids.slice(i, i + MAX_PER_ROW) });
       return lines;
     });
+    // vue d'ensemble paginée : `ROWS_PER_PAGE` lignes par page, seule la page courante est construite (les lignes se centrent sur la page)
+    if (this.selected === ALL) {
+      this.pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+      this.page = Math.min(this.page, this.pageCount - 1);
+      rows.splice(0, rows.length, ...rows.slice(this.page * ROWS_PER_PAGE, (this.page + 1) * ROWS_PER_PAGE));
+      if (this.pageLabel) this.pageLabel.textContent = `Page ${this.page + 1} / ${this.pageCount}`;
+    }
     const totalRows = rows.length;
     this.worldH = (totalRows - 1) * 190 + 280; // hauteur du contenu de la vue d'ensemble (marges : sprites hauts + étiquettes)
     this.worldW = (Math.max(1, ...rows.map((r) => r.ids.length)) - 1) * 170 + 260;
@@ -234,6 +249,7 @@ export class UnitViewerScene extends Phaser.Scene {
     this.setupEditor();
     this.buildStats();
     this.fit();
+    if (this.pageBar) this.pageBar.style.display = this.selected === ALL && this.pageCount > 1 ? 'flex' : 'none';
   }
 
   /** Vue détaillée : le dessin procédural de l'unité (celui qu'on voit avant l'arrivée du paquet 2), au-dessus du visuel actuel. Option « Fallback procédural » du panneau. */
@@ -1076,6 +1092,28 @@ ${id}` : id;
     document.body.append(close);
     this.closeBtn = close;
 
+    // pagination de la vue d'ensemble : barre en bas ◀ Page n / N ▶ (flèches gauche / droite du clavier aussi)
+    const pager = document.createElement('div');
+    pager.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:99999;display:none;align-items:center;gap:16px;font:20px system-ui,sans-serif;color:#dfe;background:rgba(0,0,0,0.82);border:1px solid #577;border-radius:8px;padding:8px 16px';
+    const mk = (label: string, delta: number): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'cursor:pointer;font:22px system-ui,sans-serif;padding:6px 22px;background:#1d3b3b;color:#dfe;border:1px solid #577;border-radius:6px';
+      b.addEventListener('click', () => {
+        b.blur();
+        this.turnPage(delta);
+      });
+      return b;
+    };
+    const lbl = document.createElement('span');
+    pager.append(mk('◀', -1), lbl, mk('▶', 1));
+    document.body.append(pager);
+    this.pageBar = pager;
+    this.pageLabel = lbl;
+    lbl.textContent = `Page ${this.page + 1} / ${this.pageCount}`;
+    this.input.keyboard?.on('keydown-LEFT', () => this.turnPage(-1));
+    this.input.keyboard?.on('keydown-RIGHT', () => this.turnPage(1));
+
     // barre de défilement native (vue d'ensemble) ; la molette de la souris la fait aussi défiler
     const bar = document.createElement('div');
     bar.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:18px;overflow-y:scroll;z-index:99998;display:none;background:rgba(0,0,0,0.35);scrollbar-width:auto;scrollbar-color:#9fe3c8 rgba(0,0,0,0.35)'; // barre bien visible (les barres natives « overlay » restent invisibles tant qu'on ne survole pas)
@@ -1155,11 +1193,21 @@ ${id}` : id;
     this.statsPanel = p;
   }
 
+  /** Page suivante / précédente de la vue d'ensemble (en boucle). */
+  private turnPage(delta: number): void {
+    if (this.selected !== ALL || this.pageCount < 2) return;
+    this.page = (this.page + delta + this.pageCount) % this.pageCount;
+    this.rebuild();
+    this.syncChrome();
+    if (this.scrollBar) this.scrollBar.scrollTop = 0;
+  }
+
   /** Vue d'ensemble : panneau masqué, croix de sortie affichée ; vue d'une unité : l'inverse. */
   private syncChrome(): void {
     const all = this.selected === ALL;
     if (this.panel) this.panel.style.display = all ? 'none' : 'flex';
     if (this.closeBtn) this.closeBtn.style.display = all ? 'block' : 'none';
+    if (this.pageBar) this.pageBar.style.display = all && this.pageCount > 1 ? 'flex' : 'none';
     if (!all && this.scrollBar) this.scrollBar.style.display = 'none';
     this.scaleRef?.setEnabled(!all); // trooper de référence : seulement dans les vues détaillées
     if (all) this.statsPanel?.remove();

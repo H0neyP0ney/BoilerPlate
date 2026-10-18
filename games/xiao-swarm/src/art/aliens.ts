@@ -17,6 +17,7 @@ const PROCEDURAL_BODY_WIDTH: Record<string, number> = {
   alien_spitter: 52,
   alien_shooter: 58,
   alien_iceballer: 52,
+  alien_fireballer: 52,
   alien_burner: 50,
   alien_shaman: 50,
   alien_wall: 50,

@@ -632,6 +632,33 @@ try {
     check(t0.burn === 0 && t0.burnDps === 0, "feu : un soldat gelé est éteint (et ne s'enflamme pas)");
   }
 
+  // ---- fireballer : comme le slime de glace mais il tire des orbes de FEU (500 PV, enflamment au contact) ; l'iceballer reste inchangé
+  {
+    const run = (type) => {
+      const { sim } = fresh(43);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt(type, sq.center.x + 300, sq.center.y, 1, false, true);
+      const a = sim.aliens[0];
+      a.age = 99;
+      a.lobCd = 0.05;
+      const target = sq.soldiers[0];
+      target.invulnerable = 0;
+      let orb = null;
+      for (let i = 0; i < 45 && !orb; i++) {
+        sim.step(1 / 30, new Map());
+        orb = sim.aliens.find((x) => x.alive && x.def.projectile);
+      }
+      return { sim, orb, target };
+    };
+    const f = run('fireballer');
+    const i = run('iceballer');
+    check(f.orb?.def.id === 'fire_orb' && i.orb?.def.id === 'ice_orb', 'fireballer : il tire des orbes de feu (le slime de glace, des orbes de glace)', `${f.orb?.def.id} / ${i.orb?.def.id}`);
+    f.orb.x = f.target.x; f.orb.y = f.target.y;
+    f.sim.step(1 / 30, new Map());
+    check(f.target.burn > 0 && f.target.frozen === 0, 'fireballer : son orbe enflamme le soldat touché (pas de gel)', `brûle ${f.target.burn.toFixed(1)} s`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

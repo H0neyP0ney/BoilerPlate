@@ -263,6 +263,17 @@ const SPECS: Record<string, Spec> = {
       tentacle(ctx, '#3ab0d8', 5, 46, 52, 66, 66, 62, 88);
     },
   },
+  alien_fireballer: {
+    w: 68,
+    h: 105,
+    body: { x: 34, y: 32, rx: 26, ry: 26, light: '#ffb27a', dark: '#c8501a' },
+    eyes: { pts: [[34, 32, 17]], white: true, iris: '#c0183a' },
+    extra: (ctx) => {
+      tentacle(ctx, '#e0702a', 6, 26, 54, 8, 76, 18, 98);
+      tentacle(ctx, '#e0702a', 6, 38, 56, 52, 78, 46, 100);
+      tentacle(ctx, '#e0702a', 5, 46, 52, 66, 66, 62, 88);
+    },
+  },
   alien_burner: {
     w: 65,
     h: 47,

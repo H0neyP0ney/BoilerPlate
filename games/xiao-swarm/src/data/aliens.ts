@@ -3,7 +3,7 @@
  */
 import { FINAL_BOSS, type DifficultyLevel } from './difficultyLevels';
 
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg' | 'golden';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg' | 'golden' | 'fireballer';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -695,13 +695,36 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 50,
     golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
+  /**
+   * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).
+   * Sprite provisoire = celui du slime de glace teinté rouge-orangé. Ajouté en DERNIER (index réseau).
+   */
+  fireballer: {
+    id: 'fireballer',
+    hp: 99.75,
+    speed: 77.5,
+    radius: 17,
+    mass: 1.1,
+    damage: 4,
+    attackCooldown: 0.5,
+    target: 'nearest',
+    maxPerWave: 2,
+    ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'fire_orb' }, // lance un orbe de feu destructible
+    revivable: true,
+    xp: 5,
+    recruitChance: 0.091,
+    color: 0xff7a2a,
+    goo: 0xc8501a,
+    tint: 0xff8a5a, // slime de glace teinté en rouge-orangé en attendant son vrai sprite
+    hpBarWidth: 30,
+  },
 };
 
 /**
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['golden', 'slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer', 'spider'];
+export const ACTIVE_ALIENS: AlienId[] = ['fireballer', 'golden', 'slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer', 'spider'];
 
 /** Réglages des zombies (ressuscités par le chaman), lus en direct : modifiables dans la vue d'unité du chaman. */
 export function zombieStats(): ZombieStats {

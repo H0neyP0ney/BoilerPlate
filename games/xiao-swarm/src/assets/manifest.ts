@@ -154,6 +154,23 @@ export const ASSETS: AssetEntry[] = [
           walk: { frames: range(0, 8), fps: 11 },
         },
       },
+      // Fireballer : la planche du slime de glace en attendant son sprite (teinte rouge-orangé : `AlienDef.tint`)
+      alien_fireballer: {
+        originX: 0.618,
+        originY: 0.952,
+        scale: 0.8,
+        shadow: 20.4,
+        muzzleFlash: true,
+        muzzle: [0.32, 0.35],
+        anchors: { 'walk:right': [0.519, 0.8451], 'walk:left': [0.4848, 0.8451] },
+        muzzles: {
+          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]],
+        },
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 11 },
+        },
+      },
     },
   },
   // Petite coccinelle violette (`gling`).

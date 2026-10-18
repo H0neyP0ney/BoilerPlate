@@ -494,8 +494,46 @@ try {
     const d1 = Math.hypot(g.x - sq.center.x, g.y - sq.center.y);
     const sown = sim.gems.coins.length - coins0;
     check(g.goldState === 1 && d1 > d0 + 200 && sown >= 3, 'alien doré : engagé, il fuit la squad en semant des pièces', `${d0.toFixed(0)} → ${d1.toFixed(0)} px, ${sown} pièces`);
-    for (let i = 0; i < 30 * (G.fleeTime + 1.5); i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
-    check(!g.alive && sim.gems.coins.length >= sown, "alien doré : après 10 s de fuite il s'enterre et disparaît (sans butin de mort)", `vivant ${g.alive}`);
+    // enfouissage : tentative non interrompue (personne ne le blesse) = il s'enterre en `burrowTime` s et disparaît (sans butin de mort)
+    for (let i = 0; i < 30 * (G.burrowEvery + G.burrowTime + 1.5); i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
+    check(!g.alive && sim.gems.coins.length >= sown, "alien doré : une tentative d'enfouissage non interrompue (2 s) le fait disparaître, sans butin de mort", `vivant ${g.alive}`);
+    // tentative interrompue : -100 PV pendant l'animation => elle s'arrête et il repart en fuite
+    const mk = (seed) => {
+      const f = fresh(seed);
+      clearAliens(f.sim);
+      const q = f.sim.squadOf('p1');
+      f.sim.horde.spawnAt('golden', q.center.x + 200, q.center.y, 1, false, true);
+      const gg = f.sim.aliens[0];
+      gg.age = 99;
+      gg.maxHp = gg.hp = ALIENS.golden.hp;
+      return { f, gg };
+    };
+    {
+      const { f, gg } = mk(45);
+      const none = new Map();
+      let guard = 0;
+      while (gg.goldBury !== 1 && guard++ < 30 * 6) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
+      const started = gg.goldBury === 1 && gg.sinkT > 0;
+      f.sim.damage(gg, G.burrowInterrupt, 'p1'); // perd 100 PV pendant l'animation
+      f.sim.step(1 / 30, none);
+      const x0 = gg.x;
+      for (let i = 0; i < 20; i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
+      check(started && gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && Math.hypot(gg.x - x0, 0) > 20, "alien doré : -100 PV pendant l'enfouissage = animation interrompue, il repart en fuite", `enfouissage ${gg.goldBury}, a bougé de ${Math.abs(gg.x - x0).toFixed(0)} px`);
+    }
+    // la dernière animation (fin de la fuite) n'est jamais interrompue, même à -100 PV
+    {
+      const { f, gg } = mk(46);
+      const none = new Map();
+      f.sim.step(1 / 30, none);
+      gg.goldState = 1;
+      gg.goldT = 0.05; // la fuite se termine : l'enfouissage final démarre
+      gg.goldNext = 99;
+      for (let i = 0; i < 4; i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
+      const finalStarted = gg.goldBury === 2 && gg.sinkT > 0;
+      f.sim.damage(gg, G.burrowInterrupt * 3, 'p1');
+      for (let i = 0; i < 30 * (G.burrowTime + 0.5); i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
+      check(finalStarted && !gg.alive, "alien doré : la dernière animation d'enfouissage n'est jamais interrompue (même à -300 PV)", `final démarré ${finalStarted}, vivant ${gg.alive}`);
+    }
     // mort : grosse quantité de pièces, quelques diamants
     const f2 = fresh(35);
     clearAliens(f2.sim);

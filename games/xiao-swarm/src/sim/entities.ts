@@ -137,6 +137,10 @@ export interface AlienState extends Body {
   goldState: number;
   goldT: number;
   goldDrop: number;
+  /** Alien doré : 0 = en fuite, 1 = tentative d'enfouissage (interruptible), 2 = dernier enfouissage (jamais interrompu) ; PV au début de la tentative ; délai avant la prochaine tentative (s). */
+  goldBury: number;
+  goldHp0: number;
+  goldNext: number;
   /** Délai (s) avant les prochains pics en croix du Rhino Alpha. */
   crossCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */

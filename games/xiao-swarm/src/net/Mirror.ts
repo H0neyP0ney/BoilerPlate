@@ -482,6 +482,9 @@ export class Mirror {
         goldState: 0,
         goldT: 0,
         goldDrop: 0,
+        goldBury: 0,
+        goldHp0: 0,
+        goldNext: 0,
         crossCd: 0,
         lurkBlockT: 0,
         swarmT: 0,
@@ -533,7 +536,7 @@ export class Mirror {
     s.revived = a.zombie;
     s.instant = a.instant;
     // s'enterre : le compte à rebours démarre à la première réception, puis il décompte localement (`step`), sans passer sous 0,001
-    s.sinkT = a.sinking ? (s.sinkT > 0 ? s.sinkT : RELOCATE.sink) : 0;
+    s.sinkT = a.sinking ? (s.sinkT > 0 ? s.sinkT : (s.def.golden?.burrowTime ?? RELOCATE.sink)) : 0; // l'alien doré s'enterre en `burrowTime` s
     s.enraged = a.enraged;
     s.lurkPhase = a.lurkPhase;
     s.lurkT = a.lurkT;

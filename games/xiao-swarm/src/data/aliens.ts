@@ -129,10 +129,10 @@ export interface AlienDef {
   boss?: { kind: 'mini' | 'final'; twin?: boolean };
   /**
    * Alien doré (rare, 0 à `spawnMax` par partie) : apparaît à `spawnDist` px d'une squad (donc hors écran : flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
-   * à moins de `engage` px (ou qu'il n'est pas blessé) ; il s'enfuit alors à `fleeSpeed` px/s en lâchant `coinCount` pièce(s) toutes les `coinEvery` s sur sa route ; après `fleeTime` s de fuite
-   * il s'enterre et disparaît. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
+   * à moins de `engage` px (ou qu'il n'est pas blessé) ; il s'enfuit alors à `fleeSpeed` px/s en lâchant `coinCount` pièce(s) toutes les `coinEvery` s sur sa route ; pendant sa fuite il ESSAIE de s'enterrer toutes les `burrowEvery` s : l'animation dure `burrowTime` s et, s'il perd `burrowInterrupt` PV pendant ce temps, elle est interrompue et il repart en fuite ; après
+   * `fleeTime` s de fuite il s'enterre une dernière fois, sans interruption possible, et disparaît. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
    */
-  golden?: { spawnMax: number; spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; fleeTime: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
+  golden?: { spawnMax: number; spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; fleeTime: number; burrowEvery: number; burrowTime: number; burrowInterrupt: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -692,7 +692,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd24a,
     goo: 0xe0a800,
     hpBarWidth: 50,
-    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, burrowEvery: 3, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).

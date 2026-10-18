@@ -157,6 +157,9 @@ export class Horde {
       goldState: 0,
       goldT: 0,
       goldDrop: 0,
+      goldBury: 0,
+      goldHp0: 0,
+      goldNext: 0,
       retarget: 0,
       attackCd: 0,
       slamWind: 0,
@@ -396,7 +399,7 @@ export class Horde {
    * enfoncement avant le recyclage (`sinkT`), lurker / Scarab enterrés ou en train de l'être (`lurkPhase` > 0).
    */
   knockable(a: AlienState): boolean {
-    if (this.isEmerging(a) || a.sinkT > 0) return false;
+    if (this.isEmerging(a) || a.sinkT > 0) return false; // (l'alien doré, lui, reste touchable pendant qu'il s'enterre : `targetable`)
     if ((a.def.lurk || a.def.burrow) && a.lurkPhase > 0) return false;
     return true;
   }
@@ -476,14 +479,28 @@ export class Horde {
         a.goldState = 1; // engagé : il s'enfuit
         a.goldT = G.fleeTime;
         a.goldDrop = G.coinEvery * 0.5;
+        a.goldNext = G.burrowEvery; // première tentative d'enfouissage après `burrowEvery` s de fuite
       } else {
         a.vx = a.vy = 0;
         return;
       }
     }
     a.goldT -= dt;
-    if (a.goldT <= 0) {
-      a.sinkT = RELOCATE.sink; // il s'enterre (même animation que les traînards), puis disparaît (`update`)
+    // il s'enterre (animation de `burrowTime` s, même visuel que les traînards) ; `goldBury` 1 : tentative interruptible, 2 : la dernière, jamais interrompue
+    if (a.goldBury > 0) {
+      a.vx = a.vy = a.kx = a.ky = 0;
+      if (a.goldT <= 0) a.goldBury = 2; // la fuite est finie : la tentative en cours devient la dernière
+      if (a.goldBury === 1 && a.goldHp0 - a.hp >= G.burrowInterrupt) {
+        a.sinkT = 0; // il a perdu assez de PV pendant l'animation : elle est interrompue, il repart en fuite
+        a.goldBury = 0;
+        a.goldNext = G.burrowEvery;
+      } else if ((a.sinkT -= dt) <= 0) a.alive = false; // enterré pour de bon : il disparaît (sans mort, ni butin)
+      return;
+    }
+    if (a.goldT <= 0 || (a.goldNext -= dt) <= 0) {
+      a.goldBury = a.goldT <= 0 ? 2 : 1;
+      a.sinkT = G.burrowTime;
+      a.goldHp0 = a.hp;
       a.vx = a.vy = 0;
       return;
     }
@@ -549,13 +566,12 @@ export class Horde {
         continue;
       }
       // s'enterre avant d'être déplacé (recyclage des traînards) : immobile, n'attaque plus
-      if (a.sinkT > 0) {
-        a.vx = a.vy = a.kx = a.ky = 0;
-        if (def.golden && (a.sinkT -= dt) <= 0) a.alive = false; // alien doré enterré : il disparaît (sans mort, ni butin)
+      if (def.golden) {
+        this.updateGolden(a, dt); // l'alien doré gère lui-même ses enfouissages (interruptibles) : voir `updateGolden`
         continue;
       }
-      if (def.golden) {
-        this.updateGolden(a, dt);
+      if (a.sinkT > 0) {
+        a.vx = a.vy = a.kx = a.ky = 0;
         continue;
       }
 

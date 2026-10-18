@@ -416,7 +416,7 @@ export class AlienView {
   hole(): { x: number; y: number; radius: number; open: number; alpha: number } | null {
     // s'enterre (recyclage des traînards) : le trou s'ouvre sous lui pendant qu'il s'enfonce
     const oy = sprites.get(this.id).offsetY ?? 0; // le trou est sous l'ombre : même décalage
-    if (this.state.sinkT > 0) return { x: this.rx, y: this.ry + oy, radius: this.state.radius * 1.3, open: Math.min(1, (1 - this.state.sinkT / RELOCATE.sink) * 2.5), alpha: 1 };
+    if (this.state.sinkT > 0) return { x: this.rx, y: this.ry + oy, radius: this.state.radius * 1.3, open: Math.min(1, (1 - this.state.sinkT / (this.state.def.golden?.burrowTime ?? RELOCATE.sink)) * 2.5), alpha: 1 };
     const total = EMERGE_OPEN + EMERGE_POP + EMERGE_FADE;
     if (this.emergeT >= total) return null;
     const alpha = this.emergeT < EMERGE_OPEN + EMERGE_POP ? 1 : 1 - (this.emergeT - EMERGE_OPEN - EMERGE_POP) / EMERGE_FADE;
@@ -500,7 +500,7 @@ export class AlienView {
       else if (a.lurkPhase === 2) show = 0;
       else if (a.lurkPhase === 3) show = 1 - Math.max(0, a.lurkT / B.rise);
     }
-    if (a.sinkT > 0) show = Math.min(show, a.sinkT / RELOCATE.sink);
+    if (a.sinkT > 0) show = Math.min(show, a.sinkT / (a.def.golden?.burrowTime ?? RELOCATE.sink)); // l'alien doré s'enfonce en `burrowTime` s
     // trou d'apparition : le trou se creuse (invisible), puis il monte hors du sol en `EMERGE_POP` s (0 → 100 % du sprite)
     if (this.emergeT < EMERGE_OPEN + EMERGE_POP) show = Math.min(show, Math.max(0, (this.emergeT - EMERGE_OPEN) / EMERGE_POP));
     this.groundCut(show);

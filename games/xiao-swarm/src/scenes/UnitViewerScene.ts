@@ -83,6 +83,8 @@ export class UnitViewerScene extends Phaser.Scene {
   private statsPanel?: HTMLDivElement;
   /** Vue d'ensemble : hauteur du contenu (monde) et barre de défilement (DOM) à droite. */
   private worldH = 0;
+  /** Largeur du contenu de la vue d'ensemble (la plus longue ligne) : le zoom est réduit si la fenêtre est plus étroite. */
+  private worldW = 0;
   private scrollBar?: HTMLDivElement;
   private scrollSpacer?: HTMLDivElement;
   private anim = 'idle';
@@ -211,6 +213,7 @@ export class UnitViewerScene extends Phaser.Scene {
     });
     const totalRows = rows.length;
     this.worldH = (totalRows - 1) * 190 + 280; // hauteur du contenu de la vue d'ensemble (marges : sprites hauts + étiquettes)
+    this.worldW = (Math.max(1, ...rows.map((r) => r.ids.length)) - 1) * 170 + 260;
     const gap = this.selected === ALL ? 170 : 0;
     const rowGap = this.selected === ALL ? 190 : 0;
     rows.forEach((g, r) => {
@@ -221,6 +224,11 @@ export class UnitViewerScene extends Phaser.Scene {
       });
     });
 
+    // vue d'ensemble : les très grands sprites (boss) dépassent la marge fixe de 280 px : la hauteur du contenu tient compte du plus haut d'entre eux (le défilement va alors jusqu'au bout)
+    if (this.selected === ALL && this.entries.length) {
+      const tallest = Math.max(...this.entries.map((e) => e.sprite.displayHeight || 0));
+      this.worldH = (totalRows - 1) * 190 + Math.max(280, tallest * 1.5 + 160);
+    }
     this.buildFallback();
     this.fillAnimSelect();
     this.setupEditor();
@@ -1070,7 +1078,7 @@ ${id}` : id;
 
     // barre de défilement native (vue d'ensemble) ; la molette de la souris la fait aussi défiler
     const bar = document.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:16px;overflow-y:scroll;z-index:99998;display:none';
+    bar.style.cssText = 'position:fixed;top:0;right:0;bottom:0;width:18px;overflow-y:scroll;z-index:99998;display:none;background:rgba(0,0,0,0.35);scrollbar-width:auto;scrollbar-color:#9fe3c8 rgba(0,0,0,0.35)'; // barre bien visible (les barres natives « overlay » restent invisibles tant qu'on ne survole pas)
     const spacer = document.createElement('div');
     spacer.style.width = '1px';
     bar.append(spacer);
@@ -1174,7 +1182,7 @@ ${id}` : id;
   private readonly fit = (): void => {
     const cam = this.cameras.main;
     const all = this.selected === ALL;
-    cam.setZoom(all ? 0.8 : this.zoomFactor); // vue d'ensemble : toujours à 80 %
+    cam.setZoom(all ? Math.min(0.8, Math.max(0.3, (this.scale.width - 40) / Math.max(1, this.worldW))) : this.zoomFactor); // vue d'ensemble : 80 %, réduit si la fenêtre est plus étroite que la plus longue ligne
     // vue d'ensemble : si le contenu dépasse l'écran, la barre de défilement fait glisser la caméra
     const contentPx = this.worldH * cam.zoom;
     const overflow = all && contentPx > this.scale.height;

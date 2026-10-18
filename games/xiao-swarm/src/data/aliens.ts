@@ -679,7 +679,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     hpBarWidth: 60,
   },
   /**
-   * Alien doré (slime en or, sprite provisoire = celui du slime teinté ; 2000 PV exacts) : rare, il fuit quand on l'approche en semant des pièces, puis s'enterre ; tué, il lâche une grosse quantité d'argent et quelques
+   * Alien doré (slime en or, sprite provisoire = la planche du slime recolorée en jaune doré (`aliens/golden.png`) ; 2000 PV exacts) : rare, il fuit quand on l'approche en semant des pièces, puis s'enterre ; tué, il lâche une grosse quantité d'argent et quelques
    * diamants. Ajouté en DERNIER : l'ordre de `ALIENS` donne l'index réseau. Réglages de comportement : `golden`.
    */
   golden: {
@@ -695,13 +695,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     recruitChance: 0,
     color: 0xffd24a,
     goo: 0xe0a800,
-    tint: 0xffd24a, // slime vert teinté en or en attendant son vrai sprite
     hpBarWidth: 50,
     golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).
-   * Sprite provisoire = celui du slime de glace teinté rouge-orangé. Ajouté en DERNIER (index réseau).
+   * Sprite provisoire = la planche du slime de glace recolorée en orange (`aliens/fireballer.png`). Ajouté en DERNIER (index réseau).
    */
   fireballer: {
     id: 'fireballer',
@@ -719,7 +718,6 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     recruitChance: 0.091,
     color: 0xff7a2a,
     goo: 0xc8501a,
-    tint: 0xff8a5a, // slime de glace teinté en rouge-orangé en attendant son vrai sprite
     hpBarWidth: 30,
   },
 };

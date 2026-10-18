@@ -18,6 +18,8 @@ export const PACK_OF: Record<string, Pack> = {
   'aliens/crab.png': '2b',
   'aliens/egg.png': '2b',
   'aliens/gling.png': 'core',
+  'aliens/fireballer.png': '2b',
+  'aliens/golden.png': '2a',
   'aliens/iceballer.png': '2b',
   'aliens/kamikaze.png': 'core',
   'aliens/lurker.png': '2b',

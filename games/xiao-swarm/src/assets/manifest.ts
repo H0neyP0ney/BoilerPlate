@@ -93,7 +93,6 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 82,
     frameHeight: 78,
     sprites: {
-      alien_golden: { originX: 0.507, originY: 0.881, scale: 0.73, shadow: 20, anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] }, facesLeft: true, anims: { idle: { frames: range(0, 8), fps: 5 }, walk: { frames: range(0, 8), fps: 12 } } }, // alien doré : la planche du slime en attendant son sprite (teinté en or : `AlienDef.tint`)
       alien_slime: {
         originX: 0.507,
         originY: 0.881,
@@ -104,6 +103,41 @@ export const ASSETS: AssetEntry[] = [
         anims: {
           idle: { frames: range(0, 8), fps: 5 },
           walk: { frames: range(0, 8), fps: 12 },
+        },
+      },
+    },
+  },
+  // Alien doré (`golden`) : planche du slime recolorée en jaune doré (`node tools/hue-shift.mjs aliens/slime.png aliens/golden.png`, deux passes : taches puis corps) ; en attendant son vrai sprite.
+  {
+    type: 'sheet',
+    url: 'aliens/golden.png',
+    frameWidth: 82,
+    frameHeight: 78,
+    sprites: {
+      alien_golden: { originX: 0.507, originY: 0.881, scale: 0.73, shadow: 20, anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] }, facesLeft: true, anims: { idle: { frames: range(0, 8), fps: 5 }, walk: { frames: range(0, 8), fps: 12 } } }, // alien doré : la planche du slime en attendant son sprite (teinté en or : `AlienDef.tint`)
+    },
+  },
+  // Fireballer : planche du slime de glace recolorée en orange (`node tools/hue-shift.mjs aliens/iceballer.png aliens/fireballer.png -165 1.5 150 250`) ; en attendant son vrai sprite.
+  {
+    type: 'sheet',
+    url: 'aliens/fireballer.png',
+    frameWidth: 68,
+    frameHeight: 105,
+    sprites: {
+      alien_fireballer: {
+        originX: 0.618,
+        originY: 0.952,
+        scale: 0.8,
+        shadow: 20.4,
+        muzzleFlash: true,
+        muzzle: [0.32, 0.35],
+        anchors: { 'walk:right': [0.519, 0.8451], 'walk:left': [0.4848, 0.8451] },
+        muzzles: {
+          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]],
+        },
+        anims: {
+          idle: { frames: range(0, 8), fps: 6 },
+          walk: { frames: range(0, 8), fps: 11 },
         },
       },
     },
@@ -139,23 +173,6 @@ export const ASSETS: AssetEntry[] = [
     frameHeight: 105,
     sprites: {
       alien_iceballer: {
-        originX: 0.618,
-        originY: 0.952,
-        scale: 0.8,
-        shadow: 20.4,
-        muzzleFlash: true,
-        muzzle: [0.32, 0.35],
-        anchors: { 'walk:right': [0.519, 0.8451], 'walk:left': [0.4848, 0.8451] },
-        muzzles: {
-          walk: [[0.3454, 0.3295], [0.2908, 0.4106], [0.3125, 0.3314], [0.3431, 0.3388], [0.3164, 0.4036], [0.307, 0.3533], [0.3277, 0.3322], [0.3086, 0.3821], [0.2965, 0.4033]],
-        },
-        anims: {
-          idle: { frames: range(0, 8), fps: 6 },
-          walk: { frames: range(0, 8), fps: 11 },
-        },
-      },
-      // Fireballer : la planche du slime de glace en attendant son sprite (teinte rouge-orangé : `AlienDef.tint`)
-      alien_fireballer: {
         originX: 0.618,
         originY: 0.952,
         scale: 0.8,

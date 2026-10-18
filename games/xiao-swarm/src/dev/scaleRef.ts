@@ -22,7 +22,7 @@ export class ScaleRef {
     } catch {
       this.on = true;
     }
-    if (scene.textures.exists(ID)) {
+    if (sprites.has(ID) || scene.textures.exists(ID)) { // le Trooper vient de la planche du Gunner (`asset:soldiers/gunner.png`) : `soldier_trooper` est un id du catalogue, pas une clé de texture
       this.sprite = sprites.add(scene, ID, 0, 0).setDepth(5000).setScale(sprites.scaleOf(ID));
       sprites.play(this.sprite, ID, 'idle');
     }

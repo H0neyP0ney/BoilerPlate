@@ -295,7 +295,7 @@ export const ASSETS: AssetEntry[] = [
       alien_boss_rhino: {
         originX: 0.505,
         originY: 0.962,
-        scale: 1.54,
+        scale: 1.4,
         shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
@@ -317,7 +317,7 @@ export const ASSETS: AssetEntry[] = [
       alien_boss_rhino_fire: {
         originX: 0.505,
         originY: 0.962,
-        scale: 1.54,
+        scale: 1.4,
         shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
@@ -337,7 +337,7 @@ export const ASSETS: AssetEntry[] = [
       alien_boss_rhino_ice: {
         originX: 0.505,
         originY: 0.962,
-        scale: 1.54,
+        scale: 1.4,
         shadow: 64.6,
         anchors: { 'walk:right': [0.4657, 0.8322], 'walk:left': [0.5399, 0.8322] },
         facesLeft: true,
@@ -541,7 +541,7 @@ export const ASSETS: AssetEntry[] = [
       alien_boss_scarab: {
         originX: 0.551,
         originY: 0.933,
-        scale: 1.7,
+        scale: 1.42,
         shadow: 85,
         anchors: { 'walk:right': [0.4897, 0.7276], 'walk:left': [0.5056, 0.7276] },
         facesLeft: true,

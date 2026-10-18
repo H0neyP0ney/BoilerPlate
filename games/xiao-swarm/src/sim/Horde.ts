@@ -1,6 +1,6 @@
 import { damp, type Point } from '@xiao/engine/sim';
 import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS } from '../config';
-import { ALIENS, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
+import { ALIENS, bossKindAt, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -341,7 +341,7 @@ export class Horde {
 
   /** Annonce l'arrivée d'un boss (bandeau + flèche dans le HUD). */
   private announce(a: AlienState): void {
-    if (a.def.boss) this.sim.events.push({ t: 'boss', id: a.id, alien: a.def.id, kind: a.def.boss.kind });
+    if (a.def.boss) this.sim.events.push({ t: 'boss', id: a.id, alien: a.def.id, kind: bossKindAt(a.def, this.sim.difficulty) });
   }
 
   /** Flaque de slime la plus proche de `a` (libre, ou déjà choisie par `a`) dans un rayon `max`. */

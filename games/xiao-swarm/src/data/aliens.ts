@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-import type { DifficultyLevel } from './difficultyLevels';
+import { FINAL_BOSS, type DifficultyLevel } from './difficultyLevels';
 
 export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg';
 
@@ -611,7 +611,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900, height: 200 },
     spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 60, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
     lob: { range: 620, cooldown: 3, flight: 1, damage: 20, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
-    boss: { kind: 'final' },
+    boss: { kind: 'mini' }, // le type réel dépend du niveau : `bossKindAt` (final en Expert)
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xd9435a,
@@ -669,6 +669,13 @@ export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze'
 /** Réglages des zombies (ressuscités par le chaman), lus en direct : modifiables dans la vue d'unité du chaman. */
 export function zombieStats(): ZombieStats {
   return ALIENS.shaman.revive!.zombie;
+}
+
+/**
+ * Type d'un boss au niveau de difficulté `level` : `final` s'il clôt la run à ce niveau (`FINAL_BOSS`), sinon `mini` (il laisse un œuf). Un seul endroit pour la simulation, la vue et le miroir.
+ */
+export function bossKindAt(def: AlienDef, level: DifficultyLevel): 'mini' | 'final' {
+  return def.boss && FINAL_BOSS[level].includes(def.id) ? 'final' : 'mini';
 }
 
 /**

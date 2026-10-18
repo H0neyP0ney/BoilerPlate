@@ -14,6 +14,16 @@ export function atLeast(level: DifficultyLevel, min: DifficultyLevel): boolean {
   return DIFFICULTY_LEVELS.indexOf(level) >= DIFFICULTY_LEVELS.indexOf(min);
 }
 
+/**
+ * Boss FINAL de chaque niveau (17/10) : la run se termine (victoire, séquence de fin) quand il tombe. Normal : le Scarab (3e boss) ; Hard (`expert`) : les rhinos jumeaux (4e boss, il faut
+ * tuer les deux) ; Expert (`impossible`) : le Giant Crab (5e boss). La timeline continue d'envoyer les boss suivants dans les données, mais la partie s'arrête avant.
+ */
+export const FINAL_BOSS: Record<DifficultyLevel, readonly string[]> = {
+  normal: ['boss_scarab'],
+  expert: ['boss_rhino_fire', 'boss_rhino_ice'],
+  impossible: ['boss_crab'],
+};
+
 /** Niveau lu dans une valeur libre (message réseau) : `normal` si ce n'en est pas un. */
 export function parseDifficultyLevel(value: unknown): DifficultyLevel {
   return DIFFICULTY_LEVELS.includes(value as DifficultyLevel) ? (value as DifficultyLevel) : 'normal';

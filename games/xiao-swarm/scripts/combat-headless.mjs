@@ -1338,10 +1338,53 @@ try {
     check(before >= 5 && after === 0 && sq.buffs.stim === 0 && !sim.aliens.some((a) => a.alive && a.def.egg), 'fin du jeu : recrues, power-ups, loots, globes d\'upgrade et d\'XP, œufs et bonus actifs effacés', `${before} avant, ${after} après`);
   }
 
+  // ---- boss final par niveau : Normal = Scarab, Hard = rhinos jumeaux (les deux), Expert = Giant Crab ; les autres boss laissent un œuf
+  {
+    const kill = (level, ids) => {
+      const { sim, step } = fresh(29, level);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      ids.forEach((id, i) => sim.horde.spawnAt(id, sq.center.x + 900 + i * 150, sq.center.y, 1, false));
+      for (const b of sim.aliens.filter((a) => a.alive && a.def.boss)) b.age = 1;
+      return { sim, step };
+    };
+    const ended = (sim) => sim.finalBossDead;
+    // Normal : le Scarab clôt la run, le Giant Crab n'est qu'un boss ordinaire
+    let { sim, step } = kill('normal', ['boss_scarab']);
+    sim.damage(sim.aliens.find((a) => a.def.id === 'boss_scarab'), 1e12, 'p1');
+    step(1);
+    const normalOk = ended(sim) && !sim.aliens.some((a) => a.alive && a.def.egg);
+    ({ sim, step } = kill('normal', ['boss_crab']));
+    sim.damage(sim.aliens.find((a) => a.def.id === 'boss_crab'), 1e12, 'p1');
+    step(1);
+    check(normalOk && !ended(sim) && sim.aliens.some((a) => a.alive && a.def.egg), "Normal : la run finit après le Scarab (pas d'œuf) ; le Giant Crab laisse un œuf et ne finit rien", `Scarab final ${normalOk}, crabe final ${ended(sim)}`);
+    // Hard : les jumeaux, seulement quand les deux sont tombés ; le Scarab laisse un œuf
+    ({ sim, step } = kill('expert', ['boss_scarab']));
+    sim.damage(sim.aliens.find((a) => a.def.id === 'boss_scarab'), 1e12, 'p1');
+    step(1);
+    const hardScarab = ended(sim);
+    ({ sim, step } = kill('expert', ['boss_rhino_fire', 'boss_rhino_ice']));
+    sim.damage(sim.aliens.find((a) => a.def.id === 'boss_rhino_fire'), 1e12, 'p1');
+    step(1);
+    const afterFirst = ended(sim);
+    sim.damage(sim.aliens.find((a) => a.alive && a.def.id === 'boss_rhino_ice'), 1e12, 'p1');
+    step(1);
+    check(!hardScarab && !afterFirst && ended(sim), 'Hard : la run finit quand les DEUX rhinos jumeaux sont tombés (pas au Scarab, pas au premier)', `Scarab ${hardScarab}, premier jumeau ${afterFirst}, les deux ${ended(sim)}`);
+    // Expert : le Giant Crab
+    ({ sim, step } = kill('impossible', ['boss_rhino_fire', 'boss_rhino_ice']));
+    for (const t of sim.aliens.filter((a) => a.alive && a.def.boss)) sim.damage(t, 1e12, 'p1');
+    step(1);
+    const expTwins = ended(sim);
+    ({ sim, step } = kill('impossible', ['boss_crab']));
+    sim.damage(sim.aliens.find((a) => a.def.id === 'boss_crab'), 1e12, 'p1');
+    step(1);
+    check(!expTwins && ended(sim), 'Expert : la run finit au Giant Crab (pas aux rhinos jumeaux)', `jumeaux ${expTwins}, crabe ${ended(sim)}`);
+  }
+
   // ---- boss final : l'équivalent d'un coffre à diamants explose, la séquence de fin attend que les diamants soient ramassés (ou disparus après 10 s)
   {
     // a) rien ramassé : les diamants disparaissent au bout de 10 s, alors seulement la fin peut démarrer
-    const { sim, step } = fresh(17);
+    const { sim, step } = fresh(17, 'impossible');
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     sim.horde.spawnAt('boss_crab', sq.center.x + 900, sq.center.y, 1, false);

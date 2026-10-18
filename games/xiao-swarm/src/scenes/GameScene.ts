@@ -5,6 +5,7 @@ import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../con
 import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
 import type { SoldierClassId } from '../data/classes';
 import { ALIENS, type AlienId } from '../data/aliens';
+import { FINAL_BOSS } from '../data/difficultyLevels';
 import { TUTORIAL } from '../data/tutorial';
 import { startDifficulty } from '../difficultyStart';
 import { MODES, type ModeDef } from '../data/modes';
@@ -509,7 +510,7 @@ export class GameScene extends Phaser.Scene {
     sq.removeDead();
     sim.respawnSquad(me, Array.from({ length: 16 }, () => 'trooper'), 2);
     const c = sq.center;
-    sim.horde.spawnAt('boss_crab', c.x + 450, c.y, 1, false);
+    for (const [i, id] of FINAL_BOSS[sim.difficulty].entries()) sim.horde.spawnAt(id as AlienId, c.x + 450 + i * 120, c.y + i * 60, 1, false); // le boss final du niveau (les deux rhinos en Hard)
   }
 
   /** Victoire solo : record et enregistrement comme `endRun`, puis la séquence de fin (le gameplay Poki s'arrête quand la fusée est partie). */

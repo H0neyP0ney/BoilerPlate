@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { sprites, theme } from '@xiao/engine';
 import { latePack } from '../assets/latePack';
-import { ALIENS, type AlienId } from '../data/aliens';
+import { ALIENS, bossKindAt, type AlienId } from '../data/aliens';
 import { entryTimes, nextBoss } from '../data/waves';
 import { t } from '../i18n';
 import type { Sim } from '../sim/Sim';
@@ -144,7 +144,7 @@ export class TimelineHud {
     const prev = sim.mode.waves.timeline.reduce((m, e) => (e.config !== undefined && e.at <= cursor ? Math.max(m, e.at) : m), 0);
     const span = Math.max(1, next.at - prev);
     const p = Math.max(0, Math.min(1, (cursor - prev) / span)); // avancement vers le prochain boss
-    const final = ALIENS[next.type].boss?.kind === 'final';
+    const final = bossKindAt(ALIENS[next.type], sim.difficulty) === 'final';
 
     this.frame.setVisible(true).setPosition(x0, y0).setScale(k);
 

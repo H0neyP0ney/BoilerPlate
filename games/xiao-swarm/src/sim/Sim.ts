@@ -1,7 +1,7 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
 import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP } from '../config';
 import { xpToNext } from '../data/progression';
-import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
+import { ALIENS, bossKindAt, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
 import { START_SQUADS, type SoldierClassId } from '../data/classes';
 import type { MapDef } from '../data/maps';
@@ -1035,16 +1035,17 @@ export class Sim {
       // Le premier tombé (`firstTwin`) est un alien comme les autres (ses drops normaux, aucun effet de fin de boss) ; son jumeau continue le combat.
       const last = !this.aliens.some((o) => o !== a && o.alive && o.def.boss);
       const firstTwin = !!a.def.boss.twin && this.aliens.some((o) => o !== a && o.alive && o.def.boss?.twin);
-      if (a.def.boss.kind === 'final') {
+      const isFinal = bossKindAt(a.def, this.difficulty) === 'final'; // le boss final dépend du niveau (Normal : Scarab, Hard : rhinos jumeaux, Expert : Giant Crab)
+      if (isFinal && !firstTwin) {
         this.finalBossDead = true;
         this.gems.spawnFinalBurst(a.x, a.y); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
       }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
-        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (!isFinal) this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
-          this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });
+          this.events.push({ t: 'bossDown', alien: a.def.id, kind: isFinal ? 'final' : 'mini' });
         }
       }
     }

@@ -466,7 +466,7 @@ try {
     a.x = near.x; a.y = near.y; a.vx = a.vy = 0;
     sim.step(1 / 30, new Map());
     const second = hp0 - a.hp - first;
-    check(active && first === ELECTRO.damage && second === 0, 'orbes électriques : 3 orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
+    check(active && first === ELECTRO.damage && second === 0, 'orbes électriques : orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
     for (let i = 0; i < 30 * 9; i++) { sim.step(1 / 30, new Map()); a.hp = a.maxHp; }
     check(sq.buffs.electro <= 0, 'orbes électriques : les orbes disparaissent après 8 s', `${sq.buffs.electro.toFixed(2)} s restant`);
   }

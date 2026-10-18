@@ -58,7 +58,7 @@ export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scr
  * Power-up Orbes électriques (17/10, ex-Fireball) : `count` orbes électriques tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
  * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
  */
-export const ELECTRO = { count: 3, time: 8, margin: 50, radiusMul: 1.2, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 %, 17/10)
+export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 % puis +15 % : 1,38 ; 4 orbes au lieu de 3, 17/10)
 /**
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.

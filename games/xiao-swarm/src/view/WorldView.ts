@@ -540,6 +540,14 @@ export class WorldView {
         this.flushPickTexts();
         break;
       }
+      case 'bossDown':
+        // boss FINAL de la run : une fusée de feu d'artifice part de son cadavre et explose en confettis
+        if (e.kind === 'final') {
+          this.fx.fireworkRocket(e.x, e.y - 20);
+          if (nearCam(e.x, e.y)) playPowerUpSfx(this.scene, 'rockets');
+          this.scene.time.delayedCall(950, () => playSfx(this.scene, 'levelup'));
+        }
+        break;
       case 'powerup': {
         const info = POWERUP_INFO[e.kind as keyof typeof POWERUP_INFO];
         if (!info) break;

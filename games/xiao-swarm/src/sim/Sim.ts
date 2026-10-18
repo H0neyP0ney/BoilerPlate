@@ -1053,7 +1053,7 @@ export class Sim {
         if (!isFinal) this.eggBoss.set(this.horde.spawnEgg(a.x, a.y).id, a.def.id); // l'œuf se souvient de son boss : le coffre contiendra SES diamants // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
-          this.events.push({ t: 'bossDown', alien: a.def.id, kind: isFinal ? 'final' : 'mini' });
+          this.events.push({ t: 'bossDown', alien: a.def.id, kind: isFinal ? 'final' : 'mini', x: a.x, y: a.y });
         }
       }
     }

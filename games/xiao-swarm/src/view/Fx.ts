@@ -481,6 +481,81 @@ export class Fx {
     this.text(x, y - 50, '+1', '#5dff84', g.textSize, '#13331c', 7);
   }
 
+  /**
+   * Fusée de feu d'artifice (boss final tombé) : elle part du cadavre, monte en accélérant en semant des étincelles, puis explose en confettis à son sommet. Tout est dessiné par le code
+   * (rectangles colorés qui tournent et planent) ; `confetti` seul est aussi utilisable à part.
+   */
+  fireworkRocket(x: number, y: number, rise = 320, ms = 950): void {
+    const rocket = this.scene.add.graphics().setDepth(DEPTH.fx + 2).setPosition(x, y);
+    const draw = (flame: number): void => {
+      rocket.clear();
+      rocket.fillStyle(0xffb02a, 0.95).fillTriangle(-6, 14, 6, 14, 0, 14 + 20 * flame); // flamme
+      rocket.fillStyle(0xfff2a0, 1).fillTriangle(-3, 14, 3, 14, 0, 14 + 11 * flame);
+      rocket.fillStyle(0xd83a3a, 1).fillRect(-6, -12, 12, 26); // corps
+      rocket.fillStyle(0xffffff, 1).fillRect(-6, -2, 12, 5);
+      rocket.fillStyle(0xf2f2f2, 1).fillTriangle(-6, -12, 6, -12, 0, -26); // ogive
+      rocket.fillStyle(0x7a1a1a, 1).fillTriangle(-6, 8, -13, 18, -6, 18).fillTriangle(6, 8, 13, 18, 6, 18); // ailerons
+    };
+    draw(1);
+    let last = 0;
+    this.scene.tweens.add({
+      targets: rocket,
+      y: y - rise,
+      duration: ms,
+      ease: 'Quad.In',
+      onUpdate: (tw) => {
+        draw(0.8 + 0.5 * Math.random());
+        const now = tw.elapsed;
+        if (now - last > 45) {
+          last = now;
+          this.burst(rocket.x + Phaser.Math.Between(-3, 3), rocket.y + 24, Math.random() < 0.5 ? 0xffb02a : 0xffe08a, 3); // traînée d'étincelles
+        }
+      },
+      onComplete: () => {
+        const ax = rocket.x;
+        const ay = rocket.y;
+        rocket.destroy();
+        this.ring(ax, ay, 170, 0xffe08a);
+        this.burst(ax, ay, 0xffffff, 16);
+        this.confetti(ax, ay);
+      },
+    });
+  }
+
+  /** Explosion de confettis en (x, y) : ~90 petits rectangles de toutes les couleurs qui partent dans toutes les directions, ralentissent, tournent et planent vers le sol. */
+  confetti(x: number, y: number, count = 90): void {
+    const colors = [0xff4d6d, 0xffd23f, 0x3bd16f, 0x3fa9ff, 0xc77dff, 0xffffff, 0xff9a3c];
+    for (let i = 0; i < count; i++) {
+      const piece = this.scene.add.rectangle(x, y, Phaser.Math.Between(6, 11), Phaser.Math.Between(4, 6), colors[i % colors.length]).setDepth(DEPTH.fx + 3);
+      const ang = Math.random() * Math.PI * 2;
+      const speed = Phaser.Math.Between(140, 460);
+      const vx = Math.cos(ang) * speed;
+      const vy = Math.sin(ang) * speed;
+      const drag = Phaser.Math.FloatBetween(2.2, 3.4); // freinage : la pièce part vite puis flotte
+      const fall = Phaser.Math.FloatBetween(55, 95); // vitesse de chute une fois freinée
+      const spin = Phaser.Math.FloatBetween(-9, 9);
+      const flip = Phaser.Math.FloatBetween(5, 11);
+      const sway = Phaser.Math.FloatBetween(10, 26);
+      const phase = Math.random() * 6;
+      const dur = Phaser.Math.Between(1900, 2800);
+      this.scene.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: dur,
+        onUpdate: (tw) => {
+          const p = tw.getValue() ?? 0;
+          const t = (p * dur) / 1000;
+          const k = (1 - Math.exp(-drag * t)) / drag;
+          piece.setPosition(x + vx * k + Math.sin(t * 3 + phase) * sway * Math.min(1, t), y + vy * k + fall * t);
+          piece.setRotation(t * spin);
+          piece.setScale(1, Math.max(0.15, Math.abs(Math.cos(t * flip)))); // la pièce se retourne en tombant
+          piece.setAlpha(p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1);
+        },
+        onComplete: () => piece.destroy(),
+      });
+    }
+  }
+
   /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */
   death(x: number, y: number, color: number): void {
     const d = FX.death;

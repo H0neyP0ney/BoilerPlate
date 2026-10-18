@@ -50,7 +50,7 @@ export type SimEvent =
   /** Mêlée en zone d'un alien (`def.cleave`, chargeur) : anneau rouge discret. */
   | { t: 'cleave'; x: number; y: number; r: number }
   | { t: 'bossEnrage'; id: number; alien: AlienId; level: number }
-  | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final' }
+  | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final'; x: number; y: number }
   | { t: 'capture'; alien: number; soldier: number }
   | { t: 'release'; soldier: number; x: number; y: number }
   | { t: 'corpse'; id: number; x: number; y: number; alien: AlienId; ttl: number }

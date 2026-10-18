@@ -1090,7 +1090,7 @@ export class Horde {
     for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
       if (!fire) this.sim.damageSoldier(s, a.def.damage * a.escDmg);
-      else this.sim.ignite(s, (a.def.damage * a.escDmg * FIRE.dmgMul) / FIRE.burnTime); // orbe de feu : le soldat s'enflamme (dégâts × 2 répartis sur la durée de brûlure)
+      else this.sim.ignite(s, a.def.damage * a.escDmg * FIRE.orbDps); // orbe de feu : le soldat s'enflamme (débit = dégâts × `FIRE.orbDps`)
       if (fire) {
         // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
         if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, 'hitTtl' in T && T.hitTtl ? T.hitTtl : T.ttl, T.dps * a.escDmg);

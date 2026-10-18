@@ -1083,7 +1083,6 @@ export class Horde {
     }
     if ((a.lurkT -= dt) <= 0 || a.x < b.minX || a.x > b.maxX || a.y < b.minY || a.y > b.maxY) {
       a.alive = false;
-      if (fire && T) this.sim.addFire(a.x, a.y + 4, T.radius * (T.hitRadiusMul ?? 1.4), T.hitTtl ?? T.ttl, T.dps * a.escDmg); // l'orbe explose en fin de course : même flaque qu'à l'impact
       if (fire) this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
       else this.sim.events.push({ t: 'freeze', x: a.x, y: a.y, r: P.ring * 0.6 }); // se brise en fin de course
       return;
@@ -1094,7 +1093,6 @@ export class Horde {
       else this.sim.ignite(s, a.def.damage * a.escDmg * FIRE.orbDps); // orbe de feu : le soldat s'enflamme (débit = dégâts × `FIRE.orbDps`)
       if (fire) {
         // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
-        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * (T.hitRadiusMul ?? 1.4), T.hitTtl ?? T.ttl, T.dps * a.escDmg);
         this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
       } else this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
       a.alive = false;

@@ -659,19 +659,18 @@ try {
     check(f.target.burn > 0 && f.target.frozen === 0, 'fireballer : son orbe enflamme le soldat touché (pas de gel)', `brûle ${f.target.burn.toFixed(1)} s`);
   }
 
-  // ---- orbe de feu : en fin de course (sans toucher personne), elle explose et laisse la même flaque qu'à l'impact
+  // ---- orbe de feu : ni à l'impact ni en fin de course elle ne laisse de flaque (seulement sa traînée)
   {
     const { sim } = fresh(44);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
-    sim.horde.launch('fire_orb', sq.center.x + 700, sq.center.y, 1, 0); // tire loin de la squad, vers l'extérieur
+    sim.horde.launch('fire_orb', sq.center.x + 700, sq.center.y, 1, 0);
     const orb = sim.aliens.find((a) => a.def.id === 'fire_orb');
     orb.lurkT = 0.1; // fin de course imminente
-    const f0 = sim.fires.length;
-    for (let i = 0; i < 6; i++) { sim.step(1 / 30, new Map()); sim.aliens = sim.aliens.filter((a) => a.def.id === 'fire_orb' || false); }
     const T = ALIENS.fire_orb.trail;
-    const endPatch = sim.fires.find((f) => Math.abs(f.r - T.radius * T.hitRadiusMul) < 1e-6 && f.ttl > T.ttl);
-    check(!orb.alive && !!endPatch, "orbe de feu : en fin de course elle explose et laisse la flaque d'impact", `${sim.fires.length - f0} flamme(s), flaque d'impact ${endPatch ? 'présente' : 'absente'}`);
+    let maxTtl = 0;
+    for (let i = 0; i < 6; i++) { sim.step(1 / 30, new Map()); sim.aliens = sim.aliens.filter((a) => a.def.id === 'fire_orb'); maxTtl = Math.max(maxTtl, ...sim.fires.map((f) => f.ttl), 0); }
+    check(!orb.alive && maxTtl <= T.ttl + 1e-6, "orbe de feu : en fin de course elle n'ajoute aucune flaque (seulement sa traînée)", `durée max d'une flamme au sol ${maxTtl.toFixed(2)} s (traînée ${T.ttl} s)`);
   }
 
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
@@ -884,7 +883,7 @@ try {
         o2.x = target.x; o2.y = target.y;
         const f0 = sim.fires.length;
         step(2);
-        check(target.burn > 0 && target.frozen === 0 && !o2.alive && sim.fires.some((f) => f.ttl > 0.6 && Math.hypot(f.x - target.x, f.y - target.y) < 30), "orbe de feu : au contact il enflamme le soldat (brûlure dans le temps + flamme au sol), sans le geler", `brûle ${target.burn.toFixed(1)} s à ${target.burnDps.toFixed(1)} PV/s, PV ${target.hp.toFixed(0)}`);
+        check(target.burn > 0 && target.frozen === 0 && !o2.alive && !sim.fires.some((f) => f.ttl > ALIENS.fire_orb.trail.ttl + 1e-6), "orbe de feu : au contact il enflamme le soldat (brûlure dans le temps, pas de flaque d'impact), sans le geler", `brûle ${target.burn.toFixed(1)} s à ${target.burnDps.toFixed(1)} PV/s, PV ${target.hp.toFixed(0)}`);
       } else {
         const orb = sim.aliens.find((a) => a.def.id === 'ice_orb' && a.alive);
         const target = sq.soldiers[0];

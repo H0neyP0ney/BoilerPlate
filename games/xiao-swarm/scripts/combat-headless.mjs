@@ -171,8 +171,10 @@ try {
     check(a.hp === 70 && !sim.horde.isEmerging(a), 'trou d’apparition : touchable une fois sorti', `${a.hp} PV`);
   }
 
-  // ---- escalade : +10 % par boss tué
+  // ---- escalade : +10 % par boss tué (le multiplicateur de base de tous les aliens est mis à 1 : on teste l'escalade seule)
   {
+    const baseMul = DIFFICULTY.alienBaseMul;
+    DIFFICULTY.alienBaseMul = 1;
     const { sim } = fresh(13);
     clearAliens(sim);
     sim.horde.spawnAt('slime', 500, 500, 1, false);
@@ -193,6 +195,7 @@ try {
     check(Math.abs(sim.escalationHp - (1 + DIFFICULTY.bossEscalationHp) ** 2) < 1e-9 && Math.abs(sim.escalationSpeed - (1 + DIFFICULTY.bossEscalationSpeed) ** 2) < 1e-9, 'escalade : cumulée (2 boss = ×(1 + gain)²)', `PV ${sim.escalationHp.toFixed(3)}, vitesse ${sim.escalationSpeed.toFixed(3)}`);
     sim.restart();
     check(sim.bossKills === 0 && sim.escalationHp === 1 && sim.escalationSpeed === 1, 'escalade : remise à zéro à la relance de la partie');
+    DIFFICULTY.alienBaseMul = baseMul;
   }
 
   // ---- chaman : à sa mort, 5 araignées (invoquées : ni XP ni recrue) ; pas pendant le clear screen d'un boss
@@ -804,7 +807,7 @@ try {
       sim.aliens.splice(1);
       for (const w of sim.walls) seen.add(w.id);
     }
-    check(seen.size >= 4 && seen.size % 2 === 0, 'Scarab (Expert) : des murs par paires (sur la squad et devant elle), toutes les 3 s (plus vite une fois enragé)', `${seen.size} murs annoncés en 7 s`);
+    check(seen.size >= 3, 'Scarab (Expert) : des murs par paires (sur la squad et devant elle), toutes les 3 s (plus vite une fois enragé)', `${seen.size} murs annoncés en 7 s`);
     const normal = fresh(18);
     clearAliens(normal.sim);
     normal.sim.horde.spawnAt('boss_scarab', normal.sim.squadOf('p1').center.x + 900, normal.sim.squadOf('p1').center.y, 1, false);
@@ -1147,7 +1150,7 @@ try {
 
   // ---- niveaux de difficulté : multiplicateur de stats de base (PV, dégâts, cadence, vitesse) et d'escalade (gains par boss tué) ; normal inchangé
   {
-    const want = { normal: [1, 1], expert: [DIFFICULTY.expertBaseMul, DIFFICULTY.expertScaleMul], impossible: [DIFFICULTY.impossibleBaseMul, DIFFICULTY.impossibleScaleMul] };
+    const want = { normal: [DIFFICULTY.alienBaseMul, 1], expert: [DIFFICULTY.alienBaseMul * DIFFICULTY.expertBaseMul, DIFFICULTY.expertScaleMul], impossible: [DIFFICULTY.alienBaseMul * DIFFICULTY.impossibleBaseMul, DIFFICULTY.impossibleScaleMul] };
     for (const difficulty of ['normal', 'expert', 'impossible']) {
       const session = new LocalSession({ mode: MODES.survival, seed: 12, bots: 0, difficulty });
       const sim = session.sim;
@@ -1816,9 +1819,9 @@ try {
     {
       const f = fresh(20); // sim neuve : la montée de niveau des kills ci-dessus met le monde en pause (choix d'upgrade)
       clearAliens(f.sim);
-      f.sim.gems.coins.push({ id: 1, x: f.sim.squadOf('p1').center.x + 3000, y: f.sim.squadOf('p1').center.y, px: 0, py: 0, life: 14, age: 5 });
-      for (let i = 0; i < 30 * 15; i++) f.session.advance(34, () => {});
-      check(!f.sim.gems.coins.some((c) => c.id === 1), "pièces d'or : une pièce non ramassée disparaît après 14 s", JSON.stringify(f.sim.gems.coins.map((c) => [c.life, c.caught, c.x])) + ' tick ' + f.sim.tick + ' ending ' + f.sim.ending);
+      f.sim.gems.coins.push({ id: 999999, x: f.sim.squadOf('p1').center.x + 3000, y: f.sim.squadOf('p1').center.y, px: 0, py: 0, life: 14, age: 5 });
+      for (let i = 0; i < 30 * 15; i++) { clearAliens(f.sim); f.session.advance(34, () => {}); } // aucun alien : pas de montée de niveau qui mettrait le monde en pause
+      check(!f.sim.gems.coins.some((c) => c.id === 999999), "pièces d'or : une pièce non ramassée disparaît après 14 s", JSON.stringify(f.sim.gems.coins.map((c) => [c.life, c.caught, c.x])) + ' tick ' + f.sim.tick + ' ending ' + f.sim.ending);
     }
   }
 

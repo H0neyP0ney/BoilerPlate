@@ -201,6 +201,11 @@ export const DIFFICULTY_DEFAULTS = {
    * d'attaque, vitesse ; ni XP ni recrues) ; `…ScaleMul` agit sur les stats qui GRANDISSENT avec les boss tués : il multiplie chaque gain d'escalade ci-dessus
    * (1,1 : +15 % par boss devient +16,5 %). Voir `Sim.escalation*`.
    */
+  /**
+   * Tous niveaux (17/10) : multiplicateur des stats de base de TOUS les aliens (PV, dégâts, cadence, vitesse), appliqué avant celui du niveau : 0,9 = −10 % pour que l'équilibrage de l'ancien
+   * Normal devienne celui du Hard (0,9 × 1,1 ≈ 1) ; Normal ×0,9, Hard ×0,99, Expert ×1,08.
+   */
+  alienBaseMul: 0.9,
   expertBaseMul: 1.1,
   expertScaleMul: 1.1,
   impossibleBaseMul: 1.2,

@@ -1,7 +1,7 @@
 import { Pool } from '@xiao/engine/sim';
 import { CRIT_MAX, CRIT_MUL, STIM_FIRE, DIFFICULTY } from '../config';
 import { CRIT_GLASSES_MUL, SNIPER_POWER_MUL } from '../data/armory';
-import { ALIENS, zombieStats } from '../data/aliens';
+import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import type { WeaponDef } from '../data/classes';
 import { projectileTexture } from '../data/damageTiers';
 import type { AlienState, Projectile, SoldierState, Unit } from './entities';
@@ -123,6 +123,7 @@ export class Combat {
         }
       }
     }
+    this.updateDelayedBlobs(dt);
     this.updateBarrages(dt);
     this.updateProjectiles(dt);
   }
@@ -261,13 +262,40 @@ export class Combat {
     for (let i = 0; i < n; i++) {
       const ang = start + (i / n) * Math.PI * 2 + rng.range(-0.5, 0.5);
       const d = rng.range(lob.deathMin ?? 50, lob.deathMax ?? 130);
-      const lx = this.inArenaX(a.x + Math.cos(ang) * d);
-      const ly = this.inArenaY(a.y + Math.sin(ang) * d);
-      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * 0.8 * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, lob.aoe, lob.texture, a.team, 'aliens');
-      p.poison = lob.poison ?? 0;
+      // elles partent l'une après l'autre (`deathGap` s d'écart) depuis l'endroit où il est mort ; le départ est reporté dans `delayedBlobs`
+      this.delayedBlobs.push({
+        t: i * (lob.deathGap ?? 0),
+        mx: a.x,
+        my: a.y - a.radius * 0.6,
+        lx: this.inArenaX(a.x + Math.cos(ang) * d),
+        ly: this.inArenaY(a.y + Math.sin(ang) * d),
+        flight: lob.flight * 0.8 * rng.range(0.92, 1.1),
+        damage: lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg,
+        aoe: lob.aoe,
+        texture: lob.texture,
+        poison: lob.poison ?? 0,
+        team: a.team,
+        id: a.id,
+        alien: a.def.id,
+      });
     }
-    this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
+    this.updateDelayedBlobs(0); // la première part tout de suite
   }
+
+  /** Boules de mort en attente de leur tour (shooter) : une par `deathGap` s. */
+  private readonly delayedBlobs: { t: number; mx: number; my: number; lx: number; ly: number; flight: number; damage: number; aoe: number; texture: string; poison: number; team: Team; id: number; alien: AlienId }[] = [];
+
+  private updateDelayedBlobs(dt: number): void {
+    for (let i = this.delayedBlobs.length - 1; i >= 0; i--) {
+      const b = this.delayedBlobs[i];
+      b.t -= dt;
+      if (b.t > 0) continue;
+      this.delayedBlobs.splice(i, 1);
+      this.sim.events.push({ t: 'alienShot', id: b.id, alien: b.alien, x: b.mx, y: b.my });
+      this.launchLob(b.mx, b.my, b.lx, b.ly, b.flight, b.damage, b.aoe, b.texture, b.team, 'aliens').poison = b.poison;
+    }
+  }
+
 
   /**
    * Slime de glace : lance un orbe de glace (alien-projectile `ice.orb`, destructible) en ligne droite vers la squad visée, avec une
@@ -519,6 +547,7 @@ export class Combat {
 
   clear(): void {
     this.barrages.length = 0;
+    this.delayedBlobs.length = 0;
     this.projectiles.releaseAll();
   }
 }

@@ -443,18 +443,18 @@ try {
     check(!!chest && free === Math.max(1, Math.round(chest.qty * DIFFICULTY.gemFreeShare)), 'œuf ouvert : 20 % du contenu du coffre jaillit tout de suite', `${free} diamants pour un coffre de ${chest?.qty}`);
   }
 
-  // ---- power-up Fireball : 3 orbes enflammées autour de la squad pendant 8 s, 20 dégâts à chaque collision avec un alien (un même alien ne les subit pas à chaque tick)
+  // ---- power-up Orbes électriques : 3 orbes enflammées autour de la squad pendant 8 s, 20 dégâts à chaque collision avec un alien (un même alien ne les subit pas à chaque tick)
   {
-    const { FIREBALL } = await vite.ssrLoadModule('/src/config.ts');
+    const { ELECTRO } = await vite.ssrLoadModule('/src/config.ts');
     const { PowerUps } = await vite.ssrLoadModule('/src/sim/PowerUps.ts');
     const { sim } = fresh(33);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
-    sim.powerups.drop('fireball', sq.center.x, sq.center.y, true);
+    sim.powerups.drop('electro', sq.center.x, sq.center.y, true);
     for (let i = 0; i < 6; i++) sim.step(1 / 30, new Map());
-    const active = Math.abs(sq.buffs.fire - FIREBALL.time) < 0.5;
+    const active = Math.abs(sq.buffs.electro - ELECTRO.time) < 0.5;
     // un alien posé sur la première orbe est touché : 20 dégâts, une seule fois par `rehit`
-    const o = PowerUps.fireballAt(sq, 0);
+    const o = PowerUps.orbAt(sq, 0);
     sim.horde.spawnAt('slime', o.x, o.y, 1, false, true);
     const a = sim.aliens[0];
     a.age = 99;
@@ -462,13 +462,13 @@ try {
     const hp0 = a.hp;
     sim.step(1 / 30, new Map());
     const first = hp0 - a.hp;
-    const near = PowerUps.fireballAt(sq, 0);
+    const near = PowerUps.orbAt(sq, 0);
     a.x = near.x; a.y = near.y; a.vx = a.vy = 0;
     sim.step(1 / 30, new Map());
     const second = hp0 - a.hp - first;
-    check(active && first === FIREBALL.damage && second === 0, 'fireball : 3 orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
+    check(active && first === ELECTRO.damage && second === 0, 'orbes électriques : 3 orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
     for (let i = 0; i < 30 * 9; i++) { sim.step(1 / 30, new Map()); a.hp = a.maxHp; }
-    check(sq.buffs.fire <= 0, 'fireball : les orbes disparaissent après 8 s', `${sq.buffs.fire.toFixed(2)} s restant`);
+    check(sq.buffs.electro <= 0, 'orbes électriques : les orbes disparaissent après 8 s', `${sq.buffs.electro.toFixed(2)} s restant`);
   }
 
   // ---- alien doré : rare (0 à 2 par partie), fuit quand on l'approche en semant des pièces, s'enterre après 10 s ; tué : beaucoup de pièces et quelques diamants
@@ -547,7 +547,7 @@ try {
     check(small.dps > 0 && small.hp === wantSmall && big.hp > small.hp * 2, 'œuf : PV adaptés au DPS de la squad (destruction ~2 s) et à son nombre de soldats', `4 soldats : ${small.dps.toFixed(0)} DPS → ${small.hp} PV ; 12 soldats : ${big.dps.toFixed(0)} DPS → ${big.hp} PV`);
   }
 
-  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard) ; pas pendant un clear screen
+  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard), l'une après l'autre (0,3 s d'écart) ; pas pendant un clear screen
   {
     const { sim } = fresh(39);
     clearAliens(sim);
@@ -555,12 +555,50 @@ try {
     sim.horde.spawnAt('shooter', sq.center.x + 900, sq.center.y, 1, false, true);
     const sh = sim.aliens[0];
     sh.age = 99;
-    const 
+    const lobs = () => (sim.combat.projectiles.active ?? sim.combat.projectiles.items ?? []).filter((p) => p.lob && p.team === 'aliens');
     sim.damage(sh, 1e9, 'p1');
-    sim.step(1 / 30, new Map());
-    const blobs = (sim.combat.projectiles.active ?? sim.combat.projectiles.items ?? []).filter((p) => p.lob && p.team === 'aliens');
+    const none = new Map();
+    const first = lobs().length; // la première part tout de suite
+    for (let i = 0; i < 4; i++) sim.step(1 / 30, none); // ~0,13 s : la seconde attend encore
+    const early = lobs().length;
+    for (let i = 0; i < 8; i++) sim.step(1 / 30, none); // ~0,4 s en tout : elle est partie
+    const blobs = lobs();
     const dists = blobs.map((p) => Math.hypot(p.x + p.vx * p.life - sh.x, p.y + p.vy * p.life - sh.y));
-    check(blobs.length === 2 && dists.every((d) => d > 35 && d < 150), 'shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui', `${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
+    check(first === 1 && early === 1 && blobs.length === 2 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 2 boules rouges en cloche autour de lui, l'une après l'autre (0,3 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
+  }
+
+  // ---- rhinos jumeaux (Expert) : 2 orbes électriques tournent en continu autour de chacun (100 px) ; un soldat touché perd 10 PV (au plus une fois par orbe et par 0,5 s) ; rien en Normal
+  {
+    const { twinOrbAt } = await vite.ssrLoadModule('/src/data/aliens.ts');
+    const O = ALIENS.boss_rhino_fire.impossible.orbs;
+    const run = (level) => {
+      const { sim } = fresh(40, level);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt('boss_rhino_fire', sq.center.x + 1500, sq.center.y, 1, false);
+      const r = sim.aliens[0];
+      r.age = 99;
+      const s0 = sq.soldiers[0];
+      s0.invulnerable = 0;
+      const hp0 = s0.hp;
+      const none = new Map();
+      let moved = 0;
+      let prev = twinOrbAt(r.def, r.x, r.y, sim.time, 0);
+      for (let i = 0; i < 30; i++) {
+        const o = twinOrbAt(r.def, r.x, r.y, sim.time, 0);
+        s0.x = s0.px = o.x; s0.y = s0.py = o.y; // le soldat se tient sur la première orbe
+        sim.step(1 / 30, none);
+        sim.aliens.splice(1);
+        r.x = sq.center.x + 1500; r.y = sq.center.y; r.hp = r.maxHp;
+        moved = Math.max(moved, Math.hypot(o.x - prev.x, o.y - prev.y));
+        prev = o;
+      }
+      return { lost: hp0 - s0.hp, moved };
+    };
+    const ex = run('impossible');
+    const no = run('normal');
+    const dmg = ex.lost / (O.damage * 1.2); // Expert : dégâts × 1,2 (stats de base de niveau)
+    check(ex.lost > 0 && ex.moved > 1 && dmg >= 1 && dmg <= 3.5 && no.lost === 0, 'rhinos jumeaux : orbes électriques en Expert (10 dégâts au contact, au plus une fois par 0,5 s), aucune en Normal', `Expert : ${ex.lost.toFixed(1)} PV en 1 s, orbe déplacée de ${ex.moved.toFixed(1)} px par tick ; Normal : ${no.lost} PV`);
   }
 
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant

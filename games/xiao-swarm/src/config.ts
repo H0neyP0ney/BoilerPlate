@@ -55,10 +55,10 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  */
 export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
 /**
- * Power-up Fireball (17/10) : `count` orbes enflammées tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
+ * Power-up Orbes électriques (17/10, ex-Fireball) : `count` orbes électriques tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
  * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
  */
-export const FIREBALL = { count: 3, time: 8, margin: 50, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 };
+export const ELECTRO = { count: 3, time: 8, margin: 50, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 };
 export const KNOCK_HOP = { time: 0.48, height: 40, arc: 1 }; // time : 0,6 s −20 % (17/10), la cloche en y dure autant ; arc < 1 raccourcirait la cloche seule
 export const WEB = { jump: 0.6, height: 70, land: 120, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */

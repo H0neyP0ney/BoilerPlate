@@ -385,7 +385,7 @@ export class CoopBot {
       for (const r of sim.recruits.items) consider(r.id, r.x, r.y, 14);
       if (cfg.powerups) {
         for (const p of sim.powerups.items) {
-          const v = p.kind === 'heal' ? (hurt > 0.3 ? 30 : 2) : p.kind === 'stim' ? 12 : p.kind === 'rockets' ? 14 : p.kind === 'fireball' ? 12 : p.kind === 'prism' ? 20 : p.kind === 'stasis' ? 10 : p.kind === 'reroll' ? 9 : 8;
+          const v = p.kind === 'heal' ? (hurt > 0.3 ? 30 : 2) : p.kind === 'stim' ? 12 : p.kind === 'rockets' ? 14 : p.kind === 'electro' ? 12 : p.kind === 'prism' ? 20 : p.kind === 'stasis' ? 10 : p.kind === 'reroll' ? 9 : 8;
           consider(p.id, p.x, p.y, v);
         }
       }

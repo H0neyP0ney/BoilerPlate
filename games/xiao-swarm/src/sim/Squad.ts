@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL, WEB, FIREBALL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL, WEB, ELECTRO } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { MEDIC_RANGE_UNITS } from '../data/armory';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
@@ -79,9 +79,9 @@ export class Squad {
   /** Plus grande taille atteinte par la squad depuis le début de la partie (la réanimation en rend 60 %). */
   peakSize = 0;
   /** Bonus temporaires (s restantes) des power-ups : stimpack (vitesse et cadence ×2),  */
-  readonly buffs = { stim: 0, fire: 0 };
-  /** Fireball : angle (rad) de la première orbe autour du centre de la squad ; les autres sont à 2π / `FIREBALL.count` d'écart. */
-  fireAngle = 0;
+  readonly buffs = { stim: 0, electro: 0 };
+  /** Orbes électriques : angle (rad) de la première orbe autour du centre de la squad ; les autres sont à 2π / `ELECTRO.count` d'écart. */
+  electroAngle = 0;
   /** Dernier rempart actif (upgrade `lastStand` prise et au moins un soldat manquant) : calculé par `Combat.update` chez l'hôte, passe dans le snapshot (aura). */
   lastStand = false;
   private pendingLevels = 0;
@@ -142,7 +142,7 @@ export class Squad {
     this.rerolls = Math.round(DIFFICULTY.rerolls);
     this.peakSize = 0;
     this.buffs.stim = 0;
-    this.buffs.fire = 0;
+    this.buffs.electro = 0;
     this.lastStand = false;
     this.pendingLevels = 0;
     for (const k of Object.keys(this.picked)) delete this.picked[k as UpgradeId];
@@ -519,9 +519,9 @@ export class Squad {
 
   update(dt: number, input: PlayerInput): void {
     if (this.buffs.stim > 0) this.buffs.stim -= dt;
-    if (this.buffs.fire > 0) {
-      this.buffs.fire -= dt;
-      this.fireAngle = (this.fireAngle + FIREBALL.speed * dt) % (Math.PI * 2);
+    if (this.buffs.electro > 0) {
+      this.buffs.electro -= dt;
+      this.electroAngle = (this.electroAngle + ELECTRO.speed * dt) % (Math.PI * 2);
     }
     const total = this.soldiers.length;
     if (total === 0) return;

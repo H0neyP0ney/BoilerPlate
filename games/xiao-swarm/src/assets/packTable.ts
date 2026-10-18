@@ -119,7 +119,7 @@ export const PACK_OF: Record<string, Pack> = {
   'ui/keys/key_W.png': 'core',
   'ui/keys/key_Z.png': 'core',
   'ui/levelup_title.png': 'core',
-  'ui/powerups/fireball.png': '2a',
+  'ui/powerups/electro.png': '2a',
   'ui/powerups/heal.png': 'core',
   'ui/powerups/magnet.png': '2a',
   'ui/powerups/prism.png': '2a',

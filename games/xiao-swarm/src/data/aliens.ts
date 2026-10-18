@@ -59,6 +59,8 @@ export interface AlienDef {
     spiderRing?: { every: number; count: number; radius: number; hpMul: number };
     /** Scarab (Impossible) : toutes les `every` s, deux murs de rochers (télégraphe `windup` s puis ligne de `length` px, rochers de rayon `rock.radius` pendant `rock.ttl` s) : l'un SUR la squad, l'autre `ahead` px DEVANT elle (sa direction de course). */
     walls?: { every: number; windup: number; length: number; ahead: number; rock: { radius: number; ttl: number } };
+    /** Rhinos jumeaux (Expert) : `count` orbes électriques tournent en continu autour du boss à `radius` px (`speed` rad/s, sens inverse pour le rhino de glace) ; un soldat touché (rayon `hit` px) perd `damage` PV, au plus une fois par orbe toutes les `rehit` s. */
+    orbs?: { count: number; radius: number; speed: number; damage: number; hit: number; rehit: number };
     /** Bouclier propre au niveau Impossible (même fonctionnement que `shield`) : posé sur tous les boss. Voir `shieldOf`. */
     shield?: { pct: number; regenDelay: number; regenTime: number };
   };
@@ -74,7 +76,7 @@ export interface AlienDef {
    * explosent au sol (zone `aoe`). Point visé : la cible + son déplacement pendant le vol × une part tirée au hasard dans `lead` (min, max ;
    * [1, 1] par défaut = anticipation complète), ± `scatter` px (22 par défaut, 70 si plusieurs boules).
    */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number; spawnHpMul?: number; /** À sa mort (hors clear screen) : `deathBlobs` boules identiques jaillissent en cloche autour de lui, à `deathMin`-`deathMax` px, dans des directions au hasard. */ deathBlobs?: number; deathMin?: number; deathMax?: number };
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number; spawnHpMul?: number; /** À sa mort (hors clear screen) : `deathBlobs` boules identiques jaillissent en cloche autour de lui, à `deathMin`-`deathMax` px, dans des directions au hasard. */ deathBlobs?: number; deathMin?: number; deathMax?: number; /** Écart (s) entre deux boules de mort : elles partent l'une après l'autre. */ deathGap?: number };
   /**
    * Murs : quand une squad est à portée (`range`), télégraphe jaune pendant `windup` s puis fait surgir `count` murs allongés (`length` px,
    * faits de rochers de rayon `rock.radius`, durée `rock.ttl` s) en arc, à `ring` px du centre de la squad, côté opposé au lanceur :
@@ -264,7 +266,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 5,
     attackCooldown: 0.5,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.3 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
@@ -470,7 +472,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   boss_rhino_fire: {
     id: 'boss_rhino_fire',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 10, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
     hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (4:30) et le Giant Crab (10:00)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
@@ -490,7 +492,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   boss_rhino_ice: {
     id: 'boss_rhino_ice',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 10, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
     hp: 14250,
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
@@ -719,4 +721,15 @@ export function bossKindAt(def: AlienDef, level: DifficultyLevel): 'mini' | 'fin
  */
 export function shieldOf(def: AlienDef, level: DifficultyLevel): AlienDef['shield'] {
   return def.shield ?? (level === 'impossible' ? def.impossible?.shield : undefined);
+}
+
+/**
+ * Position de l'orbe `i` d'un rhino jumeau (`impossible.orbs`) à l'instant `time` (s de jeu) : sur un cercle de `radius` px autour du boss, qui tourne en continu (le rhino de glace dans l'autre sens).
+ * Calculée de la même façon par la simulation (collisions) et par la vue (dessin) : aucun état à transmettre.
+ */
+export function twinOrbAt(def: AlienDef, x: number, y: number, time: number, i: number): { x: number; y: number } {
+  const o = def.impossible!.orbs!;
+  const dir = def.id === 'boss_rhino_ice' ? -1 : 1;
+  const a = time * o.speed * dir + (i * Math.PI * 2) / o.count;
+  return { x: x + Math.cos(a) * o.radius, y: y + Math.sin(a) * o.radius };
 }

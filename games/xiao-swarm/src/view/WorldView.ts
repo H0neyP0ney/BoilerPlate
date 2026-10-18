@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { CROWD, DEPTH, FIREBALL, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
-import { ALIENS, type AlienId } from '../data/aliens';
+import { CROWD, DEPTH, ELECTRO, TEST_FLAGS, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
+import { ALIENS, twinOrbAt, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
 import { SPIKE3, SPIKE_BINS } from '../art/fx';
@@ -144,7 +144,7 @@ export class WorldView {
   /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
   /** Instant (s) où chaque nuage ralentissant est apparu à l'écran (animation de « pop »). */
   private readonly cloudBorn = new Map<number, number>();
-  /** Orbes enflammées du power-up Fireball : dessinées chaque image par-dessus les unités. */
+  /** Orbes électriques (power-up et rhinos jumeaux) : dessinées chaque image par-dessus les unités. */
   private fireG?: Phaser.GameObjects.Graphics;
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
@@ -1514,7 +1514,7 @@ export class WorldView {
     l.clear();
     this.drawTongues(l, dt);
     this.drawSpikes();
-    this.drawFireballs(time);
+    this.drawElectroOrbs(time);
     this.drawCasts(l, time);
     this.drawStalactites(l);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
@@ -1530,34 +1530,80 @@ export class WorldView {
     }
   }
 
-  /** Orbes enflammées du power-up Fireball (`FIREBALL`) : 3 boules de feu qui tournent autour du centre affiché de la squad, avec une traînée ; elles clignotent la dernière seconde. */
-  private drawFireballs(time: number): void {
+  /** Une orbe électrique en (x, y) de rayon `r` : halo bleu, noyau blanc et éclairs en zigzag qui changent ~18 fois par seconde (`seed` : variation d'une orbe à l'autre). */
+  private electricOrb(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, time: number, seed: number, alpha = 1): void {
+    const flick = 1 + 0.1 * Math.sin(time * 25 + seed);
+    g.fillStyle(0x2a8cff, 0.28 * alpha).fillCircle(x, y, r * 1.9 * flick);
+    g.fillStyle(0x5cc8ff, 0.85 * alpha).fillCircle(x, y, r * 1.15 * flick);
+    g.fillStyle(0xeaf8ff, alpha).fillCircle(x, y, r * 0.6);
+    const frame = Math.floor(time * 18);
+    const rnd = (k: number): number => {
+      const v = Math.sin((frame + seed * 7.1) * 12.9898 + k * 78.233) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    g.lineStyle(2, 0xcff1ff, 0.95 * alpha);
+    for (let b = 0; b < 4; b++) {
+      let px = x;
+      let py = y;
+      const ang = rnd(b) * Math.PI * 2;
+      g.beginPath().moveTo(px, py);
+      for (let k = 1; k <= 3; k++) {
+        const a2 = ang + (rnd(b * 3 + k + 9) - 0.5) * 1.3;
+        const len = r * (0.7 + rnd(b * 5 + k + 20) * 0.7);
+        px += Math.cos(a2) * len;
+        py += Math.sin(a2) * len;
+        g.lineTo(px, py);
+      }
+      g.strokePath();
+    }
+  }
+
+  /** Horloge de l'orbe des rhinos jumeaux : le temps de jeu, prolongé entre deux pas de la simulation (30 Hz) pour un mouvement fluide. */
+  private orbClock = { sim: -1, at: 0 };
+
+  /**
+   * Orbes électriques : (1) celles du power-up (`ELECTRO`), qui tournent autour du centre affiché de la squad avec une traînée bleue, elles clignotent la dernière seconde ;
+   * (2) celles des rhinos jumeaux en Expert (`impossible.orbs`), qui tournent en continu autour du boss (même formule que la simulation : `twinOrbAt`).
+   */
+  private drawElectroOrbs(time: number): void {
     const g = (this.fireG ??= this.scene.add.graphics().setDepth(DEPTH.fx - 10));
     g.clear();
     for (const sq of this.sim.squads) {
-      if (!sq.alive || sq.buffs.fire <= 0) continue;
+      if (!sq.alive || sq.buffs.electro <= 0) continue;
       const focus = this.squadFocus(sq.owner) ?? sq.center;
-      if (!this.onScreen(focus.x, focus.y, sq.radius + FIREBALL.margin + 80)) continue;
-      const blink = sq.buffs.fire < 1 && Math.sin(time * 30) > 0 ? 0.35 : 1;
-      for (let i = 0; i < FIREBALL.count; i++) {
-        const R = sq.radius + FIREBALL.margin;
-        const ang = sq.fireAngle + (i * Math.PI * 2) / FIREBALL.count;
+      if (!this.onScreen(focus.x, focus.y, sq.radius + ELECTRO.margin + 80)) continue;
+      const blink = sq.buffs.electro < 1 && Math.sin(time * 30) > 0 ? 0.35 : 1;
+      for (let i = 0; i < ELECTRO.count; i++) {
+        const R = sq.radius + ELECTRO.margin;
+        const ang = sq.electroAngle + (i * Math.PI * 2) / ELECTRO.count;
         // traînée : des boules de plus en plus petites et pâles sur l'arc qu'elle vient de parcourir
         for (let k = 7; k >= 1; k--) {
           const a = ang - k * 0.13;
           const f = 1 - k / 8;
-          g.fillStyle(k % 2 ? 0xff5a14 : 0xffa21a, 0.5 * f * blink).fillCircle(focus.x + Math.cos(a) * R, focus.y + Math.sin(a) * R, FIREBALL.hit * (0.35 + 0.6 * f));
+          g.fillStyle(k % 2 ? 0x2a8cff : 0x7fd8ff, 0.45 * f * blink).fillCircle(focus.x + Math.cos(a) * R, focus.y + Math.sin(a) * R, ELECTRO.hit * (0.35 + 0.6 * f));
         }
-        const x = focus.x + Math.cos(ang) * R;
-        const y = focus.y + Math.sin(ang) * R; // cercle réel : il correspond aux collisions de la simulation
-        const flick = 1 + 0.12 * Math.sin(time * 22 + i * 2);
-        g.fillStyle(0xff4a0a, 0.35 * blink).fillCircle(x, y, FIREBALL.hit * 1.9 * flick);
-        g.fillStyle(0xff7a14, 0.9 * blink).fillCircle(x, y, FIREBALL.hit * 1.2 * flick);
-        g.fillStyle(0xffc83a, blink).fillCircle(x, y, FIREBALL.hit * 0.8 * flick);
-        g.fillStyle(0xfff6c0, blink).fillCircle(x - 2, y - 3, FIREBALL.hit * 0.4);
+        this.electricOrb(g, focus.x + Math.cos(ang) * R, focus.y + Math.sin(ang) * R, ELECTRO.hit, time, i + sq.slot * 3, blink); // cercle réel : il correspond aux collisions de la simulation
+      }
+    }
+    // rhinos jumeaux (Expert) : les orbes tournent en continu autour d'eux
+    const now = this.scene.time.now;
+    if (this.sim.time !== this.orbClock.sim) this.orbClock = { sim: this.sim.time, at: now };
+    const clock = this.sim.time + Math.min(0.1, (now - this.orbClock.at) / 1000);
+    for (const v of this.aliens.values()) {
+      const a = v.state;
+      const O = a.def.impossible?.orbs;
+      if (!O || !a.alive || !(TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible') || !this.onScreen(v.rx, v.ry, O.radius + 80)) continue;
+      for (let i = 0; i < O.count; i++) {
+        const o = twinOrbAt(a.def, v.rx, v.ry, clock, i);
+        for (let k = 5; k >= 1; k--) {
+          const t = twinOrbAt(a.def, v.rx, v.ry, clock - k * 0.05, i);
+          g.fillStyle(0x3aa0ff, 0.4 * (1 - k / 6)).fillCircle(t.x, t.y, O.hit * (0.4 + 0.5 * (1 - k / 6)));
+        }
+        this.electricOrb(g, o.x, o.y, O.hit * 1.1, time, i + a.id);
       }
     }
   }
+
 
   /**
    * Lignes de pics du lurker : des pointes d'os qui jaillissent du sol de proche en proche, le front avance avec la phase 4. Chaque colonne de 3 pics est UN

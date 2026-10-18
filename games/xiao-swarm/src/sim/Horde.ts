@@ -1,6 +1,6 @@
 import { damp, Rng, type Point } from '@xiao/engine/sim';
 import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS } from '../config';
-import { ALIENS, bossKindAt, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
+import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
@@ -403,6 +403,27 @@ export class Horde {
     return !a.def.lurk && !a.revived && !a.instant && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
   }
 
+  // ---------- Orbes électriques des rhinos jumeaux (Expert) ----------
+
+  /** Rehit des orbes : temps restant avant qu'une orbe puisse retoucher un soldat (clé `rhino:orbe:soldat`). */
+  private readonly orbHits = new Map<string, number>();
+
+  /** Les orbes tournent en continu autour du rhino ; un soldat touché perd `damage` (au plus une fois par orbe et par `rehit` s). */
+  private updateTwinOrbs(a: AlienState): void {
+    const O = a.def.impossible!.orbs!;
+    const time = this.sim.time;
+    for (let i = 0; i < O.count; i++) {
+      const o = twinOrbAt(a.def, a.x, a.y, time, i);
+      for (const s of this.sim.soldierHash.query(o.x, o.y, O.hit + 60, this.scratchS)) {
+        if (!s.alive || s.capturedBy || Math.hypot(s.x - o.x, s.y - o.y) > O.hit + s.radius) continue;
+        const key = `${a.id}:${i}:${s.id}`;
+        if (this.orbHits.has(key)) continue;
+        this.orbHits.set(key, O.rehit);
+        this.sim.damageSoldier(s, O.damage * a.escDmg);
+      }
+    }
+  }
+
   // ---------- Alien doré ----------
 
   /** Aléatoire PROPRE à l'alien doré (n'entame jamais la suite de `sim.rng`) : nombre d'apparitions de la partie (0 à `spawnMax`) et leurs dates. */
@@ -498,6 +519,8 @@ export class Horde {
     const { alienHash, soldierHash, arena, rng } = this.sim;
     if (this.sim.aliveSquads.length === 0) return;
     this.updateGoldenSpawns();
+    for (const [k, t] of this.orbHits) if (t - dt <= 0) this.orbHits.delete(k);
+    else this.orbHits.set(k, t - dt);
 
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
@@ -508,6 +531,9 @@ export class Horde {
         a.vx = a.vy = a.kx = a.ky = 0;
         continue;
       }
+
+      // rhinos jumeaux (Expert) : les orbes électriques tournent autour d'eux en continu
+      if (def.impossible?.orbs && (TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible')) this.updateTwinOrbs(a);
 
       // Bouclier (Scarab) : se régénère vite une fois qu'il n'a plus subi de dégâts depuis `regenDelay` s
       const shieldDef = shieldOf(def, this.sim.difficulty);

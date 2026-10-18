@@ -1,5 +1,5 @@
 import { robustCentroid } from '@xiao/engine/sim';
-import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD, FIREBALL } from '../config';
+import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD, ELECTRO } from '../config';
 import { ALIENS, shieldOf } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { skinFromIndex } from '../data/skins';
@@ -118,8 +118,8 @@ export class Mirror {
       squad.offerPrism = sq.offerPrism;
       squad.rerolls = sq.rerolls;
       squad.buffs.stim = sq.stim;
-      squad.buffs.fire = sq.fire;
-      squad.fireAngle = sq.fireAng; // la vue l'avance entre deux snapshots (`FIREBALL.speed`)
+      squad.buffs.electro = sq.electro;
+      squad.electroAngle = sq.electroAng; // la vue l'avance entre deux snapshots (`ELECTRO.speed`)
       squad.lastStand = sq.lastStand;
       UPGRADE_IDS.forEach((id, i) => {
         squad.picked[id] = sq.picked[i];
@@ -269,9 +269,9 @@ export class Mirror {
       if (o.ttl > 0) o.ttl = Math.max(0, o.ttl - dt);
     };
     for (const sq of sim.squads) {
-      if (sq.buffs.fire > 0) {
-        sq.fireAngle = (sq.fireAngle + FIREBALL.speed * dt) % (Math.PI * 2); // orbes enflammées : elles continuent de tourner entre deux snapshots
-        sq.buffs.fire = Math.max(0, sq.buffs.fire - dt);
+      if (sq.buffs.electro > 0) {
+        sq.electroAngle = (sq.electroAngle + ELECTRO.speed * dt) % (Math.PI * 2); // orbes enflammées : elles continuent de tourner entre deux snapshots
+        sq.buffs.electro = Math.max(0, sq.buffs.electro - dt);
       }
     }
     for (const c of sim.crosses) {

@@ -121,9 +121,9 @@ export interface SquadSnap {
   rerolls: number;
   /** Power-ups actifs : secondes restantes de stimpack et d'aimant à XP. */
   stim: number;
-  /** Fireball : secondes restantes des orbes enflammées et angle (rad) de la première. */
-  fire: number;
-  fireAng: number;
+  /** Orbes électriques : secondes restantes des orbes et angle (rad) de la première. */
+  electro: number;
+  electroAng: number;
   soldiers: SoldierSnap[];
 }
 
@@ -254,7 +254,7 @@ const TEXTURES = [
 const SNAPSHOT_TAG = 0x53;
 /** Précision des positions (`Writer.pos`) : 4 crans par pixel. Les cartes doivent rester sous 8192 px (arène 3802, royale 4800). */
 const POS_SCALE = 4;
-const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'prism', 'fireball'];
+const POWERUP_KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'prism', 'electro'];
 
 /** Photographie de l'état visible d'une partie (ce qu'un client doit connaître pour afficher). */
 export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Snapshot {
@@ -290,8 +290,8 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       prismPicked: UPGRADE_IDS.map((id) => sq.prismPicked[id] ?? 0),
       rerolls: sq.rerolls,
       stim: Math.max(0, sq.buffs.stim),
-      fire: Math.max(0, sq.buffs.fire),
-      fireAng: sq.fireAngle,
+      electro: Math.max(0, sq.buffs.electro),
+      electroAng: sq.electroAngle,
       soldiers: sq.soldiers.map((s) => ({
         id: s.id,
         cls: s.def.id,
@@ -517,8 +517,8 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     sq.picked.forEach((c, k) => w.u8(Math.min(15, c) | (Math.min(15, sq.prismPicked[k] ?? 0) << 4))); // prises (bas) | prises prismatiques (haut)
     w.u8(Math.min(255, Math.max(0, sq.rerolls)));
     w.u8(Math.min(255, Math.round(sq.stim * 10)));
-    w.u8(Math.min(255, Math.round(sq.fire * 10)));
-    w.u8(Math.round(((sq.fireAng % (Math.PI * 2)) / (Math.PI * 2)) * 255) & 255);
+    w.u8(Math.min(255, Math.round(sq.electro * 10)));
+    w.u8(Math.round(((sq.electroAng % (Math.PI * 2)) / (Math.PI * 2)) * 255) & 255);
     w.u16(sq.soldiers.length);
     for (const u of sq.soldiers) {
       w.u32(u.id);
@@ -756,7 +756,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
 
     const nSquads = r.u8();
     for (let i = 0; i < nSquads; i++) {
-      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), coins: r.u32(), maxSize: r.u8(), skin: r.u8(), trail: r.u8(), healing: false, lastStand: false, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], prismPicked: [], rerolls: 0, stim: 0, fire: 0, fireAng: 0, soldiers: [] };
+      const sq: SquadSnap = { owner: r.str(), anchorX: r.f32(), anchorY: r.f32(), speed: r.u16(), ack: r.u32(), kills: r.u16(), slot: r.u8(), dealt: r.u32(), coins: r.u32(), maxSize: r.u8(), skin: r.u8(), trail: r.u8(), healing: false, lastStand: false, level: 1, xp: 0, offer: [], offerPrism: [], picked: [], prismPicked: [], rerolls: 0, stim: 0, electro: 0, electroAng: 0, soldiers: [] };
       const flags = r.u8();
       sq.healing = (flags & 1) !== 0;
       sq.lastStand = (flags & 2) !== 0;
@@ -775,8 +775,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       }
       sq.rerolls = r.u8();
       sq.stim = r.u8() / 10;
-      sq.fire = r.u8() / 10;
-      sq.fireAng = (r.u8() / 255) * Math.PI * 2;
+      sq.electro = r.u8() / 10;
+      sq.electroAng = (r.u8() / 255) * Math.PI * 2;
       const n = r.u16();
       for (let j = 0; j < n; j++) {
         const id = r.u32();

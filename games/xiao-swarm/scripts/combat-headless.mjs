@@ -381,7 +381,7 @@ try {
       if (sim.crosses.length > seen) lines++;
       seen = sim.crosses.length;
     }
-    check(lines >= 1 && lines <= 3, 'Rhino Alpha : une croix de pics sur la squad toutes les 6 s (plus vite une fois enragé)', `${lines} croix en 8 s`);
+    check(lines >= 1 && lines <= 3, 'Rhino Alpha : une croix de pics sur la squad toutes les 6 s (plus vite une fois enragé ; la seconde croix, là où elle va, ne vient que si elle bouge)', `${lines} croix en 8 s`);
     check(hp0 - s0.hp >= C.damage * 0.9 && hp0 - s0.hp <= C.damage * 2.1, 'Rhino Alpha : le soldat sur une rangée de la croix est blessé une fois par croix', `${(hp0 - s0.hp).toFixed(0)} PV perdus`);
   }
 

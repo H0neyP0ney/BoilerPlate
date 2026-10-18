@@ -447,7 +447,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     oneShot: true,
     rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
-    spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 230, width: 44, damage: 60 }, // toutes les 6 s : une croix de 4 petites rangées de pics sur la squad
+    spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 60 }, // toutes les 6 s : deux croix de 4 petites rangées de pics (150 px, 230 avant le 17/10) : sur la squad et là où elle se dirige
     boss: { kind: 'mini' },
     xp: 150,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)

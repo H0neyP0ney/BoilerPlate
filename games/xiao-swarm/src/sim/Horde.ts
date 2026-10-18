@@ -440,7 +440,13 @@ export class Horde {
       if (cross && (a.crossCd -= dt * this.cdRate(a)) <= 0) {
         a.crossCd = cross.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
-        if (target) this.sim.addCross(target.center.x, target.center.y, cross, (a.revived ? zombieStats().dmgMul : 1) * a.escDmg);
+        if (target) {
+          const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg;
+          this.sim.addCross(target.center.x, target.center.y, cross, power); // une croix SUR la squad
+          // et une autre là où elle se dirige (sa course prolongée jusqu'à la fin de la poussée) ; à l'arrêt, elle ferait doublon : pas de seconde croix
+          const ahead = cross.aim + cross.sweep;
+          if (Math.hypot(target.vel.x, target.vel.y) > 40) this.sim.addCross(target.center.x + target.vel.x * ahead, target.center.y + target.vel.y * ahead, cross, power);
+        }
       }
       // Impossible (Scarab) : toutes les `every` s, un mur de rochers sur la squad visée et un devant elle
       const wallsDef = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.walls : undefined;

@@ -659,6 +659,21 @@ try {
     check(f.target.burn > 0 && f.target.frozen === 0, 'fireballer : son orbe enflamme le soldat touché (pas de gel)', `brûle ${f.target.burn.toFixed(1)} s`);
   }
 
+  // ---- orbe de feu : en fin de course (sans toucher personne), elle explose et laisse la même flaque qu'à l'impact
+  {
+    const { sim } = fresh(44);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.launch('fire_orb', sq.center.x + 700, sq.center.y, 1, 0); // tire loin de la squad, vers l'extérieur
+    const orb = sim.aliens.find((a) => a.def.id === 'fire_orb');
+    orb.lurkT = 0.1; // fin de course imminente
+    const f0 = sim.fires.length;
+    for (let i = 0; i < 6; i++) { sim.step(1 / 30, new Map()); sim.aliens = sim.aliens.filter((a) => a.def.id === 'fire_orb' || false); }
+    const T = ALIENS.fire_orb.trail;
+    const endPatch = sim.fires.find((f) => Math.abs(f.r - T.radius * T.hitRadiusMul) < 1e-6 && f.ttl > T.ttl);
+    check(!orb.alive && !!endPatch, "orbe de feu : en fin de course elle explose et laisse la flaque d'impact", `${sim.fires.length - f0} flamme(s), flaque d'impact ${endPatch ? 'présente' : 'absente'}`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

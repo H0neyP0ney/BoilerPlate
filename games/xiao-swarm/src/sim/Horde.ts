@@ -1083,6 +1083,7 @@ export class Horde {
     }
     if ((a.lurkT -= dt) <= 0 || a.x < b.minX || a.x > b.maxX || a.y < b.minY || a.y > b.maxY) {
       a.alive = false;
+      if (fire && T) this.sim.addFire(a.x, a.y + 4, T.radius * (T.hitRadiusMul ?? 1.4), T.hitTtl ?? T.ttl, T.dps * a.escDmg); // l'orbe explose en fin de course : même flaque qu'à l'impact
       if (fire) this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
       else this.sim.events.push({ t: 'freeze', x: a.x, y: a.y, r: P.ring * 0.6 }); // se brise en fin de course
       return;

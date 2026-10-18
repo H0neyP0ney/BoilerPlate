@@ -63,7 +63,7 @@ export const ELECTRO = { count: 3, time: 8, margin: 50, speed: 3.4, damage: 20, 
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.
  */
-export const FIRE = { burnTime: 2, dmgMul: 1, orbDps: 1 / 3 }; // 17/10 : brûlure 2 s (3 s avant) ; débit des flaques × 1 (× 2 avant : DPS −50 %) ; orbe de feu : débit = ses dégâts × `orbDps` PV/s (÷ 3 : 6 PV/s pour 18 de dégâts, 12 avant)
+export const FIRE = { burnTime: 2, dmgMul: 1, orbDps: 1 / 3, tick: 0.125, tickDmg: 0.25 / 3 }; // ticks de brûlure : touts les `tick` s (0,25 s avant : 2× plus souvent), chacun inflige `burnDps × tickDmg` (burnDps × 0,25 avant : 3× moins par tick, donc le DPS total est × 2/3) // 17/10 : brûlure 2 s (3 s avant) ; débit des flaques × 1 (× 2 avant : DPS −50 %) ; orbe de feu : débit = ses dégâts × `orbDps` PV/s (÷ 3 : 6 PV/s pour 18 de dégâts, 12 avant)
 export const KNOCK_HOP = { time: 0.48, height: 40, arc: 1 }; // time : 0,6 s −20 % (17/10), la cloche en y dure autant ; arc < 1 raccourcirait la cloche seule
 export const WEB = { jump: 0.6, height: 70, land: 120, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */

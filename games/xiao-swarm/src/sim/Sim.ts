@@ -950,7 +950,7 @@ export class Sim {
     }
     this.burnCd -= dt;
     if (this.burnCd > 0) return;
-    this.burnCd = 0.25;
+    this.burnCd = FIRE.tick;
     for (const sq of this.squads) {
       for (const s of sq.soldiers) {
         if (!s.alive) continue;
@@ -960,7 +960,7 @@ export class Sim {
           if ((s.x - f.x) ** 2 + (s.y - f.y) ** 2 < rr * rr) dps = Math.max(dps, f.dps); // les flaques ne se cumulent pas
         }
         if (dps > 0) this.ignite(s, dps * FIRE.dmgMul);
-        if (s.burn > 0) this.damageSoldier(s, s.burnDps * 0.25);
+        if (s.burn > 0) this.damageSoldier(s, s.burnDps * FIRE.tickDmg);
       }
     }
   }

@@ -621,7 +621,7 @@ try {
     const stillBurning = s0.burn > 0;
     const lost = hp0 - s0.hp;
     for (let i = 0; i < 30 * 4; i++) sim.step(1 / 30, none);
-    check(ignited && stillBurning && s0.burn === 0 && lost >= dps * FIRE.dmgMul * 0.9, "feu : le soldat s'enflamme (brûlure dans le temps, débit de la flaque × 2), continue de brûler après les flammes, puis s'éteint", `débit ${s0.burnDps || dps * FIRE.dmgMul} PV/s, ${lost.toFixed(0)} PV perdus pendant la 1re seconde`);
+    check(ignited && stillBurning && s0.burn === 0 && lost >= dps * FIRE.dmgMul * (FIRE.tickDmg / FIRE.tick) * 0.9 && lost <= dps * FIRE.dmgMul * (FIRE.tickDmg / FIRE.tick) * 1.3, "feu : le soldat s'enflamme (brûlure dans le temps, débit de la flaque × `dmgMul`, ticks plus fréquents et plus faibles), continue de brûler après les flammes, puis s'éteint", `débit ${s0.burnDps || dps * FIRE.dmgMul} PV/s, ${lost.toFixed(0)} PV perdus pendant la 1re seconde`);
     // la glace éteint le feu
     const f2 = fresh(42);
     clearAliens(f2.sim);

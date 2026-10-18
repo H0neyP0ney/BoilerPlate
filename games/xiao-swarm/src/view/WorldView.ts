@@ -1486,7 +1486,7 @@ export class WorldView {
       const top = v.body.displayHeight * v.body.originY + 8;
       const boss = !!a.def.boss; // la barre d'un boss est toujours affichée, même pleine, avec le mot « BOSS » au-dessus
       const hurt = a.hp < a.maxHp || boss || !!a.def.projectile; // orbe de glace : barre toujours affichée (on peut le détruire)
-      const by = v.ry + alienOffsetY(a.def.id) - top; // la barre suit le sprite décalé
+      const by = v.ry + alienOffsetY(a.def.id) - (a.def.floatHeight ?? 0) - top; // la barre suit le sprite décalé (et soulevé : orbes)
       if (hurt) this.bar(b, v.rx, by, a.def.hpBarWidth, a.hp / a.maxHp, PALETTE.hpEnemy, a.id, dt);
       const shielded = a.maxShield > 0 && (hurt || a.shield < a.maxShield);
       if (shielded) this.bar(b, v.rx, by - 8, a.def.hpBarWidth, a.shield / a.maxShield, PALETTE.shield);

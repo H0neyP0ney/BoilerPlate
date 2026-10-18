@@ -58,6 +58,8 @@ export interface AlienDef {
   impossible?: {
     spiderRing?: { every: number; count: number; radius: number; hpMul: number };
     /** Scarab (Impossible) : toutes les `every` s, deux murs de rochers (télégraphe `windup` s puis ligne de `length` px, rochers de rayon `rock.radius` pendant `rock.ttl` s) : l'un SUR la squad, l'autre `ahead` px DEVANT elle (sa direction de course). */
+    /** Rhino Alpha (Expert) : toutes les `every` s, `count` nuages de gel autour de la squad (même fonctionnement que `frost` du chaman, `range` ignoré). */
+    frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
     walls?: { every: number; windup: number; length: number; ahead: number; rock: { radius: number; ttl: number } };
     /** Rhinos jumeaux (Expert) : `count` orbes électriques tournent en continu autour du boss à `radius` px (`speed` rad/s, sens inverse pour le rhino de glace) ; un soldat touché (rayon `hit` px) perd `damage` PV, au plus une fois par orbe toutes les `rehit` s. */
     orbs?: { count: number; radius: number; speed: number; damage: number; hit: number; rehit: number };
@@ -447,7 +449,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (2:00) : énorme rhinocéros, charge tous les 4,5 s dans un couloir large signalé en rouge. */
   boss_rhino: {
     id: 'boss_rhino',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, frost: { every: 7, range: 99999, count: 4, gap: [103.5, 184], radius: 25.5, ttl: 10 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 7 s, 4 nuages de gel autour de la squad
     hp: 9500, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
     speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10) ; 55 + 30 %
     radius: 50,

@@ -479,6 +479,7 @@ export class Mirror {
         ringCd: 0,
         webCd: 0,
         wallsCd: 0,
+        frostCd: 0,
         goldState: 0,
         goldTries: 0,
         goldDrop: 0,

@@ -719,6 +719,36 @@ try {
     check(shot && g.age > 0.5, "alien doré : une fois sorti de son trou, les soldats le visent", `âge ${g.age.toFixed(2)} s, visé ${shot}`);
   }
 
+  // ---- Rhino Alpha (Expert) : toutes les 7 s, 4 nuages de gel autour de la squad ; aucun hors Expert
+  {
+    const run = (level) => {
+      const { sim } = fresh(48, level);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt('boss_rhino', sq.center.x + 1500, sq.center.y, 1, false);
+      const r = sim.aliens[0];
+      r.age = 1; // sorti de son trou mais pas enragé (l'enrage accélère ses délais)
+      r.frostCd = 0.05;
+      for (const s of sq.soldiers) s.invulnerable = 1e9; // le gel n'est pas consommé par le test
+      let max = 0;
+      let salvos = 0;
+      let prev = 0;
+      for (let i = 0; i < 30 * 16; i++) {
+        sim.step(1 / 30, new Map());
+        sim.aliens.splice(1);
+        r.x = sq.center.x + 1500; r.y = sq.center.y; r.hp = r.maxHp;
+        const n = sim.puddles.filter((p) => p.frost).length;
+        if (n - prev >= 4) salvos++;
+        prev = n;
+        max = Math.max(max, n);
+      }
+      return { max, salvos };
+    };
+    const ex = run('impossible');
+    const no = run('normal');
+    check(ex.salvos === 3 && ex.max >= 4 && no.max === 0, 'Rhino Alpha : 4 nuages de gel autour de la squad toutes les 7 s en Expert (plus vite une fois enragé), aucun en Normal', `Expert : ${ex.salvos} salve(s), ${ex.max} nuages max ; Normal : ${no.max}`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

@@ -133,6 +133,8 @@ export interface AlienState extends Body {
   webCd: number;
   /** Délai (s) avant les prochains murs du Scarab (Impossible). */
   wallsCd: number;
+  /** Délai (s) avant les prochains nuages de gel du Rhino Alpha (Expert). */
+  frostCd: number;
   /** Alien doré : 0 = attend, 1 = en fuite ; nombre de tentatives d'enfouissage déjà interrompues (0 : la 1re est interruptible, 1 : la 2e ne l'est plus) ; délai avant la prochaine pièce semée. */
   goldState: number;
   goldTries: number;

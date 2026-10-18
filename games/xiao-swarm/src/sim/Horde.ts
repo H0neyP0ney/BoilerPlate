@@ -202,6 +202,7 @@ export class Horde {
       ringCd: def.impossible?.spiderRing ? def.impossible.spiderRing.every : 0,
       webCd: def.expert?.web ? def.expert.web.every : 0,
       wallsCd: def.impossible?.walls ? def.impossible.walls.every : 0,
+      frostCd: def.impossible?.frost ? def.impossible.frost.every : 0,
       crossCd: def.spikeCross ? def.spikeCross.every : 0,
       lurkBlockT: 0,
       swarmT: 0,
@@ -593,6 +594,13 @@ export class Horde {
           const ahead = cross.aim + cross.sweep;
           if (Math.hypot(target.vel.x, target.vel.y) > 40) this.sim.addCross(target.center.x + target.vel.x * ahead, target.center.y + target.vel.y * ahead, cross, power);
         }
+      }
+      // Impossible (Rhino Alpha) : toutes les `every` s, nuages de gel autour de la squad visée (placés comme ceux du chaman)
+      const frostDef = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.frost : undefined;
+      if (frostDef && (a.frostCd -= dt * this.cdRate(a)) <= 0) {
+        a.frostCd = frostDef.every;
+        const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (target) this.castFrost(frostDef, target);
       }
       // Impossible (Scarab) : toutes les `every` s, un mur de rochers sur la squad visée et un devant elle
       const wallsDef = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.walls : undefined;

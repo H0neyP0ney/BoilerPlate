@@ -494,10 +494,9 @@ try {
     const d1 = Math.hypot(g.x - sq.center.x, g.y - sq.center.y);
     const sown = sim.gems.coins.length - coins0;
     check(g.goldState === 1 && d1 > d0 + 200 && sown >= 3, 'alien doré : engagé, il fuit la squad en semant des pièces', `${d0.toFixed(0)} → ${d1.toFixed(0)} px, ${sown} pièces`);
-    // enfouissage : tentative non interrompue (personne ne le blesse) = il s'enterre en `burrowTime` s et disparaît (sans butin de mort)
-    for (let i = 0; i < 30 * (G.burrowEvery + G.burrowTime + 1.5); i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
-    check(!g.alive && sim.gems.coins.length >= sown, "alien doré : une tentative d'enfouissage non interrompue (2 s) le fait disparaître, sans butin de mort", `vivant ${g.alive}`);
-    // tentative interrompue : -100 PV pendant l'animation => elle s'arrête et il repart en fuite
+    // 1re tentative après `burrowAfter` s de fuite : non interrompue = il s'enterre en `burrowTime` s et disparaît (sans butin de mort)
+    for (let i = 0; i < 30 * (G.burrowAfter + G.burrowTime + 1.5); i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
+    check(!g.alive && sim.gems.coins.length >= sown, "alien doré : sa 1re tentative d'enfouissage (après 4 s de chase, 2 s d'animation) non interrompue le fait disparaître, sans butin de mort", `vivant ${g.alive}`);
     const mk = (seed) => {
       const f = fresh(seed);
       clearAliens(f.sim);
@@ -508,31 +507,22 @@ try {
       gg.maxHp = gg.hp = ALIENS.golden.hp;
       return { f, gg };
     };
+    // interrompue (-100 PV pendant l'animation) : il repart en fuite, puis réessaie après 4 NOUVELLES secondes ; cette 2e tentative n'est plus interruptible
     {
       const { f, gg } = mk(45);
       const none = new Map();
-      let guard = 0;
-      while (gg.goldBury !== 1 && guard++ < 30 * 6) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
-      const started = gg.goldBury === 1 && gg.sinkT > 0;
+      let t1 = 0;
+      while (gg.goldBury !== 1 && t1 < 30 * 8) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); t1++; }
+      const firstAt = t1 / 30;
       f.sim.damage(gg, G.burrowInterrupt, 'p1'); // perd 100 PV pendant l'animation
       f.sim.step(1 / 30, none);
-      const x0 = gg.x;
-      for (let i = 0; i < 20; i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
-      check(started && gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && Math.hypot(gg.x - x0, 0) > 20, "alien doré : -100 PV pendant l'enfouissage = animation interrompue, il repart en fuite", `enfouissage ${gg.goldBury}, a bougé de ${Math.abs(gg.x - x0).toFixed(0)} px`);
-    }
-    // la dernière animation (fin de la fuite) n'est jamais interrompue, même à -100 PV
-    {
-      const { f, gg } = mk(46);
-      const none = new Map();
-      f.sim.step(1 / 30, none);
-      gg.goldState = 1;
-      gg.goldT = 0.05; // la fuite se termine : l'enfouissage final démarre
-      gg.goldNext = 99;
-      for (let i = 0; i < 4; i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
-      const finalStarted = gg.goldBury === 2 && gg.sinkT > 0;
-      f.sim.damage(gg, G.burrowInterrupt * 3, 'p1');
+      const interrupted = gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && gg.goldTries === 1;
+      let t2 = 0;
+      while (gg.goldBury !== 2 && t2 < 30 * 8) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); t2++; }
+      const secondAfter = t2 / 30;
+      f.sim.damage(gg, G.burrowInterrupt * 3, 'p1'); // même à -300 PV : plus d'interruption
       for (let i = 0; i < 30 * (G.burrowTime + 0.5); i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
-      check(finalStarted && !gg.alive, "alien doré : la dernière animation d'enfouissage n'est jamais interrompue (même à -300 PV)", `final démarré ${finalStarted}, vivant ${gg.alive}`);
+      check(Math.abs(firstAt - G.burrowAfter) < 0.3 && interrupted && Math.abs(secondAfter - G.burrowRetry) < 0.3 && !gg.alive, "alien doré : 1re tentative à 4 s, interrompue à -100 PV ; la 2e, 4 s plus tard, ne peut plus être interrompue", `1re à ${firstAt.toFixed(1)} s, interrompue ${interrupted}, 2e ${secondAfter.toFixed(1)} s après, vivant ${gg.alive}`);
     }
     // mort : grosse quantité de pièces, quelques diamants
     const f2 = fresh(35);

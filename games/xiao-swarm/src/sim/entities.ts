@@ -133,9 +133,9 @@ export interface AlienState extends Body {
   webCd: number;
   /** Délai (s) avant les prochains murs du Scarab (Impossible). */
   wallsCd: number;
-  /** Alien doré : 0 = attend, 1 = en fuite (`golden.fleeTime` s) ; temps de fuite restant ; délai avant la prochaine pièce semée. */
+  /** Alien doré : 0 = attend, 1 = en fuite ; nombre de tentatives d'enfouissage déjà interrompues (0 : la 1re est interruptible, 1 : la 2e ne l'est plus) ; délai avant la prochaine pièce semée. */
   goldState: number;
-  goldT: number;
+  goldTries: number;
   goldDrop: number;
   /** Alien doré : 0 = en fuite, 1 = tentative d'enfouissage (interruptible), 2 = dernier enfouissage (jamais interrompu) ; PV au début de la tentative ; délai avant la prochaine tentative (s). */
   goldBury: number;

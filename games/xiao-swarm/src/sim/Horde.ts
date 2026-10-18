@@ -155,7 +155,7 @@ export class Horde {
       flank: 0,
       sinkT: 0,
       goldState: 0,
-      goldT: 0,
+      goldTries: 0,
       goldDrop: 0,
       goldBury: 0,
       goldHp0: 0,
@@ -468,7 +468,7 @@ export class Horde {
     }
   }
 
-  /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; après `fleeTime` s il s'enterre. */
+  /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; il essaie de s'enterrer après 4 s de fuite, puis une 2e fois (non interruptible) après 4 nouvelles secondes. */
   private updateGolden(a: AlienState, dt: number): void {
     const G = a.def.golden!;
     a.age += dt; // sans cela son âge restait à 0 : il sortait éternellement de son trou d'apparition (invulnérable, jamais visé)
@@ -478,28 +478,27 @@ export class Horde {
       if (sq) for (const s of sq.soldiers) if (s.alive) near = Math.min(near, Math.hypot(s.x - a.x, s.y - a.y));
       if (a.hp < a.maxHp || near < G.engage) {
         a.goldState = 1; // engagé : il s'enfuit
-        a.goldT = G.fleeTime;
+        a.goldTries = 0;
         a.goldDrop = G.coinEvery * 0.5;
-        a.goldNext = G.burrowEvery; // première tentative d'enfouissage après `burrowEvery` s de fuite
+        a.goldNext = G.burrowAfter; // 1re tentative d'enfouissage après `burrowAfter` s de fuite
       } else {
         a.vx = a.vy = 0;
         return;
       }
     }
-    a.goldT -= dt;
-    // il s'enterre (animation de `burrowTime` s, même visuel que les traînards) ; `goldBury` 1 : tentative interruptible, 2 : la dernière, jamais interrompue
+    // il essaie de s'enterrer (animation de `burrowTime` s, même visuel que les traînards) : `goldBury` 1 = 1re tentative (interruptible), 2 = 2e tentative (jamais interrompue)
     if (a.goldBury > 0) {
       a.vx = a.vy = a.kx = a.ky = 0;
-      if (a.goldT <= 0) a.goldBury = 2; // la fuite est finie : la tentative en cours devient la dernière
       if (a.goldBury === 1 && a.goldHp0 - a.hp >= G.burrowInterrupt) {
-        a.sinkT = 0; // il a perdu assez de PV pendant l'animation : elle est interrompue, il repart en fuite
+        a.sinkT = 0; // il a perdu assez de PV pendant l'animation : elle est interrompue, il repart en fuite puis réessaie
         a.goldBury = 0;
-        a.goldNext = G.burrowEvery;
+        a.goldTries = 1;
+        a.goldNext = G.burrowRetry;
       } else if ((a.sinkT -= dt) <= 0) a.alive = false; // enterré pour de bon : il disparaît (sans mort, ni butin)
       return;
     }
-    if (a.goldT <= 0 || (a.goldNext -= dt) <= 0) {
-      a.goldBury = a.goldT <= 0 ? 2 : 1;
+    if ((a.goldNext -= dt) <= 0) {
+      a.goldBury = a.goldTries > 0 ? 2 : 1;
       a.sinkT = G.burrowTime;
       a.goldHp0 = a.hp;
       a.vx = a.vy = 0;

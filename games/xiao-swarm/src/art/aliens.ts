@@ -10,6 +10,7 @@ import { makeAlienFallbacks } from './alienFallbacks';
  */
 const PROCEDURAL_BODY_WIDTH: Record<string, number> = {
   alien_slime: 66,
+  alien_golden: 66,
   alien_gling: 46,
   alien_kamikaze: 52,
   alien_toad: 54,

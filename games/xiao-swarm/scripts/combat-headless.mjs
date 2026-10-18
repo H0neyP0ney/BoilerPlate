@@ -471,6 +471,45 @@ try {
     check(sq.buffs.fire <= 0, 'fireball : les orbes disparaissent après 8 s', `${sq.buffs.fire.toFixed(2)} s restant`);
   }
 
+  // ---- alien doré : rare (0 à 2 par partie), fuit quand on l'approche en semant des pièces, s'enterre après 10 s ; tué : beaucoup de pièces et quelques diamants
+  {
+    const G = ALIENS.golden.golden;
+    const counts = [0, 0, 0];
+    for (let seed = 1; seed <= 30; seed++) {
+      const { sim } = fresh(100 + seed);
+      sim.step(1 / 30, new Map());
+      counts[sim.horde.goldTimes.length]++;
+    }
+    check(counts.every((c) => c > 0) && counts.length === G.spawnMax + 1, 'alien doré : 0, 1 ou 2 apparitions par partie selon la graine', `0 : ${counts[0]}, 1 : ${counts[1]}, 2 : ${counts[2]} (30 parties)`);
+    const { sim, step } = fresh(34);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('golden', sq.center.x + 200, sq.center.y, 1, false, true);
+    const g = sim.aliens[0];
+    g.age = 99;
+    g.maxHp = g.hp = ALIENS.golden.hp;
+    const d0 = Math.hypot(g.x - sq.center.x, g.y - sq.center.y);
+    const coins0 = sim.gems.coins.length;
+    for (let i = 0; i < 30 * 3; i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
+    const d1 = Math.hypot(g.x - sq.center.x, g.y - sq.center.y);
+    const sown = sim.gems.coins.length - coins0;
+    check(g.goldState === 1 && d1 > d0 + 200 && sown >= 3, 'alien doré : engagé, il fuit la squad en semant des pièces', `${d0.toFixed(0)} → ${d1.toFixed(0)} px, ${sown} pièces`);
+    for (let i = 0; i < 30 * (G.fleeTime + 1.5); i++) { sim.step(1 / 30, new Map()); sim.aliens.splice(1); }
+    check(!g.alive && sim.gems.coins.length >= sown, "alien doré : après 10 s de fuite il s'enterre et disparaît (sans butin de mort)", `vivant ${g.alive}`);
+    // mort : grosse quantité de pièces, quelques diamants
+    const f2 = fresh(35);
+    clearAliens(f2.sim);
+    const q2 = f2.sim.squadOf('p1');
+    f2.sim.horde.spawnAt('golden', q2.center.x + 600, q2.center.y, 1, false, true);
+    const g2 = f2.sim.aliens[0];
+    g2.age = 99;
+    const c0 = f2.sim.gems.coins.length;
+    const i0 = f2.sim.gems.items.length;
+    f2.sim.damage(g2, 1e9, 'p1');
+    f2.step(1);
+    check(f2.sim.gems.coins.length - c0 >= G.deathCoins && f2.sim.gems.items.length - i0 === G.deathGems, 'alien doré tué : grosse quantité de pièces et quelques diamants', `${f2.sim.gems.coins.length - c0} pièces, ${f2.sim.gems.items.length - i0} diamants`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

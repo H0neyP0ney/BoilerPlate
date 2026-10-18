@@ -93,6 +93,7 @@ export const ASSETS: AssetEntry[] = [
     frameWidth: 82,
     frameHeight: 78,
     sprites: {
+      alien_golden: { originX: 0.507, originY: 0.881, scale: 0.73, shadow: 20, anchors: { 'walk:right': [0.507, 0.8052], 'walk:left': [0.514, 0.8052] }, facesLeft: true, anims: { idle: { frames: range(0, 8), fps: 5 }, walk: { frames: range(0, 8), fps: 12 } } }, // alien doré : la planche du slime en attendant son sprite (teinté en or : `AlienDef.tint`)
       alien_slime: {
         originX: 0.507,
         originY: 0.881,

@@ -213,6 +213,7 @@ export class Sim {
     this.sharedXpPool = 0;
     this.sharedLevel = 1;
     this.waves.reset();
+    this.horde.resetGolden();
     for (const sq of this.squads) sq.resetRun();
     this.spawnSquads(() => this.rng.pick(START_SQUADS));
     for (const sq of this.squads) for (const s of sq.soldiers) s.invulnerable = 2.5;
@@ -1029,6 +1030,10 @@ export class Sim {
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
+    if (a.def.golden) {
+      this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190); // alien doré tué : une grosse quantité d'argent et quelques diamants
+      this.gems.dropGemsAt(a.x, a.y, a.def.golden.deathGems);
+    }
     if (a.def.egg) {
       this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
       this.gems.spawnChest(a.x, a.y, this.eggBoss.get(a.id) ?? 'boss_gling'); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss

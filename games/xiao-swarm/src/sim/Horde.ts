@@ -1,4 +1,4 @@
-import { damp, type Point } from '@xiao/engine/sim';
+import { damp, Rng, type Point } from '@xiao/engine/sim';
 import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS } from '../config';
 import { ALIENS, bossKindAt, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
@@ -154,6 +154,9 @@ export class Horde {
       farT: 0,
       flank: 0,
       sinkT: 0,
+      goldState: 0,
+      goldT: 0,
+      goldDrop: 0,
       retarget: 0,
       attackCd: 0,
       slamWind: 0,
@@ -398,9 +401,101 @@ export class Horde {
     return !a.def.lurk && !a.revived && !a.instant && !a.def.projectile && a.age < ALIEN_SPAWN_HOLD;
   }
 
+  // ---------- Alien doré ----------
+
+  /** Aléatoire PROPRE à l'alien doré (n'entame jamais la suite de `sim.rng`) : nombre d'apparitions de la partie (0 à `spawnMax`) et leurs dates. */
+  private goldRng: Rng | null = null;
+  private goldTimes: number[] = [];
+
+  /** Nouvelle partie : le tirage des apparitions dorées est refait. */
+  resetGolden(): void {
+    this.goldTimes = [];
+    this.goldRng = null;
+  }
+
+  /** Tire (une fois par partie) les dates d'apparition puis fait apparaître l'alien doré quand c'est l'heure, à `spawnDist` px d'une squad (hors écran). */
+  private updateGoldenSpawns(): void {
+    const G = ALIENS.golden.golden!;
+    if (!this.goldRng) {
+      this.goldRng = new Rng((this.sim.config.seed ^ 0x7f4a7c15) >>> 0);
+      const n = Math.floor(this.goldRng.range(0, G.spawnMax + 1)); // 0, 1 ou 2 par partie
+      this.goldTimes = Array.from({ length: n }, () => this.goldRng!.range(G.spawnFrom, G.spawnTo)).sort((x, y) => x - y);
+    }
+    if (this.goldTimes.length === 0 || this.sim.tutorial?.active || this.sim.ending || this.sim.waves.time < this.goldTimes[0]) return;
+    if (this.sim.aliens.some((a) => a.alive && a.def.golden)) return; // un seul à la fois
+    const squads = this.sim.aliveSquads;
+    const sq = squads[Math.floor(this.goldRng.range(0, squads.length))];
+    const b = this.sim.arena.bounds;
+    for (let i = 0; i < 24; i++) {
+      const ang = this.goldRng.range(0, Math.PI * 2);
+      const p = { x: sq.center.x + Math.cos(ang) * G.spawnDist, y: sq.center.y + Math.sin(ang) * G.spawnDist, radius: ALIENS.golden.radius };
+      if (p.x < b.minX + 120 || p.x > b.maxX - 120 || p.y < b.minY + 120 || p.y > b.maxY - 120 || !this.sim.arena.isFree(p, p.radius + 10)) continue;
+      const g = this.create(ALIENS.golden, p.x, p.y, 1, false);
+      g.maxHp = g.hp = ALIENS.golden.hp; // 2000 PV exacts
+      g.noXp = false;
+      g.noRecruit = true;
+      this.sim.aliens.push(g);
+      this.goldTimes.shift();
+      return;
+    }
+  }
+
+  /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; après `fleeTime` s il s'enterre. */
+  private updateGolden(a: AlienState, dt: number): void {
+    const G = a.def.golden!;
+    const sq = this.sim.nearestSquad(a.x, a.y);
+    if (a.goldState === 0) {
+      let near = Infinity;
+      if (sq) for (const s of sq.soldiers) if (s.alive) near = Math.min(near, Math.hypot(s.x - a.x, s.y - a.y));
+      if (a.hp < a.maxHp || near < G.engage) {
+        a.goldState = 1; // engagé : il s'enfuit
+        a.goldT = G.fleeTime;
+        a.goldDrop = G.coinEvery * 0.5;
+      } else {
+        a.vx = a.vy = 0;
+        return;
+      }
+    }
+    a.goldT -= dt;
+    if (a.goldT <= 0) {
+      a.sinkT = RELOCATE.sink; // il s'enterre (même animation que les traînards), puis disparaît (`update`)
+      a.vx = a.vy = 0;
+      return;
+    }
+    if ((a.goldDrop -= dt) <= 0) {
+      a.goldDrop = G.coinEvery;
+      this.sim.gems.dropCoinsAt(a.x, a.y, G.coinCount, 10, 35); // quelques pièces sur sa route
+    }
+    // direction de fuite : à l'opposé de la squad, repoussée des bords de la carte (il ne se coince pas dans un coin)
+    let fx = sq ? a.x - sq.center.x : 1;
+    let fy = sq ? a.y - sq.center.y : 0;
+    const d = Math.hypot(fx, fy) || 1;
+    fx /= d;
+    fy /= d;
+    const b = this.sim.arena.bounds;
+    const m = 280;
+    fx += Math.max(0, (m - (a.x - b.minX)) / m) - Math.max(0, (m - (b.maxX - a.x)) / m);
+    fy += Math.max(0, (m - (a.y - b.minY)) / m) - Math.max(0, (m - (b.maxY - a.y)) / m);
+    const l = Math.hypot(fx, fy) || 1;
+    const speed = G.fleeSpeed * a.escSpeed;
+    a.vx = damp(a.vx, (fx / l) * speed, 8, dt);
+    a.vy = damp(a.vy, (fy / l) * speed, 8, dt);
+    this.steerV.x = a.vx;
+    this.steerV.y = a.vy;
+    this.sim.arena.steer(a.x, a.y, a.radius, this.steerV, true);
+    a.vx = this.steerV.x;
+    a.vy = this.steerV.y;
+    a.x += (a.vx + a.kx) * dt;
+    a.y += (a.vy + a.ky) * dt;
+    a.kx = damp(a.kx, 0, 6, dt);
+    a.ky = damp(a.ky, 0, 6, dt);
+    this.sim.arena.constrain(a);
+  }
+
   update(dt: number): void {
     const { alienHash, soldierHash, arena, rng } = this.sim;
     if (this.sim.aliveSquads.length === 0) return;
+    this.updateGoldenSpawns();
 
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
@@ -426,6 +521,11 @@ export class Horde {
       // s'enterre avant d'être déplacé (recyclage des traînards) : immobile, n'attaque plus
       if (a.sinkT > 0) {
         a.vx = a.vy = a.kx = a.ky = 0;
+        if (def.golden && (a.sinkT -= dt) <= 0) a.alive = false; // alien doré enterré : il disparaît (sans mort, ni butin)
+        continue;
+      }
+      if (def.golden) {
+        this.updateGolden(a, dt);
         continue;
       }
 
@@ -834,11 +934,12 @@ export class Horde {
     const { aliens, metrics } = this.sim;
     for (let i = 0; i < aliens.length; i++) {
       const a = aliens[i];
+      if (a.def.golden) continue; // l'alien doré s'enterre tout seul (fuite terminée) : jamais recyclé
       const sq = this.sim.nearestSquad(a.x, a.y);
       if (!sq) return;
       if (a.sinkT <= 0) {
         // pas encore en train de s'enterrer : assez loin depuis assez longtemps ?
-        if (!a.alive || a.def.boss || a.def.egg || a.def.projectile || a.captive || a.castT > 0 || a.lurkPhase > 0 || Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RELOCATE.far) {
+        if (!a.alive || a.def.boss || a.def.egg || a.def.golden || a.def.projectile || a.captive || a.castT > 0 || a.lurkPhase > 0 || Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RELOCATE.far) {
           a.farT = 0;
           continue;
         }

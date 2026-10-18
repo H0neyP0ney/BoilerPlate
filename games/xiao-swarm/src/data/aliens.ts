@@ -3,7 +3,7 @@
  */
 import { FINAL_BOSS, type DifficultyLevel } from './difficultyLevels';
 
-export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg';
+export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg' | 'golden';
 
 /** Qui l'alien préfère attaquer (GDD §11). */
 export type TargetPref = 'nearest' | 'center' | 'specialist';
@@ -125,6 +125,12 @@ export interface AlienDef {
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   /** `twin` : boss jumeau (rhinos feu / glace) : le premier tombé est un alien comme les autres (ni clear screen, ni œuf, ni escalade) ; seul le dernier compte. */
   boss?: { kind: 'mini' | 'final'; twin?: boolean };
+  /**
+   * Alien doré (rare, 0 à `spawnMax` par partie) : apparaît à `spawnDist` px d'une squad (donc hors écran : flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
+   * à moins de `engage` px (ou qu'il n'est pas blessé) ; il s'enfuit alors à `fleeSpeed` px/s en lâchant `coinCount` pièce(s) toutes les `coinEvery` s sur sa route ; après `fleeTime` s de fuite
+   * il s'enterre et disparaît. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
+   */
+  golden?: { spawnMax: number; spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; fleeTime: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -666,13 +672,34 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     goo: 0xc8f070,
     hpBarWidth: 60,
   },
+  /**
+   * Alien doré (slime en or, sprite provisoire = celui du slime teinté ; 2000 PV exacts) : rare, il fuit quand on l'approche en semant des pièces, puis s'enterre ; tué, il lâche une grosse quantité d'argent et quelques
+   * diamants. Ajouté en DERNIER : l'ordre de `ALIENS` donne l'index réseau. Réglages de comportement : `golden`.
+   */
+  golden: {
+    id: 'golden',
+    hp: 2000, // exacts : ni escalade ni multiplicateur
+    speed: 90,
+    radius: 19.5,
+    mass: 1,
+    damage: 0,
+    attackCooldown: 1,
+    target: 'nearest',
+    xp: 20,
+    recruitChance: 0,
+    color: 0xffd24a,
+    goo: 0xe0a800,
+    tint: 0xffd24a, // slime vert teinté en or en attendant son vrai sprite
+    hpBarWidth: 50,
+    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+  },
 };
 
 /**
  * Ennemis réellement en jeu pour l'instant : les autres restent définis (données, textures, réseau) mais
  * ils ne figurent pas dans le script de vagues par défaut (data/waves.ts), mais le Gestionnaire de vagues peut les utiliser.
  */
-export const ACTIVE_ALIENS: AlienId[] = ['slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer', 'spider'];
+export const ACTIVE_ALIENS: AlienId[] = ['golden', 'slime', 'gling', 'shooter', 'kamikaze', 'toad', 'charger', 'spitter', 'shaman', 'wall', 'bubble', 'burner', 'lurker', 'iceballer', 'spider'];
 
 /** Réglages des zombies (ressuscités par le chaman), lus en direct : modifiables dans la vue d'unité du chaman. */
 export function zombieStats(): ZombieStats {

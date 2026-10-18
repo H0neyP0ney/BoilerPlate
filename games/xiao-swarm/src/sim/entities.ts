@@ -130,6 +130,10 @@ export interface AlienState extends Body {
   webCd: number;
   /** Délai (s) avant les prochains murs du Scarab (Impossible). */
   wallsCd: number;
+  /** Alien doré : 0 = attend, 1 = en fuite (`golden.fleeTime` s) ; temps de fuite restant ; délai avant la prochaine pièce semée. */
+  goldState: number;
+  goldT: number;
+  goldDrop: number;
   /** Délai (s) avant les prochains pics en croix du Rhino Alpha. */
   crossCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */

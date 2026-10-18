@@ -97,6 +97,19 @@ export class Gems {
     }
   }
 
+  /** `n` pièces d'or qui retombent en cloche autour de (x, y), de `min` à `max` px (alien doré : sur sa route, ou à sa mort). */
+  dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45): void {
+    if (this.sim.ending) return;
+    for (let i = 0; i < n; i++) this.pushCoin(x, y, this.rng.range(0, Math.PI * 2), this.rng.range(min, max));
+  }
+
+  /** `n` diamants qui jaillissent autour de (x, y) (solo seulement). */
+  dropGemsAt(x: number, y: number, n: number): void {
+    if (!this.enabled) return;
+    const turn = this.rng.range(0, Math.PI * 2);
+    for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + this.rng.range(-0.25, 0.25), this.rng.range(60, 160));
+  }
+
   /** Un diamant qui retombe en cloche autour de (x, y), à `dist` px dans la direction `angle`. */
   private drop(x: number, y: number, angle: number, dist: number): void {
     this.items.push({

@@ -503,6 +503,7 @@ ${t('roomPlayers', { players: g.playerCount })}`, // sur deux lignes, en bas à 
     const targets: { x: number; y: number; gold?: boolean }[] = [];
     for (const o of sim.upgradeOrbs.items) if (o.owner === me.owner) targets.push(o);
     for (const e of sim.aliens) if (e.alive && e.def.egg) targets.push(e); // œuf d'un boss tué
+    for (const e of sim.aliens) if (e.alive && e.def.golden && e.sinkT <= 0) targets.push({ x: e.x, y: e.y, gold: true }); // alien doré hors écran : flèche jaune
     for (const p of sim.powerups.items) {
       if (p.kind === 'reroll') targets.push(p); // dé de relance
       else if (p.kind === 'prism') targets.push({ x: p.x, y: p.y, gold: true }); // booster prismatique : flèche dorée

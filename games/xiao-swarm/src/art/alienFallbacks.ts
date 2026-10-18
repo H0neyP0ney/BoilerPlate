@@ -170,6 +170,14 @@ const rhino = (light: string, dark: string, bump: string, bumpDark: string, leg:
 });
 
 const SPECS: Record<string, Spec> = {
+  alien_golden: {
+    w: 82,
+    h: 78,
+    legs: { style: 'stub', n: 4, color: '#c9980a', rootY: 66, half: 24, len: 10, thick: 9 },
+    body: { x: 41, y: 38, rx: 32, ry: 30, light: '#ffe98a', dark: '#c98f0a' },
+    spots: { color: 'rgba(160,110,0,0.5)', pts: [[22, 20, 7], [50, 14, 6], [62, 38, 7], [42, 58, 6], [14, 44, 5]] },
+    eyes: { pts: [[52, 34, 14]], white: true },
+  },
   alien_slime: {
     w: 82,
     h: 78,

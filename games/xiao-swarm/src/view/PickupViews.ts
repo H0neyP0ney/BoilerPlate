@@ -34,6 +34,7 @@ export const POWERUP_INFO: Record<PowerUpKind, { icon?: string; readonly color: 
   stasis: { get color() { return GLOBE_TINTS.stasis; } }, // bleu
   rockets: { get color() { return GLOBE_TINTS.rockets; } }, // jaune orangé
   prism: { get color() { return GLOBE_TINTS.prism; } }, // booster prismatique : globe, rond au sol, onde et colonne DORÉS ; étoiles arc-en-ciel (`syncPowerups`)
+  fireball: { get color() { return GLOBE_TINTS.fireball; } }, // orange feu
   reroll: { get color() { return GLOBE_TINTS.upgrade; } }, // rose, comme les globes d'upgrade (la relance concerne les upgrades)
 };
 
@@ -43,7 +44,7 @@ const BOT = { width: 52, lift: 85, bob: 6, bobSpeed: 2.6 };
 const MEDIBOT_WIDTH = 46;
 
 /** Sorte de globe (teinte du globe et de l'étoile) d'un power-up : la relance est un loot d'upgrade, elle prend le globe rose des upgrades. */
-export const globeKind =(kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'prism' | 'upgrade' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
+export const globeKind =(kind: PowerUpKind): 'stim' | 'magnet' | 'heal' | 'stasis' | 'rockets' | 'prism' | 'upgrade' | 'fireball' => (kind === 'reroll' ? 'upgrade' : kind); // la relance prend le globe rose des upgrades ; le booster prismatique a son globe doré (étoiles arc-en-ciel : `syncPowerups`)
 
 /** Clé de texture de l'icône d'un power-up. */
 export const powerUpIconKey = (kind: PowerUpKind): string => `powerup_icon_${kind}`;

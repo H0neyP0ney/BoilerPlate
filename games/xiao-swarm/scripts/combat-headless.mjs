@@ -443,6 +443,34 @@ try {
     check(!!chest && free === Math.max(1, Math.round(chest.qty * DIFFICULTY.gemFreeShare)), 'œuf ouvert : 20 % du contenu du coffre jaillit tout de suite', `${free} diamants pour un coffre de ${chest?.qty}`);
   }
 
+  // ---- power-up Fireball : 3 orbes enflammées autour de la squad pendant 8 s, 20 dégâts à chaque collision avec un alien (un même alien ne les subit pas à chaque tick)
+  {
+    const { FIREBALL } = await vite.ssrLoadModule('/src/config.ts');
+    const { PowerUps } = await vite.ssrLoadModule('/src/sim/PowerUps.ts');
+    const { sim } = fresh(33);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.powerups.drop('fireball', sq.center.x, sq.center.y, true);
+    for (let i = 0; i < 6; i++) sim.step(1 / 30, new Map());
+    const active = Math.abs(sq.buffs.fire - FIREBALL.time) < 0.5;
+    // un alien posé sur la première orbe est touché : 20 dégâts, une seule fois par `rehit`
+    const o = PowerUps.fireballAt(sq, 0);
+    sim.horde.spawnAt('slime', o.x, o.y, 1, false, true);
+    const a = sim.aliens[0];
+    a.age = 99;
+    a.hp = a.maxHp = 5000;
+    const hp0 = a.hp;
+    sim.step(1 / 30, new Map());
+    const first = hp0 - a.hp;
+    const near = PowerUps.fireballAt(sq, 0);
+    a.x = near.x; a.y = near.y; a.vx = a.vy = 0;
+    sim.step(1 / 30, new Map());
+    const second = hp0 - a.hp - first;
+    check(active && first === FIREBALL.damage && second === 0, 'fireball : 3 orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
+    for (let i = 0; i < 30 * 9; i++) { sim.step(1 / 30, new Map()); a.hp = a.maxHp; }
+    check(sq.buffs.fire <= 0, 'fireball : les orbes disparaissent après 8 s', `${sq.buffs.fire.toFixed(2)} s restant`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { CROWD, DEPTH, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
+import { CROWD, DEPTH, FIREBALL, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
@@ -144,6 +144,8 @@ export class WorldView {
   /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
   /** Instant (s) où chaque nuage ralentissant est apparu à l'écran (animation de « pop »). */
   private readonly cloudBorn = new Map<number, number>();
+  /** Orbes enflammées du power-up Fireball : dessinées chaque image par-dessus les unités. */
+  private fireG?: Phaser.GameObjects.Graphics;
   private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
@@ -1504,6 +1506,7 @@ export class WorldView {
     l.clear();
     this.drawTongues(l, dt);
     this.drawSpikes();
+    this.drawFireballs(time);
     this.drawCasts(l, time);
     this.drawStalactites(l);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
@@ -1516,6 +1519,35 @@ export class WorldView {
       const k = tr.life / 0.12;
       l.lineStyle(6 * k, 0x7dff9a, 0.35 * k).lineBetween(tr.x1, tr.y1, tr.x2, tr.y2);
       l.lineStyle(2.5 * k, 0xeaffea, k).lineBetween(tr.x1, tr.y1, tr.x2, tr.y2);
+    }
+  }
+
+  /** Orbes enflammées du power-up Fireball (`FIREBALL`) : 3 boules de feu qui tournent autour du centre affiché de la squad, avec une traînée ; elles clignotent la dernière seconde. */
+  private drawFireballs(time: number): void {
+    const g = (this.fireG ??= this.scene.add.graphics().setDepth(DEPTH.fx - 10));
+    g.clear();
+    for (const sq of this.sim.squads) {
+      if (!sq.alive || sq.buffs.fire <= 0) continue;
+      const focus = this.squadFocus(sq.owner) ?? sq.center;
+      if (!this.onScreen(focus.x, focus.y, sq.radius + FIREBALL.margin + 80)) continue;
+      const blink = sq.buffs.fire < 1 && Math.sin(time * 30) > 0 ? 0.35 : 1;
+      for (let i = 0; i < FIREBALL.count; i++) {
+        const R = sq.radius + FIREBALL.margin;
+        const ang = sq.fireAngle + (i * Math.PI * 2) / FIREBALL.count;
+        // traînée : des boules de plus en plus petites et pâles sur l'arc qu'elle vient de parcourir
+        for (let k = 7; k >= 1; k--) {
+          const a = ang - k * 0.13;
+          const f = 1 - k / 8;
+          g.fillStyle(k % 2 ? 0xff5a14 : 0xffa21a, 0.5 * f * blink).fillCircle(focus.x + Math.cos(a) * R, focus.y + Math.sin(a) * R, FIREBALL.hit * (0.35 + 0.6 * f));
+        }
+        const x = focus.x + Math.cos(ang) * R;
+        const y = focus.y + Math.sin(ang) * R; // cercle réel : il correspond aux collisions de la simulation
+        const flick = 1 + 0.12 * Math.sin(time * 22 + i * 2);
+        g.fillStyle(0xff4a0a, 0.35 * blink).fillCircle(x, y, FIREBALL.hit * 1.9 * flick);
+        g.fillStyle(0xff7a14, 0.9 * blink).fillCircle(x, y, FIREBALL.hit * 1.2 * flick);
+        g.fillStyle(0xffc83a, blink).fillCircle(x, y, FIREBALL.hit * 0.8 * flick);
+        g.fillStyle(0xfff6c0, blink).fillCircle(x - 2, y - 3, FIREBALL.hit * 0.4);
+      }
     }
   }
 

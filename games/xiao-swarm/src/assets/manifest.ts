@@ -77,7 +77,7 @@ export const ASSETS: AssetEntry[] = [
   // Freezebot (drone qui plane au centre du globe de stase) — art-src/freezebot.png réduit par `node tools/slice-freezebot.mjs` ; affiché par view/PickupViews.ts.
   { type: 'image', id: 'fx_freezebot', url: 'fx/freezebot.png' },
   // Icônes des power-ups — art-src/powerups.png découpé par `node tools/slice-powerup-icons.mjs` ; affichées par view/PickupViews.ts (globe au sol, texte flottant).
-  ...(['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'prism'] as const).map((k): AssetEntry => ({ type: 'image', id: `powerup_icon_${k}`, url: `ui/powerups/${k}.png` })),
+  ...(['stim', 'magnet', 'heal', 'stasis', 'rockets', 'reroll', 'prism', 'fireball'] as const).map((k): AssetEntry => ({ type: 'image', id: `powerup_icon_${k}`, url: `ui/powerups/${k}.png` })),
   // Timeline des vagues + « Next boss » — art-src/timeline_next_boss.png découpé par `node tools/slice-timeline-ui.mjs` ; affichés par view/TimelineHud.ts (mesures dans TIMELINE_ART).
   ...(['frame', 'fill', 'arrow', 'tick_off', 'tick_on', 'ring'] as const).map((n): AssetEntry => ({ type: 'image', id: `ui_tl_${n}`, url: `ui/timeline/${n}.png` })),
   // Globe d'XP — art-src/globe_xp.png converti en WebP (60 px, taille d'origine). Affiché à ~32 px de base (WorldView.syncOrbs) .

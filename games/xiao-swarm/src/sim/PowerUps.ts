@@ -1,5 +1,5 @@
 import { Rng } from '@xiao/engine/sim';
-import { DIFFICULTY, POWERUP_LIFE, RECRUIT } from '../config';
+import { DIFFICULTY, POWERUP_LIFE, RECRUIT, FIREBALL } from '../config';
 import type { AlienState, Field, PowerUpKind, PowerUpState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -7,7 +7,7 @@ import type { Squad } from './Squad';
 
 /** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
 const REROLL_FALL_DIST: [number, number] = [50, 100];
-const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
+const KINDS: PowerUpKind[] = ['stim', 'magnet', 'heal', 'stasis', 'rockets', 'fireball']; // la relance n'est pas tirée au hasard : c'est un loot d'alien (`maybeDropReroll`)
 /** Stimpack : durée (s), facteur de vitesse de déplacement et de cadence. */
 /** Aimant (coup unique) : rayon (px) autour de la squad dans lequel XP, recrues et power-ups sont aspirés : toute la carte (08/10 ; 1000 avant). */
 const MAGNET_RADIUS = Infinity;
@@ -89,8 +89,38 @@ export class PowerUps {
     return Math.max(1, Math.round(n * this.sim.rng.range(0.8, 1.2)));
   }
 
+  /** Position (monde) de l'orbe `i` de la squad `sq` : sur un cercle de rayon `sq.radius + FIREBALL.margin` autour de son centre. */
+  static fireballAt(sq: { center: { x: number; y: number }; radius: number; fireAngle: number }, i: number): { x: number; y: number } {
+    const a = sq.fireAngle + (i * Math.PI * 2) / FIREBALL.count;
+    const r = sq.radius + FIREBALL.margin;
+    return { x: sq.center.x + Math.cos(a) * r, y: sq.center.y + Math.sin(a) * r };
+  }
+
+  /** Orbes enflammées : chaque collision avec un alien visible lui inflige `FIREBALL.damage` ; un même couple orbe / alien attend `FIREBALL.rehit` s avant de recommencer. */
+  private readonly fireHits = new Map<string, number>();
+  private readonly fireScratch: AlienState[] = [];
+
+  private updateFireballs(dt: number): void {
+    const { sim } = this;
+    for (const [k, t] of this.fireHits) if ((this.fireHits.set(k, t - dt), t - dt <= 0)) this.fireHits.delete(k);
+    for (const sq of sim.squads) {
+      if (!sq.alive || sq.buffs.fire <= 0) continue;
+      for (let i = 0; i < FIREBALL.count; i++) {
+        const o = PowerUps.fireballAt(sq, i);
+        for (const a of sim.alienHash.query(o.x, o.y, FIREBALL.hit + 80, this.fireScratch)) {
+          if (!a.alive || !sim.horde.targetable(a) || Math.hypot(a.x - o.x, a.y - o.y) > FIREBALL.hit + a.radius) continue;
+          const key = `${sq.owner}:${i}:${a.id}`;
+          if (this.fireHits.has(key)) continue;
+          this.fireHits.set(key, FIREBALL.rehit);
+          sim.damage(a, FIREBALL.damage, sq.owner);
+        }
+      }
+    }
+  }
+
   update(dt: number): void {
     const { rng } = this.sim;
+    this.updateFireballs(dt);
     if (!this.sim.tutorial?.active && !this.sim.ending) {
       // pendant le tutoriel, aucun power-up au hasard (ni pendant la séquence de fin) : seuls ceux du script apparaissent
       this.timer -= dt;
@@ -191,6 +221,9 @@ export class PowerUps {
       case 'rockets':
         this.sim.combat.barrage(squad, ROCKETS);
         break;
+      case 'fireball':
+        squad.buffs.fire = FIREBALL.time; // 3 orbes enflammées autour de la squad pendant `FIREBALL.time` s (voir `updateFireballs`)
+        break;
       case 'prism':
         squad.prismBoost = true; // le prochain level-up de ce joueur propose 3 cartes prismatiques (pas après une relance)
         break;
@@ -220,6 +253,7 @@ export class PowerUps {
   }
 
   clear(): void {
+    this.fireHits.clear();
     this.items.length = 0;
     this.fields.length = 0;
     this.timer = DIFFICULTY.powerupFirst;

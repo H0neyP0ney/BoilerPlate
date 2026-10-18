@@ -8,7 +8,7 @@ export function playSfx(scene: Phaser.Scene, id: SfxId): void {
   sfx.play(scene, d.key, d);
 }
 
-const POWERUP_SFX: Record<string, SfxId> = { stim: 'pu_stim', magnet: 'pu_magnet', heal: 'pu_heal', stasis: 'pu_stasis', rockets: 'pu_rockets', reroll: 'pu_reroll', prism: 'pu_prism' };
+const POWERUP_SFX: Record<string, SfxId> = { stim: 'pu_stim', magnet: 'pu_magnet', heal: 'pu_heal', stasis: 'pu_stasis', rockets: 'pu_rockets', fireball: 'pu_rockets', reroll: 'pu_reroll', prism: 'pu_prism' };
 
 /** Son d'un power-up ou loot ramassé. */
 export function playPowerUpSfx(scene: Phaser.Scene, kind: string): void {

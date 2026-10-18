@@ -380,7 +380,7 @@ try {
     const snap = decodeSnapshot(encodeSnapshot(takeSnapshot(hs)));
     const ke = snap.aliens.find((x) => x.id === egg.id);
     const ko = snap.upgradeOrbs.at(-1);
-    check(!!ke && ke.type === 'boss_egg' && Math.round(ke.hp) === ALIENS.boss_egg.hp && Math.round(ke.maxHp) === ALIENS.boss_egg.hp && Math.abs(ke.x - egg.x) < 0.2 && Math.abs(ke.y - egg.y) < 0.2, 'œuf de boss : type, PV et position transmis au client', ke ? `${ke.type}, ${ke.hp} PV` : 'absent');
+    check(!!ke && ke.type === 'boss_egg' && Math.round(ke.hp) === Math.round(egg.hp) && Math.round(ke.maxHp) === Math.round(egg.maxHp) && Math.abs(ke.x - egg.x) < 0.2 && Math.abs(ke.y - egg.y) < 0.2, 'œuf de boss : type, PV et position transmis au client', ke ? `${ke.type}, ${ke.hp} PV` : 'absent');
     check(!!ko && ko.owner === a.owner && ko.upgrade === UPGRADE_IDS.indexOf('damage') && Math.abs(ko.fall - o.hop.t) < 0.02 && Math.abs(ko.x - o.x) < 0.2, 'globe d’upgrade : propriétaire, position et chute transmis au client', ko ? `${ko.owner}, chute ${ko.fall.toFixed(2)} s` : 'absent');
     egg.alive = false;
     hs.upgradeOrbs.clear();

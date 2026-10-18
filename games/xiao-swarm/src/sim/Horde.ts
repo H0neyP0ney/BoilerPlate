@@ -309,7 +309,9 @@ export class Horde {
     const p = { x, y, radius: def.radius };
     this.sim.arena.constrain(p);
     const egg = this.create(def, p.x, p.y, 1, false);
-    egg.maxHp = egg.hp = def.hp; // exacts : ni escalade ni multiplicateur
+    // PV adaptés au DPS des squads vivantes : la destruction de l'œuf dure ~`DIFFICULTY.eggBreakTime` s (`def.hp` n'est plus qu'une valeur de repli, sans squad vivante)
+    const dps = this.sim.aliveSquads.reduce((t, q) => t + this.sim.combat.squadDps(q), 0);
+    egg.maxHp = egg.hp = dps > 0 ? Math.max(DIFFICULTY.eggMinHp, Math.round(dps * DIFFICULTY.eggBreakTime * DIFFICULTY.eggEfficiency)) : def.hp; // exacts : ni escalade ni multiplicateur
     egg.instant = true; // pas de trou d'apparition, ni de délai avant d'être ciblable
     egg.noXp = true;
     egg.noRecruit = true;

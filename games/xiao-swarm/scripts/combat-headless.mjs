@@ -531,6 +531,22 @@ try {
     check(mini === COINS.bossCoins && fin === Math.round(COINS.bossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
   }
 
+  // ---- œuf de boss : PV = DPS de la squad × durée de destruction (2 s) × efficacité ; une squad plus nombreuse a un œuf plus costaud
+  {
+    const mk = (n) => {
+      const { sim } = fresh(38);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      while (sq.soldiers.length < n) sq.recruit('trooper', { x: sq.center.x, y: sq.center.y });
+      const egg = sim.horde.spawnEgg(sq.center.x + 700, sq.center.y);
+      return { dps: sim.combat.squadDps(sq), hp: egg.maxHp };
+    };
+    const small = mk(4);
+    const big = mk(12);
+    const wantSmall = Math.max(DIFFICULTY.eggMinHp, Math.round(small.dps * DIFFICULTY.eggBreakTime * DIFFICULTY.eggEfficiency));
+    check(small.dps > 0 && small.hp === wantSmall && big.hp > small.hp * 2, 'œuf : PV adaptés au DPS de la squad (destruction ~2 s) et à son nombre de soldats', `4 soldats : ${small.dps.toFixed(0)} DPS → ${small.hp} PV ; 12 soldats : ${big.dps.toFixed(0)} DPS → ${big.hp} PV`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);
@@ -766,7 +782,7 @@ try {
     i.x = sq.center.x - 350; i.y = sq.center.y + 120;
     sim.damage(i, 1e12, 'p1');
     const c = eggsOf().find((e) => Math.hypot(e.x - i.x, e.y - i.y) < 40);
-    check(eggsOf().length === 1 && !!c && !sl.alive && sim.bossKills === 1 && c.hp === ALIENS.boss_egg.hp, 'rhinos jumeaux : le dernier tué laisse l’œuf (PV exacts de `boss_egg`), clear screen (les autres aliens meurent), et l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
+    check(eggsOf().length === 1 && !!c && !sl.alive && sim.bossKills === 1 && c.hp === c.maxHp && c.hp >= DIFFICULTY.eggMinHp, 'rhinos jumeaux : le dernier tué laisse l’œuf (PV adaptés au DPS de la squad), clear screen (les autres aliens meurent), et l’escalade (×1,1) ne compte qu’une fois', `${eggsOf().length} œuf, slime ${sl.alive ? 'vivant' : 'mort'}, ${sim.bossKills} boss tué(s)`);
   }
 
   // ---- unités enterrées (BURIED) : 100 % pendant les animations, 50 % semi-enterrées (lurker en embuscade), intouchables totalement enterrées (Scarab)
@@ -1227,8 +1243,8 @@ try {
     const y = sq.center.y;
     sim.horde.spawnEgg(x, y);
     const egg = sim.aliens.find((a) => a.def.egg);
-    const EGG_HP = ALIENS.boss_egg.hp;
-    check(!!egg && egg.hp === EGG_HP && egg.maxHp === EGG_HP && DIFFICULTY.chestOrbs === 2, 'œuf : PV exacts de `boss_egg` (ni escalade ni multiplicateur), 2 globes par joueur (réglage du panneau Difficulté)', `${egg?.hp} PV`);
+    const EGG_HP = egg.maxHp; // PV adaptés au DPS des squads (2 s de destruction) : voir le test dédié plus bas
+    check(!!egg && egg.hp === EGG_HP && DIFFICULTY.chestOrbs === 2, 'œuf : PV exacts (ni escalade ni multiplicateur), 2 globes par joueur (réglage du panneau Difficulté)', `${egg?.hp} PV`);
     step(30 * 5);
     check(egg.alive && egg.hp === EGG_HP && Math.hypot(egg.x - x, egg.y - y) < 1 && sim.upgradeOrbs.items.length === 0, 'œuf : immobile, inoffensif, rien ne sort tant qu’il n’est pas détruit');
     // onde de choc (level up, revive gratuit mortel) : l'œuf, scellé sur son socle, ne bouge pas et n'est pas détruit
@@ -1238,9 +1254,10 @@ try {
     // les soldats viennent se poster dessus (replacés à chaque tick : sinon la formation les ramène vers le centre de la squad)
     const hold = (dx, ticks) => { for (let i = 0; i < ticks; i++) { for (const s of sq.soldiers) { s.x = x + dx; s.y = y; s.px = s.x; s.py = s.y; } step(1); } };
     const picked0 = Object.values(sq.picked).reduce((n, v) => n + v, 0);
-    sim.damage(egg, 600, 'p1');
+    const chip = Math.round(EGG_HP * 0.3);
+    sim.damage(egg, chip, 'p1');
     step(2);
-    check(egg.alive && Math.round(egg.hp) === EGG_HP - 600 && sim.upgradeOrbs.items.length === 0, 'œuf : abîmé mais pas détruit, rien ne sort', `${egg.hp} PV`);
+    check(egg.alive && Math.round(egg.hp) === EGG_HP - chip && sim.upgradeOrbs.items.length === 0, 'œuf : abîmé mais pas détruit, rien ne sort', `${egg.hp} PV`);
     sim.damage(egg, 1e9, 'p1');
     step(1);
     const opened = !sim.aliens.some((a) => a.def.egg);

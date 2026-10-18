@@ -127,6 +127,26 @@ export class Combat {
     this.updateProjectiles(dt);
   }
 
+  /**
+   * DPS théorique d'une squad : somme, sur ses soldats qui peuvent tirer, de dégâts du tir (× projectiles, bonus de dégâts, critiques en moyenne) × cadence. Sert à régler les PV de l'œuf des boss
+   * (`Horde.spawnEgg`) ; ne tient pas compte de la portée ni des cibles.
+   */
+  squadDps(squad: Squad): number {
+    const fireRate = squad.stats.get('fireRate') * (squad.buffs.stim > 0 ? STIM_FIRE : 1);
+    const damageMul = this.damageMulOf(squad);
+    const critChance = Math.min(CRIT_MAX, squad.stats.get('crit')) / 100;
+    const critMul = squad.perks.has('critGlasses') ? CRIT_MUL * CRIT_GLASSES_MUL : CRIT_MUL;
+    const expect = 1 + critChance * (critMul - 1);
+    let dps = 0;
+    for (const s of squad.soldiers) {
+      if (!s.alive || s.capturedBy || s.frozen > 0) continue;
+      const w = s.def.weapon;
+      const mul = damageMul * (s.def.id === 'sniper' && squad.perks.has('sniperPower') ? SNIPER_POWER_MUL : 1);
+      dps += (w.damage * (w.pellets ?? 1) * mul * expect * fireRate) / w.cooldown;
+    }
+    return dps;
+  }
+
   /** Multiplicateur de dégâts d'un tir de la squad : bonus additifs de Damage, Esprit d'équipe (par soldat vivant) et Dernier rempart (par soldat manquant) ; aussi celui de la rafale de roquettes. */
   private damageMulOf(squad: Squad): number {
     return squad.stats.get('damage') + squad.stats.get('teamSpirit') * squad.soldiers.length + squad.stats.get('lastStand') * squad.missing;

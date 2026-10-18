@@ -210,6 +210,13 @@ export const DIFFICULTY_DEFAULTS = {
   gemFreeShare: 0.2,
   /** Boss final : part (du contenu d'un coffre de ce boss) qui explose à sa mort, ramassable avant la séquence de fin (`GEM_CHEST.finalWait` s, remis à `finalReset` s à chaque diamant ramassé). */
   gemFinalShare: 0.5,
+  /**
+   * PV de l'œuf d'un boss (17/10) : adaptés au DPS théorique des squads vivantes pour que sa destruction dure `eggBreakTime` s ; `eggEfficiency` = part de ce DPS réellement appliquée (portée, soldats
+   * hors de portée, balles perdues) ; `eggMinHp` = plancher.
+   */
+  eggBreakTime: 2,
+  eggEfficiency: 0.7,
+  eggMinHp: 200,
   /** Boss final : multiplicateur de son or (`COINS.bossCoins` pièces pour un boss ordinaire). */
   coinFinalMul: 3,
   /**

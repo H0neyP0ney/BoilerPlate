@@ -711,6 +711,24 @@ try {
     check(!orb.alive && maxTtl <= T.ttl + 1e-6, "orbe de feu : en fin de course elle n'ajoute aucune flaque (seulement sa traînée)", `durée max d'une flamme au sol ${maxTtl.toFixed(2)} s (traînée ${T.ttl} s)`);
   }
 
+  // ---- alien doré : après son apparition (sans bricoler son âge) il devient visable et touchable, et le soldat lui tire dessus
+  {
+    const { sim } = fresh(47);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('golden', sq.center.x + 250, sq.center.y, 1, false); // sans instant : il sort de son trou comme en jeu
+    const g = sim.aliens[0];
+    const none = new Map();
+    let shot = false;
+    for (let i = 0; i < 30 * 4 && !shot; i++) {
+      sim.step(1 / 30, none);
+      sim.aliens.splice(1);
+      g.x = sq.center.x + 250; g.y = sq.center.y; g.goldState = 0; // il reste là : on teste seulement le ciblage
+      if (sq.soldiers.some((s) => s.target === g)) shot = true;
+    }
+    check(shot && g.age > 0.5, "alien doré : une fois sorti de son trou, les soldats le visent", `âge ${g.age.toFixed(2)} s, visé ${shot}`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

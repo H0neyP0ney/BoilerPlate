@@ -471,6 +471,7 @@ export class Horde {
   /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; après `fleeTime` s il s'enterre. */
   private updateGolden(a: AlienState, dt: number): void {
     const G = a.def.golden!;
+    a.age += dt; // sans cela son âge restait à 0 : il sortait éternellement de son trou d'apparition (invulnérable, jamais visé)
     const sq = this.sim.nearestSquad(a.x, a.y);
     if (a.goldState === 0) {
       let near = Infinity;

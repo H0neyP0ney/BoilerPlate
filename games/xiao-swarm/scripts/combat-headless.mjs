@@ -1515,8 +1515,13 @@ try {
     for (const so of q3.soldiers) { so.x = so.px = g0.x; so.y = so.py = g0.y; }
     q3.anchor.x = g0.x; q3.anchor.y = g0.y;
     let picked = 0;
-    for (let i = 0; i < 90; i++) f3.session.advance(34, (e) => { if (e.t === 'gemPicked') picked++; });
-    check(picked > 0 && f3.sim.gems.finalT > t0 - 90 * 0.034 + 1.9, 'boss final : chaque diamant ramassé retarde la fin de 2 s', `${picked} ramassé(s), délai ${t0.toFixed(1)} → ${f3.sim.gems.finalT.toFixed(1)} s`);
+    const afterPick = [];
+    for (let i = 0; i < 90; i++) {
+      const before = picked;
+      f3.session.advance(34, (e) => { if (e.t === 'gemPicked') picked++; });
+      if (picked > before) afterPick.push(f3.sim.gems.finalT);
+    }
+    check(afterPick.length > 0 && afterPick.every((v) => v <= 2 + 1e-9 && v > 1.5) && t0 > 4.5, 'boss final : chaque diamant ramassé remet le compte à rebours à 2 s (pas cumulatif)', `${picked} ramassé(s), après chaque ramassage : ${afterPick.slice(0, 3).map((v) => v.toFixed(2)).join(' / ')} s (départ ${t0.toFixed(1)} s)`);
   }
   {
     // b) tout ramassé : la fin démarre dès que le dernier est pris (sans attendre les 10 s)

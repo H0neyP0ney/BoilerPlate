@@ -80,7 +80,7 @@ export const RING = { radius: 340 };
  */
 export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
 
-export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, spread: 0.2, finalWait: 5, finalBonus: 2, cooldown: 4, grace: 0.6, life: 10, blink: 3 };
+export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, spread: 0.2, finalWait: 5, finalReset: 2, cooldown: 4, grace: 0.6, life: 10, blink: 3 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -208,7 +208,7 @@ export const DIFFICULTY_DEFAULTS = {
   gemMulHard: 1.5,
   gemMulExpert: 2,
   gemFreeShare: 0.2,
-  /** Boss final : part (du contenu d'un coffre de ce boss) qui explose à sa mort, ramassable avant la séquence de fin (`GEM_CHEST.finalWait` s, +`finalBonus` s par diamant ramassé). */
+  /** Boss final : part (du contenu d'un coffre de ce boss) qui explose à sa mort, ramassable avant la séquence de fin (`GEM_CHEST.finalWait` s, remis à `finalReset` s à chaque diamant ramassé). */
   gemFinalShare: 0.5,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire

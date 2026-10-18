@@ -50,7 +50,7 @@
 
 ## À faire
 
-**À faire (17/10, utilisateur) : écran de reward vidéo pour le boss final** — à la fin de la run, proposer une vidéo récompensée (rewarded Poki) qui **multiplie les diamants** gagnés avec le boss final (aujourd'hui : une part du coffre explose à sa mort, `DIFFICULTY.gemFinalShare`, et on a ~5 s pour les ramasser avant la séquence de fin, +2 s par diamant ramassé ; pas de vidéo).
+**À faire (17/10, utilisateur) : écran de reward vidéo pour le boss final** — à la fin de la run, proposer une vidéo récompensée (rewarded Poki) qui **multiplie les diamants** gagnés avec le boss final (aujourd'hui : une part du coffre explose à sa mort, `DIFFICULTY.gemFinalShare`, et on a ~5 s pour les ramasser avant la séquence de fin, compte à rebours remis à 2 s à chaque diamant ramassé ; pas de vidéo).
 
 ~~**Avant le web fit test Poki (11/10, utilisateur)**~~ : **tout est fait (confirmé le 15/10)** — passe son, équilibrage, assets IA retirés, placeholders de particules remplacés, polish graphique.
 

@@ -25,7 +25,7 @@ export class Gems {
    * pendant ce temps (`Sim.update`).
    */
   finalPending = false;
-  /** Temps (s) avant la séquence de fin quand le boss final a explosé : `GEM_CHEST.finalWait`, +`finalBonus` par diamant ramassé ; à 0 la fin démarre même s'il reste des diamants. */
+  /** Temps (s) avant la séquence de fin quand le boss final a explosé : `GEM_CHEST.finalWait`, remis à `finalReset` (2 s) à chaque diamant ramassé ; à 0 la fin démarre même s'il reste des diamants. */
   finalT = 0;
 
 
@@ -212,7 +212,7 @@ export class Gems {
       if (inPickRange(a)) {
         list.splice(i, 1);
         if (kind === 'coin') a.squad.coinsPicked++;
-        else if (this.finalPending) this.finalT += GEM_CHEST.finalBonus; // boss final : chaque diamant ramassé retarde la fin
+        else if (this.finalPending) this.finalT = GEM_CHEST.finalReset; // boss final : chaque diamant ramassé remet le compte à rebours à 2 s (pas cumulatif)
         this.sim.events.push(kind === 'gem' ? { t: 'gemPicked', x: g.x, y: g.y, n: 1 } : { t: 'coinPicked', x: g.x, y: g.y, n: 1, owner: a.squad.owner });
         continue;
       }

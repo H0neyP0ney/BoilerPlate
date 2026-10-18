@@ -531,7 +531,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     target: 'nearest',
     expert: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 } }, // expert et impossible : toutes les 6 s, 10 araignées surgissent en cercle autour de la squad
-    impossible: { web: { every: 5.6, range: 99999, count: 5, gap: [60, 160], radius: 56, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 5,6 s (8 s −30 %), 5 toiles (rayon 56, 80 −30 %) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée + bouclier de 5 %
+    impossible: { web: { every: 5.6, range: 99999, count: 5, gap: [42, 112], radius: 56, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 5,6 s (8 s −30 %), 5 toiles (rayon 56, 80 −30 %) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée + bouclier de 5 %
     swarm: { every: 4, duration: 1.07, count: 15, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     xp: 100,

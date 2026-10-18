@@ -17,7 +17,7 @@ import { fallbackSeen } from '../fallbackEvents';
 /** Décalage vertical (px) de la capsule du compteur au-dessus du barycentre de l'escouade. */
 const CAPSULE_LIFT = 60; // 52 + 12 (09/10), 60 (10/10)
 /** Décalage en plus (px) quand il ne reste qu'un soldat : la capsule ne cache pas sa barre de vie. */
-const CAPSULE_LIFT_ALONE = 8;
+const CAPSULE_LIFT_ALONE = 18; // 8 puis +10 px (17/10)
 /** Taille de la capsule du compteur (0,9 = 10 % plus petite). */
 const CAPSULE_SCALE = 1.035; // 0,9 × 1,15 (+15 % le 12/10)
 

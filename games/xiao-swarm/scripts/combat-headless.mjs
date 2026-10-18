@@ -1493,13 +1493,30 @@ try {
     sim.damage(boss, 1e12, 'p1');
     step(1);
     const n = sim.gems.items.length;
-    const wantMid = ALIENS.boss_crab.diamonds * DIFFICULTY.gemMulExpert;
+    const wantMid = ALIENS.boss_crab.diamonds * DIFFICULTY.gemMulExpert * DIFFICULTY.gemFinalShare; // quantité modérée : une part du coffre
     check(sim.finalBossDead && n >= Math.floor(wantMid * 0.79) && n <= Math.ceil(wantMid * 1.21) && sim.gems.finalPending && !sim.gems.endingReady, 'boss final tué : ses diamants (moyenne du boss × multiplicateur Expert, ± 20 %) au sol, la fin attend', `${n} diamants (moyenne ${wantMid})`);
     const waves0 = sim.waves.time;
     step(60); // ~2 s
     check(sim.waves.time === waves0, 'boss final tué : les vagues sont suspendues le temps de ramasser');
-    step(30 * 9); // ~9 s de plus, la squad reste loin
-    check(sim.gems.items.length === 0 && sim.gems.endingReady, 'les diamants non ramassés disparaissent après 10 s : la fin peut démarrer');
+    check(!sim.gems.endingReady, 'boss final tué : on peut encore jouer, la fin attend (2 s écoulées)');
+    step(30 * 4); // ~6 s : le délai de base (5 s) est écoulé, la squad est restée loin des diamants
+    check(sim.gems.items.length > 0 && sim.gems.endingReady, "boss final tué : sans diamant ramassé, la fin démarre après 5 s même s'il en reste au sol");
+    // chaque diamant ramassé retarde la fin de 2 s
+    const f3 = fresh(36, 'impossible');
+    clearAliens(f3.sim);
+    const q3 = f3.sim.squadOf('p1');
+    f3.sim.horde.spawnAt('boss_crab', q3.center.x + 900, q3.center.y, 1, false);
+    const b3 = f3.sim.aliens.find((x) => x.alive && x.def.boss);
+    b3.age = 1;
+    f3.sim.damage(b3, 1e12, 'p1');
+    f3.step(1);
+    const t0 = f3.sim.gems.finalT;
+    const g0 = f3.sim.gems.items[0];
+    for (const so of q3.soldiers) { so.x = so.px = g0.x; so.y = so.py = g0.y; }
+    q3.anchor.x = g0.x; q3.anchor.y = g0.y;
+    let picked = 0;
+    for (let i = 0; i < 90; i++) f3.session.advance(34, (e) => { if (e.t === 'gemPicked') picked++; });
+    check(picked > 0 && f3.sim.gems.finalT > t0 - 90 * 0.034 + 1.9, 'boss final : chaque diamant ramassé retarde la fin de 2 s', `${picked} ramassé(s), délai ${t0.toFixed(1)} → ${f3.sim.gems.finalT.toFixed(1)} s`);
   }
   {
     // b) tout ramassé : la fin démarre dès que le dernier est pris (sans attendre les 10 s)

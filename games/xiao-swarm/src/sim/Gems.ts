@@ -25,6 +25,8 @@ export class Gems {
    * pendant ce temps (`Sim.update`).
    */
   finalPending = false;
+  /** Temps (s) avant la séquence de fin quand le boss final a explosé : `GEM_CHEST.finalWait`, +`finalBonus` par diamant ramassé ; à 0 la fin démarre même s'il reste des diamants. */
+  finalT = 0;
 
 
   /**
@@ -73,7 +75,8 @@ export class Gems {
   spawnFinalBurst(x: number, y: number, boss: AlienId = 'boss_crab'): void {
     if (!this.enabled) return;
     const rng = this.rng;
-    const n = this.chestQuantity(boss);
+    const n = Math.max(1, Math.round(this.chestQuantity(boss) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
+    this.finalT = GEM_CHEST.finalWait;
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200));
     this.finalPending = true;
@@ -82,7 +85,7 @@ export class Gems {
 
   /** La séquence de fin peut démarrer : pas de burst du boss final en attente, ou tous ses diamants sont ramassés / disparus. */
   get endingReady(): boolean {
-    return !this.finalPending || this.items.length === 0;
+    return !this.finalPending || this.items.length === 0 || this.finalT <= 0;
   }
 
   /** Un alien vient de mourir : il peut lâcher une pièce d'or (plus souvent s'il est costaud), un boss en lâche une poignée. Solo seulement. */
@@ -144,6 +147,7 @@ export class Gems {
   }
 
   update(dt: number): void {
+    if (this.finalPending) this.finalT -= dt;
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
       c.px = c.x;
@@ -208,6 +212,7 @@ export class Gems {
       if (inPickRange(a)) {
         list.splice(i, 1);
         if (kind === 'coin') a.squad.coinsPicked++;
+        else if (this.finalPending) this.finalT += GEM_CHEST.finalBonus; // boss final : chaque diamant ramassé retarde la fin
         this.sim.events.push(kind === 'gem' ? { t: 'gemPicked', x: g.x, y: g.y, n: 1 } : { t: 'coinPicked', x: g.x, y: g.y, n: 1, owner: a.squad.owner });
         continue;
       }
@@ -228,5 +233,6 @@ export class Gems {
     this.items.length = 0;
     this.coins.length = 0;
     this.finalPending = false;
+    this.finalT = 0;
   }
 }

@@ -136,7 +136,7 @@ export interface AlienDef {
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
-  trail?: { every: number; radius: number; ttl: number; dps: number; /** Orbe de feu : durée (s) de la flamme posée sous le soldat touché (défaut : `ttl`). */ hitTtl?: number };
+  trail?: { every: number; radius: number; ttl: number; dps: number; /** Orbe de feu : durée (s) de la flamme posée sous le soldat touché (défaut : `ttl`). */ hitTtl?: number; /** Orbe de feu : rayon (× `radius`) de la flamme posée sous le soldat touché (défaut 1,4). */ hitRadiusMul?: number };
   /**
    * Bouclier : barre en plus des PV (`pct` × PV max), consommée avant eux. Régénérée en `regenTime` s une fois qu'aucun dégât n'a été
    * reçu depuis `regenDelay` s (tout coup, même sur un bouclier vide, relance le délai).
@@ -603,7 +603,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     floats: true,
     projectile: { life: 1.56, ring: 44, kind: 'fire' },
-    trail: { every: 0.05, radius: 22, ttl: 0.5, dps: 31.2, hitTtl: 4 }, // une flaque toutes les 0,05 s (0,1 s avant : 2× plus souvent, 17/10) ; // temps au sol du feu de l'orbe, −50 % (17/10) : traînée 0,5 s (1 s, avant 8 s), flamme sous le soldat touché 4 s (8 s)
+    trail: { every: 0.05, radius: 22, ttl: 0.5, dps: 31.2, hitTtl: 1, hitRadiusMul: 1 }, // flamme d'impact : même taille que la traînée (× 1,4 avant) et 1 s (4 s, puis 8 s avant) ; // une flaque toutes les 0,05 s (0,1 s avant : 2× plus souvent, 17/10) ; // temps au sol du feu de l'orbe, −50 % (17/10) : traînée 0,5 s (1 s, avant 8 s), flamme sous le soldat touché 4 s (8 s)
     xp: 0,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0xff8a2a,

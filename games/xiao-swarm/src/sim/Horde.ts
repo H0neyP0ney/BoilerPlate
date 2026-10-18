@@ -1093,7 +1093,7 @@ export class Horde {
       else this.sim.ignite(s, a.def.damage * a.escDmg * FIRE.orbDps); // orbe de feu : le soldat s'enflamme (débit = dégâts × `FIRE.orbDps`)
       if (fire) {
         // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
-        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, 'hitTtl' in T && T.hitTtl ? T.hitTtl : T.ttl, T.dps * a.escDmg);
+        if (T) this.sim.addFire(s.x, s.y + 4, T.radius * (T.hitRadiusMul ?? 1.4), T.hitTtl ?? T.ttl, T.dps * a.escDmg);
         this.sim.events.push({ t: 'explosion', x: a.x, y: a.y, r: 50, style: 'fire' });
       } else this.sim.freezeHit(s, P.ring); // éclate : gèle le soldat touché (onde et éclats : événement `freeze`)
       a.alive = false;

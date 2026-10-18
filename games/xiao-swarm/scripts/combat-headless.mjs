@@ -869,7 +869,7 @@ try {
         o2.x = target.x; o2.y = target.y;
         const f0 = sim.fires.length;
         step(2);
-        check(target.burn > 0 && target.frozen === 0 && !o2.alive && sim.fires.some((f) => f.ttl > 3 && Math.hypot(f.x - target.x, f.y - target.y) < 30), "orbe de feu : au contact il enflamme le soldat (brûlure dans le temps + flamme au sol), sans le geler", `brûle ${target.burn.toFixed(1)} s à ${target.burnDps.toFixed(1)} PV/s, PV ${target.hp.toFixed(0)}`);
+        check(target.burn > 0 && target.frozen === 0 && !o2.alive && sim.fires.some((f) => f.ttl > 0.6 && Math.hypot(f.x - target.x, f.y - target.y) < 30), "orbe de feu : au contact il enflamme le soldat (brûlure dans le temps + flamme au sol), sans le geler", `brûle ${target.burn.toFixed(1)} s à ${target.burnDps.toFixed(1)} PV/s, PV ${target.hp.toFixed(0)}`);
       } else {
         const orb = sim.aliens.find((a) => a.def.id === 'ice_orb' && a.alive);
         const target = sq.soldiers[0];

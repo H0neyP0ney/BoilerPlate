@@ -54,7 +54,7 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  * Remettre à `false` pour retrouver les niveaux. Ne touche pas au bouclier (Expert seulement).
  */
 export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
-export const KNOCK_HOP = { time: 0.6, height: 40 };
+export const KNOCK_HOP = { time: 0.6, height: 40, arc: 0.8 }; // arc : la cloche en y dure 80 % du recul (elle finit 20 % plus tôt, le soldat touche le sol avant la fin de la poussée)
 export const WEB = { jump: 0.6, height: 70, land: 80, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;

@@ -493,7 +493,7 @@ export class Fx {
     const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(d.flashScale);
     this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: d.flashMs, onComplete: () => flash.destroy() });
     this.column(x, y, 0xff4a4a, d.columnHeight, d.columnMs);
-    this.text(x, y - 46, '✖', '#ff5a5a', d.crossSize);
+    this.text(x, y - 46, '×', '#ff3a3a', d.crossSize * 1.6, '#4a0f0f', 7); // croix rouge : le signe × d'une police normale (le glyphe ✖ s'affichait en emoji noir)
   }
 
   /**

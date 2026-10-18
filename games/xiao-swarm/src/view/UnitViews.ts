@@ -162,7 +162,7 @@ export class SoldierView {
     // soufflé par un kamikaze : une cloche pendant tout le recul (le soldat ne rejoint son slot qu'après, en marchant)
     if (s.knockT > 0) this.knockAir += dt;
     else this.knockAir = 0;
-    if (this.knockAir > 0) bob -= Math.sin(Math.min(1, this.knockAir / KNOCK_HOP.time) * Math.PI) * KNOCK_HOP.height;
+    if (this.knockAir > 0) bob -= Math.sin(Math.min(1, this.knockAir / (KNOCK_HOP.time * KNOCK_HOP.arc)) * Math.PI) * KNOCK_HOP.height;
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
     const oy = sprites.get(this.bodyId).offsetY ?? 0; // décalage vertical du sprite (et de l'arme) réglé dans la visionneuse
     this.body.setPosition(this.rx, this.ry + bob + oy).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));

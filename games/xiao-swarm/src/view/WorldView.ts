@@ -609,7 +609,7 @@ export class WorldView {
     for (let i = 0; i < FX.levelWave.waves; i++) {
       const draw = (): void => {
         const at = follow?.() ?? w; // l'onde part du centre ACTUEL de la squad, et le suit tant qu'elle grossit
-        const ring = this.fx.ring(at.x, at.y, UPGRADE_REPEL.radius, 0xffffff, ms);
+        const ring = this.fx.ring(at.x, at.y, UPGRADE_REPEL.radius, 0xffffff, ms).setDepth(DEPTH.groundFx); // l'onde est AU SOL : sous les unités
         if (follow) this.followers.push({ parts: [{ img: ring, dy: 0 }], pos: follow });
       };
       if (i === 0) draw();

@@ -397,6 +397,8 @@ export interface GemChestState {
   state: 'idle' | 'ad' | 'cooldown';
   cool: number;
   age: number;
+  /** Nombre de diamants que le coffre contiendra à son ouverture (moyenne du boss × multiplicateur du niveau, ± `GEM_CHEST.spread`). */
+  qty: number;
 }
 
 export interface RecruitState {

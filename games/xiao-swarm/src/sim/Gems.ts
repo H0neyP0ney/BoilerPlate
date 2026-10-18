@@ -1,5 +1,6 @@
 import { clamp, Rng } from '@xiao/engine/sim';
-import { COINS, GEM_CHEST, RECRUIT } from '../config';
+import { COINS, DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
+import { ALIENS, type AlienId } from '../data/aliens';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -45,26 +46,34 @@ export class Gems {
    * sommet d'un triangle équilatéral (côté `GEM_CHEST.triangle`, ± `triangleJitter`) dont les deux globes d'upgrade (`UpgradeOrbs.burst`, en bas à gauche et à droite) sont la base.
    * Pas de jauge pendant le saut.
    */
-  spawnChest(x: number, y: number): void {
+  /** Quantité de diamants d'un coffre de `boss` : sa moyenne (`AlienDef.diamonds`) × le multiplicateur du niveau (`DIFFICULTY.gemMul…`), ± `GEM_CHEST.spread`, au moins 1. */
+  chestQuantity(boss: AlienId): number {
+    const lvl = this.sim.difficulty;
+    const mul = lvl === 'impossible' ? DIFFICULTY.gemMulExpert : lvl === 'expert' ? DIFFICULTY.gemMulHard : DIFFICULTY.gemMulNormal;
+    return Math.max(1, Math.round((ALIENS[boss].diamonds ?? 0) * mul * (1 + this.rng.range(-GEM_CHEST.spread, GEM_CHEST.spread))));
+  }
+
+  spawnChest(x: number, y: number, boss: AlienId = 'boss_gling'): void {
     if (!this.enabled || this.sim.tutorial?.active) return;
     const { minX, maxX, minY, maxY } = this.sim.arena.bounds;
     const rng = this.rng;
+    const qty = this.chestQuantity(boss);
     const R = GEM_CHEST.triangle / Math.sqrt(3); // rayon du cercle circonscrit : le centre du triangle est l'œuf
     const j = GEM_CHEST.triangleJitter;
     const ang = -Math.PI / 2 + rng.range(-0.05, 0.05); // sommet = au-dessus de l'œuf
     const dist = R * (1 + rng.range(-j, j));
     const tx = clamp(x + Math.cos(ang) * dist, minX + 60, maxX - 60);
     const ty = clamp(y + Math.sin(ang) * dist, minY + 60, maxY - 60);
-    this.chests.push({ id: this.sim.ids.get(), x, y, px: x, py: y, charge: 0, state: 'idle', cool: 0, age: 0, hop: { vx: (tx - x) / GEM_FALL_TIME, vy: (ty - y) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
-    const n = Math.floor(rng.range(GEM_CHEST.free[0], GEM_CHEST.free[1] + 1));
+    this.chests.push({ id: this.sim.ids.get(), x, y, px: x, py: y, charge: 0, state: 'idle', cool: 0, age: 0, qty, hop: { vx: (tx - x) / GEM_FALL_TIME, vy: (ty - y) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
+    const n = Math.max(1, Math.round(qty * DIFFICULTY.gemFreeShare)); // une part du contenu du coffre jaillit tout de suite
     for (let i = 0; i < n; i++) this.drop(x, y, rng.range(0, Math.PI * 2), rng.range(60, 130)); // autour de l'œuf
   }
 
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
-  spawnFinalBurst(x: number, y: number): void {
+  spawnFinalBurst(x: number, y: number, boss: AlienId = 'boss_crab'): void {
     if (!this.enabled) return;
     const rng = this.rng;
-    const n = Math.floor(rng.range(GEM_CHEST.burst[0], GEM_CHEST.burst[1] + 1));
+    const n = this.chestQuantity(boss);
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200));
     this.finalPending = true;
@@ -115,7 +124,7 @@ export class Gems {
     }
     this.chests.splice(i, 1);
     const rng = this.rng;
-    const n = Math.floor(rng.range(GEM_CHEST.burst[0], GEM_CHEST.burst[1] + 1));
+    const n = c.qty;
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(c.x, c.y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 230)); // explosion : en couronne, plus loin que les diamants du début
     this.sim.events.push({ t: 'gemChestOpen', x: c.x, y: c.y });

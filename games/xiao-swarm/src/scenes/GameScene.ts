@@ -138,9 +138,9 @@ export class GameScene extends Phaser.Scene {
         mode,
         seed: (Math.random() * 2 ** 31) | 0,
         bots: Number.isFinite(botsParam) && botsParam > 0 ? Math.min(botsParam, 11) : mode.id === 'royale' ? 5 : 0,
-        tutorial: mode.id === 'survival' && !settings.tutorialDone && !poki.getURLParam('notuto') && !jump && !test, // onboarding scripté à la première partie solo
+        tutorial: mode.id === 'survival' && (!settings.tutorialDone || !!poki.getURLParam('tuto')) && !poki.getURLParam('notuto') && !jump && !test, // onboarding scripté à la première partie solo
         loadout: settings.loadout(),
-        difficulty: startDifficulty(!settings.tutorialDone), // dernier niveau choisi avec les boutons (normal pendant le tutoriel) ; ?difficulty=expert|impossible pour un test
+        difficulty: startDifficulty(!settings.tutorialDone || !!poki.getURLParam('tuto')), // dernier niveau choisi avec les boutons (normal pendant le tutoriel) ; ?difficulty=expert|impossible pour un test
       });
       this.alienTest = test
         ? new AlienTest(this, this.session.sim, this.session.localPlayer, test, (back) => {

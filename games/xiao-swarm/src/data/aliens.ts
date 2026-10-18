@@ -125,6 +125,8 @@ export interface AlienDef {
   /** Boss : annoncé à l'écran (bandeau, flèche, barre de vie). Le boss `final` doit être tué pour gagner la partie. */
   /** `twin` : boss jumeau (rhinos feu / glace) : le premier tombé est un alien comme les autres (ni clear screen, ni œuf, ni escalade) ; seul le dernier compte. */
   boss?: { kind: 'mini' | 'final'; twin?: boolean };
+  /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
+  diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
   trail?: { every: number; radius: number; ttl: number; dps: number };
   /**
@@ -449,6 +451,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
     spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 60 }, // toutes les 6 s : deux croix de 4 petites rangées de pics (150 px, 230 avant le 17/10) : sur la squad et là où elle se dirige
     boss: { kind: 'mini' },
+    diamonds: 14, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 150,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xb03a3a,
@@ -472,6 +475,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 31.2 }, burst: { orb: 'fire_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
+    diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xff5a1a,
@@ -491,6 +495,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
+    diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0x7fd8ff,
@@ -513,6 +518,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     stalactites: { count: 8, onSoldiers: 3, spread: 260, radius: 55, delay: 0.825, stagger: 0.12, damage: 80, knockback: 300, walk: { count: 3, onSoldiers: 2 } }, // + petite pluie de 3 quand il marche (08/10)
     burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 60, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad ; 1,5 s avant, la direction du télégraphe se fige mais il suit encore la squad sur cet axe (08/10)
     boss: { kind: 'mini' },
+    diamonds: 20, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 400,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xc01c40,
@@ -534,6 +540,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     impossible: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // Expert : en plus, toutes les 6 s, 10 araignées surgissent en cercle autour de la squad + bouclier de 5 %
     swarm: { every: 4, duration: 1.07, count: 15, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
+    diamonds: 10, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 100,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xff5aa8,
@@ -612,6 +619,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 60, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
     lob: { range: 620, cooldown: 3, flight: 1, damage: 20, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
     boss: { kind: 'mini' }, // le type réel dépend du niveau : `bossKindAt` (final en Expert)
+    diamonds: 40, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
     recruitChance: 1.3, // avant : 1 (×1.3 intégré le 09/10)
     color: 0xd9435a,

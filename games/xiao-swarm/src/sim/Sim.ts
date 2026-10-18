@@ -90,6 +90,8 @@ export class Sim {
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
+  /** Boss d'origine de chaque œuf vivant (id d'alien de l'œuf → boss) : détermine le contenu du coffre à diamants. Sim seulement. */
+  readonly eggBoss = new Map<number, AlienId>();
   /** Séquence de fin (solo, boss final tombé) : plus de vagues, d'XP ni de dégâts aux soldats ; la vue pilote la squad vers la fusée (`beginEnding`). */
   ending = false;
   /** Soldats montés dans la fusée de fin : retirés sans mort (ni corps ni événement `soldierDied`). */
@@ -202,6 +204,7 @@ export class Sim {
     this.powerups.clear();
     this.xp.clear();
     this.finalBossDead = false;
+    this.eggBoss.clear();
     this.ending = false;
     this.boarded.clear();
     this.bossKills = 0;
@@ -1028,7 +1031,7 @@ export class Sim {
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.egg) {
       this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
-      this.gems.spawnChest(a.x, a.y); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss
+      this.gems.spawnChest(a.x, a.y, this.eggBoss.get(a.id) ?? 'boss_gling'); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss
     }
     if (a.def.boss) {
       // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul fait un clear screen, laisse l'œuf, compte pour l'escalade et le bandeau.
@@ -1038,11 +1041,11 @@ export class Sim {
       const isFinal = bossKindAt(a.def, this.difficulty) === 'final'; // le boss final dépend du niveau (Normal : Scarab, Hard : rhinos jumeaux, Expert : Giant Crab)
       if (isFinal && !firstTwin) {
         this.finalBossDead = true;
-        this.gems.spawnFinalBurst(a.x, a.y); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
+        this.gems.spawnFinalBurst(a.x, a.y, a.def.id); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
       }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
-        if (!isFinal) this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (!isFinal) this.eggBoss.set(this.horde.spawnEgg(a.x, a.y).id, a.def.id); // l'œuf se souvient de son boss : le coffre contiendra SES diamants // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
           this.events.push({ t: 'bossDown', alien: a.def.id, kind: isFinal ? 'final' : 'mini' });

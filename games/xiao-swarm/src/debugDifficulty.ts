@@ -31,6 +31,15 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
     ],
   },
   {
+    title: 'Diamants des boss',
+    specs: [
+      { key: 'gemMulNormal', label: 'Normal : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Multiplie la quantité moyenne de diamants du coffre de chaque boss (réglée dans la vue du boss, champ « diamonds ») en mode Normal' },
+      { key: 'gemMulHard', label: 'Hard : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Hard' },
+      { key: 'gemMulExpert', label: 'Expert : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Expert' },
+      { key: 'gemFreeShare', label: 'Diamants jaillis de l\'œuf', min: 0, max: 1, step: 0.01, hint: 'Part du contenu du coffre qui jaillit tout de suite autour de l\'œuf à son ouverture (0,2 = 20 %), en plus du coffre' },
+    ],
+  },
+  {
     title: 'Boss',
     specs: [
       { key: 'bossEscalationHp', label: 'Escalade : PV des aliens / boss', min: 0, max: 1, step: 0.01, hint: 'PV gagnés par les aliens à chaque boss ou mini-boss tué (0,15 = +15 %, cumulés ×1,15 par boss). Vaut pour les aliens qui apparaissent ensuite' },

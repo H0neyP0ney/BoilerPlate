@@ -410,6 +410,39 @@ try {
     check(before === 0 && sim.gems.chests.length === 1 && Math.hypot(sim.gems.chests[0].x - egg.x, sim.gems.chests[0].y - egg.y) < 40, "coffre à diamants : il apparaît à l'ouverture de l'œuf (pas à la mort du boss)", `${before} avant, ${sim.gems.chests.length} après`);
   }
 
+  // ---- diamants des boss : quantité moyenne par boss × multiplicateur du niveau (± 20 %), et 20 % jaillissent de l'œuf à son ouverture
+  {
+    const qtyOf = (level, boss) => {
+      const { sim } = fresh(31, level);
+      const out = [];
+      for (let i = 0; i < 40; i++) out.push(sim.gems.chestQuantity(boss));
+      return out.reduce((a, b) => a + b, 0) / out.length;
+    };
+    const mulOf = { normal: DIFFICULTY.gemMulNormal, expert: DIFFICULTY.gemMulHard, impossible: DIFFICULTY.gemMulExpert };
+    let ok = true;
+    let detail = [];
+    for (const level of ['normal', 'expert', 'impossible']) {
+      for (const boss of ['boss_gling', 'boss_scarab', 'boss_crab']) {
+        const want = ALIENS[boss].diamonds * mulOf[level];
+        const got = qtyOf(level, boss);
+        if (Math.abs(got - want) > want * 0.12 + 1) ok = false;
+        detail.push(`${level}/${boss}: ${got.toFixed(1)} (≈${want})`);
+      }
+    }
+    const inc = ALIENS.boss_gling.diamonds < ALIENS.boss_rhino.diamonds && ALIENS.boss_rhino.diamonds < ALIENS.boss_scarab.diamonds && ALIENS.boss_scarab.diamonds < ALIENS.boss_rhino_fire.diamonds && ALIENS.boss_rhino_fire.diamonds < ALIENS.boss_crab.diamonds;
+    check(ok && inc, 'diamants des boss : moyenne du boss × multiplicateur du niveau, qui augmente de boss en boss', detail.slice(0, 4).join(' ; '));
+    const { sim } = fresh(32, 'expert');
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const egg = sim.horde.spawnEgg(sq.center.x + 300, sq.center.y);
+    sim.eggBoss.set(egg.id, 'boss_scarab');
+    sim.damage(egg, 1e9, 'p1');
+    sim.step(1 / 30, new Map());
+    const chest = sim.gems.chests[0];
+    const free = sim.gems.items.length;
+    check(!!chest && free === Math.max(1, Math.round(chest.qty * DIFFICULTY.gemFreeShare)), 'œuf ouvert : 20 % du contenu du coffre jaillit tout de suite', `${free} diamants pour un coffre de ${chest?.qty}`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);
@@ -1393,7 +1426,8 @@ try {
     sim.damage(boss, 1e12, 'p1');
     step(1);
     const n = sim.gems.items.length;
-    check(sim.finalBossDead && n >= 20 && n <= 25 && sim.gems.finalPending && !sim.gems.endingReady, 'boss final tué : 20-25 diamants au sol, la fin attend', `${n} diamants`);
+    const wantMid = ALIENS.boss_crab.diamonds * DIFFICULTY.gemMulExpert;
+    check(sim.finalBossDead && n >= Math.floor(wantMid * 0.79) && n <= Math.ceil(wantMid * 1.21) && sim.gems.finalPending && !sim.gems.endingReady, 'boss final tué : ses diamants (moyenne du boss × multiplicateur Expert, ± 20 %) au sol, la fin attend', `${n} diamants (moyenne ${wantMid})`);
     const waves0 = sim.waves.time;
     step(60); // ~2 s
     check(sim.waves.time === waves0, 'boss final tué : les vagues sont suspendues le temps de ramasser');

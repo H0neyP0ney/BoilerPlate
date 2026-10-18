@@ -75,7 +75,7 @@ export const RING = { radius: 340 };
  */
 export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
 
-export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, burst: [20, 25] as [number, number], free: [1, 5] as [number, number], cooldown: 4, grace: 0.6, life: 10, blink: 3 };
+export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, spread: 0.2, cooldown: 4, grace: 0.6, life: 10, blink: 3 };
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -195,6 +195,14 @@ export const DIFFICULTY_DEFAULTS = {
   expertScaleMul: 1.1,
   impossibleBaseMul: 1.2,
   impossibleScaleMul: 1.2,
+  /**
+   * Diamants du coffre des boss (17/10) : la quantité MOYENNE vient du boss (`AlienDef.diamonds`, vue d'unité) ; ces multiplicateurs la règlent par niveau (Normal, Hard = id `expert`, Expert = id
+   * `impossible`) ; `gemFreeShare` = part (du contenu du coffre) qui jaillit tout de suite autour de l'œuf quand on l'ouvre.
+   */
+  gemMulNormal: 1,
+  gemMulHard: 1.5,
+  gemMulExpert: 2,
+  gemFreeShare: 0.2,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).

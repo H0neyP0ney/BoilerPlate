@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { lerp } from '@xiao/engine';
-import { COIN_GOLD, COIN_KEY, ensureGemTextures, GEM_CHEST_KEY, GEM_GREEN, GEM_KEY } from '../art/gems';
+import { COIN_KEY, ensureGemTextures, GEM_CHEST_KEY, GEM_GREEN, GEM_KEY } from '../art/gems';
 import { COINS, DEPTH, GEM_CHEST } from '../config';
+
+/** Échelle des pièces d'or au sol (0,34 d'origine, +50 % le 17/10), sans cercle posé dessous. */
+const COIN_SCALE = 0.34 * 1.5;
 import type { GemChestState } from '../sim/entities';
 import { GEM_FALL_TIME } from '../sim/Gems';
 import type { Sim } from '../sim/Sim';
@@ -100,7 +103,6 @@ export class GemViews {
   drawGround(g: Phaser.GameObjects.Graphics, time: number): void {
     for (const [, v] of this.chests) g.fillStyle(0x2a1d2e, 0.18 + 0.22 * v.fall).fillEllipse(v.state.x, v.state.y, 62 + 16 * v.fall, 26 + 6 * v.fall); // ombre portée au sol (suit le saut)
     for (const it of this.sim.gems.items) if (!it.hop) drawPickupSpot(g, it.x, it.y, GEM_GREEN, time, it.id, 0.8, 0.45);
-    for (const it of this.sim.gems.coins) if (!it.hop) drawPickupSpot(g, it.x, it.y, COIN_GOLD, time, it.id, 0.6, 0.32);
   }
 
   sync(time: number, alpha: number): void {
@@ -145,7 +147,7 @@ export class GemViews {
       liveCoins.add(it.id);
       let img = this.coins.get(it.id);
       if (!img) {
-        img = this.scene.add.image(it.x, it.y, COIN_KEY).setScale(0.34);
+        img = this.scene.add.image(it.x, it.y, COIN_KEY).setScale(COIN_SCALE);
         this.coins.set(it.id, img);
       }
       const x = lerp(it.px, it.x, alpha);
@@ -153,7 +155,7 @@ export class GemViews {
       const fall = it.hop ? Math.max(0, Math.min(1, 1 - it.hop.t / GEM_FALL_TIME)) : 1;
       const arc = it.hop ? Math.sin(Math.PI * fall) * 40 : 0;
       const bob = it.hop ? 0 : Math.sin(time * 5 + it.id) * 2;
-      img.setPosition(x, y - 14 - arc + bob).setDepth(DEPTH.actors + y + 40).setScale(0.34 * Math.max(0.15, Math.abs(Math.cos(time * 4 + it.id))), 0.34).setAlpha(it.life < COINS.blink && Math.sin(time * 18) > 0 ? 0.35 : 1);
+      img.setPosition(x, y - 14 - arc + bob).setDepth(DEPTH.actors + y + 40).setScale(COIN_SCALE * Math.max(0.15, Math.abs(Math.cos(time * 4 + it.id))), COIN_SCALE).setAlpha(it.life < COINS.blink && Math.sin(time * 18) > 0 ? 0.35 : 1);
     }
     for (const [id, img] of this.coins) {
       if (liveCoins.has(id)) continue;

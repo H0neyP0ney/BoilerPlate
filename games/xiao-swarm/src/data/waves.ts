@@ -110,6 +110,7 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 6 }, { type: 'burner', count: 6 }, { type: 'slime', count: 9 }] },
       { name: 'Brasier', groups: [{ type: 'burner', count: 9 }, { type: 'gling', count: 15 }] },
       { name: 'Chaman', groups: [{ type: 'shaman', count: 3 }, { type: 'slime', count: 15 }, { type: 'gling', count: 9 }] },
+      { name: 'Slimes de feu', groups: [{ type: 'fireballer', count: 3 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
     ],
     7: [
       { name: 'Rhinocéros', groups: [{ type: 'charger', count: 3 }, { type: 'wall', count: 6 }, { type: 'slime', count: 9 }] },

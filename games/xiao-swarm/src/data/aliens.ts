@@ -708,7 +708,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4,
     attackCooldown: 0.5,
     target: 'nearest',
-    maxPerWave: 2,
+    maxPerWave: 3,
     ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'fire_orb' }, // lance un orbe de feu destructible
     revivable: true,
     xp: 5,

@@ -861,7 +861,7 @@ try {
         const orb = sim.aliens.find((a) => a.def.id === 'fire_orb');
         sim.fires.length = 0;
         step(20);
-        check(sim.fires.length >= 3 && orb.def.projectile.kind === 'fire' && orb.maxHp === 500, 'orbe de feu : destructible (500 PV) et il laisse une traînée de flammes au sol', `${sim.fires.length} flammes`);
+        check(sim.fires.length >= 3 && orb.def.projectile.kind === 'fire' && orb.maxHp === ALIENS.fire_orb.hp && ALIENS.fire_orb.hp === 1000, 'orbe de feu : destructible (1000 PV) et il laisse une traînée de flammes au sol', `${sim.fires.length} flammes`);
         // au contact d'un soldat : brûlure, pas de gel
         const target = sq.soldiers[0];
         target.invulnerable = 0; target.hp = target.maxHp = 500;

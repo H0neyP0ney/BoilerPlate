@@ -594,7 +594,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Orbe de feu lancé par le rhinocéros de feu : projectile destructible (500 PV) qui laisse une traînée de flammes au sol et brûle le soldat touché. */
   fire_orb: {
     id: 'fire_orb',
-    hp: 500,
+    hp: 1000, // 500 +100 % (17/10)
     speed: 403,
     radius: 14,
     mass: 0.5,

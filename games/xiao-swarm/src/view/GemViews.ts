@@ -32,7 +32,7 @@ class ChestView {
     readonly state: GemChestState,
     private readonly onLand: () => ((x: number, y: number, r: number) => void) | undefined,
   ) {
-    this.chest = scene.add.image(state.x, state.y, GEM_CHEST_KEY).setOrigin(0.5, 0.85).setScale(0.95);
+    this.chest = scene.add.image(state.x, state.y, GEM_CHEST_KEY).setOrigin(0.5, 0.92).setScale(1);
     this.icon = scene.add.image(state.x, state.y - ICON_LIFT, scene.textures.exists(REWARDED_ICON) ? REWARDED_ICON : GEM_KEY);
     this.icon.setScale((GAUGE_R * 1.3) / Math.max(this.icon.width, this.icon.height));
     this.gauge = scene.add.graphics();

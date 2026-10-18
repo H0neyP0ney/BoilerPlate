@@ -469,7 +469,7 @@ export class Fx {
     ];
   }
 
-  /** Gain d'un soldat (recrue qui rejoint la squad) : éclats de sa classe, double onde, flash blanc et « +1 » vert qui s'élève (la colonne bleue est posée par `WorldView.syncUnits`). */
+  /** Gain d'un soldat (recrue qui rejoint la squad) : éclats de sa classe, double onde, flash blanc (plus de « +1 » vert : le soldat qui arrive suffit ; la colonne bleue est posée par `WorldView.syncUnits`). */
   gain(x: number, y: number, color: number): void {
     const g = FX.gain;
     this.burst(x, y - 20, color, g.burstCount);
@@ -478,7 +478,6 @@ export class Fx {
     this.ring(x, y, g.ringSmall, 0xffffff);
     const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0x9dffb0).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(g.flashScale);
     this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: g.flashMs, onComplete: () => flash.destroy() });
-    this.text(x, y - 50, '+1', '#5dff84', g.textSize, '#13331c', 7);
   }
 
   /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */

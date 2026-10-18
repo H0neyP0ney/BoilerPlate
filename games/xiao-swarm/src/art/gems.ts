@@ -85,29 +85,42 @@ export function ensureGemTextures(scene: Phaser.Scene): void {
     ctx.ellipse(21, 17, 6, 3, -0.6, 0, Math.PI * 2);
     ctx.fill();
   });
-  make(scene, GEM_CHEST_KEY, 128, 112, (ctx) => {
-    // corps du coffre
+  make(scene, GEM_CHEST_KEY, 96, 84, (ctx) => {
+    // petit coffret précieux : velours violet, filets d'or, fermoir serti d'un diamant
     ctx.lineJoin = 'round';
-    const body = (x: number, y: number, w: number, h: number, r: number, fill: string, stroke = '#3a2210'): void => {
+    const part = (x: number, y: number, w: number, h: number, r: number, fill: string, stroke = '#2a0f45', lw = 3.5): void => {
       ctx.beginPath();
       ctx.roundRect(x, y, w, h, r);
       ctx.fillStyle = fill;
       ctx.fill();
-      ctx.lineWidth = 4;
+      ctx.lineWidth = lw;
       ctx.strokeStyle = stroke;
       ctx.stroke();
     };
-    body(12, 52, 104, 52, 8, '#8a5a2b'); // caisse
-    body(12, 30, 104, 30, 14, '#a56b32'); // couvercle
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.fillRect(18, 34, 92, 6);
-    for (const x of [30, 90]) body(x - 7, 30, 14, 74, 3, '#e6b422', '#7a5a0a'); // ferrures dorées
-    body(54, 54, 20, 22, 4, '#f3cf55', '#7a5a0a'); // serrure
-    ctx.fillStyle = '#3a2210';
+    part(10, 42, 76, 34, 8, '#6a2d9c'); // écrin
+    part(10, 22, 76, 26, 13, '#8a43c6'); // couvercle bombé
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath();
-    ctx.arc(64, 62, 3.5, 0, Math.PI * 2);
+    ctx.ellipse(36, 30, 20, 3.5, -0.08, 0, Math.PI * 2); // reflet sur le couvercle
     ctx.fill();
-    ctx.fillRect(62.5, 62, 3, 8);
-    paintGem(ctx, 64, 24, 40); // diamant posé sur le couvercle
+    part(10, 42, 76, 6, 2, '#f3cf55', '#7a5a0a', 2.5); // filet d'or à la jonction
+    part(10, 68, 76, 8, 4, '#e6b422', '#7a5a0a', 2.5); // pied doré
+    for (const x of [22, 74]) part(x - 3.5, 22, 7, 54, 2, '#f3cf55', '#7a5a0a', 2.5); // coins dorés
+    part(40, 40, 16, 18, 4, '#f3cf55', '#7a5a0a', 2.5); // plaque du fermoir
+    paintGem(ctx, 48, 49, 16); // diamant serti sur le fermoir
+    ctx.fillStyle = '#ffffff'; // petits éclats
+    for (const [x, y, r] of [[18, 14, 3], [80, 10, 2.2], [66, 18, 1.6]]) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r * 2);
+      ctx.lineTo(x + r * 0.6, y - r * 0.6);
+      ctx.lineTo(x + r * 2, y);
+      ctx.lineTo(x + r * 0.6, y + r * 0.6);
+      ctx.lineTo(x, y + r * 2);
+      ctx.lineTo(x - r * 0.6, y + r * 0.6);
+      ctx.lineTo(x - r * 2, y);
+      ctx.lineTo(x - r * 0.6, y - r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
   });
 }

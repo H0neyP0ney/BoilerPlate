@@ -470,6 +470,10 @@ export class WorldView {
           this.fx.ring(e.x, e.y, e.r, SHOOTER_BLAST);
           break;
         }
+        if (e.style === 'fire' && e.r === ALIENS.kamikaze.deathBlast?.radius) {
+          // explosion d'un kamikaze : les soldats dans la zone décollent en cloche pendant leur recul (essai)
+          for (const sq of this.sim.squads) for (const s of sq.soldiers) if (s.alive && Math.hypot(s.x - e.x, s.y - e.y) < e.r + s.radius) this.soldiers.get(s.id)?.knockJump();
+        }
         // pas de secousse pour les petites explosions (grenades, roquettes) ni celle du kamikaze (rayon 95, retirée le 11/10), sinon l'écran tremble en permanence ; le Flammeur (120), le crabe… secouent
         this.fx.explosion(e.x, e.y, e.r, e.r > 95 && nearCam(e.x, e.y));
         if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`

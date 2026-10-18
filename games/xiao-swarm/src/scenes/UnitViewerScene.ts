@@ -268,7 +268,7 @@ ${id}` : id;
 
   /** Unité définie mais écartée du jeu (hors ACTIVE_CLASSES / ACTIVE_ALIENS ; les boss, pilotés par la timeline, comptent comme actifs). */
   private isInactive(kind: Kind, unit: string): boolean {
-    if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ALIENS[unit as AlienId].egg && !ACTIVE_ALIENS.includes(unit as AlienId); // l'œuf des boss est en jeu
+    if (kind === 'alien') return !ALIENS[unit as AlienId].boss && !ALIENS[unit as AlienId].egg && !ALIENS[unit as AlienId].projectile && !ACTIVE_ALIENS.includes(unit as AlienId); // l'œuf et les orbes (alien-projectiles lancés par l'iceballer, le fireballer, les rhinos jumeaux) sont en jeu // l'œuf des boss est en jeu
     return !ACTIVE_CLASSES.includes(baseUnit(unit) as SoldierClassId);
   }
 

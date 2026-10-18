@@ -92,7 +92,7 @@ export class PowerUps {
   /** Position (monde) de l'orbe `i` de la squad `sq` : sur un cercle de rayon `sq.radius + ELECTRO.margin` autour de son centre. */
   static orbAt(sq: { center: { x: number; y: number }; radius: number; electroAngle: number }, i: number): { x: number; y: number } {
     const a = sq.electroAngle + (i * Math.PI * 2) / ELECTRO.count;
-    const r = sq.radius + ELECTRO.margin;
+    const r = (sq.radius + ELECTRO.margin) * ELECTRO.radiusMul;
     return { x: sq.center.x + Math.cos(a) * r, y: sq.center.y + Math.sin(a) * r };
   }
 

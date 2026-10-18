@@ -1571,10 +1571,10 @@ export class WorldView {
     for (const sq of this.sim.squads) {
       if (!sq.alive || sq.buffs.electro <= 0) continue;
       const focus = this.squadFocus(sq.owner) ?? sq.center;
-      if (!this.onScreen(focus.x, focus.y, sq.radius + ELECTRO.margin + 80)) continue;
+      if (!this.onScreen(focus.x, focus.y, (sq.radius + ELECTRO.margin) * ELECTRO.radiusMul + 80)) continue;
       const blink = sq.buffs.electro < 1 && Math.sin(time * 30) > 0 ? 0.35 : 1;
       for (let i = 0; i < ELECTRO.count; i++) {
-        const R = sq.radius + ELECTRO.margin;
+        const R = (sq.radius + ELECTRO.margin) * ELECTRO.radiusMul;
         const ang = sq.electroAngle + (i * Math.PI * 2) / ELECTRO.count;
         // traînée : des boules de plus en plus petites et pâles sur l'arc qu'elle vient de parcourir
         for (let k = 7; k >= 1; k--) {

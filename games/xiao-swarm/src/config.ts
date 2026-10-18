@@ -53,7 +53,7 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  * TEST (17/10) : toutes les capacités de boss réservées à Hard / Expert (cercle d'araignées et toiles de la Gling Mère, stalactites et murs du Scarab) sont actives en Normal, pour les essayer.
  * Remettre à `false` pour retrouver les niveaux. Ne touche pas au bouclier (Expert seulement).
  */
-export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
+export const TEST_FLAGS = { allBossAbilities: false }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
 /**
  * Power-up Orbes électriques (17/10, ex-Fireball) : `count` orbes électriques tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
  * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.

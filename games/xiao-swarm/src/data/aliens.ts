@@ -28,8 +28,6 @@ export interface AlienDef {
   target: TargetPref;
   /** Flotte (ombre décollée, rebond plus ample). */
   floats?: boolean;
-  /** Hauteur (px) à laquelle le sprite est soulevé au-dessus de son point au sol : l'ombre et la hitbox restent au sol (orbes de glace et de feu : le sprite part de la hauteur de la bouche du tireur, l'ombre au niveau de la sienne). Réglable dans le panneau Stats. */
-  floatHeight?: number;
   /**
    * Alien-projectile (orbe de glace du slime de glace) : lancé en ligne droite à `speed` px/s pendant `life` s au plus, il vole au-dessus du
    * décor. Au contact d'un soldat : `damage` et gel (onde de rayon `ring`), puis il se brise ; il se brise aussi au bout de sa course. PV
@@ -586,7 +584,6 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1,
     target: 'nearest',
     floats: true,
-    floatHeight: 50, // le sprite part de la hauteur de la bouche (~50 px) ; son ombre et sa hitbox sont au sol, au niveau de l'ombre du tireur
     projectile: { life: 1.56, ring: 44 }, // portée du lanceur × 1,5 / vitesse : il file un peu au-delà de sa cible
     xp: 0,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
@@ -605,7 +602,6 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1,
     target: 'nearest',
     floats: true,
-    floatHeight: 50, // le sprite part de la hauteur de la bouche (~50 px) ; son ombre et sa hitbox sont au sol, au niveau de l'ombre du tireur
     projectile: { life: 1.56, ring: 44, kind: 'fire' },
     trail: { every: 0.1, radius: 22, ttl: 8, dps: 31.2 },
     xp: 0,

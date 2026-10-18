@@ -443,7 +443,7 @@ export class AlienView {
     // Squash / lévitation procéduraux seulement sans planche animée.
     const t = time * 7 + this.phase;
     const squash = this.animated || a.def.floats ? 0 : Math.sin(t) * 0.06;
-    let lift = (a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0) - (a.def.floatHeight ?? 0); // orbes : sprite soulevé à la hauteur de la bouche, ombre au sol
+    let lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
     // saut écrasant : pendant le vol, le sprite monte en arc (l'ombre et la position restent au sol)
     const L = a.def.leap;
     if (L?.height && a.leapT > 0) {

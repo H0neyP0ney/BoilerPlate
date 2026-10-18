@@ -57,6 +57,8 @@ export interface SoldierState extends Body {
   stun: number;
   /** Saut vers la Gling Mère après une toile : temps restant (s, 0 = au sol), départ et arrivée (le soldat est hors formation, ni visé par la foule ni tireur pendant le vol). */
   jumpT: number;
+  /** Soufflé en cloche par l'explosion d'un kamikaze : temps restant (s) pendant lequel seul le recul le déplace (il ne rejoint pas son slot), puis il revient en marchant. */
+  knockT: number;
   jx0: number;
   jy0: number;
   jx1: number;

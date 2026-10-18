@@ -82,8 +82,8 @@ export class SoldierView {
   private stunIcon?: Phaser.GameObjects.Image;
   /** Temps (s) passé en vol vers la Gling Mère (toile), 0 au sol : sert à l'arc du saut. */
   private airT = 0;
-  /** Saut de recul (essai, kamikaze) : temps restant (s) d'une cloche en y pendant le knockback, 0 = au sol. */
-  private knockHop = 0;
+  /** Temps (s) passé soufflé par un kamikaze (cloche en y pendant le recul), 0 = au sol. */
+  private knockAir = 0;
   /** Montée de niveau : copies blanches du corps et de l'arme posées par-dessus (`levelFlash`), et temps écoulé depuis le flash (ms). */
   private whiteBody?: Phaser.GameObjects.Image;
   private whiteGun?: Phaser.GameObjects.Image;
@@ -159,10 +159,10 @@ export class SoldierView {
     if (s.jumpT > 0) this.airT += dt;
     else this.airT = 0;
     if (this.airT > 0) bob -= Math.sin(Math.min(1, this.airT / WEB.jump) * Math.PI) * WEB.height;
-    if (this.knockHop > 0) {
-      this.knockHop = Math.max(0, this.knockHop - dt);
-      bob -= Math.sin((1 - this.knockHop / KNOCK_HOP.time) * Math.PI) * KNOCK_HOP.height;
-    }
+    // soufflé par un kamikaze : une cloche pendant tout le recul (le soldat ne rejoint son slot qu'après, en marchant)
+    if (s.knockT > 0) this.knockAir += dt;
+    else this.knockAir = 0;
+    if (this.knockAir > 0) bob -= Math.sin(Math.min(1, this.knockAir / KNOCK_HOP.time) * Math.PI) * KNOCK_HOP.height;
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
     const oy = sprites.get(this.bodyId).offsetY ?? 0; // décalage vertical du sprite (et de l'arme) réglé dans la visionneuse
     this.body.setPosition(this.rx, this.ry + bob + oy).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));
@@ -200,11 +200,6 @@ export class SoldierView {
   }
 
   /** Montée de niveau : le soldat devient tout blanc puis repasse à sa couleur en fondu (`FX.levelFlash`). */
-  /** Recul d'une explosion (kamikaze) : le soldat décolle en cloche (`KNOCK_HOP`) pendant que le knockback le pousse. */
-  knockJump(): void {
-    this.knockHop = KNOCK_HOP.time;
-  }
-
   levelFlash(): void {
     this.whiteMs = 0;
   }

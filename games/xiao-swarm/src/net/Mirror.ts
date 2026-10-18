@@ -357,6 +357,7 @@ export class Mirror {
         iceInvuln: 0,
         stun: 0,
         jumpT: 0,
+        knockT: 0,
         jx0: 0,
         jy0: 0,
         jx1: 0,
@@ -377,6 +378,7 @@ export class Mirror {
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
     s.stun = u.stunned ? 1 : 0;
+    s.knockT = u.knocked ? 1 : 0; // soufflé par un kamikaze : la position vient du snapshot
     s.jumpT = u.airborne ? 1 : 0; // en vol vers la Gling Mère (toile) : la position vient du snapshot
     s.invulnerable = u.invulnerable ? 1 : 0;
     s.capturedBy = u.capturedBy;
@@ -639,7 +641,7 @@ export class Mirror {
     u.py = u.y;
     if (!g) return;
     // un soldat gelé ou étourdi reste statique chez l'hôte : pas d'extrapolation à sa dernière vitesse
-    if (!(u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.jumpT > 0))) {
+    if (!(u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.jumpT > 0 || u.knockT > 0))) {
       g.x += u.vx * dt;
       g.y += u.vy * dt;
     }
@@ -653,7 +655,7 @@ export class Mirror {
    * est ramené à chaque snapshot : tremblement.
    */
   private followPredicted(u: Unit, dt: number): void {
-    if (u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.capturedBy || u.jumpT > 0)) {
+    if (u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.capturedBy || u.jumpT > 0 || u.knockT > 0)) {
       this.follow(u, dt);
       return;
     }

@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -113,7 +113,7 @@ export class Sim {
   /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number; hop?: number }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
   private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number; hpMul: number }[] = [];
@@ -270,6 +270,7 @@ export class Sim {
         s.poison = 0;
         s.stun = 0;
         s.jumpT = 0;
+        s.knockT = 0;
       }
     }
   }
@@ -555,7 +556,7 @@ export class Sim {
       const f = this.fuses[i];
       f.t -= dt;
       if (f.t > 0) continue;
-      this.addBlast(f.x, f.y, f.r, f.dmg, 'aliens', 'aliens', f.knock, 'fire');
+      this.addBlast(f.x, f.y, f.r, f.dmg, 'aliens', 'aliens', f.knock, 'fire', 0, KNOCK_HOP.time); // explosion de kamikaze : les soldats touchés sont soufflés en cloche
       this.fuses.splice(i, 1);
     }
     this.cleanup();
@@ -947,8 +948,8 @@ export class Sim {
   }
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
-  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0): void {
-    this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison });
+  addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0, hop = 0): void {
+    this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison, hop });
   }
 
   /**
@@ -1124,7 +1125,7 @@ export class Sim {
     }
   }
 
-  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number; poison?: number }): void {
+  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number; poison?: number; hop?: number }): void {
     if (!u.alive) return;
     const dx = u.x - b.x;
     const dy = u.y - b.y;
@@ -1133,6 +1134,7 @@ export class Sim {
     if (u.kind !== 'alien' || this.horde.knockable(u)) {
       u.kx += ((dx / d) * b.knock) / u.mass;
       u.ky += ((dy / d) * b.knock) / u.mass;
+      if (b.hop && u.kind === 'soldier') u.knockT = Math.max(u.knockT, b.hop); // pendant ce temps seul le recul le déplace
     }
     this.damage(u, b.dmg, b.owner);
     if (b.poison && u.kind === 'soldier' && u.alive) u.poison = Math.max(u.poison, b.poison); // empoisonné (ou durée remise à plein)

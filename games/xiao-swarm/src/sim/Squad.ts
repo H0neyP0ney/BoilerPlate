@@ -432,6 +432,7 @@ export class Squad {
       iceInvuln: 0,
       stun: 0,
       jumpT: 0,
+      knockT: 0,
       jx0: 0,
       jy0: 0,
       jx1: 0,
@@ -482,7 +483,7 @@ export class Squad {
    * ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots).
    */
   private isOut(s: SoldierState): boolean {
-    return s.capturedBy !== 0 || s.frozen > 0 || s.jumpT > 0 || this.released.has(s) || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+    return s.capturedBy !== 0 || s.frozen > 0 || s.jumpT > 0 || s.knockT > 0 || this.released.has(s) || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
   }
 
   /** Libération d'une bulle ou d'un glaçon : le soldat reste hors du mouvement de foule `RELEASE_OUT` s. */
@@ -591,6 +592,17 @@ export class Squad {
           s.stun = Math.max(s.stun, WEB.stun);
           s.vx = s.vy = 0;
         }
+        continue;
+      }
+      if (s.knockT > 0) {
+        // soufflé par un kamikaze : seul le recul le pousse (il ne rejoint pas son slot), le temps de sa cloche ; ensuite il revient en marchant
+        s.knockT -= dt;
+        s.vx = s.vy = 0;
+        s.x += s.kx * dt;
+        s.y += s.ky * dt;
+        s.kx = damp(s.kx, 0, CROWD.knockDamp, dt);
+        s.ky = damp(s.ky, 0, CROWD.knockDamp, dt);
+        if (s.invulnerable > 0) s.invulnerable -= dt;
         continue;
       }
       if (s.stun > 0) {

@@ -14,7 +14,7 @@ try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
-  const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE } = await vite.ssrLoadModule('/src/config.ts');
+  const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE, KNOCK_HOP } = await vite.ssrLoadModule('/src/config.ts');
 
   const fresh = (seed, difficulty = 'normal') => {
     const session = new LocalSession({ mode: MODES.survival, seed, bots: 0, difficulty });
@@ -354,6 +354,26 @@ try {
     if (label === 'tout droit')
       check(dir.x < -0.95 && miss < B.radius * 0.5, 'Scarab : verrouillé, le télégraphe suit encore une squad qui file tout droit', `ressort à ${miss.toFixed(0)} px du centre`);
     else check(miss > B.radius, 'Scarab : verrouillé, sa direction ne change plus : une squad qui s’écarte sur le côté l’esquive', `ressort à ${miss.toFixed(0)} px du centre`);
+  }
+
+  // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
+  {
+    const { sim } = fresh(24);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const s0 = sq.soldiers[0];
+    sim.addBlast(s0.x - 40, s0.y, 95, 0, 'aliens', 'aliens', 2200, 'fire', 0, KNOCK_HOP.time);
+    sim.step(1 / 30, new Map());
+    const flagged = s0.knockT > 0;
+    const x0 = s0.x;
+    let maxX = x0;
+    for (let i = 0; i < Math.round(KNOCK_HOP.time * 30); i++) {
+      sim.step(1 / 30, new Map());
+      maxX = Math.max(maxX, s0.x);
+    }
+    const pushed = maxX - x0;
+    for (let i = 0; i < 60; i++) sim.step(1 / 30, new Map());
+    check(flagged && s0.knockT <= 0 && pushed > 70 && s0.x < maxX - 10, 'kamikaze : le soldat est soufflé pendant la poussée, puis revient en marchant', `poussé de ${pushed.toFixed(0)} px, recul ensuite de ${(maxX - s0.x).toFixed(0)} px`);
   }
 
   // ---- Scarab : les stalactites n'existent pas en Normal (Hard et Expert seulement)

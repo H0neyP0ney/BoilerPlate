@@ -48,8 +48,8 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  * Toiles de la Gling Mère (Expert) : un soldat qui marche dans une toile la consomme et saute vers elle pendant `jump` s (arc de `height` px à l'affichage), pour retomber à `land` px
  * d'elle, étourdi `stun` s.
  */
-/** Essai (17/10) : le recul d'un kamikaze fait aussi sauter les soldats touchés en cloche (affichage seulement) : durée (s) et hauteur (px). */
-export const KNOCK_HOP = { time: 0.55, height: 40 };
+/** Essai (17/10) : le recul d'un kamikaze fait sauter les soldats touchés en cloche : durée (s, pendant laquelle seul le recul les déplace : ~95 % de la poussée à λ = 5) et hauteur (px) ; ils reviennent ensuite à leur slot en marchant. */
+export const KNOCK_HOP = { time: 0.6, height: 40 };
 export const WEB = { jump: 0.6, height: 70, land: 80, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;

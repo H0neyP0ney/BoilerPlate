@@ -1,5 +1,5 @@
 import { damp, Rng, type Point } from '@xiao/engine/sim';
-import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS, FIRE } from '../config';
 import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
@@ -339,6 +339,8 @@ export class Horde {
   freezeSoldier(s: SoldierState): void {
     if (this.sim.ending) return; // séquence de fin : plus personne ne gèle
     s.frozen = FREEZE.hp;
+    s.burn = 0; // la glace éteint le feu
+    s.burnDps = 0;
     s.iceInvuln = FREEZE.invuln; // le temps de voir la glace se former : elle n'est pas brisée dans la même rafale
     s.vx = s.vy = s.kx = s.ky = 0;
     s.target = null;
@@ -1087,7 +1089,8 @@ export class Horde {
     }
     for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
-      this.sim.damageSoldier(s, a.def.damage * a.escDmg);
+      if (!fire) this.sim.damageSoldier(s, a.def.damage * a.escDmg);
+      else this.sim.ignite(s, (a.def.damage * a.escDmg * FIRE.dmgMul) / FIRE.burnTime); // orbe de feu : le soldat s'enflamme (dégâts × 2 répartis sur la durée de brûlure)
       if (fire) {
         // éclate : brûle le soldat touché (dégâts + flamme à ses pieds)
         if (T) this.sim.addFire(s.x, s.y + 4, T.radius * 1.4, T.ttl, T.dps * a.escDmg);

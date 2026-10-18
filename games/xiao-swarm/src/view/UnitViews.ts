@@ -80,6 +80,8 @@ export class SoldierView {
 
   /** Icône de tourbillon au-dessus d'un soldat étourdi (créée à la demande). */
   private stunIcon?: Phaser.GameObjects.Image;
+  /** Flammes d'un soldat enflammé : deux images additives qui vacillent tant qu'il brûle (créées au premier besoin). */
+  private flames?: Phaser.GameObjects.Image[];
   /** Temps (s) passé en vol vers la Gling Mère (toile), 0 au sol : sert à l'arc du saut. */
   private airT = 0;
   /** Temps (s) passé soufflé par un kamikaze (cloche en y pendant le recul), 0 = au sol. */
@@ -170,6 +172,19 @@ export class SoldierView {
       this.stunIcon ??= this.scene.add.image(0, 0, 'fx_stun').setScale(0.9);
       this.stunIcon.setVisible(true).setPosition(this.rx, this.ry - 44 + bob + oy).setRotation(-time * 7).setDepth(DEPTH.actors + this.ry + 3);
     } else this.stunIcon?.setVisible(false);
+    // enflammé : une flamme continue sur le soldat (deux langues qui vacillent, additives, par-dessus son sprite)
+    if (s.burn > 0 && s.alive) {
+      this.flames ??= [0, 1].map(() => this.scene.add.image(0, 0, 'fx_flame').setBlendMode(Phaser.BlendModes.ADD));
+      this.flames.forEach((f, i) => {
+        const w = Math.sin(time * 17 + i * 2.3 + this.phase);
+        f.setVisible(true)
+          .setPosition(this.rx + (i ? 7 : -7) + w * 2, this.ry - 18 + bob + oy - Math.abs(Math.sin(time * 9 + i)) * 6)
+          .setScale((0.85 + 0.25 * Math.sin(time * 21 + i)) * (i ? 0.8 : 1), (1.05 + 0.3 * Math.sin(time * 13 + i * 1.7)) * (i ? 0.85 : 1))
+          .setAlpha(0.85)
+          .setTint(i ? 0xffd24a : 0xff6a1a)
+          .setDepth(DEPTH.actors + this.ry + 4);
+      });
+    } else this.flames?.forEach((f) => f.setVisible(false));
 
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
@@ -275,6 +290,7 @@ export class SoldierView {
 
   destroy(): void {
     this.stunIcon?.destroy();
+    this.flames?.forEach((f) => f.destroy());
     this.whiteBody?.destroy();
     this.whiteGun?.destroy();
     this.ice?.destroy();

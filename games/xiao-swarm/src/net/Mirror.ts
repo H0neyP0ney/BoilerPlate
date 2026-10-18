@@ -372,6 +372,8 @@ export class Mirror {
         iceInvuln: 0,
         stun: 0,
         jumpT: 0,
+        burn: 0,
+        burnDps: 0,
         knockT: 0,
         jx0: 0,
         jy0: 0,
@@ -394,6 +396,7 @@ export class Mirror {
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
     s.stun = u.stunned ? 1 : 0;
+    s.burn = u.burning ? 1 : 0; // enflammé : la flamme est dessinée par la vue
     s.knockT = u.knocked ? 1 : 0; // soufflé par un kamikaze : la position vient du snapshot
     s.jumpT = u.airborne ? 1 : 0; // en vol vers la Gling Mère (toile) : la position vient du snapshot
     s.invulnerable = u.invulnerable ? 1 : 0;

@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP, FIRE } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, bossKindAt, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -278,6 +278,8 @@ export class Sim {
         s.poison = 0;
         s.stun = 0;
         s.jumpT = 0;
+        s.burn = 0;
+        s.burnDps = 0;
         s.knockT = 0;
       }
     }
@@ -919,17 +921,36 @@ export class Sim {
     if (i >= 0) this.fires.splice(i, 1);
   }
 
-  /** Durée des flammes, et brûlure des soldats qui marchent dedans (par petits coups toutes les 0,25 s). */
+  /** Enflamme un soldat : il brûle `time` s (la durée repart de zéro, jamais cumulée) à `dps` PV/s (le plus fort des feux qui le touchent). Un soldat gelé ne s'enflamme pas. */
+  ignite(s: SoldierState, dps: number, time = FIRE.burnTime): void {
+    if (s.frozen > 0 || this.ending) return;
+    s.burn = Math.max(s.burn, time);
+    s.burnDps = Math.max(s.burnDps, dps);
+  }
+
+  /**
+   * Durée des flammes ; un soldat qui marche dans une flaque est enflammé (débit de la flaque × `FIRE.dmgMul`), puis brûle `FIRE.burnTime` s : ses PV baissent dans le temps (par petits coups toutes
+   * les 0,25 s, comme avant) ; plus de dégâts directs au contact.
+   */
   private updateFires(dt: number): void {
     for (let i = this.fires.length - 1; i >= 0; i--) {
       const f = this.fires[i];
       f.ttl -= dt;
       if (f.ttl <= 0) this.endFire(f);
     }
+    for (const sq of this.squads) {
+      for (const s of sq.soldiers) {
+        if (s.burn <= 0) continue;
+        s.burn -= dt;
+        if (s.burn <= 0 || s.frozen > 0 || !s.alive) {
+          s.burn = 0;
+          s.burnDps = 0;
+        }
+      }
+    }
     this.burnCd -= dt;
     if (this.burnCd > 0) return;
     this.burnCd = 0.25;
-    if (this.fires.length === 0) return;
     for (const sq of this.squads) {
       for (const s of sq.soldiers) {
         if (!s.alive) continue;
@@ -938,7 +959,8 @@ export class Sim {
           const rr = f.r + s.radius * 0.5;
           if ((s.x - f.x) ** 2 + (s.y - f.y) ** 2 < rr * rr) dps = Math.max(dps, f.dps); // les flaques ne se cumulent pas
         }
-        if (dps > 0) this.damageSoldier(s, dps * 0.25);
+        if (dps > 0) this.ignite(s, dps * FIRE.dmgMul);
+        if (s.burn > 0) this.damageSoldier(s, s.burnDps * 0.25);
       }
     }
   }

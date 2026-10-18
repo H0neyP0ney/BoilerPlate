@@ -435,6 +435,8 @@ export class Squad {
       iceInvuln: 0,
       stun: 0,
       jumpT: 0,
+      burn: 0,
+      burnDps: 0,
       knockT: 0,
       jx0: 0,
       jy0: 0,

@@ -59,6 +59,11 @@ export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scr
  * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
  */
 export const ELECTRO = { count: 3, time: 8, margin: 50, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 };
+/**
+ * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
+ * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; un orbe de feu lui inflige `dmgMul` × ses dégâts, répartis sur `burnTime` s. La glace éteint le feu.
+ */
+export const FIRE = { burnTime: 3, dmgMul: 2 };
 export const KNOCK_HOP = { time: 0.48, height: 40, arc: 1 }; // time : 0,6 s −20 % (17/10), la cloche en y dure autant ; arc < 1 raccourcirait la cloche seule
 export const WEB = { jump: 0.6, height: 70, land: 120, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */

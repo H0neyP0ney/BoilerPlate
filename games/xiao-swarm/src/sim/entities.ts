@@ -57,6 +57,9 @@ export interface SoldierState extends Body {
   stun: number;
   /** Saut vers la Gling Mère après une toile : temps restant (s, 0 = au sol), départ et arrivée (le soldat est hors formation, ni visé par la foule ni tireur pendant le vol). */
   jumpT: number;
+  /** Enflammé : temps restant (s) de brûlure et débit de dégâts (PV/s) ; le feu est une brûlure dans le temps, voir `FIRE`. */
+  burn: number;
+  burnDps: number;
   /** Soufflé en cloche par l'explosion d'un kamikaze : temps restant (s) pendant lequel seul le recul le déplace (il ne rejoint pas son slot), puis il revient en marchant. */
   knockT: number;
   jx0: number;

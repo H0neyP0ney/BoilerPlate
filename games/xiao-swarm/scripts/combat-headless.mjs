@@ -601,6 +601,37 @@ try {
     check(ex.lost > 0 && ex.moved > 1 && dmg >= 1 && dmg <= 3.5 && no.lost === 0, 'rhinos jumeaux : orbes électriques en Expert (10 dégâts au contact, au plus une fois par 0,5 s), aucune en Normal', `Expert : ${ex.lost.toFixed(1)} PV en 1 s, orbe déplacée de ${ex.moved.toFixed(1)} px par tick ; Normal : ${no.lost} PV`);
   }
 
+  // ---- feu : il enflamme le soldat (brûlure dans le temps = dégâts de la flaque × 2), pas de dégâts directs ; il brûle encore 3 s après avoir quitté les flammes ; la glace l'éteint
+  {
+    const { FIRE } = await vite.ssrLoadModule('/src/config.ts');
+    const { sim } = fresh(41);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const s0 = sq.soldiers[0];
+    s0.invulnerable = 0;
+    s0.hp = s0.maxHp = 1e6;
+    const none = new Map();
+    const dps = 30;
+    sim.addFire(s0.x, s0.y, 60, 1, dps);
+    const hp0 = s0.hp;
+    for (let i = 0; i < 8; i++) { s0.x = s0.px = sim.fires[0]?.x ?? s0.x; sim.step(1 / 30, none); }
+    const ignited = s0.burn > 0 && s0.burnDps === dps * FIRE.dmgMul;
+    // la flaque disparaît (1 s) : il continue de brûler FIRE.burnTime s, puis s'éteint
+    for (let i = 0; i < 30; i++) sim.step(1 / 30, none);
+    const stillBurning = s0.burn > 0;
+    const lost = hp0 - s0.hp;
+    for (let i = 0; i < 30 * 4; i++) sim.step(1 / 30, none);
+    check(ignited && stillBurning && s0.burn === 0 && lost >= dps * FIRE.dmgMul * 0.9, "feu : le soldat s'enflamme (brûlure dans le temps, débit de la flaque × 2), continue de brûler après les flammes, puis s'éteint", `débit ${s0.burnDps || dps * FIRE.dmgMul} PV/s, ${lost.toFixed(0)} PV perdus pendant la 1re seconde`);
+    // la glace éteint le feu
+    const f2 = fresh(42);
+    clearAliens(f2.sim);
+    const t0 = f2.sim.squadOf('p1').soldiers[0];
+    f2.sim.ignite(t0, 50);
+    f2.sim.horde.freezeSoldier(t0);
+    f2.sim.step(1 / 30, none);
+    check(t0.burn === 0 && t0.burnDps === 0, "feu : un soldat gelé est éteint (et ne s'enflamme pas)");
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);
@@ -811,7 +842,7 @@ try {
         o2.x = target.x; o2.y = target.y;
         const f0 = sim.fires.length;
         step(2);
-        check(target.hp < 500 && target.frozen === 0 && !o2.alive && sim.fires.length > f0, 'orbe de feu : au contact il brûle le soldat (dégâts + flamme), sans le geler', `PV ${target.hp.toFixed(0)}`);
+        check(target.burn > 0 && target.frozen === 0 && !o2.alive && sim.fires.length > f0, "orbe de feu : au contact il enflamme le soldat (brûlure dans le temps + flamme au sol), sans le geler", `brûle ${target.burn.toFixed(1)} s à ${target.burnDps.toFixed(1)} PV/s, PV ${target.hp.toFixed(0)}`);
       } else {
         const orb = sim.aliens.find((a) => a.def.id === 'ice_orb' && a.alive);
         const target = sq.soldiers[0];

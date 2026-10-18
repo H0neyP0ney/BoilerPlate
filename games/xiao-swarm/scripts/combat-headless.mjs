@@ -547,6 +547,22 @@ try {
     check(small.dps > 0 && small.hp === wantSmall && big.hp > small.hp * 2, 'œuf : PV adaptés au DPS de la squad (destruction ~2 s) et à son nombre de soldats', `4 soldats : ${small.dps.toFixed(0)} DPS → ${small.hp} PV ; 12 soldats : ${big.dps.toFixed(0)} DPS → ${big.hp} PV`);
   }
 
+  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard) ; pas pendant un clear screen
+  {
+    const { sim } = fresh(39);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('shooter', sq.center.x + 900, sq.center.y, 1, false, true);
+    const sh = sim.aliens[0];
+    sh.age = 99;
+    const 
+    sim.damage(sh, 1e9, 'p1');
+    sim.step(1 / 30, new Map());
+    const blobs = (sim.combat.projectiles.active ?? sim.combat.projectiles.items ?? []).filter((p) => p.lob && p.team === 'aliens');
+    const dists = blobs.map((p) => Math.hypot(p.x + p.vx * p.life - sh.x, p.y + p.vy * p.life - sh.y));
+    check(blobs.length === 2 && dists.every((d) => d > 35 && d < 150), 'shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui', `${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);

@@ -249,6 +249,27 @@ export class Combat {
   }
 
   /**
+   * Mort d'un alien à tir en cloche (shooter, `lob.deathBlobs`) : `deathBlobs` boules identiques aux siennes jaillissent de lui en cloche et retombent à `deathMin`-`deathMax` px de son centre,
+   * dans des directions au hasard (écart minimal entre elles : elles ne partent pas du même côté) ; mêmes dégâts, même zone, même télégraphe rouge.
+   */
+  deathBlobs(a: AlienState): void {
+    const lob = a.def.lob;
+    if (!lob?.deathBlobs) return;
+    const { rng } = this.sim;
+    const n = lob.deathBlobs;
+    const start = rng.range(0, Math.PI * 2);
+    for (let i = 0; i < n; i++) {
+      const ang = start + (i / n) * Math.PI * 2 + rng.range(-0.5, 0.5);
+      const d = rng.range(lob.deathMin ?? 50, lob.deathMax ?? 130);
+      const lx = this.inArenaX(a.x + Math.cos(ang) * d);
+      const ly = this.inArenaY(a.y + Math.sin(ang) * d);
+      const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * 0.8 * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, lob.aoe, lob.texture, a.team, 'aliens');
+      p.poison = lob.poison ?? 0;
+    }
+    this.sim.events.push({ t: 'alienShot', id: a.id, alien: a.def.id, x: a.x, y: a.y - a.radius * 0.6 });
+  }
+
+  /**
    * Slime de glace : lance un orbe de glace (alien-projectile `ice.orb`, destructible) en ligne droite vers la squad visée, avec une
    * anticipation partielle (`lead` × son déplacement pendant le trajet) ; il gèle le soldat qu'il touche.
    */

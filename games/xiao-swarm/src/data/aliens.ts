@@ -74,7 +74,7 @@ export interface AlienDef {
    * explosent au sol (zone `aoe`). Point visé : la cible + son déplacement pendant le vol × une part tirée au hasard dans `lead` (min, max ;
    * [1, 1] par défaut = anticipation complète), ± `scatter` px (22 par défaut, 70 si plusieurs boules).
    */
-  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number; spawnHpMul?: number };
+  lob?: { range: number; cooldown: number; flight: number; damage: number; aoe: number; texture: string; count?: number; keepMoving?: boolean; lead?: [number, number]; scatter?: number; poison?: number; spawn?: number; spawnHpMul?: number; /** À sa mort (hors clear screen) : `deathBlobs` boules identiques jaillissent en cloche autour de lui, à `deathMin`-`deathMax` px, dans des directions au hasard. */ deathBlobs?: number; deathMin?: number; deathMax?: number };
   /**
    * Murs : quand une squad est à portée (`range`), télégraphe jaune pendant `windup` s puis fait surgir `count` murs allongés (`length` px,
    * faits de rochers de rayon `rock.radius`, durée `rock.ttl` s) en arc, à `ring` px du centre de la squad, côté opposé au lanceur :
@@ -264,7 +264,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 5,
     attackCooldown: 0.5,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45 }, // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)

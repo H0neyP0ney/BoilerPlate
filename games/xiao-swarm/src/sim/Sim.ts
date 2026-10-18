@@ -1064,6 +1064,7 @@ export class Sim {
       this.events.push({ t: 'corpse', id: c.id, x: c.x, y: c.y, alien: c.type, ttl: c.ttl });
       if (this.corpses.length > 60) this.endCorpse(this.corpses[0], false);
     }
+    if (a.def.lob?.deathBlobs && !wipe && !this.ending) this.combat.deathBlobs(a); // shooter : 2 boules rouges en cloche autour du cadavre
     const brood = a.def.deathSpawn;
     if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius, hpMul: brood.hpMul ?? 1 });
     const bomb = a.def.deathBlast;

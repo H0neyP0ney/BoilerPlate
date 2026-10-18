@@ -33,6 +33,16 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
   {
     title: 'Diamants des boss',
     specs: [
+      { key: 'coinChance', label: 'Or : chance par alien', min: 0, max: 1, step: 0.01, hint: 'Chance qu’un alien ordinaire lâche 1 pièce d’or (30 % = 0,3)' },
+      { key: 'coinStrongHp', label: 'Or : PV d’un alien costaud', min: 10, max: 2000, step: 10, hint: 'Un alien d’au moins ce nombre de PV max suit la chance « costaud » ci-dessous' },
+      { key: 'coinStrongChance', label: 'Or : chance alien costaud', min: 0, max: 1, step: 0.01, hint: 'Chance de pièce d’un alien costaud (1 = toujours)' },
+      { key: 'coinBossCoins', label: 'Or : pièces d’un boss', min: 0, max: 300, step: 1, hint: 'Pièces lâchées par un boss ordinaire (le boss final : × « Or du boss final »)' },
+      { key: 'coinLife', label: 'Or : durée au sol (s)', min: 2, max: 60, step: 1, hint: 'Une pièce non ramassée disparaît au bout de ce temps (elle clignote avant)' },
+      { key: 'gemLife', label: 'Diamants : durée au sol (s)', min: 2, max: 60, step: 1, hint: 'Un diamant non ramassé disparaît au bout de ce temps' },
+      { key: 'gemChestLife', label: 'Coffre à diamants : durée (s)', min: 2, max: 60, step: 1, hint: 'Un coffre non ouvert disparaît au bout de ce temps' },
+      { key: 'gemSpread', label: 'Coffre : variation de quantité', min: 0, max: 0.9, step: 0.05, hint: 'Écart aléatoire (± part) de la quantité de diamants d’un coffre autour de la moyenne du boss' },
+      { key: 'gemFinalWait', label: 'Boss final : délai avant la fin (s)', min: 0, max: 30, step: 0.5, hint: 'Temps pour ramasser ses diamants avant la séquence de fin' },
+      { key: 'gemFinalReset', label: 'Boss final : délai après un diamant (s)', min: 0, max: 10, step: 0.5, hint: 'Le compte à rebours est remis à cette valeur à chaque diamant ramassé' },
       { key: 'gemMulNormal', label: 'Normal : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Multiplie la quantité moyenne de diamants du coffre de chaque boss (réglée dans la vue du boss, champ « diamonds ») en mode Normal' },
       { key: 'gemMulHard', label: 'Hard : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Hard' },
       { key: 'gemMulExpert', label: 'Expert : diamants ×', min: 0, max: 5, step: 0.05, hint: 'Comme Normal, pour le mode Expert' },

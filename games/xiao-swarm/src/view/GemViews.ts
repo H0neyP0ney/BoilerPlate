@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { lerp } from '@xiao/engine';
 import { COIN_KEY, ensureGemTextures, GEM_CHEST_KEY, GEM_GREEN, GEM_KEY } from '../art/gems';
-import { COINS, DEPTH, GEM_CHEST } from '../config';
+import { COINS, DEPTH, DIFFICULTY, GEM_CHEST } from '../config';
 
 /** Échelle des pièces d'or au sol (0,34 d'origine, +50 % le 17/10), sans cercle posé dessous. */
 const COIN_SCALE = 0.34 * 1.5;
@@ -56,7 +56,7 @@ class ChestView {
       this.landed = true;
       this.onLand()?.(x, y, 50); // atterrit : poussière
     }
-    const blink = s.age > GEM_CHEST.chestLife - GEM_CHEST.blink && Math.sin(time * 18) > 0; // dernières secondes : clignote
+    const blink = s.age > DIFFICULTY.gemChestLife - GEM_CHEST.blink && Math.sin(time * 18) > 0; // dernières secondes : clignote
     const depth = DEPTH.actors + y;
     this.chest.setPosition(x, y - arc).setDepth(depth).setAlpha(blink ? 0.35 : 1);
     const shown = !s.hop;

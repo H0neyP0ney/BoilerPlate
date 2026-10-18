@@ -1,5 +1,5 @@
 import { clamp, Rng } from '@xiao/engine/sim';
-import { COINS, DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
+import { DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
 import { ALIENS, bossKindAt, type AlienId } from '../data/aliens';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
@@ -52,7 +52,7 @@ export class Gems {
   chestQuantity(boss: AlienId): number {
     const lvl = this.sim.difficulty;
     const mul = lvl === 'impossible' ? DIFFICULTY.gemMulExpert : lvl === 'expert' ? DIFFICULTY.gemMulHard : DIFFICULTY.gemMulNormal;
-    return Math.max(1, Math.round((ALIENS[boss].diamonds ?? 0) * mul * (1 + this.rng.range(-GEM_CHEST.spread, GEM_CHEST.spread))));
+    return Math.max(1, Math.round((ALIENS[boss].diamonds ?? 0) * mul * (1 + this.rng.range(-DIFFICULTY.gemSpread, DIFFICULTY.gemSpread))));
   }
 
   spawnChest(x: number, y: number, boss: AlienId = 'boss_gling'): void {
@@ -76,7 +76,7 @@ export class Gems {
     if (!this.enabled) return;
     const rng = this.rng;
     const n = Math.max(1, Math.round(this.chestQuantity(boss) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
-    this.finalT = GEM_CHEST.finalWait;
+    this.finalT = DIFFICULTY.gemFinalWait;
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200));
     this.finalPending = true;
@@ -93,7 +93,7 @@ export class Gems {
     if (this.sim.ending) return; // les pièces tombent aussi en multi (contrairement aux diamants)
     const rng = this.rng;
     const final = !!a.def.boss && bossKindAt(a.def, this.sim.difficulty) === 'final';
-    const n = a.def.boss ? Math.round(COINS.bossCoins * (final ? DIFFICULTY.coinFinalMul : 1)) : rng.chance(a.maxHp >= COINS.strongHp ? COINS.strongChance : COINS.chance) ? 1 : 0;
+    const n = a.def.boss ? Math.round(DIFFICULTY.coinBossCoins * (final ? DIFFICULTY.coinFinalMul : 1)) : rng.chance(a.maxHp >= DIFFICULTY.coinStrongHp ? DIFFICULTY.coinStrongChance : DIFFICULTY.coinChance) ? 1 : 0;
     for (let i = 0; i < n; i++) {
       const hop = n > 1 ? rng.range(50, 150) : rng.range(15, 45);
       const ang = rng.range(0, Math.PI * 2);
@@ -122,7 +122,7 @@ export class Gems {
       y,
       px: x,
       py: y,
-      life: GEM_CHEST.life,
+      life: DIFFICULTY.gemLife,
       age: 0,
       hop: { vx: (Math.cos(angle) * dist) / GEM_FALL_TIME, vy: (Math.sin(angle) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME },
     });
@@ -154,7 +154,7 @@ export class Gems {
       c.px = c.x;
       c.py = c.y;
       c.age += dt;
-      if (c.state !== 'ad' && c.age >= GEM_CHEST.chestLife) {
+      if (c.state !== 'ad' && c.age >= DIFFICULTY.gemChestLife) {
         this.chests.splice(i, 1); // pas pris au bout de `chestLife` s : il disparaît (jamais pendant la vidéo)
         continue;
       }
@@ -183,7 +183,7 @@ export class Gems {
   }
 
   private pushCoin(x: number, y: number, ang: number, dist: number): void {
-    this.coins.push({ id: this.sim.ids.get(), x, y, px: x, py: y, life: COINS.life, age: 0, hop: { vx: (Math.cos(ang) * dist) / GEM_FALL_TIME, vy: (Math.sin(ang) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
+    this.coins.push({ id: this.sim.ids.get(), x, y, px: x, py: y, life: DIFFICULTY.coinLife, age: 0, hop: { vx: (Math.cos(ang) * dist) / GEM_FALL_TIME, vy: (Math.sin(ang) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
   }
 
   /** Fait vivre une liste d'objets au sol (diamants ou pièces) : chute, durée de vie, aimant, ramassage. */
@@ -213,7 +213,7 @@ export class Gems {
       if (inPickRange(a)) {
         list.splice(i, 1);
         if (kind === 'coin') a.squad.coinsPicked++;
-        else if (this.finalPending) this.finalT = GEM_CHEST.finalReset; // boss final : chaque diamant ramassé remet le compte à rebours à 2 s (pas cumulatif)
+        else if (this.finalPending) this.finalT = DIFFICULTY.gemFinalReset; // boss final : chaque diamant ramassé remet le compte à rebours à 2 s (pas cumulatif)
         this.sim.events.push(kind === 'gem' ? { t: 'gemPicked', x: g.x, y: g.y, n: 1 } : { t: 'coinPicked', x: g.x, y: g.y, n: 1, owner: a.squad.owner });
         continue;
       }

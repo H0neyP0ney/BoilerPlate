@@ -78,9 +78,9 @@ export const RING = { radius: 340 };
  * Pièces d'or (solo, `sim/Gems.ts`) : lâchées par les aliens comme les globes d'XP (jamais par un alien sans XP : invoqué, rejeu de vague, œuf, orbe). `chance` par alien (0,3 : doublé le 17/10)
  * (`strongChance` si ses PV max atteignent `strongHp`), `bossCoins` pièces pour un boss ; elles disparaissent après `life` s (clignotent les `blink` dernières).
  */
-export const COINS = { chance: 0.3, strongHp: 200, strongChance: 1, bossCoins: 30, life: 14, blink: 5 };
+export const COINS = { life: 14, blink: 5 }; // chance, PV costauds, pièces de boss et durée au sol : DIFFICULTY (coinChance…) ; `life` ne sert plus qu'à l'affichage du client // chance, PV costauds, pièces de boss et durée au sol : DIFFICULTY (coinChance…) ;  ne sert plus qu'à l'affichage du client
 
-export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, chestLife: 10, radius: 67, chargeTime: 2, decay: 2, spread: 0.2, finalWait: 5, finalReset: 2, cooldown: 4, grace: 0.6, life: 10, blink: 3 };
+export const GEM_CHEST = { triangle: 156, triangleJitter: 0.07, radius: 67, chargeTime: 2, decay: 2, cooldown: 4, grace: 0.6, blink: 3 }; // la durée au sol, la variation de quantité et les délais de fin sont dans DIFFICULTY (gemLife, gemChestLife, gemSpread, gemFinalWait, gemFinalReset)
 /**
  * Unités enterrées (`Horde.burial`) : pendant les animations (s'enterrer, se déterrer) elles prennent 100 % des dégâts. SEMI-ENTERRÉES (lurker
  * en embuscade : généralement immobiles) : `semiDmg` des dégâts, seul le haut du sprite dépasse du sol (`semiShow`, part en partant du haut).
@@ -219,6 +219,21 @@ export const DIFFICULTY_DEFAULTS = {
   eggMinHp: 200,
   /** Boss final : multiplicateur de son or (`COINS.bossCoins` pièces pour un boss ordinaire). */
   coinFinalMul: 3,
+  /**
+   * Économie : or lâché par les aliens (17/10) et durées au sol. `coinChance` : chance qu'un alien ordinaire lâche 1 pièce ; `coinStrongChance` pour ceux de `coinStrongHp` PV ou plus ; `coinBossCoins` :
+   * pièces d'un boss ordinaire (× `coinFinalMul` pour le final) ; `coinLife` / `gemLife` : secondes au sol d'une pièce / d'un diamant avant de disparaître ; `gemChestLife` : durée de vie du
+   * coffre à diamants ; `gemSpread` : écart aléatoire (± part) de la quantité d'un coffre ; `gemFinalWait` / `gemFinalReset` : compte à rebours avant la fin après le boss final et sa remise à zéro à chaque diamant.
+   */
+  coinChance: 0.3,
+  coinStrongHp: 200,
+  coinStrongChance: 1,
+  coinBossCoins: 30,
+  coinLife: 14,
+  gemLife: 10,
+  gemChestLife: 10,
+  gemSpread: 0.2,
+  gemFinalWait: 5,
+  gemFinalReset: 2,
   /**
    * Œuf laissé par chaque boss tué (sauf le final, `boss_egg` : 1000 PV, à détruire) : il libère alors `chestOrbs` globes d'upgrade aléatoire
    * PAR JOUEUR vivant (réservés à leur joueur, entier).

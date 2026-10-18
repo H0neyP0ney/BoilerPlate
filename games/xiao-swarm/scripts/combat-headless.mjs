@@ -528,7 +528,7 @@ try {
     };
     const mini = coinsOf('normal', 'boss_gling');
     const fin = coinsOf('normal', 'boss_scarab');
-    check(mini === COINS.bossCoins && fin === Math.round(COINS.bossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
+    check(mini === DIFFICULTY.coinBossCoins && fin === Math.round(DIFFICULTY.coinBossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
   }
 
   // ---- œuf de boss : PV = DPS de la squad × durée de destruction (2 s) × efficacité ; une squad plus nombreuse a un œuf plus costaud

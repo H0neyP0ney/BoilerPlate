@@ -136,7 +136,7 @@ export interface AlienDef {
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
-  trail?: { every: number; radius: number; ttl: number; dps: number };
+  trail?: { every: number; radius: number; ttl: number; dps: number; /** Orbe de feu : durée (s) de la flamme posée sous le soldat touché (défaut : `ttl`). */ hitTtl?: number };
   /**
    * Bouclier : barre en plus des PV (`pct` × PV max), consommée avant eux. Régénérée en `regenTime` s une fois qu'aucun dégât n'a été
    * reçu depuis `regenDelay` s (tout coup, même sur un bouclier vide, relance le délai).
@@ -603,7 +603,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     floats: true,
     projectile: { life: 1.56, ring: 44, kind: 'fire' },
-    trail: { every: 0.1, radius: 22, ttl: 8, dps: 31.2 },
+    trail: { every: 0.1, radius: 22, ttl: 1, dps: 31.2, hitTtl: 8 }, // la traînée ne reste que 1 s au sol (8 s avant le 17/10) ; la flamme sous le soldat touché dure toujours 8 s
     xp: 0,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0xff8a2a,

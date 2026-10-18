@@ -692,7 +692,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd24a,
     goo: 0xe0a800,
     hpBarWidth: 50,
-    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 300, fleeSpeed: 260, fleeTime: 10, burrowEvery: 3, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 220, fleeSpeed: 260, fleeTime: 10, burrowEvery: 3, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).

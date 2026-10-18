@@ -156,7 +156,7 @@ try {
   hs.aliens.length = 0;
   hs.waves.trigger(0, 1); // niveau 0 = BOSS_LEVEL (Alpha Rhino seul)
   const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
-  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * DIFFICULTY.alienBaseMul * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
+  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
   hs.waves.trigger(1, 3); // « Petit groupe » (slime ×4 × 1,15) : chaque squad vivante reçoit la vague
@@ -309,7 +309,7 @@ try {
   hs.aliens.length = 0;
   hs.horde.spawnAt('slime', a.center.x + 400, a.center.y, 1, true);
   const zb = hs.aliens[0];
-  check(zb.revived && Math.abs(zb.maxHp - ALIENS.slime.hp * DIFFICULTY.alienBaseMul * ALIENS.shaman.revive.zombie.hpMul) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
+  check(zb.revived && Math.abs(zb.maxHp - ALIENS.slime.hp * ALIENS.shaman.revive.zombie.hpMul) < 0.01, 'zombie : ×3 PV', `${zb.maxHp} PV`);
   hs.aliens.length = 0;
   check(hs.map.obstacles.length > 0 && JSON.stringify(client.sim.map.obstacles) === JSON.stringify(hs.map.obstacles), 'carte : mêmes obstacles tirés chez l’hôte et chez le client (même seed)', `${hs.map.obstacles.length} obstacles`);
   check(client.sim.difficulty === hs.difficulty && !client.isHost && host.isHost, 'niveau de difficulté : le client voit celui de l’hôte (welcome) et ne le choisit pas', `${hs.difficulty} / ${client.sim.difficulty}`);

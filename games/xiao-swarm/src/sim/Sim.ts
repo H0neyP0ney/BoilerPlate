@@ -614,7 +614,7 @@ export class Sim {
    */
   private escalation(gain: number): number {
     const level = this.difficulty;
-    const base = DIFFICULTY.alienBaseMul * (level === 'expert' ? DIFFICULTY.expertBaseMul : level === 'impossible' ? DIFFICULTY.impossibleBaseMul : 1); // `alienBaseMul` : −10 % pour tous les niveaux
+    const base = level === 'expert' ? DIFFICULTY.expertBaseMul : level === 'impossible' ? DIFFICULTY.impossibleBaseMul : 1;
     const scale = level === 'expert' ? DIFFICULTY.expertScaleMul : level === 'impossible' ? DIFFICULTY.impossibleScaleMul : 1;
     return base * (1 + gain * scale) ** this.bossKills;
   }

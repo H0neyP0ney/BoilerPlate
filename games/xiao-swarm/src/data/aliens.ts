@@ -227,12 +227,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Petit cafard (id historique `gling`, ex-petit slime rose) : rapide, fragile, arrive en essaims. */
   gling: {
     id: 'gling',
-    hp: 21.375, // avant : 15 (×1.5 intégré le 09/10) ; -10 %
-    speed: 225, // avant : 180 (×1.25 intégré le 09/10) ; +40 %
+    hp: 19.238, // avant : 15 (×1.5 intégré le 09/10) ; -10 %
+    speed: 202.5, // avant : 180 (×1.25 intégré le 09/10) ; +40 %
     radius: 13,
     mass: 0.6,
-    damage: 2.5,
-    attackCooldown: 0.3,
+    damage: 2.25,
+    attackCooldown: 0.33,
     target: 'nearest',
     revivable: true,
     xp: 1,
@@ -244,12 +244,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime de base (vert). */
   slime: {
     id: 'slime',
-    hp: 78.375, // avant : 55 (×1.5 intégré le 09/10)
-    speed: 90, // avant : 72 (×1.25 intégré le 09/10)
+    hp: 70.537, // avant : 55 (×1.5 intégré le 09/10)
+    speed: 81, // avant : 72 (×1.25 intégré le 09/10)
     radius: 19.5,
     mass: 1,
-    damage: 6,
-    attackCooldown: 0.4,
+    damage: 5.4,
+    attackCooldown: 0.44,
     target: 'nearest',
     revivable: true,
     xp: 2,
@@ -261,14 +261,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime bombardier (gros, bleu) : lent et costaud, lance des boules de gelée en cloche (zone au sol, télégraphiée en rouge). */
   shooter: {
     id: 'shooter',
-    hp: 99.75, // avant : 70 (×1.5 intégré le 09/10)
-    speed: 68.75, // avant : 55 (×1.25 intégré le 09/10)
+    hp: 89.775, // avant : 70 (×1.5 intégré le 09/10)
+    speed: 61.875, // avant : 55 (×1.25 intégré le 09/10)
     radius: 24,
     mass: 3,
-    damage: 5,
-    attackCooldown: 0.5,
+    damage: 4.5,
+    attackCooldown: 0.55,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 22, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.3 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 19.8, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.3 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
@@ -280,14 +280,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   kamikaze: {
     id: 'kamikaze',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 35.625, // avant : 25 (×1.5 intégré le 09/10)
-    speed: 131.25, // avant : 105 (×1.25 intégré le 09/10)
+    hp: 32.063, // avant : 25 (×1.5 intégré le 09/10)
+    speed: 118.13, // avant : 105 (×1.25 intégré le 09/10)
     radius: 23.5,
     mass: 1,
-    damage: 2,
-    attackCooldown: 0.4,
+    damage: 1.8,
+    attackCooldown: 0.44,
     target: 'nearest',
-    deathBlast: { delay: 1, radius: 95, damage: 60, knockback: 2200 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp : ~147 px (×2 ; 1100 ≈ 73 px, 560 d'origine ≈ 37 px)
+    deathBlast: { delay: 1, radius: 95, damage: 54, knockback: 2200 }, // recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp : ~147 px (×2 ; 1100 ≈ 73 px, 560 d'origine ≈ 37 px)
     xp: 3,
     recruitChance: 0.039, // avant : 0.03 (×1.3 intégré le 09/10)
     color: 0xe8333a,
@@ -298,14 +298,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   toad: {
     id: 'toad',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 57, // avant : 40 (×1.5 intégré le 09/10)
-    speed: 87.5, // avant : 70 (×1.25 intégré le 09/10)
+    hp: 51.3, // avant : 40 (×1.5 intégré le 09/10)
+    speed: 78.75, // avant : 70 (×1.25 intégré le 09/10)
     radius: 25,
     mass: 1.4,
-    damage: 3,
-    attackCooldown: 0.45,
+    damage: 2.7,
+    attackCooldown: 0.495,
     target: 'nearest',
-    tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 4 }, // portée 270 → 297 (+10 %, 14/10)
+    tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 3.6 }, // portée 270 → 297 (+10 %, 14/10)
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
     color: 0x3fd0a0,
@@ -316,15 +316,15 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   charger: {
     id: 'charger',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 997.5, // avant : 300 (×1.5 intégré le 09/10) ; ×3 ; 665 avant le 14/10 (+50 %)
-    speed: 200, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
+    hp: 897.75, // avant : 300 (×1.5 intégré le 09/10) ; ×3 ; 665 avant le 14/10 (+50 %)
+    speed: 180, // avant : 70 (×1.25 intégré le 09/10) ; +30 % (40, 07/10)
     radius: 39,
     mass: 5,
-    damage: 20,
-    attackCooldown: 0.5,
+    damage: 18,
+    attackCooldown: 0.55,
     target: 'nearest',
     cleave: 70, // mêlée en zone (07/10)
-    rush: { cooldown: 5, windup: 0.3, length: 600, width: 80, speed: 1000, damage: 50, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; préparation 0,4725 → 0,3 le 14/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
+    rush: { cooldown: 5, windup: 0.3, length: 600, width: 80, speed: 1000, damage: 45, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; préparation 0,4725 → 0,3 le 14/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     electric: true,
     xp: 10,
     recruitChance: 0.195, // avant : 0.15 (×1.3 intégré le 09/10)
@@ -336,14 +336,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   spitter: {
     id: 'spitter',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 142.5, // avant : 100 (×1.5 intégré le 09/10)
-    speed: 112.5, // avant : 90 (×1.25 intégré le 09/10)
+    hp: 128.25, // avant : 100 (×1.5 intégré le 09/10)
+    speed: 101.25, // avant : 90 (×1.25 intégré le 09/10)
     radius: 28,
     mass: 1.2,
-    damage: 2,
-    attackCooldown: 0.45,
+    damage: 1.8,
+    attackCooldown: 0.495,
     target: 'nearest',
-    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 14, aoe: 38, texture: 'fx_spit' }, // boules vertes, plus de flaque (07/10)
+    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 12.6, aoe: 38, texture: 'fx_spit' }, // boules vertes, plus de flaque (07/10)
     // nuage ralentissant retiré pour l'instant (08/10) ; pour le remettre : cloud: { every: 6, range: 560, lead: 0.6, radius: 66.5, ttl: 3.5, slow: 0.5 }
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
@@ -355,12 +355,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   shaman: {
     id: 'shaman',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 85.5, // avant : 60 (×1.5 intégré le 09/10)
-    speed: 75, // avant : 60 (×1.25 intégré le 09/10)
+    hp: 76.95, // avant : 60 (×1.5 intégré le 09/10)
+    speed: 67.5, // avant : 60 (×1.25 intégré le 09/10)
     radius: 24,
     mass: 1.5,
-    damage: 1.5,
-    attackCooldown: 0.5,
+    damage: 1.35,
+    attackCooldown: 0.55,
     target: 'nearest',
     frost: { every: 9, range: 560, count: 2, gap: [103.5, 184], radius: 25.5, ttl: 10 }, // flocons à distance (07/10) : à 103,5-184 px du bord réel de la squad (+15 % le 09/10, 90-160 avant)
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30, zombie: { copies: 2, hpMul: 3, dmgMul: 1, speedMul: 1.35, attackMul: 3 } }, // le ressuscité est un ZOMBIE (réglages `zombie`, vue du chaman)
@@ -375,12 +375,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   wall: {
     id: 'wall',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 384.75, // avant : 150 (×1.5 intégré le 09/10) ; 213,75 avant le 14/10 (+80 %)
-    speed: 75, // avant : 60 (×1.25 intégré le 09/10)
+    hp: 346.27, // avant : 150 (×1.5 intégré le 09/10) ; 213,75 avant le 14/10 (+80 %)
+    speed: 67.5, // avant : 60 (×1.25 intégré le 09/10)
     radius: 32.5,
     mass: 1.3,
-    damage: 2,
-    attackCooldown: 0.5,
+    damage: 1.8,
+    attackCooldown: 0.55,
     target: 'nearest',
     wall: { range: 640, cooldown: 6, windup: 1.1, count: 2, ring: 190, spread: 0.9, length: 134, rock: { radius: 22, ttl: 5.6 } }, // −30 % (était 8 s)
     xp: 4,
@@ -393,14 +393,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   lurker: {
     id: 'lurker',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 1026, // avant : 350 (×1.5 intégré le 09/10) ; ×3 ; 570 avant le 14/10 (+80 %)
-    speed: 200, // avant : 120 (×1.25 intégré le 09/10)
+    hp: 923.4, // avant : 350 (×1.5 intégré le 09/10) ; ×3 ; 570 avant le 14/10 (+80 %)
+    speed: 180, // avant : 120 (×1.25 intégré le 09/10)
     radius: 29.5,
     mass: 2,
     damage: 0,
-    attackCooldown: 1,
+    attackCooldown: 1.1,
     target: 'nearest',
-    lurk: { lead: 2.4, digRange: 168, digTime: 0.7, rise: 0.6, wait: 7, rewait: 2, trigger: 432, aim: 0.45, length: 456, width: 44, sweep: 0.38, damage: 60, cooldown: 1.6 }, // 14/10 : télégraphe 0,6 → 0,45 s, pics +20 % de vitesse (0,456 → 0,38 s : 1200 px/s), même équilibrage que la couronne du Giant Crab
+    lurk: { lead: 2.4, digRange: 168, digTime: 0.7, rise: 0.6, wait: 7, rewait: 2, trigger: 432, aim: 0.45, length: 456, width: 44, sweep: 0.38, damage: 54, cooldown: 1.6 }, // 14/10 : télégraphe 0,6 → 0,45 s, pics +20 % de vitesse (0,456 → 0,38 s : 1200 px/s), même équilibrage que la couronne du Giant Crab
     xp: 8,
     recruitChance: 0.104, // avant : 0.08 (×1.3 intégré le 09/10)
     color: 0x7a5a9a,
@@ -411,17 +411,17 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   bubble: {
     id: 'bubble',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 3325, // avant : 2000 (×1.5 intégré le 09/10) ; ×3
-    speed: 280, // avant : 210 (×1.25 intégré le 09/10)
+    hp: 2992.5, // avant : 2000 (×1.5 intégré le 09/10) ; ×3
+    speed: 252, // avant : 210 (×1.25 intégré le 09/10)
     radius: 22,
     mass: 3,
     damage: 0,
-    attackCooldown: 1,
+    attackCooldown: 1.1,
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
     maxPerWave: 3, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris ; 3 depuis le 12/10 (les vagues de bulles en ont 3 : niveaux 7 et 8)
-    capture: { dps: 39 }, // digestion : 25 → 50 → 40 (−20 %, 07/10) → 30 → 39 (+30 %, 14/10)
+    capture: { dps: 35.1 }, // digestion : 25 → 50 → 40 (−20 %, 07/10) → 30 → 39 (+30 %, 14/10)
     xp: 12,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0x8fe0ff,
@@ -432,14 +432,14 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   burner: {
     id: 'burner',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 114, // avant : 80 (×1.5 intégré le 09/10) ; x2
-    speed: 106.25, // avant : 85 (×1.25 intégré le 09/10)
+    hp: 102.6, // avant : 80 (×1.5 intégré le 09/10) ; x2
+    speed: 95.625, // avant : 85 (×1.25 intégré le 09/10)
     radius: 29,
     mass: 1,
-    damage: 3,
-    attackCooldown: 0.4,
+    damage: 2.7,
+    attackCooldown: 0.44,
     target: 'nearest',
-    trail: { every: 0.22, radius: 24, ttl: 11.25, dps: 31.2 },
+    trail: { every: 0.22, radius: 24, ttl: 11.25, dps: 28.08 },
     xp: 4,
     recruitChance: 0.039, // avant : 0.03 (×1.3 intégré le 09/10)
     color: 0xff5a1a,
@@ -450,16 +450,16 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   boss_rhino: {
     id: 'boss_rhino',
     impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, frost: { every: 7, range: 99999, count: 4, gap: [103.5, 184], radius: 25.5, ttl: 10 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 7 s, 4 nuages de gel autour de la squad
-    hp: 9500, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
-    speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10) ; 55 + 30 %
+    hp: 8550, // 900 × 11 (l'ancien multiplicateur global bossHpMul, intégré aux PV de base le 09/10)
+    speed: 80.438, // avant : 71.5 (×1.25 intégré le 09/10) ; 55 + 30 %
     radius: 50,
     mass: 14,
-    damage: 7,
-    attackCooldown: 1,
+    damage: 6.3,
+    attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
-    spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 60 }, // toutes les 6 s : deux croix de 4 petites rangées de pics (150 px, 230 avant le 17/10) : sur la squad et là où elle se dirige
+    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
+    spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 54 }, // toutes les 6 s : deux croix de 4 petites rangées de pics (150 px, 230 avant le 17/10) : sur la squad et là où elle se dirige
     boss: { kind: 'mini' },
     diamonds: 14, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 150,
@@ -474,16 +474,16 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   boss_rhino_fire: {
     id: 'boss_rhino_fire',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 10, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
-    hp: 14250, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (4:30) et le Giant Crab (10:00)
-    speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 9, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
+    hp: 12825, // chacun (1100 × 11) : 2 × 12100 = entre le Scarab (4:30) et le Giant Crab (10:00)
+    speed: 80.438, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
     mass: 14,
-    damage: 7,
-    attackCooldown: 1,
+    damage: 6.3,
+    attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 31.2 }, burst: { orb: 'fire_orb', count: 8 } },
+    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 28.08 }, burst: { orb: 'fire_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
     diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -494,16 +494,16 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   },
   boss_rhino_ice: {
     id: 'boss_rhino_ice',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 10, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
-    hp: 14250,
-    speed: 89.375, // avant : 71.5 (×1.25 intégré le 09/10)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, orbs: { count: 2, radius: 100, speed: 2.2, damage: 9, hit: 16, rehit: 0.5 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + 2 orbes électriques qui tournent autour de lui
+    hp: 12825,
+    speed: 80.438, // avant : 71.5 (×1.25 intégré le 09/10)
     radius: 50,
     mass: 14,
-    damage: 7,
-    attackCooldown: 1,
+    damage: 6.3,
+    attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 45, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
+    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
     diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -516,17 +516,17 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   boss_scarab: {
     id: 'boss_scarab',
     impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, walls: { every: 3, windup: 1.1, length: 200, ahead: 240, rock: { radius: 26, ttl: 6 } } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 3 s un mur sur la squad et un devant elle
-    hp: 19000, // 1500 × 11
-    speed: 187.5, // avant : 150 (×1.25 intégré le 09/10) ; ×3
+    hp: 17100, // 1500 × 11
+    speed: 168.75, // avant : 150 (×1.25 intégré le 09/10) ; ×3
     radius: 68,
     mass: 50,
-    damage: 15,
-    attackCooldown: 1.2,
+    damage: 13.5,
+    attackCooldown: 1.32,
     oneShot: true,
     target: 'center',
     // plus de slam (08/10) : remplacé par la pluie de stalactites. Plus de bouclier en normal (14/10) : il valait `shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }` ; la capacité est prévue sur TOUS les boss du mode impossible.
-    stalactites: { count: 8, onSoldiers: 3, spread: 260, radius: 55, delay: 0.825, stagger: 0.12, damage: 80, knockback: 300, walk: { count: 3, onSoldiers: 2 } }, // + petite pluie de 3 quand il marche (08/10)
-    burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 60, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad ; 1,5 s avant, la direction du télégraphe se fige mais il suit encore la squad sur cet axe (08/10)
+    stalactites: { count: 8, onSoldiers: 3, spread: 260, radius: 55, delay: 0.825, stagger: 0.12, damage: 72, knockback: 300, walk: { count: 3, onSoldiers: 2 } }, // + petite pluie de 3 quand il marche (08/10)
+    burrow: { every: 5, dig: 0.6, wait: 2.1, lock: 1.5, rise: 0.47, radius: 180, damage: 54, knockback: 600, lead: 1, lunge: 3 }, // s'enterre plus souvent (8 → 5 s) ; sort SUR la squad ; 1,5 s avant, la direction du télégraphe se fige mais il suit encore la squad sur cet axe (08/10)
     boss: { kind: 'mini' },
     diamonds: 20, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 400,
@@ -538,12 +538,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (1:00) : énorme gling rose, s'arrête toutes les 4 s pour faire apparaître 19 araignées (`spider`) en 1,07 s. */
   boss_gling: {
     id: 'boss_gling',
-    hp: 5700, // 600 × 11 (600 = +30 % de 500)
-    speed: 106.25, // avant : 85 (×1.25 intégré le 09/10)
+    hp: 5130, // 600 × 11 (600 = +30 % de 500)
+    speed: 95.625, // avant : 85 (×1.25 intégré le 09/10)
     radius: 43.5,
     mass: 14,
-    damage: 5,
-    attackCooldown: 0.6,
+    damage: 4.5,
+    attackCooldown: 0.66,
     oneShot: true,
     target: 'nearest',
     expert: { web: { every: 5.6, range: 99999, count: 5, gap: [42, 112], radius: 56, ttl: 10 } }, // Hard et Expert : toutes les 5,6 s, 5 toiles (rayon 56) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée
@@ -559,12 +559,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Slime bleu ciel (difficulté 3/10, dès 45 s) : lance une boucle de glace qui gèle les soldats touchés dans un glaçon. */
   iceballer: {
     id: 'iceballer',
-    hp: 99.75, // avant : 70 (×1.5 intégré le 09/10)
-    speed: 77.5, // avant : 62 (×1.25 intégré le 09/10)
+    hp: 89.775, // avant : 70 (×1.5 intégré le 09/10)
+    speed: 69.75, // avant : 62 (×1.25 intégré le 09/10)
     radius: 17,
     mass: 1.1,
-    damage: 4,
-    attackCooldown: 0.5,
+    damage: 3.6,
+    attackCooldown: 0.55,
     target: 'nearest',
     maxPerWave: 2,
     ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'ice_orb' }, // lance un orbe de glace destructible (08/10 ; un flocon avant)
@@ -582,7 +582,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 403,
     radius: 14,
     mass: 0.5,
-    damage: 6,
+    damage: 5.4,
     attackCooldown: 1,
     target: 'nearest',
     floats: true,
@@ -600,12 +600,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 403,
     radius: 14,
     mass: 0.5,
-    damage: 18,
+    damage: 16.2,
     attackCooldown: 1,
     target: 'nearest',
     floats: true,
     projectile: { life: 1.56, ring: 44, kind: 'fire' },
-    trail: { every: 0.05, radius: 22, ttl: 0.5, dps: 31.2 }, // traînée seulement (17/10) : plus de flaque à l'impact ni en fin de course ; une flaque toutes les 0,05 s, 0,5 s au sol
+    trail: { every: 0.05, radius: 22, ttl: 0.5, dps: 28.08 }, // traînée seulement (17/10) : plus de flaque à l'impact ni en fin de course ; une flaque toutes les 0,05 s, 0,5 s au sol
     xp: 0,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0xff8a2a,
@@ -616,18 +616,18 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   boss_crab: {
     id: 'boss_crab',
     impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
-    hp: 47500, // 3000 × 11
-    speed: 60, // avant : 48 (×1.25 intégré le 09/10)
+    hp: 42750, // 3000 × 11
+    speed: 54, // avant : 48 (×1.25 intégré le 09/10)
     radius: 75, // 3× plus gros (affichage et collision)
     scale: 3,
     mass: 30,
-    damage: 12.5,
-    attackCooldown: 1.2,
+    damage: 11.25,
+    attackCooldown: 1.32,
     oneShot: true,
     target: 'center',
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900, height: 200 },
-    spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 60, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
-    lob: { range: 620, cooldown: 3, flight: 1, damage: 20, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
+    spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 54, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
+    lob: { range: 620, cooldown: 3, flight: 1, damage: 18, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
     boss: { kind: 'mini' }, // le type réel dépend du niveau : `bossKindAt` (final en Expert)
     diamonds: 40, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -642,12 +642,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   spider: {
     id: 'spider',
-    hp: 21.375, // avant : 15 (×1.5 intégré le 09/10)
-    speed: 225, // avant : 180 (×1.25 intégré le 09/10)
+    hp: 19.238, // avant : 15 (×1.5 intégré le 09/10)
+    speed: 202.5, // avant : 180 (×1.25 intégré le 09/10)
     radius: 18,
     mass: 0.6,
-    damage: 2.5,
-    attackCooldown: 0.3,
+    damage: 2.25,
+    attackCooldown: 0.33,
     target: 'nearest',
     revivable: true,
     xp: 1,
@@ -667,7 +667,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     radius: 27,
     mass: 60,
     damage: 0,
-    attackCooldown: 99,
+    attackCooldown: 108.9,
     target: 'nearest',
     egg: true,
     xp: 0,
@@ -702,12 +702,12 @@ export const ALIENS: Record<AlienId, AlienDef> = {
    */
   fireballer: {
     id: 'fireballer',
-    hp: 99.75,
-    speed: 77.5,
+    hp: 89.775,
+    speed: 69.75,
     radius: 17,
     mass: 1.1,
-    damage: 4,
-    attackCooldown: 0.5,
+    damage: 3.6,
+    attackCooldown: 0.55,
     target: 'nearest',
     maxPerWave: 3,
     ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'fire_orb' }, // lance un orbe de feu destructible

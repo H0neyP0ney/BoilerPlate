@@ -63,10 +63,16 @@ const ROWS_PER_PAGE = 3;
 /** Opacité des unités inactives (hors ACTIVE_CLASSES / ACTIVE_ALIENS). */
 const INACTIVE_ALPHA = 0.25;
 
-const GROUPS: { kind: Kind; prefix: string; ids: string[] }[] = [
-  { kind: 'soldier', prefix: 'soldier_', ids: [...Object.keys(CLASSES), ...Object.keys(SKIN_SHEETS).map((id) => `trooper#k${id}`)] }, // + les skins à planche dédiée (`assets/skinSheets.ts`) : même Trooper, planche du skin
-  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_') || id === 'boss_egg') }, // l'œuf n'est pas un boss : il rejoint les aliens (la ligne des boss est pleine)
-  { kind: 'alien', prefix: 'alien_', ids: Object.keys(ALIENS).filter((id) => id.startsWith('boss_') && id !== 'boss_egg') }, // boss : ligne à part
+/** Unités « divers » : alien-projectiles (orbes de glace et de feu), œuf des boss, araignée (invoquée, jamais dans une vague) et alien doré (spécial). Page à part. */
+const MISC_ALIENS = ['ice_orb', 'fire_orb', 'boss_egg', 'spider', 'golden'];
+const BOSS_ORDER = ['boss_gling', 'boss_rhino', 'boss_scarab', 'boss_rhino_fire', 'boss_rhino_ice', 'boss_crab'];
+/** Une page par groupe (plusieurs si un groupe dépasse `ROWS_PER_PAGE` lignes) : soldats et skins, aliens de base, divers, boss. */
+const GROUPS: { kind: Kind; prefix: string; title: string; ids: string[] }[] = [
+  { kind: 'soldier', prefix: 'soldier_', title: 'Soldats et skins', ids: [...Object.keys(CLASSES), ...Object.keys(SKIN_SHEETS).map((id) => `trooper#k${id}`)] }, // + les skins à planche dédiée (`assets/skinSheets.ts`) : même Trooper, planche du skin
+  { kind: 'alien', prefix: 'alien_', title: 'Aliens de base', ids: Object.keys(ALIENS).filter((id) => !id.startsWith('boss_') && !MISC_ALIENS.includes(id)) },
+  { kind: 'alien', prefix: 'alien_', title: 'Divers (orbes, œuf…)', ids: MISC_ALIENS.filter((id) => id in ALIENS) },
+  // boss dans l'ordre de la timeline (Gling Mère 1:00, Rhino Alpha 2:00, Scarab 4:30, rhinos jumeaux 7:00, Giant Crab 10:00) ; un éventuel nouveau boss est ajouté à la suite
+  { kind: 'alien', prefix: 'alien_', title: 'Boss', ids: BOSS_ORDER.concat(Object.keys(ALIENS).filter((id) => id.startsWith('boss_') && id !== 'boss_egg' && !BOSS_ORDER.includes(id))).filter((id) => id in ALIENS) },
 ];
 /** Classe de base d'une unité de la liste (`trooper#kninja` → `trooper`) : un skin se règle comme le Trooper (stats, hitbox) mais avec sa propre planche. */
 const baseUnit = (unit: string): string => unit.split('#')[0];
@@ -219,12 +225,18 @@ export class UnitViewerScene extends Phaser.Scene {
       for (let i = 0; i < g.ids.length; i += MAX_PER_ROW) lines.push({ ...g, ids: g.ids.slice(i, i + MAX_PER_ROW) });
       return lines;
     });
-    // vue d'ensemble paginée : `ROWS_PER_PAGE` lignes par page, seule la page courante est construite (les lignes se centrent sur la page)
+    // vue d'ensemble paginée par catégorie (soldats et skins, aliens de base, divers, boss), `ROWS_PER_PAGE` lignes au plus par page ; seule la page courante est construite (les lignes se centrent sur la page)
     if (this.selected === ALL) {
-      this.pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+      const pages: { title: string; rows: typeof rows }[] = [];
+      for (const g of groups) {
+        const lines = rows.filter((r) => r.title === g.title);
+        for (let i = 0; i < lines.length; i += ROWS_PER_PAGE) pages.push({ title: g.title, rows: lines.slice(i, i + ROWS_PER_PAGE) });
+      }
+      this.pageCount = Math.max(1, pages.length);
       this.page = Math.min(this.page, this.pageCount - 1);
-      rows.splice(0, rows.length, ...rows.slice(this.page * ROWS_PER_PAGE, (this.page + 1) * ROWS_PER_PAGE));
-      if (this.pageLabel) this.pageLabel.textContent = `Page ${this.page + 1} / ${this.pageCount}`;
+      const cur = pages[this.page];
+      rows.splice(0, rows.length, ...(cur?.rows ?? []));
+      if (this.pageLabel) this.pageLabel.textContent = `${cur?.title ?? ''} — page ${this.page + 1} / ${this.pageCount}`;
     }
     const totalRows = rows.length;
     this.worldH = (totalRows - 1) * 190 + 280; // hauteur du contenu de la vue d'ensemble (marges : sprites hauts + étiquettes)
@@ -1110,7 +1122,7 @@ ${id}` : id;
     document.body.append(pager);
     this.pageBar = pager;
     this.pageLabel = lbl;
-    lbl.textContent = `Page ${this.page + 1} / ${this.pageCount}`;
+    lbl.textContent = '';
     this.input.keyboard?.on('keydown-LEFT', () => this.turnPage(-1));
     this.input.keyboard?.on('keydown-RIGHT', () => this.turnPage(1));
 

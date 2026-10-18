@@ -603,7 +603,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     floats: true,
     projectile: { life: 1.56, ring: 44, kind: 'fire' },
-    trail: { every: 0.1, radius: 22, ttl: 1, dps: 31.2, hitTtl: 8 }, // la traînée ne reste que 1 s au sol (8 s avant le 17/10) ; la flamme sous le soldat touché dure toujours 8 s
+    trail: { every: 0.1, radius: 22, ttl: 0.5, dps: 31.2, hitTtl: 4 }, // temps au sol du feu de l'orbe, −50 % (17/10) : traînée 0,5 s (1 s, avant 8 s), flamme sous le soldat touché 4 s (8 s)
     xp: 0,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)
     color: 0xff8a2a,

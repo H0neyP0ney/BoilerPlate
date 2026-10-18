@@ -829,10 +829,10 @@ try {
       seenIce = ice;
     }
     const wantSpiders = difficulty === 'normal' ? 0 : 3; // 18 s : surgissements à 6, 12 et 18 s (le dernier peut tomber juste après)
-    const wantIce = difficulty === 'impossible' ? 2 : 0; // 18 s : 8 s et 16 s
+    const wantIce = difficulty === 'impossible' ? 3 : 0; // 18 s : 5,6 s, 11,2 s et 16,8 s
     check(spiderBursts >= (wantSpiders ? 2 : 0) && spiderBursts <= wantSpiders, `${difficulty} : Gling Mère, cercle d'araignées ${difficulty === 'normal' ? 'absent' : 'toutes les 6 s'}`, `${spiderBursts} surgissement(s)`);
     if (wantSpiders) check(ringErr < 120, `${difficulty} : les araignées surgissent en cercle autour de la squad (rayon ~300 px)`, `écart max au rayon ${ringErr.toFixed(0)} px`);
-    check(iceBursts === wantIce, `${difficulty} : Gling Mère, toiles ${difficulty === 'impossible' ? 'toutes les 8 s (5 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
+    check(iceBursts === wantIce, `${difficulty} : Gling Mère, toiles ${difficulty === 'impossible' ? 'toutes les 5,6 s (5 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
   }
 
   // ---- bouclier de 5 % sur TOUS les boss en mode impossible seulement (normal et expert : aucun) ; il encaisse avant les PV et passe correctement par le réseau

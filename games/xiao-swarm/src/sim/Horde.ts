@@ -193,8 +193,8 @@ export class Horde {
       reviveLock: 0,
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
-      ringCd: def.expert?.spiderRing ? def.expert.spiderRing.every : 0,
-      webCd: def.impossible?.web ? def.impossible.web.every : 0,
+      ringCd: def.impossible?.spiderRing ? def.impossible.spiderRing.every : 0,
+      webCd: def.expert?.web ? def.expert.web.every : 0,
       wallsCd: def.impossible?.walls ? def.impossible.walls.every : 0,
       crossCd: def.spikeCross ? def.spikeCross.every : 0,
       lurkBlockT: 0,
@@ -436,7 +436,7 @@ export class Horde {
         a.retarget = 0.4 + rng.next() * 0.3;
       }
       // Rhino Alpha : toutes les `every` s, une croix de 4 petites rangées de pics de lurker sur le centre de la squad visée
-      const cross = def.spikeCross;
+      const cross = TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert') ? def.spikeCross : undefined; // dès Hard
       if (cross && (a.crossCd -= dt * this.cdRate(a)) <= 0) {
         a.crossCd = cross.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
@@ -586,14 +586,14 @@ export class Horde {
           a.swarmCd = w.every;
         }
       }
-      // Niveaux Expert / Impossible (Gling Mère) : cercle d'araignées autour de la squad visée (elles surgissent du sol, avec leur trou d'apparition habituel : un court télégraphe)
-      const ring = TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert') ? def.expert?.spiderRing : undefined;
+      // Niveau Expert (Gling Mère) : cercle d'araignées autour de la squad visée (elles surgissent du sol, avec leur trou d'apparition habituel : un court télégraphe)
+      const ring = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.spiderRing : undefined;
       if (ring && !swarming && (a.ringCd -= dt * cdRate) <= 0) {
         a.ringCd = ring.every;
         this.spiderRing(a, ring);
       }
       // Impossible : toiles au sol autour de la squad visée (placées comme les nuages du chaman) ; y marcher = sauter vers la Mère
-      const web = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.web : undefined;
+      const web = TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert') ? def.expert?.web : undefined;
       if (web && !swarming && (a.webCd -= dt * cdRate) <= 0) {
         a.webCd = web.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);

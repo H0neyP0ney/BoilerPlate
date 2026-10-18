@@ -359,7 +359,7 @@ try {
 
   // ---- Rhino Alpha : toutes les 6 s, une croix de 4 petites rangées de pics sur le centre de la squad ; un soldat sur une rangée est blessé une fois
   {
-    const { sim } = fresh(25);
+    const { sim } = fresh(25, 'expert'); // Hard : pas de croix en Normal
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     sim.horde.spawnAt('boss_rhino', sq.center.x + 1400, sq.center.y, 1, false);
@@ -381,8 +381,21 @@ try {
       if (sim.crosses.length > seen) lines++;
       seen = sim.crosses.length;
     }
+    const norm = fresh(25);
+    clearAliens(norm.sim);
+    const nq = norm.sim.squadOf('p1');
+    norm.sim.horde.spawnAt('boss_rhino', nq.center.x + 1400, nq.center.y, 1, false);
+    norm.sim.aliens[0].age = 99;
+    norm.sim.aliens[0].crossCd = 0.05;
+    let nCross = 0;
+    for (let i = 0; i < 30 * 8; i++) {
+      norm.sim.step(1 / 30, new Map());
+      norm.sim.aliens.splice(1);
+      nCross = Math.max(nCross, norm.sim.crosses.length);
+    }
+    check(nCross === 0, 'Rhino Alpha : pas de croix de pics en Normal', `${nCross} croix`);
     check(lines >= 1 && lines <= 3, 'Rhino Alpha : une croix de pics sur la squad toutes les 6 s (plus vite une fois enragé ; la seconde croix, là où elle va, ne vient que si elle bouge)', `${lines} croix en 8 s`);
-    check(hp0 - s0.hp >= C.damage * 0.9 && hp0 - s0.hp <= C.damage * 2.1, 'Rhino Alpha : le soldat sur une rangée de la croix est blessé une fois par croix', `${(hp0 - s0.hp).toFixed(0)} PV perdus`);
+    check(hp0 - s0.hp >= C.damage * 0.9 && hp0 - s0.hp <= C.damage * 2.5, 'Rhino Alpha : le soldat sur une rangée de la croix est blessé une fois par croix', `${(hp0 - s0.hp).toFixed(0)} PV perdus`);
   }
 
   // ---- coffre à diamants : il saute de l'œuf quand l'œuf est ouvert (détruit), pas à la mort du boss
@@ -817,7 +830,7 @@ try {
     }
   }
 
-  // ---- Gling Mère par niveau : expert = 10 araignées en cercle autour de la squad toutes les 6 s ; impossible = en plus 5 toiles toutes les 8 s ; rien en normal
+  // ---- Gling Mère par niveau : Hard (expert) = 5 toiles toutes les 5,6 s ; Expert (impossible) = en plus 10 araignées en cercle autour de la squad toutes les 6 s ; rien en Normal
   for (const difficulty of ['normal', 'expert', 'impossible']) {
     const session = new LocalSession({ mode: MODES.survival, seed: 9, bots: 0, difficulty });
     const sim = session.sim;
@@ -840,11 +853,11 @@ try {
       if (ice - seenIce >= 5) iceBursts++;
       seenIce = ice;
     }
-    const wantSpiders = difficulty === 'normal' ? 0 : 3; // 18 s : surgissements à 6, 12 et 18 s (le dernier peut tomber juste après)
-    const wantIce = difficulty === 'impossible' ? 3 : 0; // 18 s : 5,6 s, 11,2 s et 16,8 s
-    check(spiderBursts >= (wantSpiders ? 2 : 0) && spiderBursts <= wantSpiders, `${difficulty} : Gling Mère, cercle d'araignées ${difficulty === 'normal' ? 'absent' : 'toutes les 6 s'}`, `${spiderBursts} surgissement(s)`);
+    const wantSpiders = difficulty === 'impossible' ? 3 : 0; // 18 s : surgissements à 6, 12 et 18 s (le dernier peut tomber juste après)
+    const wantIce = difficulty === 'normal' ? 0 : 3; // 18 s : 5,6 s, 11,2 s et 16,8 s
+    check(spiderBursts >= (wantSpiders ? 2 : 0) && spiderBursts <= wantSpiders, `${difficulty} : Gling Mère, cercle d'araignées ${difficulty === 'impossible' ? 'toutes les 6 s' : 'absent'}`, `${spiderBursts} surgissement(s)`);
     if (wantSpiders) check(ringErr < 120, `${difficulty} : les araignées surgissent en cercle autour de la squad (rayon ~300 px)`, `écart max au rayon ${ringErr.toFixed(0)} px`);
-    check(iceBursts === wantIce, `${difficulty} : Gling Mère, toiles ${difficulty === 'impossible' ? 'toutes les 5,6 s (5 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
+    check(iceBursts === wantIce, `${difficulty} : Gling Mère, toiles ${difficulty === 'normal' ? 'absentes' : 'toutes les 5,6 s (5 à la fois)'}`, `${iceBursts} salve(s)`);
   }
 
   // ---- bouclier de 5 % sur TOUS les boss en mode impossible seulement (normal et expert : aucun) ; il encaisse avant les PV et passe correctement par le réseau

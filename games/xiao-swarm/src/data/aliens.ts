@@ -50,15 +50,15 @@ export interface AlienDef {
    */
   frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
   /**
-   * Capacités en plus selon le niveau de difficulté (un niveau hérite des précédents : `impossible` a aussi celles d'`expert`). `expert.spiderRing` (Gling Mère) : toutes les `every` s,
-   * `count` araignées surgissent du sol en cercle de rayon `radius` autour de la squad visée (PV × `hpMul`). `impossible.web` : toiles au sol posées comme les nuages de gel du chaman
-   * (même forme que `frost`, `range` ignoré : autour de la squad où qu'elle soit) ; un soldat qui y entre la consomme et saute vers la Gling Mère (`WEB` de `config.ts`).
+   * Capacités en plus selon le niveau de difficulté (un niveau hérite des précédents : `impossible` a aussi celles d'`expert`). `expert.web` (Gling Mère, dès Hard) : toiles au sol posées comme les nuages de gel du chaman
+   * (même forme que `frost`, `range` ignoré : autour de la squad où qu'elle soit) ; un soldat qui y entre la consomme et saute vers la Gling Mère (`WEB` de `config.ts`). `impossible.spiderRing` (Gling Mère, Expert) :
+   * toutes les `every` s, `count` araignées surgissent du sol en cercle de rayon `radius` autour de la squad visée (PV × `hpMul`).
    */
-  expert?: { spiderRing?: { every: number; count: number; radius: number; hpMul: number } };
+  expert?: { web?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number } };
   impossible?: {
+    spiderRing?: { every: number; count: number; radius: number; hpMul: number };
     /** Scarab (Impossible) : toutes les `every` s, deux murs de rochers (télégraphe `windup` s puis ligne de `length` px, rochers de rayon `rock.radius` pendant `rock.ttl` s) : l'un SUR la squad, l'autre `ahead` px DEVANT elle (sa direction de course). */
     walls?: { every: number; windup: number; length: number; ahead: number; rock: { radius: number; ttl: number } };
-    web?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
     /** Bouclier propre au niveau Impossible (même fonctionnement que `shield`) : posé sur tous les boss. Voir `shieldOf`. */
     shield?: { pct: number; regenDelay: number; regenTime: number };
   };
@@ -530,8 +530,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.6,
     oneShot: true,
     target: 'nearest',
-    expert: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 } }, // expert et impossible : toutes les 6 s, 10 araignées surgissent en cercle autour de la squad
-    impossible: { web: { every: 5.6, range: 99999, count: 5, gap: [42, 112], radius: 56, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 5,6 s (8 s −30 %), 5 toiles (rayon 56, 80 −30 %) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée + bouclier de 5 %
+    expert: { web: { every: 5.6, range: 99999, count: 5, gap: [42, 112], radius: 56, ttl: 10 } }, // Hard et Expert : toutes les 5,6 s, 5 toiles (rayon 56) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée
+    impossible: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // Expert : en plus, toutes les 6 s, 10 araignées surgissent en cercle autour de la squad + bouclier de 5 %
     swarm: { every: 4, duration: 1.07, count: 15, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     xp: 100,

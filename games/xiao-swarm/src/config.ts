@@ -49,6 +49,11 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  * d'elle, étourdi `stun` s.
  */
 /** Essai (17/10) : le recul d'un kamikaze fait sauter les soldats touchés en cloche : durée (s, pendant laquelle seul le recul les déplace : ~95 % de la poussée à λ = 5) et hauteur (px) ; ils reviennent ensuite à leur slot en marchant. */
+/**
+ * TEST (17/10) : toutes les capacités de boss réservées à Hard / Expert (cercle d'araignées et toiles de la Gling Mère, stalactites et murs du Scarab) sont actives en Normal, pour les essayer.
+ * Remettre à `false` pour retrouver les niveaux. Ne touche pas au bouclier (Expert seulement).
+ */
+export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
 export const KNOCK_HOP = { time: 0.6, height: 40 };
 export const WEB = { jump: 0.6, height: 70, land: 80, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */

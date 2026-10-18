@@ -1,5 +1,5 @@
 import { damp, type Point } from '@xiao/engine/sim';
-import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS } from '../config';
 import { ALIENS, shieldOf, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
@@ -196,6 +196,7 @@ export class Horde {
       ringCd: def.expert?.spiderRing ? def.expert.spiderRing.every : 0,
       webCd: def.impossible?.web ? def.impossible.web.every : 0,
       wallsCd: def.impossible?.walls ? def.impossible.walls.every : 0,
+      crossCd: def.spikeCross ? def.spikeCross.every : 0,
       lurkBlockT: 0,
       swarmT: 0,
       swarmAcc: 0,
@@ -434,8 +435,15 @@ export class Horde {
         this.pickTarget(a, def.target);
         a.retarget = 0.4 + rng.next() * 0.3;
       }
+      // Rhino Alpha : toutes les `every` s, une croix de 4 petites rangées de pics de lurker sur le centre de la squad visée
+      const cross = def.spikeCross;
+      if (cross && (a.crossCd -= dt * this.cdRate(a)) <= 0) {
+        a.crossCd = cross.every;
+        const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (target) this.sim.addCross(target.center.x, target.center.y, cross, (a.revived ? zombieStats().dmgMul : 1) * a.escDmg);
+      }
       // Impossible (Scarab) : toutes les `every` s, un mur de rochers sur la squad visée et un devant elle
-      const wallsDef = this.sim.difficulty === 'impossible' ? def.impossible?.walls : undefined;
+      const wallsDef = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.walls : undefined;
       if (wallsDef && (a.wallsCd -= dt * this.cdRate(a)) <= 0) {
         a.wallsCd = wallsDef.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
@@ -573,13 +581,13 @@ export class Horde {
         }
       }
       // Niveaux Expert / Impossible (Gling Mère) : cercle d'araignées autour de la squad visée (elles surgissent du sol, avec leur trou d'apparition habituel : un court télégraphe)
-      const ring = atLeast(this.sim.difficulty, 'expert') ? def.expert?.spiderRing : undefined;
+      const ring = TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert') ? def.expert?.spiderRing : undefined;
       if (ring && !swarming && (a.ringCd -= dt * cdRate) <= 0) {
         a.ringCd = ring.every;
         this.spiderRing(a, ring);
       }
       // Impossible : toiles au sol autour de la squad visée (placées comme les nuages du chaman) ; y marcher = sauter vers la Mère
-      const web = this.sim.difficulty === 'impossible' ? def.impossible?.web : undefined;
+      const web = TEST_FLAGS.allBossAbilities || this.sim.difficulty === 'impossible' ? def.impossible?.web : undefined;
       if (web && !swarming && (a.webCd -= dt * cdRate) <= 0) {
         a.webCd = web.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
@@ -1173,7 +1181,7 @@ export class Horde {
         const cd = a.leapCd;
         a.leapCd -= dt * this.cdRate(a);
         // il marche vers la squad : petite pluie de stalactites à mi-chemin du compte à rebours
-        const W = atLeast(this.sim.difficulty, 'expert') ? a.def.stalactites?.walk : undefined; // stalactites : Hard et Expert seulement (pas en Normal)
+        const W = TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert') ? a.def.stalactites?.walk : undefined; // stalactites : Hard et Expert seulement (pas en Normal)
         if (W && cd > B.every / 2 && a.leapCd <= B.every / 2) this.castStalactites(a, W.count, W.onSoldiers);
         const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (a.leapCd <= 0 && sq && sq.alive) {
@@ -1240,7 +1248,7 @@ export class Horde {
           a.lurkT = B.lunge;
           a.leapT = 0;
           a.leapCd = B.every;
-          if (a.def.stalactites && atLeast(this.sim.difficulty, 'expert')) this.castStalactites(a); // une fois sorti : pluie de stalactites (Hard et Expert seulement)
+          if (a.def.stalactites && (TEST_FLAGS.allBossAbilities || atLeast(this.sim.difficulty, 'expert'))) this.castStalactites(a); // une fois sorti : pluie de stalactites (Hard et Expert seulement)
         } else a.leapT = Math.max(0.05, a.lurkT);
         return true;
       }

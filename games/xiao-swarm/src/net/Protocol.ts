@@ -11,7 +11,7 @@ import { skinIndex } from '../data/skins';
 import { trailIndex } from '../data/trails';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 71; // 71 : bit 128 des drapeaux de soldat = soufflé en cloche par un kamikaze ; 70 : toiles de la Gling Mère (octet 254 de `slow` des flaques) et soldat en vol vers elle (bit 64 des drapeaux de soldat) ; 69 : la caisse de pièces est retirée (plus d'alien `coin_crate` ; le coffre à diamants descend en parachute) ; 68 : la boîte de power-up est remplacée par la caisse de pièces (`coin_crate`, même place en fin de liste) ; 67 : caisses de pièces et de TNT retirées (un seul type de boîte reste, `powerup_box`) ; 66 : caisse de TNT (`tnt_crate`, un type d'alien de plus) ; 65 : deux nouveaux types d'alien en fin de liste (`powerup_box`, `coin_crate`) ; 64 : pièces d'or au sol (liste `coins`) et cumul de pièces ramassées par squad (`coins` de SquadSnap) ; 63 : le `hello` annonce aussi l'armurerie du joueur (`units`, `perks`) ; 62 : skin et trail de chaque squad (un octet chacun dans le snapshot ; `hello` les annonce) ; 61 : salle d'attente (message `lobby` de l'hôte, champ `lobby` du welcome, message `start`) ; 60 : tourelles supprimées (plus de liste `turrets` ni de sorte de power-up `turrets`, plus de texture de tir électrique) ; 59 : le welcome annonce le niveau de difficulté de la room (`difficulty`), message `difficulty` de l'hôte, bouclier écrit aussi pour tous les boss ; 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 72; // 72 : pics en croix du Rhino Alpha (liste `crosses` après les stalactites) ; 71 : bit 128 des drapeaux de soldat = soufflé en cloche par un kamikaze ; 70 : toiles de la Gling Mère (octet 254 de `slow` des flaques) et soldat en vol vers elle (bit 64 des drapeaux de soldat) ; 69 : la caisse de pièces est retirée (plus d'alien `coin_crate` ; le coffre à diamants descend en parachute) ; 68 : la boîte de power-up est remplacée par la caisse de pièces (`coin_crate`, même place en fin de liste) ; 67 : caisses de pièces et de TNT retirées (un seul type de boîte reste, `powerup_box`) ; 66 : caisse de TNT (`tnt_crate`, un type d'alien de plus) ; 65 : deux nouveaux types d'alien en fin de liste (`powerup_box`, `coin_crate`) ; 64 : pièces d'or au sol (liste `coins`) et cumul de pièces ramassées par squad (`coins` de SquadSnap) ; 63 : le `hello` annonce aussi l'armurerie du joueur (`units`, `perks`) ; 62 : skin et trail de chaque squad (un octet chacun dans le snapshot ; `hello` les annonce) ; 61 : salle d'attente (message `lobby` de l'hôte, champ `lobby` du welcome, message `start`) ; 60 : tourelles supprimées (plus de liste `turrets` ni de sorte de power-up `turrets`, plus de texture de tir électrique) ; 59 : le welcome annonce le niveau de difficulté de la room (`difficulty`), message `difficulty` de l'hôte, bouclier écrit aussi pour tous les boss ; 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -225,6 +225,8 @@ export interface Snapshot {
   fires: { id: number; x: number; y: number; r: number }[];
   /** Stalactites annoncées par le Scarab (v40) : zone, temps restant avant l'impact et durée du télégraphe (s). */
   stalactites: { id: number; x: number; y: number; r: number; t: number; dur: number }[];
+  /** Pics en croix du Rhino Alpha : télégraphe restant `t` puis poussée restante `s` (s). */
+  crosses: { id: number; x: number; y: number; t: number; s: number }[];
   /** Coffres laissés par les boss tués (v44) : position et progression d'ouverture (0 → 1). */
   /** Globes d'upgrade des coffres (v44), chacun réservé à `owner`, `upgrade` = index dans `UPGRADE_IDS` (son icône) ; `fall` = temps de chute restant en cloche (s, 0 = posé au sol). */
   upgradeOrbs: { id: number; owner: PlayerId; upgrade: number; x: number; y: number; fall: number }[];
@@ -359,6 +361,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
     walls: sim.walls.map((w) => ({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, r: w.rockR, ttl: w.ttl, t: w.t, dur: w.dur })),
     fires: sim.fires.map((f) => ({ id: f.id, x: f.x, y: f.y, r: f.r })),
     stalactites: sim.stalactites.map((k) => ({ id: k.id & 0xffff, x: k.x, y: k.y, r: k.r, t: k.t, dur: k.dur })),
+    crosses: sim.crosses.map((c) => ({ id: c.id & 0xffff, x: c.x, y: c.y, t: c.t, s: c.s })),
     coins: sim.gems.coins.map((c) => ({ id: c.id, x: c.x, y: c.y, fall: c.hop?.t ?? 0, blink: c.life < COINS.blink })),
     upgradeOrbs: sim.upgradeOrbs.items.map((o) => ({ id: o.id, owner: o.owner, upgrade: Math.max(0, UPGRADE_IDS.indexOf(o.upgrade)), x: o.x, y: o.y, fall: o.hop?.t ?? 0 })),
     zones: sim.reviveZones.map((z) => ({ owner: z.owner, x: z.x, y: z.y, r: z.r, progress: z.progress / REVIVE_TIME })),
@@ -690,6 +693,15 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(Math.round(k.dur * 50));
   }
   mark('stalactites');
+  w.u8(Math.min(255, s.crosses.length));
+  for (const c of s.crosses.slice(0, 255)) {
+    w.u16(c.id);
+    w.pos(c.x);
+    w.pos(c.y);
+    w.u8(Math.min(255, Math.round(c.t * 100)));
+    w.u8(Math.min(255, Math.round(c.s * 100)));
+  }
+  mark('crosses');
   w.u8(Math.min(255, s.upgradeOrbs.length));
   for (const o of s.upgradeOrbs.slice(0, 255)) {
     w.u32(o.id);
@@ -732,7 +744,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     const r = new Reader(buf);
     if (r.u8() !== SNAPSHOT_TAG) return null;
     const seq = r.u32();
-    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [], upgradeOrbs: [], coins: [] };
+    const snap: Snapshot = { seq, shots: [], impacts: [], hits: [], tick: r.u32(), time: r.f32(), cursor: r.f32(), choiceT: 0, squads: [], aliens: [], recruits: [], projectiles: [], orbs: [], zones: [], powerups: [], fields: [], puddles: [], rocks: [], walls: [], fires: [], stalactites: [], crosses: [], upgradeOrbs: [], coins: [] };
     snap.choiceT = r.u8() / 40;
 
     const nSquads = r.u8();
@@ -883,6 +895,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     for (let i = 0; i < nFires; i++) snap.fires.push({ id: r.u16(), x: r.u16(), y: r.u16(), r: r.u8() });
     const nStal = r.u8();
     for (let i = 0; i < nStal; i++) snap.stalactites.push({ id: r.u16(), x: r.pos(), y: r.pos(), r: r.u8(), t: r.u8() / 50, dur: r.u8() / 50 });
+    const nCross = r.u8();
+    for (let i = 0; i < nCross; i++) snap.crosses.push({ id: r.u16(), x: r.pos(), y: r.pos(), t: r.u8() / 100, s: r.u8() / 100 });
     const nUpOrbs = r.u8();
     for (let i = 0; i < nUpOrbs; i++) snap.upgradeOrbs.push({ id: r.u32(), owner: r.str(), upgrade: r.u8(), x: r.pos(), y: r.pos(), fall: r.u8() / 100 });
     const nCoins = r.u8();

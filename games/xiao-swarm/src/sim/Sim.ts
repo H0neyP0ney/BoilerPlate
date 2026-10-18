@@ -10,7 +10,7 @@ import { Arena } from './Arena';
 import { UpgradeOrbs } from './Chests';
 import { Gems } from './Gems';
 import { Combat } from './Combat';
-import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, Stalactite, Unit, WallTelegraph } from './entities';
+import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, SpikeCross, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
@@ -85,6 +85,8 @@ export class Sim {
   readonly walls: WallTelegraph[] = [];
   /** Stalactites annoncées (Scarab) : passent par le snapshot (télégraphe chez les clients). */
   readonly stalactites: Stalactite[] = [];
+  /** Pics en croix du Rhino Alpha : passent par le snapshot (télégraphe et poussée chez les clients). */
+  readonly crosses: SpikeCross[] = [];
   private burnCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
@@ -187,6 +189,7 @@ export class Sim {
     this.puddles.length = 0;
     this.walls.length = 0;
     this.stalactites.length = 0;
+    this.crosses.length = 0;
     this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
@@ -225,6 +228,7 @@ export class Sim {
     this.puddles.length = 0;
     this.walls.length = 0;
     this.stalactites.length = 0;
+    this.crosses.length = 0;
     this.shockwaves.length = 0;
     this.arena.rocks.length = 0;
     this.blasts.length = 0;
@@ -548,6 +552,7 @@ export class Sim {
     this.updateReviveZones(dt);
     this.updateWalls(dt);
     this.updateStalactites(dt);
+    this.updateCrosses(dt);
     this.updatePuddles(dt);
     this.powerups.update(dt);
     this.updateShockwaves(dt);
@@ -665,6 +670,42 @@ export class Sim {
     y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
     this.stalactites.push({ id: this.ids.get(), x, y, r, t: delay, dur: delay, damage, knockback });
     if (this.stalactites.length > 60) this.stalactites.shift();
+  }
+
+  /** Pose une croix de pics (Rhino Alpha) centrée en (x, y) : mesures de `def.spikeCross`, dégâts × `power`. */
+  addCross(x: number, y: number, C: { aim: number; sweep: number; length: number; width: number; damage: number }, power: number): void {
+    this.crosses.push({ id: this.ids.get(), x, y, t: C.aim, s: C.sweep, length: C.length, width: C.width, aim: C.aim, sweep: C.sweep, damage: C.damage * power });
+    if (this.crosses.length > 20) this.crosses.shift();
+  }
+
+  /** Pics en croix : télégraphe, puis les 4 rangées s'étendent ; chaque soldat est blessé une fois quand un front passe sur lui (comme les pics du lurker). */
+  private updateCrosses(dt: number): void {
+    for (let i = this.crosses.length - 1; i >= 0; i--) {
+      const c = this.crosses[i];
+      if (c.t > 0) {
+        c.t -= dt;
+        continue;
+      }
+      const prevF = c.s >= c.sweep ? -30 : (1 - c.s / c.sweep) * c.length;
+      c.s -= dt;
+      const curF = (1 - Math.max(0, c.s) / c.sweep) * c.length;
+      for (const s of this.soldierHash.query(c.x, c.y, c.length + 40, this.scratchSoldiers)) {
+        if (!s.alive) continue;
+        const dx = s.x - c.x;
+        const dy = s.y - c.y;
+        for (let k = 0; k < 4; k++) {
+          const cos = Math.round(Math.cos((k * Math.PI) / 2));
+          const sin = Math.round(Math.sin((k * Math.PI) / 2));
+          const along = dx * cos + dy * sin;
+          const across = Math.abs(-dx * sin + dy * cos);
+          if (along > prevF && along <= Math.min(curF, this.arena.rayLength(c.x, c.y, cos, sin, c.length)) && across <= c.width / 2 + s.radius * 0.6) {
+            this.damageSoldier(s, c.damage);
+            break; // une seule fois par passage de front
+          }
+        }
+      }
+      if (c.s <= 0) this.crosses.splice(i, 1);
+    }
   }
 
   /** Stalactites qui tombent : à l'impact, dégâts et recul aux soldats dans la zone. */

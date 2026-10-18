@@ -128,6 +128,8 @@ export interface AlienState extends Body {
   webCd: number;
   /** Délai (s) avant les prochains murs du Scarab (Impossible). */
   wallsCd: number;
+  /** Délai (s) avant les prochains pics en croix du Rhino Alpha. */
+  crossCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */
   lurkBlockT: number;
   swarmT: number;
@@ -245,6 +247,21 @@ export interface Stalactite {
   dur: number;
   damage: number;
   knockback: number;
+}
+
+/** Pics en croix (Rhino Alpha) : télégraphe `t` s puis poussée `s` s ; 4 rangées d'angle 0, 90°, 180°, 270° autour de (x, y). Les mesures (`length`, `width`…) viennent de `def.spikeCross`. */
+export interface SpikeCross {
+  id: number;
+  x: number;
+  y: number;
+  /** Temps restant du télégraphe (s), puis de la poussée des pics. */
+  t: number;
+  s: number;
+  length: number;
+  width: number;
+  aim: number;
+  sweep: number;
+  damage: number;
 }
 
 export interface WallTelegraph {

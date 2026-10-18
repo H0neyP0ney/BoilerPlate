@@ -493,7 +493,7 @@ export class Fx {
     const flash = this.scene.add.image(x, y - 16, 'fx_glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.fx + 1).setScale(d.flashScale);
     this.scene.tweens.add({ targets: flash, alpha: 0, scale: 1.2, duration: d.flashMs, onComplete: () => flash.destroy() });
     this.column(x, y, 0xff4a4a, d.columnHeight, d.columnMs);
-    this.text(x, y - 50, '-1', '#ff5a5a', FX.gain.textSize, '#3a1313', 7); // pendant du « +1 » vert : un soldat perdu
+    this.text(x, y - 46, '✖', '#ff5a5a', d.crossSize);
   }
 
   /**

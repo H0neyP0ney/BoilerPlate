@@ -210,6 +210,9 @@ export class Mirror {
     for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
     sim.fires.length = 0; // affichage seulement (la brûlure est calculée chez l'hôte)
     for (const f of snap.fires) sim.fires.push({ id: f.id, x: f.x, y: f.y, r: f.r, ttl: 1, dps: 0 });
+    sim.crosses.length = 0; // pics en croix : télégraphe puis poussée (les dégâts sont calculés chez l'hôte) ; les mesures viennent des données du Rhino Alpha
+    const CX = ALIENS.boss_rhino.spikeCross!;
+    for (const c of snap.crosses) sim.crosses.push({ id: c.id, x: c.x, y: c.y, t: c.t, s: c.s, length: CX.length, width: CX.width, aim: CX.aim, sweep: CX.sweep, damage: 0 });
     sim.stalactites.length = 0; // télégraphes seulement (l'impact est calculé chez l'hôte)
     for (const k of snap.stalactites) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
 
@@ -263,6 +266,10 @@ export class Mirror {
     const tick = (o: { ttl: number }): void => {
       if (o.ttl > 0) o.ttl = Math.max(0, o.ttl - dt);
     };
+    for (const c of sim.crosses) {
+      if (c.t > 0) c.t = Math.max(0, c.t - dt);
+      else c.s = Math.max(0, c.s - dt); // pics en croix : le télégraphe puis la poussée se décomptent entre deux snapshots
+    }
     for (const k of sim.stalactites) if (k.t > 0) k.t = Math.max(0, k.t - dt); // stalactite : décompte jusqu'à l'impact
     for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // télégraphe d'un mur : `t` décompte jusqu'à l'apparition des rochers
     for (const p of sim.puddles) tick(p);
@@ -460,6 +467,7 @@ export class Mirror {
         ringCd: 0,
         webCd: 0,
         wallsCd: 0,
+        crossCd: 0,
         lurkBlockT: 0,
         swarmT: 0,
         swarmAcc: 0,

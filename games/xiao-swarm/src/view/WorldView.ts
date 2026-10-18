@@ -1307,6 +1307,22 @@ export class WorldView {
         g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(len, hw), true);
       }
     }
+    // Rhino Alpha : croix de pics sur la squad, les 4 lignes rouges se remplissent pendant le télégraphe
+    for (const c of this.sim.crosses) {
+      if (c.t <= 0 || !this.onScreen(c.x, c.y, c.length + 60)) continue;
+      const k = 1 - c.t / c.aim;
+      const hw = c.width / 2;
+      for (let i = 0; i < 4; i++) {
+        const cos = Math.round(Math.cos((i * Math.PI) / 2));
+        const sin = Math.round(Math.sin((i * Math.PI) / 2));
+        const quad = (len: number, wd: number): Phaser.Math.Vector2[] =>
+          [[0, -wd], [len, -wd], [len, wd], [0, wd]].map(([u, w]) => new Phaser.Math.Vector2(c.x + cos * u - sin * w, c.y + sin * u + cos * w));
+        const len = this.sim.arena.rayLength(c.x, c.y, cos, sin, c.length); // jamais hors de la carte
+        g.fillStyle(teleColor('lurk'), teleOuter(k)).fillPoints(quad(len, hw), true);
+        g.fillStyle(teleColor('lurk'), teleInner(k)).fillPoints(quad(len * k, hw * k), true);
+        g.lineStyle(3, teleColor('lurk'), 0.5 + 0.4 * k).strokePoints(quad(len, hw), true);
+      }
+    }
     // Scarab : trou sous lui qui se creuse puis se rebouche, et trou d'arrivée DERRIÈRE la squad qui se forme (zone rouge qui se remplit) avant sa sortie
     for (const v of this.aliens.values()) {
       const a = v.state;
@@ -1543,6 +1559,34 @@ export class WorldView {
             .setScale(1, rise)
             .setPosition(px, py)
             .setDepth(DEPTH.actors + py); // triés en profondeur avec les unités (par la base de la pointe) : un soldat devant une pointe la cache, derrière elle, c'est la pointe qui passe devant
+          n++;
+        }
+      }
+    }
+    // croix de pics du Rhino Alpha : mêmes colonnes de pointes, 4 rangées à 0 / 90 / 180 / 270°, le front part du centre
+    for (const c of this.sim.crosses) {
+      if (c.t > 0 || !this.onScreen(c.x, c.y, c.length + 80)) continue;
+      const p = 1 - c.s / c.sweep;
+      const front = p * c.length;
+      const fade = p > 0.75 ? 1 - ((p - 0.75) / 0.25) * 0.6 : 1;
+      for (let i = 0; i < 4; i++) {
+        const cos = Math.round(Math.cos((i * Math.PI) / 2));
+        const sin = Math.round(Math.sin((i * Math.PI) / 2));
+        const ang = (i * Math.PI) / 2;
+        const bin = Math.round((((ang % Math.PI) + Math.PI) % Math.PI) / (Math.PI / SPIKE_BINS)) % SPIKE_BINS;
+        const key = `fx_spike3_${bin}`;
+        const limit = Math.min(front, this.sim.arena.rayLength(c.x, c.y, cos, sin, c.length));
+        for (let d = 18, col = 0; d <= limit; d += step, col++) {
+          const rise = Math.min(1, (front - d) / 70 + 0.25);
+          const off = col % 2 ? 4 : -4;
+          let img = this.spikeSprites[n];
+          if (!img) {
+            img = this.scene.add.image(0, 0, key).setOrigin(0.5, SPIKE3.baseY / SPIKE3.h);
+            this.spikeSprites[n] = img;
+          }
+          const px = c.x + cos * d - sin * off;
+          const py = c.y + sin * d + cos * off;
+          img.setTexture(key).setVisible(true).setAlpha(fade).setScale(1, rise).setPosition(px, py).setDepth(DEPTH.actors + py);
           n++;
         }
       }

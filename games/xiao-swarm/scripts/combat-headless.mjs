@@ -14,7 +14,8 @@ try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');
   const { MODES } = await vite.ssrLoadModule('/src/data/modes.ts');
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
-  const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE, KNOCK_HOP } = await vite.ssrLoadModule('/src/config.ts');
+  const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE, KNOCK_HOP, TEST_FLAGS } = await vite.ssrLoadModule('/src/config.ts');
+  TEST_FLAGS.allBossAbilities = false; // les capacités de boss par niveau se testent niveau par niveau (le drapeau de test les active toutes en Normal)
 
   const fresh = (seed, difficulty = 'normal') => {
     const session = new LocalSession({ mode: MODES.survival, seed, bots: 0, difficulty });
@@ -354,6 +355,34 @@ try {
     if (label === 'tout droit')
       check(dir.x < -0.95 && miss < B.radius * 0.5, 'Scarab : verrouillé, le télégraphe suit encore une squad qui file tout droit', `ressort à ${miss.toFixed(0)} px du centre`);
     else check(miss > B.radius, 'Scarab : verrouillé, sa direction ne change plus : une squad qui s’écarte sur le côté l’esquive', `ressort à ${miss.toFixed(0)} px du centre`);
+  }
+
+  // ---- Rhino Alpha : toutes les 6 s, une croix de 4 petites rangées de pics sur le centre de la squad ; un soldat sur une rangée est blessé une fois
+  {
+    const { sim } = fresh(25);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('boss_rhino', sq.center.x + 1400, sq.center.y, 1, false);
+    const rh = sim.aliens[0];
+    rh.age = 99;
+    rh.crossCd = 0.05;
+    const C = ALIENS.boss_rhino.spikeCross;
+    const s0 = sq.soldiers[0];
+    s0.invulnerable = 0;
+    const hp0 = s0.hp;
+    let seen = 0;
+    let lines = 0;
+    for (let i = 0; i < 30 * 8; i++) {
+      s0.x = sq.center.x + 100; // sur la rangée de droite (à 100 px du centre)
+      s0.y = sq.center.y;
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(1);
+      rh.x = sq.center.x + 1400; rh.y = sq.center.y; rh.hp = rh.maxHp;
+      if (sim.crosses.length > seen) lines++;
+      seen = sim.crosses.length;
+    }
+    check(lines >= 1 && lines <= 3, 'Rhino Alpha : une croix de pics sur la squad toutes les 6 s (plus vite une fois enragé)', `${lines} croix en 8 s`);
+    check(hp0 - s0.hp >= C.damage * 0.9 && hp0 - s0.hp <= C.damage * 2.1, 'Rhino Alpha : le soldat sur une rangée de la croix est blessé une fois par croix', `${(hp0 - s0.hp).toFixed(0)} PV perdus`);
   }
 
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant

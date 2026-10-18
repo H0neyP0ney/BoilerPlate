@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -269,6 +269,7 @@ export class Sim {
         }
         s.poison = 0;
         s.stun = 0;
+        s.jumpT = 0;
       }
     }
   }
@@ -787,12 +788,12 @@ export class Sim {
   }
 
   /** Flaque de crachat : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s. */
-  addPuddle(x: number, y: number, r: number, ttl: number, slow: number, frost = false): void {
+  addPuddle(x: number, y: number, r: number, ttl: number, slow: number, frost = false, webOwner = 0): void {
     // jamais hors de la carte (une squad au bord : le chaman, le rhinocéros de glace… posaient des nuages dans le vide) : le centre reste dans l'arène
     const b = this.arena.bounds;
     x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
     y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
-    this.puddles.push(frost ? { id: this.ids.get(), x, y, r, ttl, slow: 1, frost } : { id: this.ids.get(), x, y, r, ttl, slow });
+    this.puddles.push(webOwner ? { id: this.ids.get(), x, y, r, ttl, slow: 1, web: true, owner: webOwner } : frost ? { id: this.ids.get(), x, y, r, ttl, slow: 1, frost } : { id: this.ids.get(), x, y, r, ttl, slow });
     if (this.puddles.length > 40) this.puddles.shift();
   }
 
@@ -810,15 +811,46 @@ export class Sim {
           break;
         }
       }
+      if (!gone && p.web) {
+        // toile de la Gling Mère : sans elle, plus de toile ; sinon le premier soldat qui y marche la consomme et saute vers elle
+        const mother = this.aliens.find((a) => a.alive && a.id === p.owner);
+        if (!mother) gone = true;
+        else {
+          for (const s of this.soldierHash.query(p.x, p.y, p.r + 30, this.scratchSoldiers)) {
+            if (!s.alive || s.capturedBy || s.frozen > 0 || s.jumpT > 0 || s.stun > 0 || s.invulnerable > 0 || Math.hypot(s.x - p.x, s.y - p.y) > p.r + s.radius * 0.5) continue;
+            this.webPull(s, mother);
+            this.events.push({ t: 'webPull', x: p.x, y: p.y, r: p.r });
+            gone = true;
+            break;
+          }
+        }
+      }
       if (gone) this.puddles.splice(i, 1);
     }
+  }
+
+  /** Le soldat saute vers la Gling Mère : arrivée à `WEB.land` px d'elle (côté du soldat), dans l'arène et hors des obstacles. */
+  private webPull(s: SoldierState, mother: AlienState): void {
+    const mx = mother.x + mother.vx * WEB.jump; // la Mère avance pendant le vol : on vise où elle sera à l'arrivée
+    const my = mother.y + mother.vy * WEB.jump;
+    const dx = s.x - mx;
+    const dy = s.y - my;
+    const d = Math.hypot(dx, dy) || 1;
+    const land = { x: mx + (dx / d) * WEB.land, y: my + (dy / d) * WEB.land, radius: s.radius };
+    this.arena.constrain(land);
+    s.jumpT = WEB.jump;
+    s.jx0 = s.x;
+    s.jy0 = s.y;
+    s.jx1 = land.x;
+    s.jy1 = land.y;
+    s.kx = s.ky = 0;
   }
 
   /** Facteur de vitesse d'un soldat à cet endroit (1 = libre ; les flaques ne se cumulent pas : la plus forte l'emporte). */
   slowAt(x: number, y: number, radius: number): number {
     let k = 1;
     for (const p of this.puddles) {
-      if (p.frost) continue; // nuage de glace : il gèle (updatePuddles), il ne ralentit pas
+      if (p.frost || p.web) continue; // nuage de glace ou toile : ils agissent dans updatePuddles, ils ne ralentissent pas
       const rr = p.r + radius * 0.5;
       if ((x - p.x) ** 2 + (y - p.y) ** 2 < rr * rr) k = Math.min(k, p.slow);
     }

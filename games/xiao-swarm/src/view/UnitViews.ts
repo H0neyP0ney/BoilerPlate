@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { lerp, sprites } from '@xiao/engine';
 import { alienOffsetY } from './spriteOffset';
-import { BURIED, DEPTH, FREEZE, RECRUIT, RELOCATE } from '../config';
+import { BURIED, DEPTH, FREEZE, RECRUIT, RELOCATE, WEB } from '../config';
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
@@ -80,6 +80,8 @@ export class SoldierView {
 
   /** Icône de tourbillon au-dessus d'un soldat étourdi (créée à la demande). */
   private stunIcon?: Phaser.GameObjects.Image;
+  /** Temps (s) passé en vol vers la Gling Mère (toile), 0 au sol : sert à l'arc du saut. */
+  private airT = 0;
   /** Montée de niveau : copies blanches du corps et de l'arme posées par-dessus (`levelFlash`), et temps écoulé depuis le flash (ms). */
   private whiteBody?: Phaser.GameObjects.Image;
   private whiteGun?: Phaser.GameObjects.Image;
@@ -151,6 +153,10 @@ export class SoldierView {
       bob = moving ? -Math.abs(Math.sin(this.walk)) * 3 : Math.sin(time * 2.2 + this.phase) * 0.8;
       this.body.setFlipX(sprites.flipFor(this.bodyId, facing));
     }
+    // saut vers la Gling Mère (toile) : le sprite monte en arc (le sol et l'ombre restent à leur place) ; le temps de vol est mesuré ici (la sim n'envoie que « en vol »)
+    if (s.jumpT > 0) this.airT += dt;
+    else this.airT = 0;
+    if (this.airT > 0) bob -= Math.sin(Math.min(1, this.airT / WEB.jump) * Math.PI) * WEB.height;
     sprites.place(this.body, this.bodyId); // ancrage propre à la séquence / direction (si défini)
     const oy = sprites.get(this.bodyId).offsetY ?? 0; // décalage vertical du sprite (et de l'arme) réglé dans la visionneuse
     this.body.setPosition(this.rx, this.ry + bob + oy).setDepth(depth).setScale(sprites.scaleOf(this.bodyId));

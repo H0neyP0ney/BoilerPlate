@@ -44,6 +44,11 @@ export const MELEE_REACH = 10;
  * les coups alliés ne comptent pas (on voit la glace se former). Le soldat gelé ne bouge ni ne tire, et reste attaquable par les aliens.
  */
 export const FREEZE = { hp: 50, invuln: 0.5 };
+/**
+ * Toiles de la Gling Mère (Expert) : un soldat qui marche dans une toile la consomme et saute vers elle pendant `jump` s (arc de `height` px à l'affichage), pour retomber à `land` px
+ * d'elle, étourdi `stun` s.
+ */
+export const WEB = { jump: 0.6, height: 70, land: 80, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;
 /** Vague en embuscade (chance : `DIFFICULTY.ambushChance`) : le groupe sort du sol à `ahead` px DEVANT la squad (dans son sens de course ; direction au hasard si elle est immobile), dispersé de ±`spread` px, avec l'animation d'apparition habituelle. */

@@ -92,7 +92,7 @@ export class Combat {
       squad.lastStand = stand > 0 && squad.missing > 0;
       const damageMul = this.damageMulOf(squad);
       for (const s of squad.soldiers) {
-        if (s.capturedBy || s.frozen > 0 || s.stun > 0) continue; // avalé par une bulle, gelé ou étourdi : ne tire plus
+        if (s.capturedBy || s.frozen > 0 || s.stun > 0 || s.jumpT > 0) continue; // avalé par une bulle, gelé, étourdi ou en vol : ne tire plus
         const weapon = s.def.weapon;
         s.cooldown -= dt * fireRate;
         s.retarget -= dt;

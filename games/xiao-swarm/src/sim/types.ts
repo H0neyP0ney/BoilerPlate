@@ -43,6 +43,8 @@ export type SimEvent =
   | { t: 'restart' }
   | { t: 'boss'; id: number; alien: AlienId; kind: 'mini' | 'final' }
   | { t: 'freeze'; x: number; y: number; r: number }
+  /** Un soldat a marché dans une toile de la Gling Mère : elle se déchire (éclats blancs). */
+  | { t: 'webPull'; x: number; y: number; r: number }
   /** Un soldat sort de la glace (dégelé par ses alliés, ou mort dedans) : éclats. */
   | { t: 'thaw'; soldier: number; x: number; y: number }
   /** Mêlée en zone d'un alien (`def.cleave`, chargeur) : anneau rouge discret. */

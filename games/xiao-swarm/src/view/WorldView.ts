@@ -416,6 +416,11 @@ export class WorldView {
         this.fx.burst(e.x, e.y - 14, 0x9fe0ff, 24);
         if (nearCam(e.x, e.y)) playSfx(this.scene, 'freeze');
         break;
+      case 'webPull':
+        // la toile se déchire : onde et éclats blancs
+        this.fx.ring(e.x, e.y, e.r * 1.2, 0xffffff);
+        this.fx.burst(e.x, e.y - 10, 0xf2f2ff, 18);
+        break;
       case 'thaw':
         // un soldat sort de la glace (dégelé, ou mort dedans) : elle vole en éclats
         {
@@ -1219,6 +1224,18 @@ export class WorldView {
       const pop = age >= CLOUD_POP ? 1 : Phaser.Math.Easing.Back.Out(age / CLOUD_POP);
       const a = Math.min(1, p.ttl, age / 0.12);
       const r = p.r * pop;
+      if (p.web) {
+        // toile de la Gling Mère : disque blanc translucide, rayons et anneaux de soie ; y marcher = être projeté vers la Mère (contour rouge : danger)
+        g.fillStyle(0xf2f2ff, 0.16 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);
+        g.lineStyle(2, 0xffffff, 0.85 * a);
+        for (let k = 0; k < 8; k++) {
+          const ang = (k / 8) * Math.PI * 2;
+          g.lineBetween(p.x, p.y, p.x + Math.cos(ang) * r, p.y + Math.sin(ang) * r * 0.65);
+        }
+        for (const f of [0.35, 0.65, 0.95]) g.strokeEllipse(p.x, p.y, r * 2 * f, r * 1.3 * f);
+        g.lineStyle(3, 0xff3a3a, 0.9 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
+        continue;
+      }
       if (p.frost) {
         // nuage de glace (flocons du chaman) : bleu glacé, bouffées blanches et flocons qui tournent ; y entrer = gelé
         g.fillStyle(0x3a8ad8, 0.3 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);

@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL, WEB } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { MEDIC_RANGE_UNITS } from '../data/armory';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
@@ -431,6 +431,11 @@ export class Squad {
       frozen: 0,
       iceInvuln: 0,
       stun: 0,
+      jumpT: 0,
+      jx0: 0,
+      jy0: 0,
+      jx1: 0,
+      jy1: 0,
       poison: 0,
       grabbed: 0,
     };
@@ -477,7 +482,7 @@ export class Squad {
    * ou isolé loin de la squad (il ne compte alors ni pour le centre, ni pour les slots).
    */
   private isOut(s: SoldierState): boolean {
-    return s.capturedBy !== 0 || s.frozen > 0 || this.released.has(s) || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
+    return s.capturedBy !== 0 || s.frozen > 0 || s.jumpT > 0 || this.released.has(s) || s.grabbed > GRAB_IMMUNE - GRAB_OUT || this.detached.has(s);
   }
 
   /** Libération d'une bulle ou d'un glaçon : le soldat reste hors du mouvement de foule `RELEASE_OUT` s. */
@@ -571,6 +576,23 @@ export class Squad {
         if (this.sim.aliens.some((x) => x.alive && x.id === s.capturedBy)) continue;
         s.capturedBy = 0;
       }
+      if (s.jumpT > 0) {
+        // saute vers la Gling Mère (toile) : trajectoire droite du départ à l'arrivée, hors formation ; l'arc est dessiné par la vue ; à l'atterrissage : étourdi
+        s.jumpT -= dt;
+        const k = Math.min(1, Math.max(0, 1 - s.jumpT / WEB.jump));
+        s.x = s.jx0 + (s.jx1 - s.jx0) * k;
+        s.y = s.jy0 + (s.jy1 - s.jy0) * k;
+        s.vx = (s.jx1 - s.jx0) / WEB.jump;
+        s.vy = (s.jy1 - s.jy0) / WEB.jump;
+        s.kx = s.ky = 0;
+        if (s.invulnerable > 0) s.invulnerable -= dt;
+        if (s.jumpT <= 0) {
+          s.jumpT = 0;
+          s.stun = Math.max(s.stun, WEB.stun);
+          s.vx = s.vy = 0;
+        }
+        continue;
+      }
       if (s.stun > 0) {
         // étourdi : immobile (seul le recul agit), ne rejoint pas son slot
         s.stun -= dt;
@@ -619,7 +641,7 @@ export class Squad {
       const a = this.soldiers[i];
       for (let j = i + 1; j < total; j++) {
         const b = this.soldiers[j];
-        if (a.capturedBy || b.capturedBy || a.frozen > 0 || b.frozen > 0) continue;
+        if (a.capturedBy || b.capturedBy || a.frozen > 0 || b.frozen > 0 || a.jumpT > 0 || b.jumpT > 0) continue;
         const ddx = b.x - a.x;
         const ddy = b.y - a.y;
         const min = (a.radius + b.radius) * 1.05;
@@ -637,7 +659,7 @@ export class Squad {
     }
 
     // 6. Obstacles & bords
-    for (const s of this.soldiers) if (!s.capturedBy) this.sim.arena.constrain(s);
+    for (const s of this.soldiers) if (!s.capturedBy && s.jumpT <= 0) this.sim.arena.constrain(s); // en vol (toile) : il passe au-dessus des obstacles
 
     this.updateHealing(dt);
   }

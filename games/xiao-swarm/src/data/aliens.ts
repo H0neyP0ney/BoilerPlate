@@ -51,12 +51,14 @@ export interface AlienDef {
   frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
   /**
    * Capacités en plus selon le niveau de difficulté (un niveau hérite des précédents : `impossible` a aussi celles d'`expert`). `expert.spiderRing` (Gling Mère) : toutes les `every` s,
-   * `count` araignées surgissent du sol en cercle de rayon `radius` autour de la squad visée (PV × `hpMul`). `impossible.frost` : les nuages de gel du chaman (même fonctionnement que `frost`,
-   * `range` ignoré : la Gling Mère les pose autour de la squad où qu'elle soit).
+   * `count` araignées surgissent du sol en cercle de rayon `radius` autour de la squad visée (PV × `hpMul`). `impossible.web` : toiles au sol posées comme les nuages de gel du chaman
+   * (même forme que `frost`, `range` ignoré : autour de la squad où qu'elle soit) ; un soldat qui y entre la consomme et saute vers la Gling Mère (`WEB` de `config.ts`).
    */
   expert?: { spiderRing?: { every: number; count: number; radius: number; hpMul: number } };
   impossible?: {
-    frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
+    /** Scarab (Impossible) : toutes les `every` s, deux murs de rochers (télégraphe `windup` s puis ligne de `length` px, rochers de rayon `rock.radius` pendant `rock.ttl` s) : l'un SUR la squad, l'autre `ahead` px DEVANT elle (sa direction de course). */
+    walls?: { every: number; windup: number; length: number; ahead: number; rock: { radius: number; ttl: number } };
+    web?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
     /** Bouclier propre au niveau Impossible (même fonctionnement que `shield`) : posé sur tous les boss. Voir `shieldOf`. */
     shield?: { pct: number; regenDelay: number; regenTime: number };
   };
@@ -492,7 +494,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (4:30) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss)
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, walls: { every: 3, windup: 1.1, length: 200, ahead: 240, rock: { radius: 26, ttl: 6 } } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 3 s un mur sur la squad et un devant elle
     hp: 19000, // 1500 × 11
     speed: 187.5, // avant : 150 (×1.25 intégré le 09/10) ; ×3
     radius: 68,
@@ -523,7 +525,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     oneShot: true,
     target: 'nearest',
     expert: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 } }, // expert et impossible : toutes les 6 s, 10 araignées surgissent en cercle autour de la squad
-    impossible: { frost: { every: 8, range: 99999, count: 3, gap: [103.5, 184], radius: 25.5, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 8 s, 3 zones de gel autour de la squad (comme le chaman) + bouclier de 5 %
+    impossible: { web: { every: 8, range: 99999, count: 5, gap: [60, 160], radius: 80, ttl: 10 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // impossible : toutes les 8 s, 5 toiles (rayon 80) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée + bouclier de 5 %
     swarm: { every: 4, duration: 1.07, count: 15, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     xp: 100,

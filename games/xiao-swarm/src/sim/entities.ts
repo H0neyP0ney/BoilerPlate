@@ -55,6 +55,12 @@ export interface SoldierState extends Body {
   poison: number;
   /** Temps restant (s) d'étourdissement (slam du Scarab) : il ne bouge ni ne tire, mais reste attaquable. */
   stun: number;
+  /** Saut vers la Gling Mère après une toile : temps restant (s, 0 = au sol), départ et arrivée (le soldat est hors formation, ni visé par la foule ni tireur pendant le vol). */
+  jumpT: number;
+  jx0: number;
+  jy0: number;
+  jx1: number;
+  jy1: number;
   /**
    * Temps restant (s) d'un « grab » (langue) : tant qu'il est > GRAB_HOLD il est tiré hors de la formation (il ne rejoint pas son
    * slot), et jusqu'à 0 il est immunisé contre tout autre grab (langue ou bulle).
@@ -117,7 +123,9 @@ export interface AlienState extends Body {
   swarmCd: number;
   /** Compteurs (s) des capacités des niveaux Expert (cercle d'araignées) et Impossible (zones de gel), voir `AlienDef.expert` / `impossible`. */
   ringCd: number;
-  iceCd: number;
+  webCd: number;
+  /** Délai (s) avant les prochains murs du Scarab (Impossible). */
+  wallsCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */
   lurkBlockT: number;
   swarmT: number;
@@ -261,6 +269,9 @@ export interface Puddle {
   slow: number;
   /** Nuage de glace (flocons du chaman) : gèle le premier soldat qui y entre (puis disparaît) au lieu de ralentir. */
   frost?: boolean;
+  /** Toile de la Gling Mère (id de l'alien qui l'a posée, sim seulement) : le premier soldat qui y marche la consomme et saute vers elle (`WEB`). Absente du snapshot : `web` y suffit. */
+  web?: boolean;
+  owner?: number;
 }
 
 /** Zone laissée au sol par un joueur mort (coop) : un équipier qui y reste `REVIVE_TIME` s le ramène avec une escouade de base. */

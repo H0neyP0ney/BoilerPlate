@@ -16,8 +16,8 @@ try {
   const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
   const { DIFFICULTY, RELOCATE, GEM_CHEST, SPECIAL_RECRUIT_CHANCE } = await vite.ssrLoadModule('/src/config.ts');
 
-  const fresh = (seed) => {
-    const session = new LocalSession({ mode: MODES.survival, seed, bots: 0 });
+  const fresh = (seed, difficulty = 'normal') => {
+    const session = new LocalSession({ mode: MODES.survival, seed, bots: 0, difficulty });
     const step = (ticks = 1) => {
       for (let i = 0; i < ticks; i++) session.advance(34, () => {});
     };
@@ -264,7 +264,7 @@ try {
   // ---- Scarab : sous terre, le télégraphe vise le centre de la squad (sans anticipation), se verrouille `lock` s avant la sortie ;
   //      une squad qui en sort à temps n'est pas touchée
   {
-    const { sim, step } = fresh(16);
+    const { sim, step } = fresh(16, 'expert');
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     const B = ALIENS.boss_scarab.burrow;
@@ -328,7 +328,7 @@ try {
   // ---- Scarab : pendant le verrouillage, la direction du télégraphe est figée mais il suit encore la squad sur cet axe :
   //      filer tout droit ne suffit pas (il ressort dessus), s'écarter sur le côté oui
   for (const [label, after] of [['tout droit', { mx: -1, my: 0 }], ['sur le côté', { mx: 0, my: -1 }]]) {
-    const { sim, step } = fresh(16);
+    const { sim, step } = fresh(16, 'expert');
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     const B = ALIENS.boss_scarab.burrow;
@@ -356,9 +356,93 @@ try {
     else check(miss > B.radius, 'Scarab : verrouillé, sa direction ne change plus : une squad qui s’écarte sur le côté l’esquive', `ressort à ${miss.toFixed(0)} px du centre`);
   }
 
-  // ---- Scarab : quand il marche vers la squad entre deux plongées, une petite pluie de stalactites (une seule, à mi-chemin du compte à rebours)
+  // ---- Scarab : les stalactites n'existent pas en Normal (Hard et Expert seulement)
   {
     const { sim } = fresh(16);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('boss_scarab', sq.center.x + 700, sq.center.y, 1, false);
+    const sc = sim.aliens[0];
+    sc.age = 99;
+    let casts = 0;
+    let prev = 0;
+    for (let i = 0; i < 30 * 12; i++) {
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(1);
+      if (sim.stalactites.length > prev) casts++;
+      prev = sim.stalactites.length;
+    }
+    check(casts === 0, 'Scarab : en Normal, aucune stalactite', `${casts} pluie(s) en 12 s`);
+  }
+
+  // ---- Scarab (Expert) : toutes les 3 s, un mur annoncé sur la squad et un devant elle
+  {
+    const { sim } = fresh(18, 'impossible');
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sim.horde.spawnAt('boss_scarab', sq.center.x + 900, sq.center.y, 1, false);
+    const sc = sim.aliens[0];
+    sc.age = 99;
+    sc.wallsCd = 0.05;
+    const seen = new Set();
+    const move = new Map([['p1', { mx: -1, my: 0 }]]);
+    for (let i = 0; i < 30 * 7; i++) {
+      sim.step(1 / 30, move);
+      sim.aliens.splice(1);
+      for (const w of sim.walls) seen.add(w.id);
+    }
+    check(seen.size >= 4 && seen.size % 2 === 0, 'Scarab (Expert) : des murs par paires (sur la squad et devant elle), toutes les 3 s (plus vite une fois enragé)', `${seen.size} murs annoncés en 7 s`);
+    const normal = fresh(18);
+    clearAliens(normal.sim);
+    normal.sim.horde.spawnAt('boss_scarab', normal.sim.squadOf('p1').center.x + 900, normal.sim.squadOf('p1').center.y, 1, false);
+    normal.sim.aliens[0].age = 99;
+    let n = 0;
+    for (let i = 0; i < 30 * 7; i++) {
+      normal.sim.step(1 / 30, new Map());
+      normal.sim.aliens.splice(1);
+      n = Math.max(n, normal.sim.walls.length);
+    }
+    check(n === 0, 'Scarab : pas de murs hors Expert', `${n} mur(s)`);
+  }
+
+  // ---- Gling Mère (Expert) : une toile consommée envoie le soldat vers elle, étourdi à l'arrivée
+  {
+    const { sim } = fresh(23, 'impossible');
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const mx = sq.center.x + 600;
+    const my = sq.center.y;
+    sim.horde.spawnAt('boss_gling', mx, my, 1, false);
+    const mother = sim.aliens[0];
+    mother.age = 99;
+    const s0 = sq.soldiers[0];
+    sim.addPuddle(s0.x, s0.y, 80, 10, 1, false, mother.id);
+    let airborne = false;
+    for (let i = 0; i < 12; i++) {
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(1);
+      if (s0.jumpT > 0) {
+        airborne = true;
+        s0.invulnerable = 5; // la Mère ne l'achève pas pendant le test (l'étourdissement se mesure seul)
+      }
+    }
+    check(airborne && !sim.puddles.some((p) => p.web && Math.hypot(p.x - s0.x, p.y - s0.y) < 5), 'toile : le soldat qui marche dedans la consomme et saute', `en vol ${airborne}`);
+    for (let i = 0; i < 60 && s0.jumpT > 0; i++) {
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(1);
+    }
+    const dMother = Math.hypot(s0.x - mother.x, s0.y - mother.y);
+    check(s0.jumpT === 0 && s0.stun > 0.5 && Math.abs(dMother - 80) < 40, 'toile : il retombe à ~80 px de la Mère, étourdi', `${dMother.toFixed(0)} px, étourdi ${s0.stun.toFixed(2)} s`);
+    for (let i = 0; i < 40; i++) {
+      sim.step(1 / 30, new Map());
+      sim.aliens.splice(1);
+    }
+    check(s0.stun <= 0, "toile : l'étourdissement dure 1 s", `${s0.stun.toFixed(2)} s restant`);
+  }
+
+  // ---- Scarab : quand il marche vers la squad entre deux plongées, une petite pluie de stalactites (une seule, à mi-chemin du compte à rebours)
+  {
+    const { sim } = fresh(16, 'expert');
     clearAliens(sim);
     const sq = sim.squadOf('p1');
     const B = ALIENS.boss_scarab.burrow;
@@ -672,7 +756,7 @@ try {
     }
   }
 
-  // ---- Gling Mère par niveau : expert = 10 araignées en cercle autour de la squad toutes les 6 s ; impossible = en plus 3 zones de gel toutes les 8 s ; rien en normal
+  // ---- Gling Mère par niveau : expert = 10 araignées en cercle autour de la squad toutes les 6 s ; impossible = en plus 5 toiles toutes les 8 s ; rien en normal
   for (const difficulty of ['normal', 'expert', 'impossible']) {
     const session = new LocalSession({ mode: MODES.survival, seed: 9, bots: 0, difficulty });
     const sim = session.sim;
@@ -686,20 +770,20 @@ try {
     let seenSpiders = 0, spiderBursts = 0, seenIce = 0, iceBursts = 0, ringErr = 0;
     for (let tick = 0; tick < 30 * 18; tick++) {
       boss.x = sq.center.x + 900; boss.y = sq.center.y; boss.hp = boss.maxHp; // le boss reste en vie, loin
-      sq.soldiers.forEach((x) => { x.invulnerable = 5; }); // les nuages de gel ne sont pas consommés par le test
+      sq.soldiers.forEach((x) => { x.invulnerable = 5; }); // les toiles ne sont pas consommées par le test
       session.advance(34, () => {});
       const spiders = sim.aliens.filter((a) => a.def.id === 'spider');
       if (spiders.length - seenSpiders >= 5) { spiderBursts++; ringErr = spiders.reduce((m, a) => Math.max(m, Math.abs(Math.hypot(a.x - sq.center.x, a.y - sq.center.y) - 300)), 0); }
       seenSpiders = spiders.length;
-      const ice = sim.puddles.filter((p) => p.frost).length;
-      if (ice - seenIce >= 3) iceBursts++;
+      const ice = sim.puddles.filter((p) => p.web).length;
+      if (ice - seenIce >= 5) iceBursts++;
       seenIce = ice;
     }
     const wantSpiders = difficulty === 'normal' ? 0 : 3; // 18 s : surgissements à 6, 12 et 18 s (le dernier peut tomber juste après)
     const wantIce = difficulty === 'impossible' ? 2 : 0; // 18 s : 8 s et 16 s
     check(spiderBursts >= (wantSpiders ? 2 : 0) && spiderBursts <= wantSpiders, `${difficulty} : Gling Mère, cercle d'araignées ${difficulty === 'normal' ? 'absent' : 'toutes les 6 s'}`, `${spiderBursts} surgissement(s)`);
     if (wantSpiders) check(ringErr < 120, `${difficulty} : les araignées surgissent en cercle autour de la squad (rayon ~300 px)`, `écart max au rayon ${ringErr.toFixed(0)} px`);
-    check(iceBursts === wantIce, `${difficulty} : Gling Mère, zones de gel ${difficulty === 'impossible' ? 'toutes les 8 s (3 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
+    check(iceBursts === wantIce, `${difficulty} : Gling Mère, toiles ${difficulty === 'impossible' ? 'toutes les 8 s (5 à la fois)' : 'absentes'}`, `${iceBursts} salve(s)`);
   }
 
   // ---- bouclier de 5 % sur TOUS les boss en mode impossible seulement (normal et expert : aucun) ; il encaisse avant les PV et passe correctement par le réseau

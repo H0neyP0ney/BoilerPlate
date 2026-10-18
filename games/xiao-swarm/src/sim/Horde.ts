@@ -194,7 +194,8 @@ export class Horde {
       age: 0,
       swarmCd: def.swarm ? def.swarm.every : 0,
       ringCd: def.expert?.spiderRing ? def.expert.spiderRing.every : 0,
-      iceCd: def.impossible?.frost ? def.impossible.frost.every : 0,
+      webCd: def.impossible?.web ? def.impossible.web.every : 0,
+      wallsCd: def.impossible?.walls ? def.impossible.walls.every : 0,
       lurkBlockT: 0,
       swarmT: 0,
       swarmAcc: 0,
@@ -256,7 +257,7 @@ export class Horde {
    * `F.count` nuages de gel (rayon `F.radius`, durée `F.ttl` s) autour de la squad `sq`, répartis d'un coup tout autour à `F.gap` px (min-max) de son bord réel (le soldat le plus éloigné de son
    * centre : la formation s'étale plus que son rayon théorique), jamais hors de la carte (angles retentés si le point tombe dans le vide, puis `addPuddle` recadre). Chaman et Gling Mère (impossible).
    */
-  private castFrost(F: NonNullable<AlienState['def']['frost']>, sq: Squad): void {
+  private castFrost(F: NonNullable<AlienState['def']['frost']>, sq: Squad, webOwner = 0): void {
     const { rng } = this.sim;
     let edge = sq.radius;
     for (const s of sq.soldiers) if (s.alive && !s.capturedBy && !s.frozen) edge = Math.max(edge, Math.hypot(s.x - sq.center.x, s.y - sq.center.y) + s.radius);
@@ -271,7 +272,7 @@ export class Horde {
         if (px >= bounds.minX + F.radius && px <= bounds.maxX - F.radius && py >= bounds.minY + F.radius && py <= bounds.maxY - F.radius) break;
         ang = rng.range(0, Math.PI * 2);
       }
-      this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, true);
+      this.sim.addPuddle(sq.center.x + Math.cos(ang) * d, sq.center.y + Math.sin(ang) * d, F.radius, F.ttl, 1, !webOwner, webOwner); // webOwner : toile de la Gling Mère au lieu d'un nuage de gel
     }
   }
 
@@ -433,6 +434,13 @@ export class Horde {
         this.pickTarget(a, def.target);
         a.retarget = 0.4 + rng.next() * 0.3;
       }
+      // Impossible (Scarab) : toutes les `every` s, un mur de rochers sur la squad visée et un devant elle
+      const wallsDef = this.sim.difficulty === 'impossible' ? def.impossible?.walls : undefined;
+      if (wallsDef && (a.wallsCd -= dt * this.cdRate(a)) <= 0) {
+        a.wallsCd = wallsDef.every;
+        const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+        if (target) this.castBossWalls(a, wallsDef, target);
+      }
       if (def.lurk) {
         this.updateLurker(a, dt);
         continue;
@@ -570,12 +578,12 @@ export class Horde {
         a.ringCd = ring.every;
         this.spiderRing(a, ring);
       }
-      // Impossible : zones de gel autour de la squad visée (comme le chaman)
-      const ice = this.sim.difficulty === 'impossible' ? def.impossible?.frost : undefined;
-      if (ice && !swarming && (a.iceCd -= dt * cdRate) <= 0) {
-        a.iceCd = ice.every;
+      // Impossible : toiles au sol autour de la squad visée (placées comme les nuages du chaman) ; y marcher = sauter vers la Mère
+      const web = this.sim.difficulty === 'impossible' ? def.impossible?.web : undefined;
+      if (web && !swarming && (a.webCd -= dt * cdRate) <= 0) {
+        a.webCd = web.every;
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
-        if (target) this.castFrost(ice, target);
+        if (target) this.castFrost(web, target, a.id);
       }
       if (def.slam) {
         a.slamCd -= dt * cdRate;
@@ -1165,7 +1173,7 @@ export class Horde {
         const cd = a.leapCd;
         a.leapCd -= dt * this.cdRate(a);
         // il marche vers la squad : petite pluie de stalactites à mi-chemin du compte à rebours
-        const W = a.def.stalactites?.walk;
+        const W = atLeast(this.sim.difficulty, 'expert') ? a.def.stalactites?.walk : undefined; // stalactites : Hard et Expert seulement (pas en Normal)
         if (W && cd > B.every / 2 && a.leapCd <= B.every / 2) this.castStalactites(a, W.count, W.onSoldiers);
         const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (a.leapCd <= 0 && sq && sq.alive) {
@@ -1232,7 +1240,7 @@ export class Horde {
           a.lurkT = B.lunge;
           a.leapT = 0;
           a.leapCd = B.every;
-          if (a.def.stalactites) this.castStalactites(a); // une fois sorti : pluie de stalactites
+          if (a.def.stalactites && atLeast(this.sim.difficulty, 'expert')) this.castStalactites(a); // une fois sorti : pluie de stalactites (Hard et Expert seulement)
         } else a.leapT = Math.max(0.05, a.lurkT);
         return true;
       }
@@ -1352,6 +1360,27 @@ export class Horde {
         const py = cy + Math.sin(ang) * w.ring * k;
         if (!this.sim.wallFits(px, py, ang + Math.PI / 2, w.length, w.rock.radius)) continue;
         this.sim.addWall(px, py, ang + Math.PI / 2, w.length, w.windup, w.rock.radius, w.rock.ttl);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Murs du Scarab (Impossible) : un SUR la squad (centre prévu à la fin du télégraphe), un autre `ahead` px DEVANT elle dans sa direction de course (sinon du côté opposé au Scarab),
+   * chacun perpendiculaire à cette direction. Un mur qui ne tient pas (hors carte, obstacle) est rapproché de la squad, à défaut non posé.
+   */
+  private castBossWalls(a: AlienState, W: NonNullable<NonNullable<AlienState['def']['impossible']>['walls']>, sq: Squad): void {
+    const cx = sq.center.x + sq.vel.x * W.windup;
+    const cy = sq.center.y + sq.vel.y * W.windup;
+    const moving = Math.hypot(sq.vel.x, sq.vel.y) > 40;
+    const dir = moving ? Math.atan2(sq.vel.y, sq.vel.x) : Math.atan2(cy - a.y, cx - a.x);
+    const perp = dir + Math.PI / 2;
+    for (const k of [0, 1]) {
+      for (const f of [1, 0.75, 0.5]) {
+        const px = cx + Math.cos(dir) * W.ahead * k * f;
+        const py = cy + Math.sin(dir) * W.ahead * k * f;
+        if (!this.sim.wallFits(px, py, perp, W.length, W.rock.radius)) continue;
+        this.sim.addWall(px, py, perp, W.length, W.windup, W.rock.radius, W.rock.ttl);
         break;
       }
     }

@@ -885,6 +885,7 @@ export class Sim {
     s.jy0 = s.y;
     s.jx1 = land.x;
     s.jy1 = land.y;
+    s.jm = mother.id;
     s.kx = s.ky = 0;
   }
 
@@ -1025,7 +1026,10 @@ export class Sim {
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
-    if (a.def.egg) this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
+    if (a.def.egg) {
+      this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
+      this.gems.spawnChest(a.x, a.y); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss
+    }
     if (a.def.boss) {
       // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul fait un clear screen, laisse l'œuf, compte pour l'escalade et le bandeau.
       // Le premier tombé (`firstTwin`) est un alien comme les autres (ses drops normaux, aucun effet de fin de boss) ; son jumeau continue le combat.
@@ -1037,7 +1041,7 @@ export class Sim {
       }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
-        if (a.def.boss.kind !== 'final') { const egg = this.horde.spawnEgg(a.x, a.y); this.gems.spawnChest(egg.x, egg.y); } // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
+        if (a.def.boss.kind !== 'final') this.horde.spawnEgg(a.x, a.y); // œuf à détruire sur le cadavre du boss (le boss final, lui, gagne la partie ; jumeaux : seul le dernier tombé en laisse un)
         if (last) {
           this.bossKills++; // escalade : les aliens suivants sont plus forts (une seule fois pour les jumeaux)
           this.events.push({ t: 'bossDown', alien: a.def.id, kind: a.def.boss.kind });

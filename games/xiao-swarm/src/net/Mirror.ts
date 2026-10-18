@@ -369,6 +369,7 @@ export class Mirror {
         jy0: 0,
         jx1: 0,
         jy1: 0,
+        jm: 0,
         poison: 0,
         grabbed: 0,
       };

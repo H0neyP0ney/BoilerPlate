@@ -437,6 +437,7 @@ export class Squad {
       jy0: 0,
       jx1: 0,
       jy1: 0,
+      jm: 0,
       poison: 0,
       grabbed: 0,
     };
@@ -580,6 +581,17 @@ export class Squad {
       if (s.jumpT > 0) {
         // saute vers la Gling Mère (toile) : trajectoire droite du départ à l'arrivée, hors formation ; l'arc est dessiné par la vue ; à l'atterrissage : étourdi
         s.jumpT -= dt;
+        const mother = this.sim.aliens.find((a) => a.alive && a.id === s.jm);
+        if (mother) {
+          // le point d'arrivée suit la Mère (elle avance pendant le vol) : il retombe toujours à `WEB.land` px d'elle, du côté du départ
+          const dx = s.jx0 - mother.x;
+          const dy = s.jy0 - mother.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const land = { x: mother.x + (dx / d) * WEB.land, y: mother.y + (dy / d) * WEB.land, radius: s.radius };
+          this.sim.arena.constrain(land);
+          s.jx1 = land.x;
+          s.jy1 = land.y;
+        }
         const k = Math.min(1, Math.max(0, 1 - s.jumpT / WEB.jump));
         s.x = s.jx0 + (s.jx1 - s.jx0) * k;
         s.y = s.jy0 + (s.jy1 - s.jy0) * k;

@@ -63,6 +63,8 @@ export interface SoldierState extends Body {
   jy0: number;
   jx1: number;
   jy1: number;
+  /** Id de la Gling Mère visée par le saut (le point d'arrivée la suit pendant le vol). */
+  jm: number;
   /**
    * Temps restant (s) d'un « grab » (langue) : tant qu'il est > GRAB_HOLD il est tiré hors de la formation (il ne rejoint pas son
    * slot), et jusqu'à 0 il est immunisé contre tout autre grab (langue ou bulle).

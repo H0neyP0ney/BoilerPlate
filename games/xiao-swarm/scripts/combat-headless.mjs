@@ -385,6 +385,18 @@ try {
     check(hp0 - s0.hp >= C.damage * 0.9 && hp0 - s0.hp <= C.damage * 2.1, 'Rhino Alpha : le soldat sur une rangée de la croix est blessé une fois par croix', `${(hp0 - s0.hp).toFixed(0)} PV perdus`);
   }
 
+  // ---- coffre à diamants : il saute de l'œuf quand l'œuf est ouvert (détruit), pas à la mort du boss
+  {
+    const { sim } = fresh(27);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const egg = sim.horde.spawnEgg(sq.center.x + 300, sq.center.y);
+    const before = sim.gems.chests.length;
+    sim.damage(egg, 1e9, 'p1');
+    sim.step(1 / 30, new Map());
+    check(before === 0 && sim.gems.chests.length === 1 && Math.hypot(sim.gems.chests[0].x - egg.x, sim.gems.chests[0].y - egg.y) < 40, "coffre à diamants : il apparaît à l'ouverture de l'œuf (pas à la mort du boss)", `${before} avant, ${sim.gems.chests.length} après`);
+  }
+
   // ---- Kamikaze : le soldat touché est soufflé en cloche (seul le recul le déplace pendant KNOCK_HOP.time), puis revient en marchant
   {
     const { sim } = fresh(24);
@@ -481,7 +493,7 @@ try {
       sim.aliens.splice(1);
     }
     const dMother = Math.hypot(s0.x - mother.x, s0.y - mother.y);
-    check(s0.jumpT === 0 && s0.stun > 0.5 && Math.abs(dMother - 80) < 40, 'toile : il retombe à ~80 px de la Mère, étourdi', `${dMother.toFixed(0)} px, étourdi ${s0.stun.toFixed(2)} s`);
+    check(s0.jumpT === 0 && s0.stun > 0.5 && Math.abs(dMother - 120) < 40, 'toile : il retombe à ~120 px de la Mère, étourdi', `${dMother.toFixed(0)} px, étourdi ${s0.stun.toFixed(2)} s`);
     for (let i = 0; i < 40; i++) {
       sim.step(1 / 30, new Map());
       sim.aliens.splice(1);

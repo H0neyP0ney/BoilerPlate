@@ -55,7 +55,7 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
  */
 export const TEST_FLAGS = { allBossAbilities: true }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
 export const KNOCK_HOP = { time: 0.48, height: 40, arc: 1 }; // time : 0,6 s −20 % (17/10), la cloche en y dure autant ; arc < 1 raccourcirait la cloche seule
-export const WEB = { jump: 0.6, height: 70, land: 80, stun: 1 };
+export const WEB = { jump: 0.6, height: 70, land: 120, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
 export const ALIEN_SPAWN_HOLD = 0.7;
 /** Vague en embuscade (chance : `DIFFICULTY.ambushChance`) : le groupe sort du sol à `ahead` px DEVANT la squad (dans son sens de course ; direction au hasard si elle est immobile), dispersé de ±`spread` px, avec l'animation d'apparition habituelle. */

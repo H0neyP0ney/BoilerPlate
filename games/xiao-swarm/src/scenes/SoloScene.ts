@@ -4,6 +4,7 @@ import { SCENES } from '../config';
 import { hudOnTop } from './hudOnTop';
 import { DIFFICULTY_LABEL_KEYS, DIFFICULTY_LEVELS, type DifficultyLevel } from '../data/difficultyLevels';
 import { t } from '../i18n';
+import { chestButton, chestWidth } from './chestButtons';
 import { settings } from '../settings';
 import type { GameScene } from './GameScene';
 
@@ -81,14 +82,9 @@ export class SoloScene extends Phaser.Scene {
         });
       }
     });
-    // gros bouton « Skins » au milieu à droite : ouvre la boutique (diamants verts des coffres de boss)
-    const shopW = Math.min(190, Math.max(110, w * 0.26));
-    const shopH = 128;
-    const shopX = w - shopW / 2 - 14;
-    add(new Button(this, shopX, h / 2, { label: t('skinsBtn'), variant: 'secondary', fill: 0x1f7a4d, textColor: '#ffffff', width: shopW, height: shopH, onClick: () => this.shop() }));
-    // « Armory » (market) en face, au milieu à gauche : unités à débloquer et upgrades payées en pièces d'or
-    const armX = shopW / 2 + 14;
-    add(new Button(this, armX, h / 2, { label: t('armoryBtn'), variant: 'secondary', fill: 0x8a5a05, textColor: '#ffffff', width: shopW, height: shopH, onClick: () => this.armory() }));
+    // Wardrobe (vestiaire) au milieu à droite : ouvre la boutique (diamants verts des coffres de boss) ; Armory (arsenal) en face, au milieu à gauche : unités à débloquer et upgrades payées en pièces d'or
+    add(chestButton(this, w - chestWidth(w) / 2 - 14, 'skins', w, h, () => this.shop()));
+    add(chestButton(this, chestWidth(w) / 2 + 14, 'armory', w, h, () => this.armory()));
     add(new Button(this, cx, playY, { label: t('play'), width: playW, height: 110, pulse: true, onClick: () => this.play() }));
     // « Back » sous Play : même largeur que lui, collé comme les trois boutons de niveau (18 px d'écart)
     const backH = 56;

@@ -153,6 +153,16 @@ export class Combat {
     return squad.stats.get('damage') + squad.stats.get('teamSpirit') * squad.soldiers.length + squad.stats.get('lastStand') * squad.missing;
   }
 
+  /**
+   * Dégâts d'un coup « de squad » qui n'est pas un tir (orbes électriques) : `base` × bonus de dégâts des upgrades (comme les tirs), avec la chance de critique de la squad
+   * (dégâts × `CRIT_MUL`, × lunettes de critique). Un tirage de `rng` seulement si la chance de critique n'est pas nulle.
+   */
+  squadHit(squad: Squad, base: number): { damage: number; crit: boolean } {
+    const crit = this.rollCrit(Math.min(CRIT_MAX, squad.stats.get('crit')) / 100);
+    const critMul = squad.perks.has('critGlasses') ? CRIT_MUL * CRIT_GLASSES_MUL : CRIT_MUL;
+    return { damage: base * this.damageMulOf(squad) * (crit ? critMul : 1), crit };
+  }
+
   /** Tirage de critique (stat `crit` de la squad) : aucun tirage de `rng` tant que la chance est nulle. */
   private rollCrit(chance: number): boolean {
     return chance > 0 && this.sim.rng.chance(Math.min(1, chance));

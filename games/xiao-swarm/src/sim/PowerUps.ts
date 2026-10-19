@@ -112,7 +112,10 @@ export class PowerUps {
           const key = `${sq.owner}:${i}:${a.id}`;
           if (this.electroHits.has(key)) continue;
           this.electroHits.set(key, ELECTRO.rehit);
-          sim.damage(a, ELECTRO.damage, sq.owner);
+          // comme un tir : bonus de dégâts des upgrades (Damage, Esprit d'équipe, Dernier rempart) et critique de la squad (chiffre de critique à l'impact)
+          const hit = sim.combat.squadHit(sq, ELECTRO.damage);
+          if (hit.crit) sim.events.push({ t: 'crit', x: a.x, y: a.y - 10, dmg: hit.damage });
+          sim.damage(a, hit.damage, sq.owner);
         }
       }
     }

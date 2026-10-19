@@ -3,6 +3,7 @@ import { Button, theme } from '@xiao/engine';
 import { SCENES } from '../config';
 import { hudOnTop } from './hudOnTop';
 import { t } from '../i18n';
+import { chestButton, chestWidth } from './chestButtons';
 import { createOnlineSession, OnlineError, type OnlineRequest } from '../online';
 
 const TEXT = { fontFamily: theme.font, color: '#ffffff', fontStyle: 'bold' } as const;
@@ -54,14 +55,9 @@ export class MultiplayerScene extends Phaser.Scene {
     const rowY = playY - 55 - 50;
     add(new Button(this, cx - bw / 2 - gap / 2, rowY, { label: t('mpCreateGame'), variant: 'secondary', width: bw, height: 64, onClick: () => void this.start({ kind: 'host', public: true, lobby: true }) }));
     add(new Button(this, cx + bw / 2 + gap / 2, rowY, { label: t('mpJoinGame'), variant: 'secondary', width: bw, height: 64, onClick: () => this.join() }));
-    // Armory (pièce d'or) à gauche et Skins (diamant vert) à droite, comme sur l'écran titre
-    const sw = Math.min(190, Math.max(110, w * 0.26));
-    const sh = 128;
-    const side = (x: number, label: string, fill: number, scene: string): void => {
-      add(new Button(this, x, h / 2, { label, variant: 'secondary', fill, textColor: '#ffffff', width: sw, height: sh, onClick: () => this.openMenu(scene) }));
-    };
-    side(sw / 2 + 14, t('armoryBtn'), 0x8a5a05, SCENES.armory);
-    side(w - sw / 2 - 14, t('skinsBtn'), 0x1f7a4d, SCENES.shop);
+    // Armory (arsenal) à gauche et Wardrobe (vestiaire) à droite, comme sur l'écran titre
+    add(chestButton(this, chestWidth(w) / 2 + 14, 'armory', w, h, () => this.openMenu(SCENES.armory)));
+    add(chestButton(this, w - chestWidth(w) / 2 - 14, 'skins', w, h, () => this.openMenu(SCENES.shop)));
     // message d'erreur / de connexion (« Can't connect… ») : au-dessus de la ligne Create / Join
     if (this.message) add(this.add.text(cx, rowY - 32 - 30, this.message, { ...TEXT, fontSize: '24px', color: '#ff8a8a', align: 'center' }).setOrigin(0.5));
   };

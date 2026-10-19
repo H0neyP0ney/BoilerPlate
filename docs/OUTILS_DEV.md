@@ -145,6 +145,8 @@ Chaque visuel d'interface part d'une image source de `games/xiao-swarm/art-src/`
 | `slice-keyboard.mjs` | `keyboard.png` → `ui/keys/key.png` (la touche) + `key_W/A/S/D/Z/Q.png` (lettres dessinées) | touches du tutoriel (`HudScene.makeHint`) ; une autre touche choisie s'affiche en texte sur la même touche |
 | `slice-upgrade-slots.mjs` | `slot_upgrade.png` → `ui/slot_full.png`, `slot_empty.png` (base : les slots vides à la couleur de chaque carte sont fabriqués au lancement) | slots des cartes |
 | `slice-egg.mjs` | œuf des boss : rogne `art-src/egg.png` à son contenu (taille d'origine, plus de socle) | `aliens/egg.png` (`alien_boss_egg`) |
+| `slice-menu-buttons.mjs` | `bouton menu.png` (jaune + bleu) → `ui/menu_yellow.png` + `menu_blue.png` | `TitleScene` (option `image` de `Button`) |
+| `slice-armory-buttons.mjs`, `gen-sprite-glow.py` (Python + Pillow) | `armory_outfits.png` → `ui/btn_armory.png` + `btn_skins.png` ; puis halos `btn_*_glow.png` (contour blanc + flou, réglages en tête du script) | `scenes/chestButtons.ts` (option `sprite` de `Button`) |
 | `slice-levelup-title.mjs`, `slice-reroll-button.mjs`, `slice-star-particle.mjs`, `slice-rewarded-icon.mjs` | titre, bouton Reroll, étoile (`fx/star.png`), icône rewarded | `LevelUpScene`, `Button` du moteur |
 | `lighten-crit-digits.mjs [part]` | éclaircit le jaune des chiffres de critique (originaux sauvegardés dans `art-src/crit-original/`) | `Fx.crit` |
 

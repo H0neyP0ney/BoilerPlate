@@ -4,6 +4,7 @@ import { BLUES } from '../art/playerHue';
 import { PLAYER_HUE_SHIFT, SCENES } from '../config';
 import { hudOnTop } from './hudOnTop';
 import { t } from '../i18n';
+import { chestButton, chestWidth, TITLE_ROW, type ChestKind } from './chestButtons';
 
 /**
  * Écran titre (`TitleScreen`) : deux gros boutons côte à côte, Solo à gauche et Multiplayer à droite. Overlay de `GameScene`
@@ -32,21 +33,24 @@ export class TitleScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const gap = Math.min(40, width * 0.03);
     const w = Math.min(280, (width - 3 * gap) / 2); // 30 % plus petits qu'à l'origine (400 × 180)
-    const h = 126;
-    const y = height * 0.8; // à 20 % du bas de l'écran
-    const solo = new Button(this, width / 2 - w / 2 - gap / 2, y, { label: t('solo'), width: w, height: h, pulse: true, onClick: () => this.go(SCENES.solo) });
-    const multi = new Button(this, width / 2 + w / 2 + gap / 2, y, { label: t('multiplayer'), variant: 'secondary', width: w, height: h, onClick: () => this.go(SCENES.multiplayer) });
+    const h = TITLE_ROW.h; // 126 + 20 %
+    const y = height * TITLE_ROW.y; // à 20 % du bas de l'écran
+    const solo = new Button(this, width / 2 - w / 2 - gap / 2, y, { label: t('solo'), image: 'ui_menu_yellow', width: w, height: h, pulse: true, onClick: () => this.go(SCENES.solo) });
+    const multi = new Button(this, width / 2 + w / 2 + gap / 2, y, { label: t('multiplayer'), variant: 'secondary', image: 'ui_menu_blue', width: w, height: h, onClick: () => this.go(SCENES.multiplayer) });
     this.addHeads(solo, 1, w); // Solo : une tête de recrue
     this.addHeads(multi, 4, w); // Multiplayer : quatre têtes, une par couleur de joueur
+    // même taille de police pour Solo et Multiplayer : celle du plus long libellé (réduite par `Button` pour tenir dans le bouton), calée sur l'image cible (×0,6, +15 % = ×0,69)
+    const labelOf = (b: Button): Phaser.GameObjects.Text => b.list.find((o) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text;
+    const fontScale = Math.min(labelOf(solo).scale, labelOf(multi).scale) * 0.69;
+    labelOf(solo).setScale(fontScale);
+    labelOf(multi).setScale(fontScale);
     this.objects.push(solo, multi);
-    // Armory (pièce d'or) à gauche et Skins (diamant vert) à droite, mêmes boutons que sur l'écran Solo, au milieu de la hauteur
-    const sw = Math.min(190, Math.max(110, width * 0.26));
-    const sh = 128;
-    const side = (x: number, label: string, fill: number, scene: string): void => {
-      this.objects.push(new Button(this, x, height / 2, { label, variant: 'secondary', fill, textColor: '#ffffff', width: sw, height: sh, onClick: () => this.go(scene, true) }));
+    // Armory (arsenal) à gauche et Wardrobe (vestiaire) à droite, à 100 px au-dessus de Solo / Multiplayer (bas du coffre → haut du bouton)
+    const side = (x: number, kind: ChestKind, scene: string): void => {
+      this.objects.push(chestButton(this, x, kind, width, height, () => this.go(scene, true)));
     };
-    side(sw / 2 + 14, t('armoryBtn'), 0x8a5a05, SCENES.armory);
-    side(width - sw / 2 - 14, t('skinsBtn'), 0x1f7a4d, SCENES.shop);
+    side(chestWidth(width) / 2 + 14, 'armory', SCENES.armory);
+    side(width - chestWidth(width) / 2 - 14, 'skins', SCENES.shop);
   }
 
   /**
@@ -57,16 +61,19 @@ export class TitleScene extends Phaser.Scene {
     const src = 'recruit_part_gunner';
     if (!this.textures.exists(src)) return;
     const label = button.list.find((o) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text; // pas d'index fixe : le pulse ajoute un objet en tête de liste
-    label.setY(24).setScale(label.scale * 0.9); // texte 10 % plus petit
-    const spacing = Math.min(62, (buttonWidth - 40) / count);
+    label.setY(22); // l'échelle du texte est posée par `rebuild` (la même pour les deux boutons)
+    const spacing = Math.min(62, (buttonWidth - 40) / count) * (count > 1 ? 0.65 : 1); // têtes du multi resserrées (0,8 puis 0,65)
     for (let i = 0; i < count; i++) {
       let key = src;
       if (i > 0) {
         key = `title_head#s${i}`;
         if (!recolorTexture(this, src, key, { ...BLUES, shift: PLAYER_HUE_SHIFT[i] })) key = src;
       }
-      const head = this.add.image((i - (count - 1) / 2) * spacing, -26, key);
-      head.setScale((count > 1 ? 52 * 0.85 : 52) * 0.9 / head.height); // têtes du multi 15 % plus petites que celle du solo, toutes 10 % plus petites
+      const head = this.add.image((i - (count - 1) / 2) * spacing, -16, key);
+      head.setScale((count > 1 ? 52 * 0.85 : 52) * 0.75 / head.height); // têtes du multi 15 % plus petites que celle du solo ; taille calée sur l'image cible
+      // ombre foncée de la même forme que la tête : copie noire décalée vers le bas
+      const shadow = this.add.image(head.x, head.y + 3, key).setScale(head.scale).setTint(0x000000).setTintMode(Phaser.TintModes.FILL).setAlpha(0.384);
+      button.add(shadow);
       button.add(head);
     }
   }

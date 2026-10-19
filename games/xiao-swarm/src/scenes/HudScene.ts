@@ -69,6 +69,10 @@ const KEY_STEP = 300;
 /** Tracé de la main du tutoriel « glisse » : un 8 couché de demi-largeur `width` et de demi-hauteur `height` (px). */
 const HAND_EIGHT = { width: 70, height: 18 };
 
+/** Compteurs d'or et de diamants (haut gauche) : les deux icônes (dessinées sur 64 px : la pièce fait 60 px de large, le diamant 56) mesurent ≈ 28 px à l'écran. */
+const COIN_ICON_SCALE = 0.47;
+const GEM_ICON_SCALE = 0.5;
+
 /**
  * HUD minimal en scène parallèle (non affecté par le zoom caméra) : bouton pause,
  * consigne de contrôle avant le premier input et, en ligne uniquement, le code de la salle à partager.
@@ -187,11 +191,11 @@ export class HudScene extends Phaser.Scene {
     this.levelText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 4 });
     this.levelShown = null;
     ensureGemTextures(this);
-    this.gemIcon = this.add.image(0, 0, GEM_KEY).setScale(0.5);
-    this.gemText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#9bffc8', stroke: '#13233a', strokeThickness: 5 }).setOrigin(0, 0.5);
+    this.gemIcon = this.add.image(0, 0, GEM_KEY).setScale(GEM_ICON_SCALE);
+    this.gemText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 }).setOrigin(0, 0.5);
     this.gemShown = -1; // la scène est réutilisée : le texte est à refaire
-    this.coinIcon = this.add.image(0, 0, COIN_KEY).setScale(0.42);
-    this.coinText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '24px', fontStyle: 'bold', color: '#ffe08a', stroke: '#13233a', strokeThickness: 5 }).setOrigin(0, 0.5);
+    this.coinIcon = this.add.image(0, 0, COIN_KEY).setScale(COIN_ICON_SCALE);
+    this.coinText = this.add.text(0, 0, '', { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 }).setOrigin(0, 0.5);
     this.coinShown = -1;
     this.respawnText = this.add
       .text(0, 0, t('respawning'), { fontFamily: theme.font, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 7 })
@@ -305,7 +309,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.gemShown = settings.gems;
       this.gemText.setText(String(settings.gems));
       this.placeGems();
-      if (gain) this.pop(this.gemIcon, 0.5, 1.35, 220); // petit « pop » à chaque diamant ramassé
+      if (gain) this.pop(this.gemIcon, GEM_ICON_SCALE, 1.35, 220); // petit « pop » à chaque diamant ramassé
       if (gain) this.pop(this.gemText, 1, 1.35, 220);
     }
     if (settings.coins !== this.coinShown) {
@@ -313,7 +317,7 @@ ${[...new Set(staleDropped)].join(', ')}`, { fontFamily: theme.font, fontSize: '
       this.coinShown = settings.coins;
       this.coinText.setText(String(settings.coins));
       this.placeGems();
-      if (gain) this.pop(this.coinIcon, 0.42, 1.25, 160);
+      if (gain) this.pop(this.coinIcon, COIN_ICON_SCALE, 1.25, 160);
       if (gain) this.pop(this.coinText, 1, 1.25, 160);
     }
     if (aliens !== this.alienShown) {

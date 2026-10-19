@@ -50,6 +50,13 @@ export const ASSETS: AssetEntry[] = [
   ...(['W', 'A', 'S', 'D', 'Z', 'Q'] as const).map((l): AssetEntry => ({ type: 'image', id: `ui_key_${l}`, url: `ui/keys/key_${l}.png` })),
   // Bouton « Relancer » du choix d'upgrade — art-src/bouton_reroll.png rogné par `node tools/slice-reroll-button.mjs` ; affiché par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_reroll', url: 'ui/reroll.png' },
+  // Gros boutons des menus (jaune : Solo / Quick Play / Play, bleu : Multiplayer) — art-src/bouton menu.png coupé par `node tools/slice-menu-buttons.mjs` ; `Button` (option `image`).
+  { type: 'image', id: 'ui_menu_yellow', url: 'ui/menu_yellow.png' },
+  { type: 'image', id: 'ui_menu_blue', url: 'ui/menu_blue.png' },
+  { type: 'image', id: 'ui_btn_armory', url: 'ui/btn_armory.png' }, // Armory / Skins de l'écran titre : art-src/armory_outfits.png coupé par `node tools/slice-armory-buttons.mjs` (option `sprite` de Button)
+  { type: 'image', id: 'ui_btn_skins', url: 'ui/btn_skins.png' },
+  { type: 'image', id: 'ui_btn_armory_glow', url: 'ui/btn_armory_glow.png' }, // halo blanc du survol : `python tools/gen-sprite-glow.py`
+  { type: 'image', id: 'ui_btn_skins_glow', url: 'ui/btn_skins_glow.png' },
   // Slots de progression des cartes d'upgrade — art-src/slot_upgrade.png détouré par `node tools/slice-upgrade-slots.mjs` (vide / plein) ; affichés par scenes/LevelUpScene.ts.
   { type: 'image', id: 'ui_slot_empty', url: 'ui/slot_empty.png' }, // vide : base des slots à la couleur de chaque carte (art/cardTextures.ts)
   { type: 'image', id: 'ui_slot_full', url: 'ui/slot_full.png' },

@@ -8,6 +8,7 @@ import { Sim } from '../sim/Sim';
 import { NO_INPUT, type PlayerId, type PlayerInput, type SimEvent } from '../sim/types';
 import {
   encodeSnapshot,
+  offerKey,
   parseMessage,
   PROTOCOL_VERSION,
   SNAPSHOT_EVERY,
@@ -346,10 +347,10 @@ export class HostSession implements Session {
       case 'hello':
         return this.onHello(peer, msg.v, msg.skin, msg.trail, msg.units, msg.perks);
       case 'upgrade':
-        if (this.remotes.has(peer) && typeof msg.index === 'number') this.sim.chooseUpgrade(peer, Math.floor(msg.index));
+        if (this.remotes.has(peer) && typeof msg.index === 'number' && this.sameOffer(peer, msg.offer)) this.sim.chooseUpgrade(peer, Math.floor(msg.index));
         return;
       case 'reroll':
-        if (this.remotes.has(peer)) this.sim.rerollUpgrade(peer);
+        if (this.remotes.has(peer) && this.sameOffer(peer, msg.offer)) this.sim.rerollUpgrade(peer);
         return;
       case 'input': {
         const r = this.remotes.get(peer);
@@ -379,6 +380,17 @@ export class HostSession implements Session {
       }
     }
   };
+
+  /**
+   * Le choix (ou la relance) d'un client vise-t-il la proposition en cours ? Il annonce les cartes qu'il avait à l'écran : si l'hôte a changé de proposition
+   * entre-temps (fin du temps : choix au hasard puis niveau suivant ; le client voit la jauge ~200 ms en retard), l'index désignerait une carte jamais vue.
+   * Refusé : le client verra la nouvelle proposition et choisira. Sans `offer` (client d'avant), accepté comme avant.
+   */
+  private sameOffer(peer: PlayerId, offer: unknown): boolean {
+    if (typeof offer !== 'string') return true;
+    const sq = this.sim.squadOf(peer);
+    return !!sq && offer === offerKey(sq.offer, sq.offerPrism);
+  }
 
   /** Skin et trail annoncés par un joueur (cosmétiques : ids inconnus ignorés) ; l'hôte les diffuse à tous dans le snapshot. */
   private setCosmetics(owner: PlayerId, skin: unknown, trail: unknown): void {

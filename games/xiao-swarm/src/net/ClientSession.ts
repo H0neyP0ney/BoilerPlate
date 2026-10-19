@@ -6,6 +6,7 @@ import type { PlayerId, SimEvent } from '../sim/types';
 import { Mirror } from './Mirror';
 import {
   decodeSnapshot,
+  offerKey,
   parseMessage,
   PROTOCOL_VERSION,
   type ClientMessage,
@@ -170,13 +171,19 @@ export class ClientSession implements Session {
   /** Pas de revive en ligne : l'hôte fait réapparaître la squad tout seul. */
   reviveLocal(): void {}
 
+  /** Cartes à l'écran (snapshot tamponné, celui qu'affiche l'écran de choix) : l'hôte refuse le choix si sa proposition a changé entre-temps. */
+  private shownOffer(): string {
+    const sq = this.sim.squadOf(this.localPlayer);
+    return sq ? offerKey(sq.offer, sq.offerPrism) : '';
+  }
+
   chooseUpgrade(index: number): void {
-    const msg: ClientMessage = { t: 'upgrade', index };
+    const msg: ClientMessage = { t: 'upgrade', index, offer: this.shownOffer() };
     this.transport.send(this.hostId, 'reliable', JSON.stringify(msg));
   }
 
   rerollUpgrade(): void {
-    const msg: ClientMessage = { t: 'reroll' };
+    const msg: ClientMessage = { t: 'reroll', offer: this.shownOffer() };
     this.transport.send(this.hostId, 'reliable', JSON.stringify(msg));
   }
 

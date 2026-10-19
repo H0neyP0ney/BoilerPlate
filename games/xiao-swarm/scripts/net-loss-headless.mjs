@@ -67,7 +67,7 @@ try {
   };
   /** Sonde de la file d'inputs de l'hôte : ticks sans input en attente (on rejoue le précédent) et inputs sautés (file trop longue ou raccourcie). */
   const probeQueue = (host) => {
-    const q = { starved: 0, skipped: 0, ticks: 0, depth: 0, maxDepth: 0, deepTicks: 0 };
+    const q = { starved: 0, skipped: 0, caught: 0, ticks: 0, depth: 0, maxDepth: 0, deepTicks: 0 };
     const orig = host.consumeInput.bind(host);
     host.consumeInput = (id, r) => {
       const before = r.applied;
@@ -78,7 +78,8 @@ try {
       q.maxDepth = Math.max(q.maxDepth, r.queue.length);
       if (r.queue.length >= 3) q.deepTicks++;
       if (empty) q.starved++;
-      else if (before > 0 && r.applied > before + 1) q.skipped += r.applied - before - 1;
+      else if (before > 0 && r.applied > before + 1) q.skipped += r.applied - before - 1 - (r.input.catchUp ? 1 : 0);
+      if (!empty && r.input.catchUp) q.caught++;
     };
     return q;
   };
@@ -144,7 +145,7 @@ try {
       console.log(`- ${label}`);
       console.log(`    correction d'ancre / snapshot (px) : ${fmt(stat(corr))} (${corr.length} snapshots, ${snaps} recalages > 40 px)`);
       console.log(`    à-coup du centre affiché (px/tick) : ${fmt(stat(jit))}`);
-      console.log(`    file d'inputs de l'hôte : ${q.starved} ticks sans input / ${q.ticks}, ${q.skipped} inputs sautés, retard ajouté moyen ${(q.depth / q.ticks).toFixed(2)} ticks (max ${q.maxDepth}, ≥ 3 ticks pendant ${q.deepTicks} ticks) ; réseau : ${w.hub.stats.lost} perdus, ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
+      console.log(`    file d'inputs de l'hôte : ${q.starved} ticks sans input / ${q.ticks}, ${q.skipped} inputs sautés, ${q.caught} rattrapages (2 inputs en 1 tick), retard ajouté moyen ${(q.depth / q.ticks).toFixed(2)} ticks (max ${q.maxDepth}, ≥ 3 ticks pendant ${q.deepTicks} ticks) ; réseau : ${w.hub.stats.lost} perdus, ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
     }
   }
 
@@ -258,6 +259,42 @@ try {
     check(Math.hypot(p.anchor.x - hq.anchor.x, p.anchor.y - hq.anchor.y) < 1, 'après les relances, l\'ancre prédite est recalée sur l\'hôte');
   }
 
+  // ---------- upgrade ----------
+  if (want('upgrade')) {
+    console.log('\n=== upgrade : deux niveaux d\'avance, l\'invité clique dans les 100 dernières ms des 5 s (latence 3) ===');
+    const w = await setup({ latency: 3, seed: 21, aliens: false });
+    const client = w.clients[0];
+    const me = client.localPlayer;
+    let wrong = 0, rejected = 0;
+    const N = 8;
+    // le clic de l'invité arrive chez l'hôte par `sim.chooseUpgrade` (le choix au hasard de fin du temps, lui, passe par la squad directement)
+    let armed = false, clickOffer = null;
+    const origChoose = w.host.sim.chooseUpgrade.bind(w.host.sim);
+    w.host.sim.chooseUpgrade = (owner, idx) => {
+      if (owner === me && armed) clickOffer = [...(w.host.sim.squadOf(me).offer ?? [])];
+      return origChoose(owner, idx);
+    };
+    for (let k = 0; k < N; k++) {
+      const gsq = w.host.sim.squadOf(me);
+      gsq.gainXp(gsq.xpNeeded - gsq.xp + 0.01);
+      gsq.gainXp(gsq.xpNeeded - gsq.xp + 0.01); // deux niveaux : à la fin du temps, l'hôte choisit au hasard puis ouvre le suivant
+      for (let i = 0; i < 120 && !(w.host.sim.choiceT > 0 && client.sim.squadOf(me)?.offer); i++) await w.tick();
+      w.host.chooseUpgrade(0);
+      while (client.sim.choiceT > 0.1 + (100 + 3 * 33) / 1000) await w.tick(); // l'invité voit la jauge avec ~200 ms de retard
+      const seen = [...client.sim.squadOf(me).offer]; // les cartes à l'écran de l'invité
+      armed = true;
+      clickOffer = null;
+      client.chooseUpgrade(0); // clic sur la 1re carte VUE, juste avant la fin du temps (à l'écran)
+      for (let i = 0; i < 12; i++) await w.tick();
+      armed = false;
+      if (!clickOffer) rejected++;
+      else if (clickOffer.join() !== seen.join()) wrong++;
+      for (let g = 0; g < 4 && gsq.offer; g++) origChoose(me, 0); // on referme pour la manche suivante
+      for (let i = 0; i < 30; i++) await w.tick();
+    }
+    console.log(`  UPGRADE — sur ${N} clics : ${wrong} appliqués à une carte jamais vue, ${rejected} refusés (proposition périmée), ${N - wrong - rejected} conformes`);
+  }
+
   // ---------- big ----------
   if (want('big')) {
     console.log('\n=== big : 4 joueurs, 40 soldats chacun, ~600 aliens + 2 boss, un invité rejoint en plein combat ===');
@@ -303,10 +340,16 @@ try {
     bytes = msgs = biggest = evBytes = 0;
     evTypes.clear();
     const corr = probeRecon(late);
+    const lsq = hs.squadOf(late.localPlayer);
     for (let i = 0; i < 150; i++) {
       fill();
       for (let c = 0; c < w.clients.length; c++) w.clients[c].setLocalInput(Math.cos(i / 20 + c), Math.sin(i / 20 + c));
+      const n0 = corr.length;
       await w.tick();
+      if (process.env.TRACE && corr.length > n0 && corr[corr.length - 1] > 10) {
+        const mine = late.sim.squadOf(late.localPlayer);
+        console.log(`  tick ${i} correction ${corr[corr.length - 1].toFixed(1)} | hôte : ancre ${lsq.anchor.x.toFixed(0)},${lsq.anchor.y.toFixed(0)} centre ${lsq.center.x.toFixed(0)},${lsq.center.y.toFixed(0)} soldats ${lsq.soldiers.length} | invité : ancre ${mine.anchor.x.toFixed(0)},${mine.anchor.y.toFixed(0)} centre ${mine.center.x.toFixed(0)},${mine.center.y.toFixed(0)} soldats ${mine.soldiers.length}`);
+      }
     }
     const sizes = {};
     encodeSnapshot(takeSnapshot(hs), sizes);

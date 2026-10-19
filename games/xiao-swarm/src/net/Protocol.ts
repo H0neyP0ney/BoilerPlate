@@ -34,10 +34,18 @@ export type ClientMessage =
   | { t: 'hello'; v: number; skin?: string; trail?: string; units?: string[]; perks?: string[] }
   /** `n` : numéro du tick client (prédiction) ; l'hôte renvoie le dernier reçu dans le snapshot (`ack`). */
   | { t: 'input'; mx: number; my: number; n: number; prev?: number[] }
-  /** Choix d'upgrade au level up (index dans les propositions de sa squad). */
-  | { t: 'upgrade'; index: number }
-  /** Relance des propositions d'upgrade. */
-  | { t: 'reroll' };
+  /**
+   * Choix d'upgrade au level up (index dans les propositions de sa squad). `offer` : les cartes que le joueur avait à l'écran (`offerKey`) ; l'hôte refuse le
+   * choix si sa proposition a changé entre-temps (fin du temps : choix au hasard puis niveau suivant). Optionnel : un client d'avant ne l'envoie pas.
+   */
+  | { t: 'upgrade'; index: number; offer?: string }
+  /** Relance des propositions d'upgrade (`offer` : comme pour `upgrade`). */
+  | { t: 'reroll'; offer?: string };
+
+/** Clé d'une proposition d'upgrade (ids et prismatiques) : le client l'envoie avec son choix, l'hôte la compare à la sienne. */
+export function offerKey(offer: readonly string[] | null, prism: readonly boolean[]): string {
+  return offer ? offer.map((id, i) => (prism[i] ? `${id}*` : id)).join(',') : '';
+}
 
 /** Hôte → client. */
 export type HostMessage =

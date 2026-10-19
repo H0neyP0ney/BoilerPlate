@@ -9,6 +9,7 @@ répondre, commenter et documenter en français.
 - Règles de chargement des fichiers (paquets 1 / 2a / 2b), des replis et de la fabrication des textures procédurales : `docs/CHARGEMENT.md`.
 - Noms et enchaînement des écrans d'interface (TitleScreen, SoloScreen, MultiplayerScreen, LobbyScreen…) : `docs/UI_ECRANS.md`.
 - **Assets provisoires (règle permanente)** : chaque fois que tu crées un asset graphique ou sonore provisoire (texture dessinée par le code, sprite recoloré, icône générée, son synthétisé, **FX compris**), tu l'ajoutes dans la liste de référence `docs/ASSETS_PROCEDURAUX.md` (section adaptée : clé / fichier, ce que c'est, où dans le code). Quand il est remplacé par un vrai asset, tu le retires de la liste. But : avoir en permanence la référence de tout ce qui est encore placeholder en jeu.
+- Netcode : `docs/MULTIJOUEUR.md` (chaîne complète de la squad locale d'un invité, constantes, pistes ouvertes) ; prompt d'audit pour une nouvelle session : `docs/PROMPT_ANALYSE_NETCODE.md`.
 - État et prochaines étapes : `docs/ROADMAP.md`. Game design : `docs/Xiao_Swarm_Attack_Game_Design.md`. Outils de dev : `docs/OUTILS_DEV.md`. Capacités des aliens (actives et désactivées) : `docs/ALIENS.md`. Idées pour les soldats (capacités, upgrades de boutique) : `docs/IDEES_UNITES.md`.
 
 ## Commandes

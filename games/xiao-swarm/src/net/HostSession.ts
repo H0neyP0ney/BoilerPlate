@@ -74,6 +74,11 @@ const MAX_INPUT_QUEUE = 6;
 const INPUT_QUEUE_WINDOW = 90;
 /** Trou maximal (ticks) comblé en répétant le dernier input ; au-delà, on saute. */
 const MAX_INPUT_GAP = 8;
+/**
+ * Événements envoyés sur le canal FIABLE (les autres partent en non fiable : un effet perdu n'est pas grave). Ceux-ci pilotent un écran, une
+ * sauvegarde ou les événements Poki chez le client (`GameScene.onEvent`, `HudScene.onNetEnd` / `onBoss`) : rares, ils ne coûtent rien.
+ */
+const RELIABLE_EVENTS = new Set<SimEvent['t']>(['gameEnd', 'restart', 'boss', 'bossDown', 'bossEnrage']);
 
 /**
  * L'hôte fait tourner LA simulation (autoritaire) : il applique ses propres inputs
@@ -313,8 +318,12 @@ export class HostSession implements Session {
     this.fxImpacts = [];
     this.fxHits = [];
     if (this.outbound.length > 0) {
-      const msg: HostMessage = { t: 'events', seq: this.frame, list: this.outbound };
-      this.transport.broadcast('unreliable', JSON.stringify(msg));
+      // événements qui changent l'état ou les écrans d'un client (fin de partie, relance, annonces de boss) : canal fiable, rares. Perdus, l'invité ne voyait
+      // pas l'écran de fin, ne débloquait pas le niveau suivant après une victoire et n'envoyait pas `gameplayStop` à Poki (mesure `sim:netloss -- events`).
+      const reliable = this.outbound.filter((e) => RELIABLE_EVENTS.has(e.t));
+      const rest = reliable.length > 0 ? this.outbound.filter((e) => !RELIABLE_EVENTS.has(e.t)) : this.outbound;
+      if (reliable.length > 0) this.transport.broadcast('reliable', JSON.stringify({ t: 'events', seq: this.frame, list: reliable } satisfies HostMessage));
+      if (rest.length > 0) this.transport.broadcast('unreliable', JSON.stringify({ t: 'events', seq: this.frame, list: rest } satisfies HostMessage));
       this.outbound = [];
     }
   }

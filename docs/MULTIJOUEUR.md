@@ -116,7 +116,8 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    `Mirror.applyLocal` (table `localProjectiles`, hors tampon) et leurs tirs (flash, son : `ClientSession.shotEvents`) rejoués dès réception ; les autres projectiles et tirs restent tamponnés.
    Une balle neuve de ma squad naît décalée de l'avance de la prédiction (`predictor.dx` / `dy` : ancre prédite − ancre hôte), puis le lissage (`CATCH_UP`) la ramène sur sa trajectoire hôte.
    Avant, elles partaient ~215 ms trop tard, de l'endroit où l'hôte voyait mes soldats. Mesure (`sim:netloss -- shots`, course, latence 3) : écart visuel balle / tireur, invité contre hôte,
-   114 → 4,9 px en moyenne (p95 131 → 17) ; retard d'apparition 6,5 → 2,5 ticks. Les impacts (`impact`) restent tamponnés : une balle peut disparaître ~100 ms avant son étincelle.
+   114 → 4,9 px en moyenne (p95 131 → 17) ; retard d'apparition 6,5 → 2,5 ticks. Les impacts (`impact`) restent tamponnés : une balle peut disparaître ~100 ms avant son étincelle, et, extrapolée entre deux snapshots, dépasser sa
+   cible de ~50 px avant de disparaître (correctifs notés : `docs/AUDIT_NETCODE.md` § 4, point 5).
    Visuel seulement : les dégâts restent calculés chez l'hôte.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant

@@ -223,6 +223,16 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
 3. **Annonce de la reprise** : l'hôte connaît la reprise un tick avant (tous ont choisi) ; l'annoncer comme `choiceIn` raccourcirait les 7 ticks
    d'immobilité du § 1.1 (v78).
 4. **Serveur Node autoritaire** (`sim/` est pur) : supprime l'avantage de latence de l'hôte et la montée de 514 Ko/s chez lui. Gros chantier.
+5. **Fin de vie des balles de ma squad** (après la v79, à faire si un défaut se voit en jeu) : aujourd'hui une balle de ma squad disparaît dès le snapshot
+   qui ne la contient plus (`Mirror.syncProjectiles`). Trois défauts visuels possibles :
+   - **Étincelle en retard** : `impact` et `hit` restent tamponnés (heure des aliens), donc l'étincelle et le flash de l'alien arrivent ~100 ms après la
+     disparition de la balle. Correctif : marquer aussi les impacts avec la squad du tireur (+1 octet, v80) et rejouer ceux de ma squad hors tampon,
+     comme les tirs (`ClientSession.shotEvents`).
+   - **Dépassement de la cible** : entre deux snapshots la balle est extrapolée à sa vitesse ; elle peut voler jusqu'à ~2 ticks de trop (~50 px) avant
+     de disparaître (existait déjà avant la v79). Correctif : arrêter l'extrapolation d'une balle de ma squad qui croise un alien affiché (visuel seul,
+     sans protocole ; approximatif car l'alien affiché a 100 ms de retard).
+   - **Tir à bout portant** : une balle qui vit moins de ~3 ticks disparaît avant que son décalage de naissance (avance de la prédiction) ait fondu.
+     Accepté tel quel.
 
 ## 5. À tester en réel (deux fenêtres, ou des amis)
 1. **Reprise après level up** (§ 1.1) : invité qui garde le stick enfoncé pendant le choix → la squad doit repartir sans bond. Chez l'hôte, regarder

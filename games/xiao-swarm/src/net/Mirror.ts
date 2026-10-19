@@ -8,7 +8,7 @@ import { CLASSES } from '../data/classes';
 import type { AlienState, GemState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
-import { rushSmashes, rushStop } from '../sim/Horde';
+import { rushSmashes } from '../sim/Horde';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
 import { SNAPSHOT_EVERY, type AlienSnap, type ProjectileSnap, type RecruitSnap, type Snapshot, type SoldierSnap } from './Protocol';
@@ -149,8 +149,8 @@ export class Mirror {
   /**
    * Charges (`rush`) simulées ici, par alien : l'alien qui charge est un alien qui bouge vite (1000-1300 px/s), affiché ~`teleLead` en retard il était à
    * ~400 px de là où l'hôte le juge. La charge part à la fin du télégraphe avancé, de son point de départ (`rushX/Y`), sur l'axe verrouillé, avec la loi
-   * de l'hôte (même accélération, arrêt contre un obstacle de la carte : `rushStop`, rochers brisés : `rushSmashes`) ; l'alien est affiché là. `done` :
-   * finie ici (arrêtée ou au bout), il y reste jusqu'à ce que l'hôte la dise finie.
+   * de l'hôte (même accélération, glissade le long des obstacles : `Arena.steer`, rochers brisés : `rushSmashes`) ; l'alien est affiché là. `done` :
+   * finie ici (au bout de sa durée), il y reste jusqu'à ce que l'hôte la dise finie.
    */
   private readonly charges = new Map<number, Charge>();
   /** Vitesse lissée de mon ancre prédite (px/s) : celle que l'hôte aura (`Squad.vel`) quand il jouera mes inputs. */
@@ -720,19 +720,18 @@ export class Mirror {
         this.teleDone.set('k' + r.id, TELE_DONE_TTL + 3);
         this.localEvents.push({ t: 'rockBreak', id: r.id, x: r.x, y: r.y, r: r.radius, dx: c.dx, dy: c.dy });
       }
-      const stop = rushStop(this.sim.arena, c.x, c.y, c.dx, c.dy, Math.hypot(c.vx, c.vy) * k, a.radius);
-      if (stop >= 0) {
-        c.x += c.dx * stop;
-        c.y += c.dy * stop;
-        c.vx = c.vy = 0;
-        c.done = true;
-      } else {
-        c.vx = damp(c.vx, c.dx * R.speed, 8, k);
-        c.vy = damp(c.vy, c.dy * R.speed, 8, k);
-        c.x += c.vx * k;
-        c.y += c.vy * k;
-        if (c.t >= c.dur) c.done = true;
-      }
+      // déplacement de `Horde.update` : accélération, glissade le long du décor, recadrage dans l'arène
+      c.vx = damp(c.vx, c.dx * R.speed, 8, k);
+      c.vy = damp(c.vy, c.dy * R.speed, 8, k);
+      const v = { x: c.vx, y: c.vy };
+      this.sim.arena.steer(c.x, c.y, a.radius, v, true);
+      c.vx = v.x;
+      c.vy = v.y;
+      const p = { x: c.x + c.vx * k, y: c.y + c.vy * k, radius: a.radius };
+      this.sim.arena.constrain(p);
+      c.x = p.x;
+      c.y = p.y;
+      if (c.t >= c.dur) c.done = true;
       if (c.done && R.burst) this.localImpact({ t: 'slam', x: c.x, y: c.y, r: 130 }); // jumeaux : onde de départ des orbes (les orbes, elles, viennent du snapshot)
     }
   }
@@ -1080,8 +1079,8 @@ export class Mirror {
     if (charge) {
       if (a.rushing) {
         charge.hostSeen = true;
-        // l'hôte la montre (en retard, sur la même ligne) : l'écart latéral est recalé ; s'il est allé plus loin que la charge simulée ici (arrêtée à tort,
-        // un obstacle frôlé), elle reprend de sa position
+        // l'hôte la montre (en retard, sur la même ligne) : l'écart latéral est recalé ; s'il est allé plus loin que la charge simulée ici (départ estimé
+        // trop tôt ou trop court), elle reprend de sa position
         const ex = a.x - charge.x;
         const ey = a.y - charge.y;
         const side = -ex * charge.dy + ey * charge.dx;

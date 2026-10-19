@@ -3,7 +3,6 @@ import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, G
 import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
-import type { Arena } from './Arena';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
 
@@ -816,12 +815,6 @@ export class Horde {
           speed = r.speed;
           this.rushHit(a);
           this.smashRocks(a, r.speed * dt); // les rochers de mur sur son chemin volent en éclats
-          if (this.rushBlocked(a, dt)) {
-            // un obstacle de la carte (ou le bord de l'arène) l'arrête net : la charge s'achève contre lui au lieu de glisser le long (19/10)
-            a.rushT = 0;
-            speed = 0;
-            a.vx = a.vy = 0;
-          }
           if (r.trail) {
             a.trailCd -= dt;
             if (a.trailCd <= 0) {
@@ -1616,19 +1609,6 @@ export class Horde {
    * Charge (rhinocéros, jumeaux…) : les rochers de mur (Wall) à portée du corps ou sur le pas à venir sont fracassés et leurs débris partent loin dans le sens de la charge
    * (`Sim.breakRock`). `step` : distance (px) que l'alien parcourt pendant ce tick.
    */
-  /**
-   * Charge arrêtée par le décor : la position du prochain pas (vitesse actuelle, au moins quelques px) chevauche un obstacle de la carte ou sort de
-   * l'arène ; il avance alors jusqu'au contact. Les rochers des murs d'alien ne l'arrêtent pas (brisés par `smashRocks`). Même calcul chez l'invité
-   * (`Mirror`, charge simulée) : `rushStop`.
-   */
-  private rushBlocked(a: AlienState, dt: number): boolean {
-    const d = rushStop(this.sim.arena, a.x, a.y, a.rushDx, a.rushDy, Math.hypot(a.vx, a.vy) * dt, a.radius);
-    if (d < 0) return false;
-    a.x += a.rushDx * d;
-    a.y += a.rushDy * d;
-    return true;
-  }
-
   private smashRocks(a: AlienState, step: number): void {
     const rocks = this.sim.arena.rocks;
     for (let i = rocks.length - 1; i >= 0; i--) {
@@ -1761,24 +1741,6 @@ export class Horde {
       }
     }
   }
-}
-
-/**
- * Charge (`rush`) : distance (px) jusqu'au contact si le prochain pas (`move` px, au moins quelques px) chevauche un obstacle de la carte ou sort de
- * l'arène alors que la position actuelle est libre, sinon −1. Partagé par l'hôte (`Horde.rushBlocked`) et la charge simulée chez l'invité (`Mirror`).
- */
-export function rushStop(arena: Arena, x: number, y: number, dx: number, dy: number, move: number, radius: number): number {
-  const step = Math.max(4, move + 2);
-  if (arena.isFreeOfMap({ x: x + dx * step, y: y + dy * step }, radius)) return -1;
-  if (!arena.isFreeOfMap({ x, y }, radius)) return -1; // déjà au contact (il frôlait l'obstacle au départ) : pas d'arrêt, la glissade l'en écarte
-  let lo = 0;
-  let hi = step;
-  for (let i = 0; i < 8; i++) {
-    const mid = (lo + hi) / 2;
-    if (arena.isFreeOfMap({ x: x + dx * mid, y: y + dy * mid }, radius)) lo = mid;
-    else hi = mid;
-  }
-  return lo;
 }
 
 /** Charge : le rocher `k` (mur d'alien) est sur le chemin du pas (`step` px) d'un alien de rayon `radius` en (x, y) : il vole en éclats. */

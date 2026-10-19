@@ -155,15 +155,13 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
   `Horde.burrowSquad`) ; en solo rien ne change.
 - **Charges** (chargeur, Rhino Alpha, jumeaux) : l'alien qui charge (1000-1300 px/s) était affiché ~`teleLead` en retard, donc loin de là où l'hôte
   le juge. Chez l'invité, la charge est **simulée** (`Mirror.charges`, `startCharge` / `stepCharge`) : départ à la fin du télégraphe avancé
-  (`rushWind`), de la dernière position reçue, sur l'axe verrouillé (normalisé), loi de l'hôte (accélération `damp` 8, durée `length / speed`, arrêt
-  contre un obstacle de la carte : `rushStop`, rochers des murs d'alien brisés ici : `rushSmashes`, événement `rockBreak` local, double de l'hôte jeté,
-  rocher écarté des snapshots) ; quand l'hôte annonce la charge, l'écart latéral est recalé et une charge arrêtée ici à tort reprend. L'alien est
-  rendu au snapshot quand l'hôte l'a dite finie. **Gameplay (hôte, solo compris)** : une charge s'arrête maintenant net contre un obstacle de la carte
-  ou le bord de l'arène (avant : elle glissait le long), sauf si l'alien le frôlait déjà au départ.
-  Mesure (`tele`, gigue + perte, position affichée / hôte au même input pendant les charges) : chargeur moy 184 → 49 px, p95 391 → 105 ; Rhino
-  Alpha moy 140 → 38, p95 385 → 65. Reste un cas rare : charge locale arrêtée par un petit obstacle frôlé que l'hôte évite (départ estimé à ~15 px
-  près : l'alien dérive encore pendant le télégraphe), reprise quand l'hôte annonce la charge (max 440 px une fois sur 20). Essai sans effet :
-  ajouter au départ la glissade de fin d'élan (vitesse reçue freinée).
+  (`rushWind`), de la dernière position reçue, sur l'axe verrouillé (normalisé), loi de l'hôte (accélération `damp` 8, durée `length / speed`, glissade
+  le long du décor : `Arena.steer`, rochers des murs d'alien brisés ici : `rushSmashes`, événement `rockBreak` local, double de l'hôte jeté,
+  rocher écarté des snapshots) ; quand l'hôte annonce la charge, l'écart latéral est recalé (et elle reprend de sa position s'il est allé plus loin).
+  L'alien est rendu au snapshot quand l'hôte l'a dite finie.
+  Mesure (`tele`, gigue + perte, position affichée / hôte au même input pendant les charges) : chargeur moy 192 → 39 px, p95 372 → 77, max 104 ;
+  Rhino Alpha moy 140 → 38, p95 385 → 65. Essai annulé à la demande : arrêt net de la charge contre un obstacle de la carte (`464c910`) ; essai sans
+  effet : ajouter au départ la glissade de fin d'élan (vitesse reçue freinée).
 - **Pas traité** : ruée du Scarab après sa sortie (alien qui bouge, comme une charge, mais vitesse et cible propres), apparition des rochers d'un
   mur (obstacles que la prédiction contourne, positions calculées par l'hôte). Visuel seulement : les dégâts restent calculés chez l'hôte.
   Non vérifié en navigateur.

@@ -224,21 +224,15 @@ export class Arena {
   }
 
   isFree(p: Point, radius: number): boolean {
-    if (!this.isFreeOfMap(p, radius)) return false;
-    for (const o of this.rocks) {
-      const dx = p.x - o.x;
-      const dy = p.y - o.y;
-      if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
-    }
-    return true;
-  }
-
-  /** Comme `isFree`, sans les rochers (murs d'alien, temporaires) : seulement le bord de l'arène et les obstacles de la carte. */
-  isFreeOfMap(p: Point, radius: number): boolean {
     const b = this.bounds;
     if (p.x < b.minX + radius || p.x > b.maxX - radius || p.y < b.minY + radius || p.y > b.maxY - radius) return false;
     for (const i of this.collect(p.x, p.y, radius)) {
       const o = this.obstacles[i];
+      const dx = p.x - o.x;
+      const dy = p.y - o.y;
+      if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;
+    }
+    for (const o of this.rocks) {
       const dx = p.x - o.x;
       const dy = p.y - o.y;
       if (dx * dx + dy * dy < (o.radius + radius) ** 2) return false;

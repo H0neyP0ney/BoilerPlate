@@ -1544,35 +1544,6 @@ try {
     check(!sim.recruits.items.includes(r2), 'recrue posée : elle est ramassée dès qu’elle redevient utile (soldat blessé)');
   }
 
-  // ---- une charge qui rencontre un obstacle de la carte s'arrête contre lui (avant le 19/10 : elle glissait le long) ; la ruée continue sinon
-  {
-    const { sim, step } = fresh(9);
-    clearAliens(sim);
-    const b = sim.arena.bounds;
-    const o = sim.arena.obstacles.find((c) => c.radius > 30 && c.x > b.minX + 900 && c.x < b.maxX - 900 && sim.arena.isFree({ x: c.x + c.radius + 420, y: c.y }, 60));
-    if (!o) check(false, 'charge contre un obstacle : obstacle de test trouvé');
-    else {
-      sim.horde.spawnAt('charger', o.x + o.radius + 420, o.y, 1, false, true);
-      const a = sim.aliens[sim.aliens.length - 1];
-      a.rushDx = -1;
-      a.rushDy = 0;
-      a.rushWind = 0;
-      a.rushT = a.def.rush.length / a.def.rush.speed;
-      a.rushCd = 99;
-      let ticks = 0;
-      let minGap = Infinity;
-      while (a.rushT > 0 && ticks < 60) {
-        sim.choiceT = 0;
-        step(1);
-        ticks++;
-        minGap = Math.min(minGap, Math.hypot(a.x - o.x, a.y - o.y) - o.radius - a.radius);
-      }
-      const gap = Math.hypot(a.x - o.x, a.y - o.y) - o.radius - a.radius;
-      check(a.rushT <= 0 && ticks < Math.ceil((a.def.rush.length / a.def.rush.speed) * 30), 'charge contre un obstacle de la carte : elle s’arrête avant la fin de sa course', `${ticks} ticks`);
-      check(minGap > -2 && gap < 8 && Math.abs(a.y - o.y) < 20, 'charge contre un obstacle de la carte : arrêtée contre lui, sans glisser le long', `écart ${gap.toFixed(1)} px, décalage latéral ${Math.abs(a.y - o.y).toFixed(1)} px`);
-    }
-  }
-
   // ---- la charge du rhinocéros fracasse les rochers de mur (débris envoyés dans le sens de la charge)
   {
     const { sim, step } = fresh(9);

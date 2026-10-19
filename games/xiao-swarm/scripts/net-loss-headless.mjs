@@ -67,13 +67,16 @@ try {
   };
   /** Sonde de la file d'inputs de l'hôte : ticks sans input en attente (on rejoue le précédent) et inputs sautés (file trop longue ou raccourcie). */
   const probeQueue = (host) => {
-    const q = { starved: 0, skipped: 0, ticks: 0 };
+    const q = { starved: 0, skipped: 0, ticks: 0, depth: 0, maxDepth: 0, deepTicks: 0 };
     const orig = host.consumeInput.bind(host);
     host.consumeInput = (id, r) => {
       const before = r.applied;
       const empty = r.queue.length === 0;
       orig(id, r);
       q.ticks++;
+      q.depth += r.queue.length; // inputs encore en attente après celui joué = ticks de retard de l'invité chez l'hôte, en plus de la latence
+      q.maxDepth = Math.max(q.maxDepth, r.queue.length);
+      if (r.queue.length >= 3) q.deepTicks++;
       if (empty) q.starved++;
       else if (before > 0 && r.applied > before + 1) q.skipped += r.applied - before - 1;
     };
@@ -141,7 +144,7 @@ try {
       console.log(`- ${label}`);
       console.log(`    correction d'ancre / snapshot (px) : ${fmt(stat(corr))} (${corr.length} snapshots, ${snaps} recalages > 40 px)`);
       console.log(`    à-coup du centre affiché (px/tick) : ${fmt(stat(jit))}`);
-      console.log(`    file d'inputs de l'hôte : ${q.starved} ticks sans input / ${q.ticks}, ${q.skipped} inputs sautés ; réseau : ${w.hub.stats.lost} perdus, ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
+      console.log(`    file d'inputs de l'hôte : ${q.starved} ticks sans input / ${q.ticks}, ${q.skipped} inputs sautés, retard ajouté moyen ${(q.depth / q.ticks).toFixed(2)} ticks (max ${q.maxDepth}, ≥ 3 ticks pendant ${q.deepTicks} ticks) ; réseau : ${w.hub.stats.lost} perdus, ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
     }
   }
 

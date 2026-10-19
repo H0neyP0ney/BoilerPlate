@@ -41,6 +41,11 @@ export class AnchorPredictor {
     return this.speed;
   }
 
+  /** Inputs envoyés que l'hôte n'a pas encore joués (d'après le dernier `ack` reçu). */
+  get unacked(): number {
+    return this.history.length;
+  }
+
   /** Vrai dès qu'un premier snapshot a calé la prédiction. */
   get active(): boolean {
     return this.ready;

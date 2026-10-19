@@ -356,10 +356,10 @@ export class HostSession implements Session {
         if (!r) return;
         const n = typeof msg.n === 'number' && Number.isFinite(msg.n) ? Math.floor(msg.n) : 0;
         if (n <= r.seq) return; // paquet en retard ou dupliqué : déjà reçu
-        // le paquet redonde les deux inputs précédents (`prev`) : un paquet perdu ou en retard ne laisse pas de trou
+        // le paquet redonde les inputs précédents (`prev` : n-1, n-2…, jusqu'à `MAX_INPUT_GAP`) : un paquet perdu, en retard ou une courte coupure ne laisse pas de trou
         const entries: { n: number; mx: number; my: number }[] = [];
         const prev: unknown[] = Array.isArray(msg.prev) ? msg.prev : [];
-        for (let k = 1; k >= 0; k--) {
+        for (let k = Math.min(MAX_INPUT_GAP, prev.length >> 1) - 1; k >= 0; k--) {
           const pn = n - (k + 1);
           if (pn > r.seq && prev.length >= 2 * (k + 1)) entries.push({ n: pn, mx: finite(prev[2 * k]), my: finite(prev[2 * k + 1]) });
         }

@@ -31,6 +31,8 @@ const DELAY_FRAMES = (INTERP_DELAY_MS / 1000) * TICK_RATE;
 const RESYNC_FRAMES = 30;
 /** Snapshots gardés au plus dans le tampon (les plus anciens sont appliqués d'office). */
 const MAX_BUFFER = 16;
+/** Inputs précédents redondés au plus dans chaque message `input` (l'hôte en lit jusqu'à `MAX_INPUT_GAP`, soit 8). */
+const MAX_PREV_INPUTS = 8;
 
 type Welcome = Extract<HostMessage, { t: 'welcome' }>;
 
@@ -189,10 +191,13 @@ export class ClientSession implements Session {
    * (réconciliation). Un paquet perdu ou en retard est sans conséquence : le suivant arrive 33 ms après.
    */
   private sendInput(mx: number, my: number): void {
-    // `prev` : les deux inputs précédents (n-1 puis n-2), pour que l'hôte comble un paquet perdu ou arrivé dans le désordre
-    const msg: ClientMessage = { t: 'input', mx, my, n: this.ticks, prev: this.prevInputs.length > 0 ? this.prevInputs : undefined };
+    // `prev` : les inputs précédents (n-1, n-2…), pour que l'hôte comble un paquet perdu, arrivé dans le désordre ou une courte coupure. Tous ceux que l'hôte
+    // n'a pas encore joués (`unacked`), entre 2 et `MAX_PREV_INPUTS` : avec 2 seulement, après une coupure de 8 ticks l'hôte comblait le trou en répétant le
+    // dernier input connu (correction d'ancre max 30 px, `sim:netloss -- recon`, profil « rafales »).
+    const keep = 2 * Math.max(2, Math.min(MAX_PREV_INPUTS, this.mirror.predictor.unacked));
+    const msg: ClientMessage = { t: 'input', mx, my, n: this.ticks, prev: this.prevInputs.length > 0 ? this.prevInputs.slice(0, keep) : undefined };
     this.transport.send(this.hostId, 'unreliable', JSON.stringify(msg));
-    this.prevInputs = [mx, my, ...this.prevInputs.slice(0, 2)];
+    this.prevInputs = [mx, my, ...this.prevInputs.slice(0, 2 * MAX_PREV_INPUTS - 2)];
   }
   private prevInputs: number[] = [];
 

@@ -67,6 +67,8 @@ export class ClientSession implements Session {
   private playSeq: number;
   private latestSeq: number;
   private appliedSeq: number;
+  /** Dernier snapshot lu pour MA squad (sans délai, voir `Mirror.applyLocal`). */
+  private localSeq = -1;
   private mx = 0;
   private my = 0;
   private ticks = 0;
@@ -84,7 +86,11 @@ export class ClientSession implements Session {
     this.sim = new Sim({ mode: MODES[welcome.mode as keyof typeof MODES] ?? MODES.survival, seed: welcome.seed, players: [], xp: true, online: true, difficulty: parseDifficultyLevel(welcome.difficulty) });
     this.mirror = new Mirror(this.sim, welcome.you);
     this.playSeq = this.latestSeq = this.appliedSeq = first.seq;
-    this.applySnapshot(first);
+    this.applySnapshot(first); // chemin complet (crée les squads dans l'ordre de l'hôte) ; la lecture sans délai de ma squad prend le relais ensuite
+    if (INTERP_DELAY_MS > 0) {
+      this.mirror.directLocal = true;
+      this.localSeq = first.seq;
+    }
 
     transport.onMessage = this.onMessage;
     transport.onPeerDisconnected = (peer) => {
@@ -187,6 +193,10 @@ export class ClientSession implements Session {
       const snap = decodeSnapshot(data);
       if (!snap) return;
       this.sinceSnapshot = 0;
+      if (INTERP_DELAY_MS > 0 && snap.seq > this.localSeq) {
+        this.localSeq = snap.seq;
+        this.mirror.applyLocal(snap); // ma squad ne passe pas par le tampon : sa réconciliation lit l'ancre et l'ack les plus récents
+      }
       if (INTERP_DELAY_MS <= 0) {
         this.applySnapshot(snap);
         return;

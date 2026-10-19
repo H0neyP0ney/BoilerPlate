@@ -471,16 +471,19 @@ try {
     check(sq.buffs.electro <= 0, 'orbes électriques : les orbes disparaissent après 8 s', `${sq.buffs.electro.toFixed(2)} s restant`);
   }
 
-  // ---- alien doré : rare (0 à 2 par partie), fuit quand on l'approche en semant des pièces, s'enterre après 10 s ; tué : beaucoup de pièces et quelques diamants
+  // ---- alien doré : rare (un seul par partie, entre 3 et 5 min), fuit quand on l'approche en semant des pièces, s'enterre après 10 s ; tué : beaucoup de pièces et quelques diamants
   {
     const G = ALIENS.golden.golden;
-    const counts = [0, 0, 0];
+    let allOne = true;
+    let inWindow = true;
     for (let seed = 1; seed <= 30; seed++) {
       const { sim } = fresh(100 + seed);
       sim.step(1 / 30, new Map());
-      counts[sim.horde.goldTimes.length]++;
+      const times = sim.horde.goldTimes;
+      if (times.length !== 1) allOne = false;
+      else if (times[0] < G.spawnFrom || times[0] > G.spawnTo) inWindow = false;
     }
-    check(counts.every((c) => c > 0) && counts.length === G.spawnMax + 1, 'alien doré : 0, 1 ou 2 apparitions par partie selon la graine', `0 : ${counts[0]}, 1 : ${counts[1]}, 2 : ${counts[2]} (30 parties)`);
+    check(allOne && inWindow, 'alien doré : une apparition par partie, entre spawnFrom et spawnTo', `${G.spawnFrom}-${G.spawnTo} s, 30 graines`);
     const { sim, step } = fresh(34);
     clearAliens(sim);
     const sq = sim.squadOf('p1');
@@ -575,7 +578,7 @@ try {
     check(small.dps > 0 && small.hp === wantSmall && big.hp > small.hp * 2, 'œuf : PV adaptés au DPS de la squad (destruction ~2 s) et à son nombre de soldats', `4 soldats : ${small.dps.toFixed(0)} DPS → ${small.hp} PV ; 12 soldats : ${big.dps.toFixed(0)} DPS → ${big.hp} PV`);
   }
 
-  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard), l'une après l'autre (0,3 s d'écart) ; pas pendant un clear screen
+  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard), l'une après l'autre (0,1 s d'écart) ; pas pendant un clear screen
   {
     const { sim } = fresh(39);
     clearAliens(sim);
@@ -587,12 +590,12 @@ try {
     sim.damage(sh, 1e9, 'p1');
     const none = new Map();
     const first = lobs().length; // la première part tout de suite
-    for (let i = 0; i < 4; i++) sim.step(1 / 30, none); // ~0,13 s : la seconde attend encore
+    for (let i = 0; i < 2; i++) sim.step(1 / 30, none); // ~0,07 s : la seconde attend encore
     const early = lobs().length;
-    for (let i = 0; i < 8; i++) sim.step(1 / 30, none); // ~0,4 s en tout : elle est partie
+    for (let i = 0; i < 4; i++) sim.step(1 / 30, none); // ~0,2 s en tout : elle est partie
     const blobs = lobs();
     const dists = blobs.map((p) => Math.hypot(p.x + p.vx * p.life - sh.x, p.y + p.vy * p.life - sh.y));
-    check(first === 1 && early === 1 && blobs.length === 2 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 2 boules rouges en cloche autour de lui, l'une après l'autre (0,3 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
+    check(first === 1 && early === 1 && blobs.length === 2 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 2 boules rouges en cloche autour de lui, l'une après l'autre (0,1 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
   }
 
   // ---- rhinos jumeaux (Expert) : 2 orbes électriques tournent en continu autour de chacun (100 px) ; un soldat touché perd 10 PV (au plus une fois par orbe et par 0,5 s) ; rien en Normal

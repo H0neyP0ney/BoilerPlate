@@ -7,6 +7,7 @@ import { trailFromIndex } from '../data/trails';
 import { CLASSES } from '../data/classes';
 import type { AlienState, GemState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
+import type { Squad } from '../sim/Squad';
 import type { PlayerId } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
 import { SNAPSHOT_EVERY, type AlienSnap, type ProjectileSnap, type RecruitSnap, type Snapshot, type SoldierSnap } from './Protocol';
@@ -90,6 +91,37 @@ export class Mirror {
   private readonly lastAlienPos = new Map<number, { x: number; y: number; seq: number }>();
 
   /**
+   * Vrai quand la squad locale est lue sans passer par le tampon d'interpolation (`applyLocal`, appelée à la réception de chaque snapshot) :
+   * la réconciliation travaille sur l'ancre et l'`ack` les plus récents, pas sur ceux d'il y a `INTERP_DELAY_MS` de plus.
+   */
+  directLocal = false;
+  /** Pause de choix d'upgrade vue dans le dernier snapshot reçu (sans délai) : la prédiction s'arrête avec l'hôte, pas 100 ms plus tard. */
+  private localChoiceT = 0;
+
+  /** Ancre et soldats de MA squad, tirés du snapshot qui vient d'arriver (sans passer par le tampon). Le reste attend `apply`. */
+  applyLocal(snap: Snapshot): void {
+    const sq = snap.squads.find((s) => s.owner === this.localPlayer);
+    const squad = this.sim.squads.find((s) => s.owner === this.localPlayer); // jamais créée ici : l'ordre des squads est celui de `apply`
+    if (!sq || !squad) return;
+    this.localChoiceT = snap.choiceT;
+    this.applyLocalSquad(squad, sq, snap.choiceT > 0);
+  }
+
+  /** Réconciliation de l'ancre prédite et reprise des positions hôte des soldats d'une squad (la mienne : prédiction ; une autre : suivi simple). */
+  private applyLocalSquad(squad: Squad, sq: Snapshot['squads'][number], frozen: boolean, seen?: Set<number>): void {
+    if (sq.owner === this.localPlayer) {
+      this.predictor.reconcile(this.sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen);
+      squad.anchor.x = this.predictor.anchor.x;
+      squad.anchor.y = this.predictor.anchor.y;
+    }
+    squad.soldiers.length = 0;
+    for (const u of sq.soldiers) {
+      seen?.add(u.id);
+      squad.soldiers.push(this.upsertSoldier(u, sq.owner));
+    }
+  }
+
+  /**
    * `next` : snapshot suivant, déjà dans le tampon du client. Les aliens n'envoient plus leur vitesse (v43) : elle est déduite de leur
    * position dans `next` (vraie interpolation entre deux snapshots), sinon de leur position précédente (extrapolation).
    */
@@ -129,17 +161,12 @@ export class Mirror {
       squad.stats.add('maxSquad', { flat: sq.maxSize - SQUAD.baseMaxSize });
       // `isHealing` = arrêtée depuis assez longtemps ET un Medic présent.
       squad.stillTime = sq.healing ? CROWD.stillDelay + 1 : 0;
-      if (sq.owner === this.localPlayer) {
-        const frozen = snap.choiceT > 0;
-        this.predictor.reconcile(sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen);
-        squad.anchor.x = this.predictor.anchor.x;
-        squad.anchor.y = this.predictor.anchor.y;
+      if (sq.owner === this.localPlayer && this.directLocal) {
+        // ancre et soldats de ma squad : déjà lus sans délai par `applyLocal` (un snapshot du tampon, plus vieux, les écraserait)
+        for (const s of squad.soldiers) seenSoldiers.add(s.id);
+        continue;
       }
-      squad.soldiers.length = 0;
-      for (const u of sq.soldiers) {
-        seenSoldiers.add(u.id);
-        squad.soldiers.push(this.upsertSoldier(u, sq.owner));
-      }
+      this.applyLocalSquad(squad, sq, snap.choiceT > 0, seenSoldiers);
     }
     prune(this.soldiers, seenSoldiers);
     // Joueurs partis : leur squad n'est plus dans le snapshot.
@@ -240,7 +267,7 @@ export class Mirror {
     // sont ramenés à chaque snapshot : tremblement des projectiles et des aliens pendant la pause)
     const dt = this.frozen ? 0 : dtReal;
     const predicting = !!local;
-    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, sim.choiceT > 0);
+    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, (this.directLocal ? this.localChoiceT : sim.choiceT) > 0);
     const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
       if (predicted && sq.owner === this.localPlayer) {

@@ -62,6 +62,11 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   avec lui. Effet : un snapshot perdu, en retard ou arrivé en rafale ne fait plus sauter les aliens (mesure : réseau en rafales toutes les 166 ms,
   saut max d'un alien 27 px / image avec le tampon, comme sur un réseau parfait, contre 64 px sans). Coût : aliens et autres squads affichés
   100 ms plus tard ; la squad locale, prédite, n'est pas retardée.
+  **Ma squad ne passe PAS par le tampon (19/10)** : `ClientSession.onMessage` appelle `Mirror.applyLocal` dès la réception de chaque snapshot
+  (ancre, vitesse, `ack`, soldats, pause de choix) et `Mirror.apply` (tampon) saute ma squad (`directLocal`). Avant, la réconciliation lisait
+  l'ancre et l'`ack` 100 ms plus vieux : fenêtre de rejeu d'inputs de RTT + 100 ms + 66 ms, donc des corrections plus grandes et des soldats
+  tirés dans un sens puis ramenés quand on inversait la direction avec de petits inputs (ressenti « je me bats avec la réconciliation »). Testé
+  par `sim:net` et `sim:predict`.
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot appliqué (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
 - **Effets de tir** (v38) : l'hôte range `shot` (id du tireur + position), `impact` (position + texture) et `hit` (id) dans le snapshot au lieu

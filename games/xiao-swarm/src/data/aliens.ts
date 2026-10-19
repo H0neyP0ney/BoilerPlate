@@ -130,11 +130,11 @@ export interface AlienDef {
   /** `twin` : boss jumeau (rhinos feu / glace) : le premier tombé est un alien comme les autres (ni clear screen, ni œuf, ni escalade) ; seul le dernier compte. */
   boss?: { kind: 'mini' | 'final'; twin?: boolean };
   /**
-   * Alien doré (rare, 0 à `spawnMax` par partie) : apparaît à `spawnDist` px d'une squad (donc hors écran : flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
+   * Alien doré (rare, un seul par partie) : apparaît à `spawnDist` px d'une squad (donc hors écran : flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
    * à moins de `engage` px (ou qu'il n'est pas blessé) ; il s'enfuit alors à `fleeSpeed` px/s en lâchant `coinCount` pièce(s) toutes les `coinEvery` s sur sa route ; après `burrowAfter` s de fuite il ESSAIE de s'enterrer (animation de `burrowTime` s) ; si il perd `burrowInterrupt` PV pendant ce temps, l'animation est interrompue, il repart en fuite puis RÉESSAIE après `burrowRetry` s : cette seconde
    * tentative ne peut plus être interrompue (sauf s'il meurt) et il disparaît. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
    */
-  golden?: { spawnMax: number; spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; burrowAfter: number; burrowRetry: number; burrowTime: number; burrowInterrupt: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
+  golden?: { spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; burrowAfter: number; burrowRetry: number; burrowTime: number; burrowInterrupt: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -268,7 +268,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4.5,
     attackCooldown: 0.55,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 19.8, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.3 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 19.8, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.1 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
@@ -694,7 +694,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd24a,
     goo: 0xe0a800,
     hpBarWidth: 50,
-    golden: { spawnMax: 2, spawnFrom: 90, spawnTo: 540, spawnDist: 650, engage: 220, fleeSpeed: 260, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+    golden: { spawnFrom: 180, spawnTo: 300, spawnDist: 650, engage: 220, fleeSpeed: 260, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).

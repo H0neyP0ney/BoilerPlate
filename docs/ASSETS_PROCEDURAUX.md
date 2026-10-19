@@ -1,6 +1,6 @@
-# Assets dessinés par le code (Xiao Swarm)
+# Assets provisoires du jeu : dessinés par le code, recolorés, synthétisés (Xiao Swarm)
 
-État au 10/10/2026. Deux sortes :
+**Liste de référence des placeholders graphiques et sonores en jeu, FX compris** (règle de `CLAUDE.md` : toute création d'un asset provisoire s'y ajoute, tout remplacement par un vrai asset l'en retire). Sections 5 et 6 ajoutées le 19/10 (reprises de `CLAUDE.md`, à compléter au fil de l'eau) ; sections 1 à 4 : état au 10/10/2026. Deux sortes :
 
 - **Textures dessinées en code** (`canvasTexture`, une fois au chargement) : elles ont une clé de texture, donc **un fichier du même nom déclaré dans `src/assets/manifest.ts` les remplace** sans toucher au code (même clé). Fichiers sources : `src/art/*.ts`.
 - **Formes tracées à chaque frame** (`Graphics` : cercles, barres, ellipses) : pas de texture ; les remplacer par une image demande de modifier le code d'affichage.
@@ -78,3 +78,26 @@ Liste des principales (pas de texture : les remplacer par des images demande du 
 
 - **Texture (sections 1 à 3)** : poser le fichier dans `public/assets/…` et le déclarer dans `src/assets/manifest.ts` avec **la même clé** (ex. `{ type: 'image', id: 'fx_stun', url: 'fx/stun.png' }`). Le dessin en code n'est alors plus utilisé. Garder des proportions proches : plusieurs effets règlent leur échelle en pixels (visionneuse Particules, `fxParams.ts`).
 - **Forme (section 4)** : à faire au cas par cas dans le code d'affichage.
+
+## 5. Placeholders qui ne sont pas des textures dessinées en code (ajoutés le 19/10)
+
+Sprites recolorés, icônes générées, dessins de FX tracés par le code : à remplacer par de vrais assets.
+
+| Asset | Ce que c'est | Où |
+|---|---|---|
+| `aliens/golden.png` (alien doré) | planche du slime recolorée en jaune doré (`tools/hue-shift.mjs`) | `public/assets/aliens/` |
+| `aliens/fireballer.png` (fireballer) | planche de l'iceballer recolorée en orange | `public/assets/aliens/` |
+| planches des rhinos Braise / Givre (`boss_rhino_fire` / `_ice`) | planche du Rhino Alpha recolorée (`tools/hue-shift.mjs`) | `public/assets/aliens/` |
+| `ui/powerups/electro.png` | icône du power-up Orbes électriques, générée par code (provisoire) | `public/assets/ui/powerups/` |
+| Orbes électriques (power-up et rhinos jumeaux) | halo bleu, noyau blanc, éclairs et traînée tracés par le code | `WorldView.electricOrb` / `drawElectroOrbs` |
+| Coffre à diamants et diamants | dessinés par le code (velours violet, filets d'or) | `art/gems.ts` |
+| Fusée et confettis du feu d'artifice du boss final | fusée dessinée par le code, confettis = rectangles | `Fx.fireworkRocket` / `Fx.confetti` |
+| « +1 » vert et croix rouge de perte de soldat | texte et signe tracés par le code | `Fx.gain` / `Fx.death` |
+| Trails (huit couleurs) | rubans tracés par le code, couleurs PROVISOIRES | `data/trails.ts`, `view/TrailFx.ts` |
+| Skins (10 teintes) | soldats recolorés (sauf le ninja : vraie planche) | `data/skins.ts` |
+
+## 6. Sons provisoires
+
+- **Une quarantaine de bruitages mp3 synthétisés** par `tools/gen-sfx.py` (13/10), « sons de remplacement à écraser un par un » : catalogue `SFX` de `settings.ts`, réglages dans `data/sfxTuning.ts`, liste et méthode de remplacement dans `docs/SONS.md`. Quand un son est remplacé par un vrai fichier (variante `<nom>--<variante>.mp3` ou fichier remplacé), le retirer de cette liste.
+- Son des Orbes électriques = celui de la rafale de roquettes (réutilisé, provisoire) ; son du feu d'artifice = rafale de roquettes + level up.
+

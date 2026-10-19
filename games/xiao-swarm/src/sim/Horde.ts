@@ -432,7 +432,7 @@ export class Horde {
 
   // ---------- Alien doré ----------
 
-  /** Aléatoire PROPRE à l'alien doré (n'entame jamais la suite de `sim.rng`) : nombre d'apparitions de la partie (0 à `spawnMax`) et leurs dates. */
+  /** Aléatoire PROPRE à l'alien doré (n'entame jamais la suite de `sim.rng`) : date de son apparition (une seule par partie). */
   private goldRng: Rng | null = null;
   private goldTimes: number[] = [];
 
@@ -447,8 +447,7 @@ export class Horde {
     const G = ALIENS.golden.golden!;
     if (!this.goldRng) {
       this.goldRng = new Rng((this.sim.config.seed ^ 0x7f4a7c15) >>> 0);
-      const n = Math.floor(this.goldRng.range(0, G.spawnMax + 1)); // 0, 1 ou 2 par partie
-      this.goldTimes = Array.from({ length: n }, () => this.goldRng!.range(G.spawnFrom, G.spawnTo)).sort((x, y) => x - y);
+      this.goldTimes = [this.goldRng.range(G.spawnFrom, G.spawnTo)]; // un seul par partie, à une date tirée dans la fenêtre
     }
     if (this.goldTimes.length === 0 || this.sim.tutorial?.active || this.sim.ending || this.sim.waves.time < this.goldTimes[0]) return;
     if (this.sim.aliens.some((a) => a.alive && a.def.golden)) return; // un seul à la fois

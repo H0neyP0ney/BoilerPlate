@@ -54,12 +54,19 @@ export class AnchorPredictor {
     return this.anchor.y - this.base.y;
   }
 
-  /** Un tick client : mémorise l'input du tick `n` et avance l'ancre prédite. `frozen` : monde en pause (choix d'upgrade). */
-  step(arena: Arena, n: number, mx: number, my: number, dt: number, frozen: boolean): void {
-    this.history.push({ n, mx, my });
+  /**
+   * Un tick client : mémorise l'input du tick `n` et avance l'ancre prédite. `frozen` : monde figé chez l'hôte (choix d'upgrade, écran de fin, salle d'attente).
+   * Renvoie vrai si l'input est TENU (monde figé, ou après la dernière input jouée avant une pause annoncée) : l'ancre prédite ne bouge pas, et le client envoie
+   * alors un input nul à l'hôte (`ClientSession.sendInput`). Sans cela, l'hôte jouait à la reprise les inputs tenus pendant que le client attendait la nouvelle
+   * (un aller simple) : la squad de l'invité restait figée puis sautait de 20 px par tick (mesure `sim:netloss -- resume`).
+   */
+  step(arena: Arena, n: number, mx: number, my: number, dt: number, frozen: boolean): boolean {
+    const held = frozen || n > this.limitN;
+    this.history.push({ n, mx: held ? 0 : mx, my: held ? 0 : my });
     if (this.history.length > HISTORY) this.history.shift();
-    if (!this.ready || frozen || n > this.limitN) return;
+    if (!this.ready || held) return held;
     stepAnchor(arena, this.anchor, mx, my, this.speed, dt);
+    return false;
   }
 
   /** Un snapshot : ancre de l'hôte, vitesse de l'ancre, dernier input acquitté. `alive` faux : on suit simplement l'hôte. */

@@ -123,16 +123,24 @@ export class Mirror {
    * la réconciliation travaille sur l'ancre et l'`ack` les plus récents, pas sur ceux d'il y a `INTERP_DELAY_MS` de plus.
    */
   directLocal = false;
-  /** Pause de choix d'upgrade vue dans le dernier snapshot reçu (sans délai) : la prédiction s'arrête avec l'hôte, pas 100 ms plus tard. */
-  private localChoiceT = 0;
+  /**
+   * Monde figé chez l'hôte d'après le dernier snapshot reçu (sans délai) : pause de choix d'upgrade, ou tick qui n'avance plus (écran de fin, salle d'attente).
+   * La prédiction de ma squad s'arrête et repart avec l'hôte, pas 100 ms plus tard : `frozen` (lu dans le tampon) gardait mes soldats immobiles 100 ms
+   * après la reprise pendant que l'ancre repartait, d'où un rattrapage par bonds.
+   */
+  private localFrozen = false;
+  private localTick = -1;
+  /** L'input du tick client courant est tenu (monde figé ou pause annoncée) : le client envoie un input nul (voir `AnchorPredictor.step`). */
+  inputHeld = false;
 
   /** Ancre et soldats de MA squad, tirés du snapshot qui vient d'arriver (sans passer par le tampon). Le reste attend `apply`. */
   applyLocal(snap: Snapshot): void {
+    this.localFrozen = snap.choiceT > 0 || snap.tick === this.localTick;
+    this.localTick = snap.tick;
     const sq = snap.squads.find((s) => s.owner === this.localPlayer);
     const squad = this.sim.squads.find((s) => s.owner === this.localPlayer); // jamais créée ici : l'ordre des squads est celui de `apply`
     if (!sq || !squad) return;
-    this.localChoiceT = snap.choiceT;
-    this.applyLocalSquad(squad, sq, snap.choiceT > 0, Mirror.limitOf(snap, sq));
+    this.applyLocalSquad(squad, sq, this.localFrozen, Mirror.limitOf(snap, sq));
   }
 
   /** Réconciliation de l'ancre prédite et reprise des positions hôte des soldats d'une squad (la mienne : prédiction ; une autre : suivi simple). */
@@ -393,7 +401,9 @@ export class Mirror {
     // sont ramenés à chaque snapshot : tremblement des projectiles et des aliens pendant la pause)
     const dt = this.frozen ? 0 : dtReal;
     const predicting = !!local;
-    if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, (this.directLocal ? this.localChoiceT : sim.choiceT) > 0);
+    // ma squad : figée ou non d'après le dernier snapshot reçu (sans délai), pas d'après celui du tampon
+    const localFrozen = this.directLocal ? this.localFrozen : this.frozen;
+    this.inputHeld = !!local && this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, localFrozen);
     this.localHold = !!local && local.n > this.predictor.limitN; // les inputs après la limite seront jetés par l'hôte (pause annoncée) : ma squad ne bouge plus
     const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
@@ -401,7 +411,8 @@ export class Mirror {
         // la squad locale suit l'ancre prédite : pas d'extrapolation à la vitesse reçue (elle est déjà dans le décalage)
         sq.anchor.x = this.predictor.anchor.x;
         sq.anchor.y = this.predictor.anchor.y;
-        for (const s of sq.soldiers) this.followPredicted(s, dt);
+        const dtLocal = localFrozen ? 0 : dtReal;
+        for (const s of sq.soldiers) this.followPredicted(s, dtLocal);
       } else {
         for (const s of sq.soldiers) this.follow(s, dt);
       }

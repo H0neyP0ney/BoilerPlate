@@ -151,8 +151,14 @@ export class ClientSession implements Session {
     if (INTERP_DELAY_MS > 0) this.playback(deltaMs);
     this.loop.advance(deltaMs, (dt) => {
       this.ticks++;
-      this.mirror.step(dt, { n: this.ticks, mx: this.mx, my: this.my });
-      this.sendInput();
+      // arrondi AVANT la prédiction : l'hôte joue l'input arrondi qu'on lui envoie, la prédiction doit jouer le même
+      const mx = round(this.mx);
+      const my = round(this.my);
+      this.mirror.step(dt, { n: this.ticks, mx, my });
+      // input tenu (monde figé chez l'hôte, pause annoncée) : la prédiction n'a pas bougé, l'hôte ne doit pas bouger non plus (il jouerait sinon à la reprise ce que
+      // le joueur a tenu pendant qu'il attendait la nouvelle)
+      if (this.mirror.inputHeld) this.sendInput(0, 0);
+      else this.sendInput(mx, my);
     });
     const events = this.pending;
     this.pending = [];
@@ -182,9 +188,7 @@ export class ClientSession implements Session {
    * Un input par tick, numéroté : l'hôte renvoie le dernier numéro pris en compte, le client rejoue les suivants
    * (réconciliation). Un paquet perdu ou en retard est sans conséquence : le suivant arrive 33 ms après.
    */
-  private sendInput(): void {
-    const mx = round(this.mx);
-    const my = round(this.my);
+  private sendInput(mx: number, my: number): void {
     // `prev` : les deux inputs précédents (n-1 puis n-2), pour que l'hôte comble un paquet perdu ou arrivé dans le désordre
     const msg: ClientMessage = { t: 'input', mx, my, n: this.ticks, prev: this.prevInputs.length > 0 ? this.prevInputs : undefined };
     this.transport.send(this.hostId, 'unreliable', JSON.stringify(msg));

@@ -18,6 +18,7 @@
     "sim:calibrate": "node scripts/bench-calibrate.mjs",
     "sim:predict": "node scripts/net-predict-headless.mjs",
     "sim:jitter": "node scripts/net-jitter-headless.mjs",
+    "sim:startstop": "node scripts/net-startstop-headless.mjs",
     "sim:bot": "node scripts/bot-headless.mjs",
     "sim:crowd": "node scripts/crowd-headless.mjs",
     "sim:recruit": "node scripts/recruit-slot-headless.mjs"

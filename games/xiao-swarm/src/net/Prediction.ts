@@ -32,6 +32,12 @@ export class AnchorPredictor {
   private ready = false;
   private readonly history: Frame[] = [];
   private readonly scratch: Circle = { x: 0, y: 0, radius: 18 };
+  /** Ancre après chacun des inputs rejoués au dernier snapshot (de l'input suivant l'ack au tick courant) : les soldats la suivent avec leur inertie (`Mirror`). */
+  readonly path: { x: number; y: number }[] = [];
+  /** Vitesse de l'ancre au dernier snapshot (px/s). */
+  get anchorSpeed(): number {
+    return this.speed;
+  }
 
   /** Vrai dès qu'un premier snapshot a calé la prédiction. */
   get active(): boolean {
@@ -63,7 +69,13 @@ export class AnchorPredictor {
     const t = this.scratch;
     t.x = hostX;
     t.y = hostY;
-    if (alive && !frozen) for (const f of this.history) stepAnchor(arena, t, f.mx, f.my, speed, dt);
+    this.path.length = 0;
+    if (alive && !frozen) {
+      for (const f of this.history) {
+        stepAnchor(arena, t, f.mx, f.my, speed, dt);
+        this.path.push({ x: t.x, y: t.y });
+      }
+    }
     const ex = t.x - this.anchor.x;
     const ey = t.y - this.anchor.y;
     if (!this.ready || !alive || ex * ex + ey * ey > SNAP * SNAP) {

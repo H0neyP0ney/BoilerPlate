@@ -72,7 +72,15 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   la corrigeait (mesure `sim:jitter` : correction moyenne 3 à 4 px, jusqu'à 20 px, avec 2-3 ticks de gigue). Maintenant : file d'inputs par joueur
   (`HostSession.consumeInput`, un par tick, trous comblés en répétant le dernier input, file qui grossit d'un cran sur un retard et raccourcit
   après 3 s sans gigue, plafond 6), `ack` = dernier input JOUÉ, et le client envoie les deux inputs précédents avec chaque paquet (`prev`).
-  Correction moyenne mesurée : 0,04 px. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.
+  Correction moyenne mesurée : 0,04 px.
+  **Soldats de ma squad simulés chez le client (19/10)** : avant, chaque soldat visait « sa position hôte (périmée de RTT + 66 ms) + déplacement de
+  l'ancre prédite », donc la squad démarrait d'un bloc, puis repartait en arrière quand les positions hôte (en retard, avec leur inertie) arrivaient, et
+  à l'arrêt se rejouait un petit élan (profil mesuré par `sim:startstop` : 3,8 5,7 6,6 7,1 … 4,6 6,1 3,8 au lieu de 0 1,7 3,7 5,3 …). Maintenant
+  `Mirror.reconcileSoldier` repart de l'état hôte du soldat (position, vitesse) et rejoue les inputs non acquittés le long de l'ancre rejouée avec la loi
+  de `Squad.update` (rejoint son slot, `CROWD.velDamp` / `gain`), puis `crowdStep` fait un pas par tick client : la squad accélère et freine comme chez
+  l'hôte, sans attendre l'aller-retour. Slot = position + vitesse / gain (gain moyen : le gain propre à chaque soldat n'est pas transmis), conservé pendant
+  les transitoires. Non modélisés (corrigés par le snapshot, fondu à 40 %) : séparation entre soldats, repoussement des aliens et recul des coups. Les
+  soldats gelés, étourdis, dans une bulle, en vol ou soufflés restent suivis depuis l'hôte. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot appliqué (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
 - **Effets de tir** (v38) : l'hôte range `shot` (id du tireur + position), `impact` (position + texture) et `hit` (id) dans le snapshot au lieu

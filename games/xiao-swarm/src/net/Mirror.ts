@@ -1,4 +1,4 @@
-import { robustCentroid } from '@xiao/engine/sim';
+import { damp, robustCentroid } from '@xiao/engine/sim';
 import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD, ELECTRO } from '../config';
 import { ALIENS, shieldOf } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
@@ -34,6 +34,25 @@ interface Goal {
 const SNAPSHOT_DT = SNAPSHOT_EVERY / TICK_RATE;
 /** Vitesse maximale (px/s) retenue pour l'extrapolation d'un objet au sol (au-delà : saut, pas un mouvement). */
 const MAX_GROUND_SPEED = 2000;
+
+/** Gain moyen de rejoint de slot (`CROWD.gainMin + gainSpread / 2`) : le gain propre à chaque soldat n'est pas transmis, l'écart est corrigé par le snapshot. */
+const CROWD_GAIN = CROWD.gainMin + CROWD.gainSpread * 0.5;
+/** Part de l'écart (état hôte rejoué contre état simulé) fondue à chaque snapshot, et écart (px) au-delà duquel on recale d'un coup. */
+const SOLDIER_BLEND = 0.4;
+const SOLDIER_SNAP = 80;
+/** Vitesse (px/s) sous laquelle un soldat est « au repos » (son slot se lit directement) et écart de slot (px) au-delà duquel on le considère réattribué. */
+const SLOT_REST = 8;
+const SLOT_TOLERANCE = 30;
+
+/** État de foule simulé chez le client pour un soldat de ma squad : position, vitesse et slot visé (relatif à l'ancre). */
+interface CrowdState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  sx: number;
+  sy: number;
+}
 
 /** Input du tick client courant, pour la prédiction de la squad locale. */
 export interface LocalInput {
@@ -117,8 +136,76 @@ export class Mirror {
     squad.soldiers.length = 0;
     for (const u of sq.soldiers) {
       seen?.add(u.id);
-      squad.soldiers.push(this.upsertSoldier(u, sq.owner));
+      const s = this.upsertSoldier(u, sq.owner);
+      squad.soldiers.push(s);
+      if (sq.owner === this.localPlayer) this.reconcileSoldier(s, u, sq.anchorX, sq.anchorY);
     }
+  }
+
+  /** Soldat de ma squad dans un état où l'hôte le déplace lui-même (gelé, étourdi, bulle, saut, souffle) : il suit sa position hôte, sans modèle de foule. */
+  private static hostDriven(s: SoldierState): boolean {
+    return s.frozen > 0 || s.stun > 0 || !!s.capturedBy || s.jumpT > 0 || s.knockT > 0;
+  }
+
+  /** Modèles de foule locaux des soldats de ma squad (état simulé au tick client courant). */
+  private readonly crowd = new WeakMap<SoldierState, CrowdState>();
+
+  /**
+   * Un soldat de ma squad est simulé ici avec la MÊME loi que chez l'hôte (rejoint son slot avec inertie : `Squad.update`), en suivant l'ancre prédite.
+   * À chaque snapshot : état hôte (positions et vitesses à l'instant de l'`ack`) puis rejeu des inputs pas encore acquittés le long de l'ancre rejouée
+   * (`predictor.path`), donc un état à l'instant client courant, cohérent dans le temps : la squad accélère et freine comme chez l'hôte, sans attendre
+   * l'aller-retour, et sans le décalage rigide « position hôte périmée + déplacement de l'ancre » qui la faisait avancer d'un bloc au départ puis repartir à
+   * l'arrêt. L'écart avec l'état simulé jusque-là est fondu (comme l'ancre).
+   */
+  private reconcileSoldier(s: SoldierState, u: SoldierSnap, anchorX: number, anchorY: number): void {
+    if (Mirror.hostDriven(s)) {
+      this.crowd.delete(s);
+      return;
+    }
+    // slot visé : la loi donne v ≈ (slot − position) × gain, donc slot ≈ position + v / gain (relatif à l'ancre hôte). Exact au repos et à vitesse de croisière,
+    // faux pendant une accélération ou un freinage : on garde alors le slot connu, sauf s'il s'est vraiment déplacé (soldat tué ou recruté : la formation est réattribuée)
+    const old = this.crowd.get(s);
+    const estX = u.x + u.vx / CROWD_GAIN - anchorX;
+    const estY = u.y + u.vy / CROWD_GAIN - anchorY;
+    const atRest = u.vx * u.vx + u.vy * u.vy < SLOT_REST * SLOT_REST;
+    const moved = old ? (estX - old.sx) ** 2 + (estY - old.sy) ** 2 > SLOT_TOLERANCE * SLOT_TOLERANCE : true;
+    const sx = old && !atRest && !moved ? old.sx : estX;
+    const sy = old && !atRest && !moved ? old.sy : estY;
+    const n: CrowdState = { x: u.x, y: u.y, vx: u.vx, vy: u.vy, sx, sy };
+    const dtTick = 1 / TICK_RATE;
+    for (const p of this.predictor.path) this.crowdStep(n, p.x, p.y, this.predictor.anchorSpeed, dtTick, s.radius);
+    if (!old || (n.x - old.x) ** 2 + (n.y - old.y) ** 2 > SOLDIER_SNAP * SOLDIER_SNAP) {
+      this.crowd.set(s, n);
+      return;
+    }
+    old.x += (n.x - old.x) * SOLDIER_BLEND;
+    old.y += (n.y - old.y) * SOLDIER_BLEND;
+    old.vx += (n.vx - old.vx) * SOLDIER_BLEND;
+    old.vy += (n.vy - old.vy) * SOLDIER_BLEND;
+    old.sx = sx;
+    old.sy = sy;
+  }
+
+  /** Un pas de la loi de foule d'un soldat (celle de `Squad.update`, sans séparation ni répulsion des aliens : ils sont corrigés par le snapshot). */
+  private crowdStep(c: CrowdState, ax: number, ay: number, speed: number, dt: number, radius: number): void {
+    const target = { x: ax + c.sx, y: ay + c.sy, radius: radius + CROWD.wallMargin * 0.4 };
+    this.sim.arena.constrain(target);
+    let dX = (target.x - c.x) * CROWD_GAIN;
+    let dY = (target.y - c.y) * CROWD_GAIN;
+    const maxSpeed = speed * CROWD.maxSpeedMul;
+    const l = Math.hypot(dX, dY);
+    if (l > maxSpeed) {
+      dX = (dX / l) * maxSpeed;
+      dY = (dY / l) * maxSpeed;
+    }
+    c.vx = damp(c.vx, dX, CROWD.velDamp, dt);
+    c.vy = damp(c.vy, dY, CROWD.velDamp, dt);
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    const me = { x: c.x, y: c.y, radius };
+    this.sim.arena.constrain(me);
+    c.x = me.x;
+    c.y = me.y;
   }
 
   /**
@@ -709,8 +796,20 @@ export class Mirror {
    * est ramené à chaque snapshot : tremblement.
    */
   private followPredicted(u: Unit, dt: number): void {
-    if (u.kind === 'soldier' && (u.frozen > 0 || u.stun > 0 || u.capturedBy || u.jumpT > 0 || u.knockT > 0)) {
+    if (u.kind === 'soldier' && Mirror.hostDriven(u as SoldierState)) {
       this.follow(u, dt);
+      return;
+    }
+    const c = this.crowd.get(u as SoldierState);
+    if (c) {
+      // modèle de foule local (voir `reconcileSoldier`) : un pas par tick, le long de l'ancre prédite
+      u.px = u.x;
+      u.py = u.y;
+      if (dt > 0) this.crowdStep(c, this.predictor.anchor.x, this.predictor.anchor.y, this.predictor.anchorSpeed, dt, u.radius);
+      u.x = c.x;
+      u.y = c.y;
+      u.vx = c.vx;
+      u.vy = c.vy;
       return;
     }
     const g = this.goals.get(u);

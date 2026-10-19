@@ -5,7 +5,7 @@
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
 //   shots  : balles de ma squad pendant une course (écart visuel balle / tireur, invité contre hôte)
-//   tele   : stalactites, croix de pics et boules en cloche sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
+//   tele   : stalactites, croix de pics, boules en cloche, kamikazes sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
 //   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
 //            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
@@ -400,8 +400,8 @@ try {
       const C = { aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 0 };
       const hostAt = new Map(); // clé → ack de l'invité au tick d'impact chez l'hôte
       const shownAt = new Map(); // clé → input de l'invité quand l'impact s'affiche chez lui
-      const hostPrev = { st: new Map(), cr: new Map(), lob: new Map() };
-      const cliPrev = { st: new Map(), cr: new Map(), lob: new Map() };
+      const hostPrev = { st: new Map(), cr: new Map(), lob: new Map(), fu: new Map() };
+      const cliPrev = { st: new Map(), cr: new Map(), lob: new Map(), fu: new Map() };
       // impact = un télégraphe vu actif (t > 0) qui passe à t ≤ 0 ou disparaît
       const scan = (prev, list, key, active, n, out) => {
         const now = new Map();
@@ -415,22 +415,25 @@ try {
         client.setLocalInput(Math.cos(i / 25), Math.sin(i / 25));
         if (i > 30 && i % 20 === 0) hs.addStalactite(gsq.center.x, gsq.center.y, 60, 0.8, 0, 0);
         if (i > 30 && i % 45 === 5) hs.addCross(gsq.center.x, gsq.center.y, C, 1);
+        if (i > 30 && i % 25 === 15) hs.fuses.push({ id: hs.ids.get(), x: gsq.center.x + 40, y: gsq.center.y, t: 1, dur: 1, r: 95, dmg: 0, knock: 0, alien: 'kamikaze' });
         if (i > 30 && i % 30 === 10) hs.combat.launchLob(gsq.center.x + 200, gsq.center.y, gsq.center.x, gsq.center.y, 1, 0, 60, 'fx_blob_red', 'aliens', 'aliens');
         await w.tick();
         const ack = w.host.acks.get(client.localPlayer) ?? 0;
         scan(hostPrev.st, hs.stalactites, (o) => 's' + o.id, (o) => o.t > 0, ack, hostAt);
         scan(hostPrev.cr, hs.crosses, (o) => 'c' + o.id, (o) => o.t > 0, ack, hostAt);
         scan(hostPrev.lob, lobs(hs), (o) => 'l' + (o.id & 0xffff), (o) => o.life > 0, ack, hostAt);
+        scan(hostPrev.fu, hs.fuses, (o) => 'f' + (o.id & 0xffff), (o) => o.t > 0, ack, hostAt);
         const cs = client.mirror.sim;
         scan(cliPrev.st, cs.stalactites, (o) => 's' + o.id, (o) => o.t > 1e-6, client.ticks, shownAt);
         scan(cliPrev.cr, cs.crosses, (o) => 'c' + o.id, (o) => o.t > 1e-6, client.ticks, shownAt);
         scan(cliPrev.lob, lobs(cs), (o) => 'l' + o.id, (o) => o.life > 1e-6, client.ticks, shownAt);
+        scan(cliPrev.fu, cs.fuses, (o) => 'f' + o.id, (o) => o.t > 1e-6, client.ticks, shownAt);
       }
-      const byKind = { s: [], c: [], l: [] };
+      const byKind = { s: [], c: [], l: [], f: [] };
       for (const [k, n] of shownAt) if (hostAt.has(k)) byKind[k[0]].push(n - hostAt.get(k));
       const sfmt = (a) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a)} à ${Math.max(...a)} (${a.length})` : '-');
       console.log(`- ${label}`);
-      console.log(`    stalactites : ${sfmt(byKind.s)} ; croix (début des pics) : ${sfmt(byKind.c)} ; boules en cloche : ${sfmt(byKind.l)}`);
+      console.log(`    stalactites : ${sfmt(byKind.s)} ; croix (début des pics) : ${sfmt(byKind.c)} ; boules en cloche : ${sfmt(byKind.l)} ; kamikazes : ${sfmt(byKind.f)}`);
     }
     // Giant Crab : atterrissage du saut (impact) et départ de la couronne de pics, même mesure
     {

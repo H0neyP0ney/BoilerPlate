@@ -251,6 +251,21 @@ export interface Field {
 
 /** Flaque laissée par un crachat : ralentit les soldats qui s'y trouvent (`slow` = facteur de vitesse, < 1). */
 /** Mur annoncé (télégraphe jaune) : à la fin du compte à rebours, une ligne de rochers surgit. */
+/** Mèche d'un kamikaze mort : son corps reste sur place et explose (zone `r`) quand `t` atteint 0. Dans le snapshot (v80) : un événement perdu effaçait le télégraphe. */
+export interface Fuse {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  /** Temps restant avant l'explosion, et durée totale de la mèche (s). */
+  t: number;
+  dur: number;
+  dmg: number;
+  knock: number;
+  /** Alien dont le corps attend l'explosion (son sprite clignote à l'écran). */
+  alien: AlienId;
+}
+
 /** Stalactite qui va tomber (Scarab) : zone annoncée (télégraphe) puis impact quand `t` atteint 0. */
 export interface Stalactite {
   id: number;

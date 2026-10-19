@@ -146,7 +146,8 @@ export class WorldView {
   private readonly cloudBorn = new Map<number, number>();
   /** Orbes électriques (power-up et rhinos jumeaux) : dessinées chaque image par-dessus les unités. */
   private fireG?: Phaser.GameObjects.Graphics;
-  private readonly fuses: { x: number; y: number; r: number; t: number; dur: number; img: Phaser.GameObjects.Sprite; base: number }[] = [];
+  /** Corps des kamikazes en attente d'explosion (par id de mèche, `sim.fuses` : hôte et invité). */
+  private readonly fuseImgs = new Map<number, { img: Phaser.GameObjects.Sprite; base: number }>();
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
   private readonly tongues: { alien: number; target: number; t: number; dur: number }[] = [];
   /** Préparation de charge vue la dernière fois (valeur reçue et heure locale) : chez un client, `rushWind` n'arrive qu'à chaque snapshot, on la fait décroître entre deux pour un remplissage fluide. */
@@ -351,22 +352,12 @@ export class WorldView {
         this.pendingWaves.length = 0;
         for (const img of this.rockImgs.values()) img.destroy();
         for (const f of this.fireImgs.values()) f.img.destroy();
-        for (const f of this.fuses) f.img.destroy();
+        for (const f of this.fuseImgs.values()) f.img.destroy();
         this.corpseImgs.clear();
         this.rockImgs.clear();
         this.fireImgs.clear();
-        this.fuses.length = 0;
+        this.fuseImgs.clear();
         this.tongues.length = 0;
-        break;
-      }
-      case 'fuse': {
-        if (nearCam(e.x, e.y)) playSfx(this.scene, 'fuse');
-        const id = `alien_${e.alien}`;
-        const img = sprites.add(this.scene, id, e.x, e.y + alienOffsetY(e.alien)).setDepth(DEPTH.actors + e.y);
-        sprites.place(img, id);
-        const base = sprites.scaleOf(id);
-        img.setScale(base);
-        this.fuses.push({ x: e.x, y: e.y, r: e.r, t: e.delay, dur: e.delay, img, base });
         break;
       }
       case 'corpse': {
@@ -683,7 +674,7 @@ export class WorldView {
     this.loot.sync(time, alpha);
     this.gems.sync(time, alpha);
     this.followHalos();
-    this.updateFuses(dt, time);
+    this.updateFuses(time);
     this.updateFires(time);
     this.drawOverlay(time, dt);
     this.arena.update(this.scene.cameras.main.worldView);
@@ -1065,22 +1056,35 @@ export class WorldView {
     }
   }
 
-  /** Corps de kamikaze en attente d'explosion : clignote de plus en plus vite, enfle un peu. */
-  private updateFuses(dt: number, time: number): void {
-    for (let i = this.fuses.length - 1; i >= 0; i--) {
-      const f = this.fuses[i];
-      f.t -= dt;
-      if (f.t <= 0) {
-        f.img.destroy();
-        this.fuses.splice(i, 1);
-        continue;
+  /**
+   * Corps de kamikaze en attente d'explosion (`sim.fuses`, aussi chez l'invité : dans le snapshot depuis la v80) : clignote de plus en plus vite, enfle un
+   * peu ; disparaît à la fin de la mèche (l'explosion est un événement).
+   */
+  private updateFuses(time: number): void {
+    const seen = new Set<number>();
+    for (const f of this.sim.fuses) {
+      seen.add(f.id);
+      let v = this.fuseImgs.get(f.id);
+      if (!v) {
+        if (this.onScreen(f.x, f.y, 200)) playSfx(this.scene, 'fuse');
+        const id = `alien_${f.alien}`;
+        const img = sprites.add(this.scene, id, f.x, f.y + alienOffsetY(f.alien)).setDepth(DEPTH.actors + f.y);
+        sprites.place(img, id);
+        v = { img, base: sprites.scaleOf(id) };
+        img.setScale(v.base);
+        this.fuseImgs.set(f.id, v);
       }
-      const k = 1 - f.t / f.dur;
-      if (Math.sin(time * (14 + 34 * k)) > 0) f.img.setTint(0xff3a2a).setTintMode(Phaser.TintModes.FILL);
-      else f.img.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      const k = f.dur > 0 ? Math.max(0, Math.min(1, 1 - f.t / f.dur)) : 1;
+      if (Math.sin(time * (14 + 34 * k)) > 0) v.img.setTint(0xff3a2a).setTintMode(Phaser.TintModes.FILL);
+      else v.img.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
       // pulsations d'échelle de plus en plus rapides et amples (étirement / écrasement en opposition de phase)
       const pulse = Math.sin(time * (30 + 60 * k)) * (0.05 + 0.13 * k) * 1.15; // variations d'échelle +15 %
-      f.img.setScale(f.base * (1 + 0.12 * k + pulse), f.base * (1 + 0.12 * k - pulse * 0.8));
+      v.img.setScale(v.base * (1 + 0.12 * k + pulse), v.base * (1 + 0.12 * k - pulse * 0.8));
+    }
+    for (const [id, v] of this.fuseImgs) {
+      if (seen.has(id)) continue;
+      v.img.destroy();
+      this.fuseImgs.delete(id);
     }
   }
 
@@ -1393,8 +1397,8 @@ export class WorldView {
       g.lineStyle(3, teleColor('lob'), 0.5 + 0.4 * k).strokeEllipse(ix, iy, p.aoe * 2, p.aoe * 1.4);
     }
     // Télégraphes rouges : explosion retardée d'un kamikaze (zone qui se remplit) et couloir de charge du rhinocéros
-    for (const f of this.fuses) {
-      const k = 1 - f.t / f.dur;
+    for (const f of this.sim.fuses) {
+      const k = f.dur > 0 ? Math.max(0, Math.min(1, 1 - f.t / f.dur)) : 1;
       g.fillStyle(teleColor('fuse'), teleOuter(k)).fillEllipse(f.x, f.y, f.r * 2, f.r * 1.4);
       g.fillStyle(teleColor('fuse'), teleInner(k)).fillEllipse(f.x, f.y, f.r * 2 * k, f.r * 1.4 * k);
       g.lineStyle(3, teleColor('fuse'), 0.5 + 0.4 * k).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.4);

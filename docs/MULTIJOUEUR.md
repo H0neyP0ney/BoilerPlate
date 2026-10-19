@@ -30,7 +30,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
   tailles ±10 %) sont dérivées de la seed et de `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
-## Netcode : fonctionnement actuel (protocole v79)
+## Netcode : fonctionnement actuel (protocole v80)
 
 ### Paramètres
 | Quoi | Valeur | Où |
@@ -45,7 +45,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 21 octets / alien, 23 / soldat, 12,5 / projectile, 7 / globe, 7 / flamme (v38) ; ≈ 6 Ko pour 145 aliens + 60 soldats + 200 globes | `encodeSnapshot(…, sizes)` |
 | Positions | 1/4 de pixel sur 16 bits signés (−8192 → 8191 px) : soldats, aliens, recrues, projectiles, globes, effets de tir. Ancres des squads et télégraphes restent en f32 | `Writer.pos` / `POS_SCALE` (`Protocol.ts`) |
-| Version du protocole | **79** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v78 laisse de l'ancre annoncée dans le snapshot (bit 4 des drapeaux de squad + cœur, rayon, vitesse du cœur : `SquadSnap.leash`) ; v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
+| Version du protocole | **80** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v80 mèches des kamikazes dans le snapshot (liste `fuses`, plus d'événement `fuse`) ; v79 squad du tireur par projectile ; v78 laisse de l'ancre annoncée dans le snapshot (bit 4 des drapeaux de squad + cœur, rayon, vitesse du cœur : `SquadSnap.leash`) ; v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
 
 ### Hôte autoritaire
 L'hôte fait tourner `Sim` et applique les inputs reçus (le dernier input connu est maintenu d'un tick à l'autre). Tout ce qu'un client doit voir passe
@@ -73,7 +73,7 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   des vagues de burners, ≈ 4 min).
 - **Squad locale d'un client invité** : **prédite et simulée chez le client** (chaîne complète ci-dessous).
 
-### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v79)
+### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v80)
 
 Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (aucun aller-retour), sans que la correction par l'hôte se voie.
 
@@ -119,12 +119,13 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    114 → 4,9 px en moyenne (p95 131 → 17) ; retard d'apparition 6,5 → 2,5 ticks. Les impacts (`impact`) restent tamponnés : une balle peut disparaître ~100 ms avant son étincelle, et, extrapolée entre deux snapshots, dépasser sa
    cible de ~50 px avant de disparaître (correctifs notés : `docs/AUDIT_NETCODE.md` § 4, point 5).
    Visuel seulement : les dégâts restent calculés chez l'hôte.
-9. **Télégraphes à l'heure de ma squad** (19/10, client seulement, sans changement de protocole) : ma squad est en avance (prédite), le monde en retard (aller simple + tampon), et l'hôte juge
+9. **Télégraphes à l'heure de ma squad** (19/10 ; mèches des kamikazes dans le snapshot depuis la v80) : ma squad est en avance (prédite), le monde en retard (aller simple + tampon), et l'hôte juge
    les dégâts sur SA position de ma squad. `Mirror.teleLead` = mon input courant − `ack` du snapshot affiché (÷ 30, lissé `TELE_LEAD_SMOOTH` 0,25, plafond `MAX_TELE_LEAD` 0,5 s, gardé pendant
-   une pause, 0 sans squad prédite) ; `Mirror.advanceTelegraphs` avance d'autant stalactites, croix de pics, murs, pics du lurker et couronne du crabe, saut du crabe (minuteur et position en vol,
-   `placeLeaper`) et boules en cloche des aliens (`upsertProjectile`). L'impact (stalactite, `slam`, explosion de boule) est joué ici à la fin du télégraphe avancé (`localEvents`) et le double
-   de l'hôte jeté (`swallowHostEvent`, `IMPACT_MATCH` 24 px, `TELE_DONE_TTL` 2 s). Mesure `sim:netloss -- tele` : impact vu 7-9 ticks trop tard → 0-1 tick (saut du crabe 13,5 → 1).
-   Pas traités : charge, explosion retardée du kamikaze, rochers d'un mur. Détail : `docs/AUDIT_NETCODE.md` § 1.9.
+   une pause, 0 sans squad prédite) ; `Mirror.advanceTelegraphs` avance d'autant stalactites, croix de pics, murs, mèches des kamikazes (`sim.fuses`, v80 : avant, un
+   événement `fuse` sur le canal non fiable, perdu = aucun télégraphe ; la vue lit maintenant `sim.fuses` chez l'hôte comme chez l'invité), pics du lurker et couronne du crabe, saut du crabe (minuteur et position en vol,
+   `placeLeaper`) et boules en cloche des aliens (`upsertProjectile`). L'impact (stalactite, `slam`, explosion de boule ou de kamikaze) est joué ici à la fin du télégraphe avancé (`localEvents`) et le double
+   de l'hôte jeté (`swallowHostEvent`, `IMPACT_MATCH` 24 px, `TELE_DONE_TTL` 2 s). Mesure `sim:netloss -- tele` : impact vu 7-9 ticks trop tard → 0-1 tick (saut du crabe 13,5 → 1,
+   kamikaze 7,5-9,5 → 0-1). Pas traités : charge (l'alien bouge, affiché en retard), apparition des rochers d'un mur (obstacles de la prédiction). Détail : `docs/AUDIT_NETCODE.md` § 1.9.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant
 son annonce** (un aller-retour de retard au début d'une retenue), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,

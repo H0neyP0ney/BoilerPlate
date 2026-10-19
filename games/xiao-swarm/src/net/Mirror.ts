@@ -111,7 +111,7 @@ export class Mirror {
    * Avance des télégraphes (s). Ma squad est prédite (en avance sur l'hôte d'un aller simple + la file d'inputs), le reste du monde arrive en retard (un aller
    * simple + le tampon de 100 ms) : sans correction, je voyais la fin d'un télégraphe ~230-300 ms après que l'hôte a jugé ma squad (« j'étais sorti et j'ai
    * pris les dégâts »). L'écart se mesure exactement : mon input courant − l'`ack` du snapshot affiché (l'input que l'hôte avait joué quand il l'a pris).
-   * Les minuteurs des télégraphes (stalactites, croix de pics, murs, pics du lurker et du crabe, saut du crabe, boules en cloche des aliens) sont avancés
+   * Les minuteurs des télégraphes (stalactites, croix de pics, murs, mèches des kamikazes, pics du lurker et du crabe, saut du crabe, boules en cloche des aliens) sont avancés
    * d'autant : leur fin tombe quand ma squad affichée est là où l'hôte la juge. 0 sans squad prédite (spectateur, mort).
    */
   teleLead = 0;
@@ -414,6 +414,8 @@ export class Mirror {
     sim.stalactites.length = 0; // télégraphes seulement (l'impact est calculé chez l'hôte)
     for (const k of snap.stalactites) if (!this.teleDone.has('s' + k.id)) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
     for (let i = sim.crosses.length - 1; i >= 0; i--) if (this.teleDone.has('c' + sim.crosses[i].id)) sim.crosses.splice(i, 1);
+    sim.fuses.length = 0; // mèches des kamikazes : le corps clignote, l'explosion est calculée chez l'hôte
+    for (const f of snap.fuses) if (!this.teleDone.has('f' + f.id)) sim.fuses.push({ ...f, dmg: 0, knock: 0 });
 
     // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits. Ceux de ma squad : lus par `applyLocal`
     const mine = this.directLocal ? snap.squads.findIndex((q) => q.owner === this.localPlayer) : -2;
@@ -451,7 +453,7 @@ export class Mirror {
 
   /**
    * Fait avancer de `dt` s les télégraphes rendus ici (pas du snapshot à `teleLead`, puis chaque tick) : stalactites (impact joué ici, puis retirées), croix de
-   * pics (télégraphe puis poussée), murs, pics du lurker et couronne du crabe (télégraphe puis poussée), saut du crabe (impact joué à l'atterrissage).
+   * pics (télégraphe puis poussée), murs, mèches des kamikazes (explosion jouée ici), pics du lurker et couronne du crabe (télégraphe puis poussée), saut du crabe (impact joué à l'atterrissage).
    */
   private advanceTelegraphs(dt: number): void {
     if (dt <= 0) return;
@@ -476,6 +478,13 @@ export class Mirror {
       this.teleDone.set('c' + c.id, TELE_DONE_TTL);
     }
     for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // les rochers, eux, viennent du snapshot
+    for (let i = sim.fuses.length - 1; i >= 0; i--) {
+      const f = sim.fuses[i];
+      if ((f.t -= dt) > 0) continue;
+      sim.fuses.splice(i, 1);
+      this.teleDone.set('f' + f.id, TELE_DONE_TTL);
+      this.localImpact({ t: 'explosion', x: f.x, y: f.y, r: f.r, style: 'fire' }); // comme `Sim.step` → `addBlast(…, 'fire')`
+    }
     for (const a of sim.aliens) {
       const L = a.def.lurk ?? a.def.spikeRing;
       if (L && a.lurkPhase === 3) {

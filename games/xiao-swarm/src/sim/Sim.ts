@@ -10,7 +10,7 @@ import { Arena } from './Arena';
 import { UpgradeOrbs } from './Chests';
 import { Gems } from './Gems';
 import { Combat } from './Combat';
-import type { AlienState, Corpse, FirePatch, Puddle, ReviveZone, SoldierState, SpikeCross, Stalactite, Unit, WallTelegraph } from './entities';
+import type { AlienState, Corpse, FirePatch, Fuse, Puddle, ReviveZone, SoldierState, SpikeCross, Stalactite, Unit, WallTelegraph } from './entities';
 import { Horde } from './Horde';
 import { PowerUps } from './PowerUps';
 import { Recruits } from './Recruits';
@@ -118,10 +118,10 @@ export class Sim {
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
   tick = 0;
   private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number; hop?: number }[] = [];
-  /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. */
+  /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. Lues par la vue et le snapshot. */
+  readonly fuses: Fuse[] = [];
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
   private readonly deathSpawns: { type: AlienId; x: number; y: number; count: number; radius: number; hpMul: number }[] = [];
-  private readonly fuses: { x: number; y: number; t: number; r: number; dmg: number; knock: number }[] = [];
 
   constructor(readonly config: SimConfig) {
     this.rng = new Rng(config.seed);
@@ -1091,8 +1091,7 @@ export class Sim {
     if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius, hpMul: brood.hpMul ?? 1 });
     const bomb = a.def.deathBlast;
     if (bomb) {
-      this.fuses.push({ x: a.x, y: a.y, t: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.escDmg, knock: bomb.knockback });
-      this.events.push({ t: 'fuse', x: a.x, y: a.y, r: bomb.radius, delay: bomb.delay, alien: a.def.id });
+      this.fuses.push({ id: this.ids.get(), x: a.x, y: a.y, t: bomb.delay, dur: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.escDmg, knock: bomb.knockback, alien: a.def.id });
     }
     if (a.tut && this.tutorial) {
       this.tutorial.drop(a); // onboarding : XP, recrue et power-up choisis par le script

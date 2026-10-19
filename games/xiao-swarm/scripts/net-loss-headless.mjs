@@ -5,7 +5,7 @@
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
 //   shots  : balles de ma squad pendant une course (écart visuel balle / tireur, invité contre hôte)
-//   tele   : stalactites, croix de pics, boules en cloche, kamikazes, Giant Crab, sortie du Scarab sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
+//   tele   : stalactites, croix de pics, boules en cloche, kamikazes, Giant Crab, sortie du Scarab, charges sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
 //   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
 //            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
@@ -526,6 +526,46 @@ try {
       const sfmt = (a, f = 0) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a).toFixed(f)} à ${Math.max(...a).toFixed(f)} (${a.length})` : '-');
       console.log('- Scarab, latence 5 / 3 + gigue 0-2, 3 % de perte');
       console.log(`    sortie de terre : moment ${sfmt(dn)} ; écart de position ${sfmt(dp)} px ; jamais vues ${missed} / ${hostSlams.length}`);
+    }
+    // Charges (chargeur, Rhino Alpha) sur la squad de l'invité : position de l'alien affichée chez l'invité à son input n, contre celle de l'hôte après
+    // avoir joué ce même input (ce que l'invité doit esquiver), pendant les charges ; et instant de l'arrêt contre un obstacle
+    for (const kind of ['charger', 'boss_rhino']) {
+      const w = await setup({ latency: 3, seed: 3 });
+      const client = w.clients[0];
+      w.hub.latencyTo.set(client.localPlayer, 5);
+      Object.assign(w.hub.conditions, { loss: 0.03, jitter: 2, reorder: true });
+      if (process.env.NOTELE) client.mirror.measureTeleLead = () => { client.mirror.teleLead = 0; };
+      const hs = w.host.sim;
+      const gsq = hs.squadOf(client.localPlayer);
+      const hostAt = new Map(); // input → position hôte de l'alien (pendant une charge)
+      const shown = new Map(); // input → position affichée chez l'invité
+      let al = null;
+      let charges = 0;
+      for (let i = 0; i < 600; i++) {
+        if (!al || !al.alive) {
+          hs.aliens.length = 0;
+          hs.horde.spawnAt(kind, gsq.center.x + 450, gsq.center.y + 60, 1, false, true);
+          al = hs.aliens.find((a) => a.def.id === kind);
+        }
+        for (let k = hs.aliens.length - 1; k >= 0; k--) if (hs.aliens[k] !== al) hs.aliens.splice(k, 1);
+        al.hp = al.maxHp;
+        if (al.rushWind <= 0 && al.rushT <= 0) al.rushCd = Math.min(al.rushCd, 0.2);
+        for (const s of gsq.soldiers) s.hp = s.maxHp;
+        client.setLocalInput(Math.cos(i / 22), Math.sin(i / 35));
+        const was = al.rushT > 0;
+        await w.tick();
+        if (!was && al.rushT > 0) charges++;
+        const ack = w.host.acks.get(client.localPlayer) ?? 0;
+        if (al.rushT > 0 && !hostAt.has(ack)) hostAt.set(ack, { x: al.x, y: al.y });
+        const ca = client.mirror.sim.aliens.find((a) => a.def.id === kind);
+        if (ca) shown.set(client.ticks, { x: ca.x, y: ca.y });
+
+      }
+      const err = [];
+      for (const [n, h] of hostAt) { const c = shown.get(n); if (c) { err.push(Math.hypot(c.x - h.x, c.y - h.y)); if (process.env.TRACE && err[err.length - 1] > 120) console.log(`    input ${n} hôte ${h.x.toFixed(0)},${h.y.toFixed(0)} affiché ${c.x.toFixed(0)},${c.y.toFixed(0)}`); } }
+      console.log(`- ${kind === 'charger' ? 'chargeur' : 'Rhino Alpha'}, latence 5 / 3 + gigue 0-2, 3 % de perte : ${charges} charges`);
+      console.log(`    position affichée / hôte au même input, pendant les charges (px) : ${fmt(stat(err))}`);
+      if (process.env.TRACE) { const along = []; for (const [n, h] of hostAt) { const c = shown.get(n); const p = hostAt.get(n - 1); if (c && p) { const dx = h.x - p.x, dy = h.y - p.y, l = Math.hypot(dx, dy) || 1; along.push(((c.x - h.x) * dx + (c.y - h.y) * dy) / l); } } console.log('    écart le long de la charge (+ = affiché en avance) : ' + fmt(stat(along)) + ' ; moy signée ' + (along.reduce((x, y) => x + y, 0) / along.length).toFixed(1)); }
     }
   }
 

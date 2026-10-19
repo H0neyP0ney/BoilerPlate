@@ -48,7 +48,7 @@ Outils ajoutés : `LoopbackHub.conditions` (perte, gigue réordonnée, doublons,
 | `events` | 12 fins de partie avec 30 % de perte : `gameEnd` / `restart` reçus, ancre recalée après relance |
 | `upgrade` | deux niveaux d'avance, clic de l'invité dans les 100 dernières ms affichées des 5 s |
 | `shots` | balles de ma squad pendant une course : écart visuel balle / tireur (invité contre hôte, au tick du snapshot lu), retard d'apparition |
-| `tele` | stalactites, croix de pics, boules en cloche et mèches de kamikaze posées sur la squad d'un invité qui bouge, puis un Giant Crab (saut, couronne de pics) : input de l'invité au moment où l'impact s'affiche chez lui, moins l'input que l'hôte avait joué en calculant les dégâts (0 = juste). `NOTELE=1` : sans avance des télégraphes |
+| `tele` | stalactites, croix de pics, boules en cloche et mèches de kamikaze posées (+ Giant Crab, sortie du Scarab, charges du chargeur et du Rhino Alpha : position affichée / hôte au même input) sur la squad d'un invité qui bouge, puis un Giant Crab (saut, couronne de pics) : input de l'invité au moment où l'impact s'affiche chez lui, moins l'input que l'hôte avait joué en calculant les dégâts (0 = juste). `NOTELE=1` : sans avance des télégraphes |
 | `hidden` | onglet de l'invité caché 60 s en combat : files du client, état au retour |
 | `big` | 4 joueurs (hôte + 3 invités, dont un qui rejoint en plein combat), 40 soldats chacun, ~470 aliens gardés en vie + Rhino Alpha + Giant Crab, 3 % de perte : taille et débit des snapshots, événements JSON par type, corrections de l'invité arrivé en dernier. `NOLEASH=1` désactive la laisse chez l'hôte, `TRACE=1` détaille les grosses corrections |
 
@@ -153,8 +153,19 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
   sous terre, le Scarab n'a pas de cible et la zone suivait « la squad la plus proche de l'endroit où il a plongé », recalculée à chaque tick ; en
   multi, elle pouvait changer de squad en route et se figer. La squad visée est maintenant fixée quand il s'enterre (`AlienState.burrowSq`,
   `Horde.burrowSquad`) ; en solo rien ne change.
-- **Pas traité** : charge (`rushWind`) et autres attaques rattachées à un alien qui bouge (l'alien lui-même est affiché en retard : il faudrait
-  l'extrapoler sur sa ligne de charge), apparition des rochers d'un mur (obstacles que la prédiction contourne, positions calculées par l'hôte). Visuel seulement : les dégâts restent calculés chez l'hôte.
+- **Charges** (chargeur, Rhino Alpha, jumeaux) : l'alien qui charge (1000-1300 px/s) était affiché ~`teleLead` en retard, donc loin de là où l'hôte
+  le juge. Chez l'invité, la charge est **simulée** (`Mirror.charges`, `startCharge` / `stepCharge`) : départ à la fin du télégraphe avancé
+  (`rushWind`), de la dernière position reçue, sur l'axe verrouillé (normalisé), loi de l'hôte (accélération `damp` 8, durée `length / speed`, arrêt
+  contre un obstacle de la carte : `rushStop`, rochers des murs d'alien brisés ici : `rushSmashes`, événement `rockBreak` local, double de l'hôte jeté,
+  rocher écarté des snapshots) ; quand l'hôte annonce la charge, l'écart latéral est recalé et une charge arrêtée ici à tort reprend. L'alien est
+  rendu au snapshot quand l'hôte l'a dite finie. **Gameplay (hôte, solo compris)** : une charge s'arrête maintenant net contre un obstacle de la carte
+  ou le bord de l'arène (avant : elle glissait le long), sauf si l'alien le frôlait déjà au départ.
+  Mesure (`tele`, gigue + perte, position affichée / hôte au même input pendant les charges) : chargeur moy 184 → 49 px, p95 391 → 105 ; Rhino
+  Alpha moy 140 → 38, p95 385 → 65. Reste un cas rare : charge locale arrêtée par un petit obstacle frôlé que l'hôte évite (départ estimé à ~15 px
+  près : l'alien dérive encore pendant le télégraphe), reprise quand l'hôte annonce la charge (max 440 px une fois sur 20). Essai sans effet :
+  ajouter au départ la glissade de fin d'élan (vitesse reçue freinée).
+- **Pas traité** : ruée du Scarab après sa sortie (alien qui bouge, comme une charge, mais vitesse et cible propres), apparition des rochers d'un
+  mur (obstacles que la prédiction contourne, positions calculées par l'hôte). Visuel seulement : les dégâts restent calculés chez l'hôte.
   Non vérifié en navigateur.
 
 ## 2. Risques (non corrigés)

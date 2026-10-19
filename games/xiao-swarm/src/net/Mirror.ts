@@ -8,6 +8,7 @@ import { CLASSES } from '../data/classes';
 import type { AlienState, GemState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
+import { rushSmashes, rushStop } from '../sim/Horde';
 import type { PlayerId, SimEvent } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
 import { SNAPSHOT_EVERY, type AlienSnap, type ProjectileSnap, type RecruitSnap, type Snapshot, type SoldierSnap } from './Protocol';
@@ -72,6 +73,20 @@ const TELE_DONE_TTL = 2;
 /** Écart (px) sous lequel un effet d'impact de l'hôte est le même que celui déjà joué ici. */
 const IMPACT_MATCH = 24;
 
+/** Charge simulée chez l'invité (`Mirror.charges`) : position, vitesse, axe, temps écoulé / durée ; `hostSeen` : l'hôte l'a annoncée (`rushing`). */
+interface Charge {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  dx: number;
+  dy: number;
+  t: number;
+  dur: number;
+  done: boolean;
+  hostSeen: boolean;
+}
+
 /** Input du tick client courant, pour la prédiction de la squad locale. */
 export interface LocalInput {
   n: number;
@@ -131,6 +146,13 @@ export class Mirror {
   private readonly burrows = new Map<number, { mine: boolean; checked: boolean; locked: boolean; dx: number; dy: number; x: number; y: number; emerged: boolean }>();
   /** Ancres de toutes les squads dans le snapshot affiché : la squad visée par un Scarab est celle dont l'ancre est la plus proche de sa zone. */
   private snapAnchors: { owner: PlayerId; x: number; y: number }[] = [];
+  /**
+   * Charges (`rush`) simulées ici, par alien : l'alien qui charge est un alien qui bouge vite (1000-1300 px/s), affiché ~`teleLead` en retard il était à
+   * ~400 px de là où l'hôte le juge. La charge part à la fin du télégraphe avancé, de son point de départ (`rushX/Y`), sur l'axe verrouillé, avec la loi
+   * de l'hôte (même accélération, arrêt contre un obstacle de la carte : `rushStop`, rochers brisés : `rushSmashes`) ; l'alien est affiché là. `done` :
+   * finie ici (arrêtée ou au bout), il y reste jusqu'à ce que l'hôte la dise finie.
+   */
+  private readonly charges = new Map<number, Charge>();
   /** Vitesse lissée de mon ancre prédite (px/s) : celle que l'hôte aura (`Squad.vel`) quand il jouera mes inputs. */
   private readonly myVel = { x: 0, y: 0 };
   private myPrev?: { x: number; y: number };
@@ -416,7 +438,7 @@ export class Mirror {
     sim.walls.length = 0;
     for (const w of snap.walls) sim.walls.push({ id: w.id, x: w.x, y: w.y, angle: w.angle, length: w.length, rockR: w.r, ttl: w.ttl, t: w.t, dur: w.dur });
     sim.arena.rocks.length = 0;
-    for (const k of snap.rocks) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl });
+    for (const k of snap.rocks) if (!this.teleDone.has('k' + k.id)) sim.arena.rocks.push({ id: k.id, x: k.x, y: k.y, radius: k.r, ttl: k.ttl }); // brisé ici par une charge simulée : écarté
     sim.fires.length = 0; // affichage seulement (la brûlure est calculée chez l'hôte)
     for (const f of snap.fires) sim.fires.push({ id: f.id, x: f.x, y: f.y, r: f.r, ttl: 1, dps: 0 });
     sim.crosses.length = 0; // pics en croix : télégraphe puis poussée (les dégâts sont calculés chez l'hôte) ; les mesures viennent des données du Rhino Alpha
@@ -457,6 +479,7 @@ export class Mirror {
 
   /** Vrai si cet événement de l'hôte est l'impact d'un télégraphe déjà joué ici (`localImpact`) : la vue ne le rejoue pas. */
   swallowHostEvent(e: SimEvent): boolean {
+    if (e.t === 'rockBreak') return this.teleDone.has('k' + e.id); // rocher déjà brisé ici par une charge simulée
     if (e.t !== 'stalactite' && e.t !== 'explosion' && e.t !== 'slam') return false;
     const tol = e.t === 'slam' ? Math.max(IMPACT_MATCH, e.r * 0.5) : IMPACT_MATCH; // sortie du Scarab : sa zone, suivie ici, peut différer un peu de celle de l'hôte
     const i = this.localImpacts.findIndex((l) => l.t === e.t && Math.hypot(l.x - e.x, l.y - e.y) < tol);
@@ -510,6 +533,16 @@ export class Mirror {
         }
       } else if (L && a.lurkPhase === 4) a.lurkT = Math.max(0, a.lurkT - dt);
       if (a.def.burrow && a.lurkPhase > 0) this.advanceBurrow(a, dt);
+      if (a.def.rush) {
+        if (a.rushWind > 0) {
+          a.rushWind -= dt;
+          if (a.rushWind <= 0) {
+            const over = -a.rushWind;
+            a.rushWind = 0;
+            this.startCharge(a, over);
+          }
+        }
+      }
       const J = a.def.leap;
       if (J && a.leapT > 0) {
         const land = J.recover; // `leapT` restant à l'atterrissage
@@ -658,6 +691,52 @@ export class Mirror {
     }
   }
 
+  /** Départ d'une charge (fin du télégraphe vue ici) : une seule fois par charge (clé = alien + point de départ), simulée depuis `over` s. */
+  private startCharge(a: AlienState, over: number): void {
+    const R = a.def.rush!;
+    const key = 'r' + a.id + ':' + Math.round(a.rushX) + ':' + Math.round(a.rushY);
+    if (this.teleDone.has(key)) return;
+    this.teleDone.set(key, R.length / R.speed + R.windup + 2);
+    // départ : dernière position de l'hôte (l'alien peut encore dériver pendant le télégraphe : `rushX/Y` est celle de son début) ; axe normalisé (quantifié au centième)
+    const g = this.goals.get(a);
+    const n = Math.hypot(a.rushDx, a.rushDy) || 1;
+    const c: Charge = { x: g ? g.x : a.x, y: g ? g.y : a.y, vx: 0, vy: 0, dx: a.rushDx / n, dy: a.rushDy / n, t: 0, dur: R.length / R.speed, done: false, hostSeen: false };
+    this.charges.set(a.id, c);
+    if (over > 0) this.stepCharge(a, c, over);
+  }
+
+  /** Avance une charge simulée ici de `dt` s, par pas de tick (loi de `Horde.update` pendant `rushT`) ; rochers brisés ici, double de l'hôte jeté. */
+  private stepCharge(a: AlienState, c: Charge, dt: number): void {
+    const R = a.def.rush!;
+    const h = 1 / TICK_RATE;
+    for (let left = dt; left > 1e-6 && !c.done; left -= h) {
+      const k = Math.min(h, left);
+      c.t += k;
+      const rocks = this.sim.arena.rocks;
+      for (let i = rocks.length - 1; i >= 0; i--) {
+        const r = rocks[i];
+        if (!rushSmashes(c.x, c.y, a.radius, R.speed * k, r)) continue;
+        rocks.splice(i, 1);
+        this.teleDone.set('k' + r.id, TELE_DONE_TTL + 3);
+        this.localEvents.push({ t: 'rockBreak', id: r.id, x: r.x, y: r.y, r: r.radius, dx: c.dx, dy: c.dy });
+      }
+      const stop = rushStop(this.sim.arena, c.x, c.y, c.dx, c.dy, Math.hypot(c.vx, c.vy) * k, a.radius);
+      if (stop >= 0) {
+        c.x += c.dx * stop;
+        c.y += c.dy * stop;
+        c.vx = c.vy = 0;
+        c.done = true;
+      } else {
+        c.vx = damp(c.vx, c.dx * R.speed, 8, k);
+        c.vy = damp(c.vy, c.dy * R.speed, 8, k);
+        c.x += c.vx * k;
+        c.y += c.vy * k;
+        if (c.t >= c.dur) c.done = true;
+      }
+      if (c.done && R.burst) this.localImpact({ t: 'slam', x: c.x, y: c.y, r: 130 }); // jumeaux : onde de départ des orbes (les orbes, elles, viennent du snapshot)
+    }
+  }
+
   /** Saut du crabe : position pendant le vol, d'après le départ, le point d'impact et `leapT` (avancé) ; le snapshot, en retard, la ferait atterrir trop tard. */
   private placeLeaper(a: AlienState): void {
     const J = a.def.leap;
@@ -710,9 +789,15 @@ export class Mirror {
     for (const a of sim.aliens) {
       this.follow(a, dt);
       this.placeLeaper(a);
+      const charge = this.charges.get(a.id);
+      if (charge) {
+        this.stepCharge(a, charge, dt);
+        a.x = charge.x;
+        a.y = charge.y;
+      }
       // compteurs de télégraphes : la sim hôte les décompte à chaque tick, on fait pareil entre deux snapshots (sinon ils avancent par paliers de 66 ms)
       if (a.slamWind > 0) a.slamWind = Math.max(0, a.slamWind - dt);
-      if (a.rushWind > 0) a.rushWind = Math.max(0, a.rushWind - dt); // négatif après la charge : on n'y touche pas
+      if (a.rushWind > 0 && !a.def.rush) a.rushWind = Math.max(0, a.rushWind - dt); // charge : `advanceTelegraphs` (départ de la charge simulée ici)
       if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
       const telegraph = ((a.def.lurk || a.def.spikeRing) && (a.lurkPhase === 3 || a.lurkPhase === 4)) || (!!a.def.burrow && a.lurkPhase > 0); // pics, plongée du Scarab : `advanceTelegraphs`
       if (!telegraph && a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
@@ -991,6 +1076,26 @@ export class Mirror {
     s.slamWind = a.slamWind;
     s.rushWind = a.rushWind;
     s.rushT = a.rushing ? 1 : 0;
+    const charge = this.charges.get(a.id);
+    if (charge) {
+      if (a.rushing) {
+        charge.hostSeen = true;
+        // l'hôte la montre (en retard, sur la même ligne) : l'écart latéral est recalé ; s'il est allé plus loin que la charge simulée ici (arrêtée à tort,
+        // un obstacle frôlé), elle reprend de sa position
+        const ex = a.x - charge.x;
+        const ey = a.y - charge.y;
+        const side = -ex * charge.dy + ey * charge.dx;
+        charge.x += -charge.dy * side * 0.5;
+        charge.y += charge.dx * side * 0.5;
+        if (charge.done && ex * charge.dx + ey * charge.dy > 4) {
+          charge.x = a.x;
+          charge.y = a.y;
+          charge.done = false;
+        }
+      }
+      // finie ici et chez l'hôte (qui l'a annoncée puis plus) : l'alien suit de nouveau le snapshot ; filet de sécurité si l'hôte ne l'a jamais annoncée
+      if (charge.done && ((charge.hostSeen && !a.rushing && a.rushWind <= 0) || charge.t > charge.dur + 2)) this.charges.delete(a.id);
+    }
     s.rushDx = a.rushDx;
     s.rushDy = a.rushDy;
     s.rushX = a.rushX;

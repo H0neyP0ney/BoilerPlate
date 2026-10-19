@@ -127,7 +127,9 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    de l'hôte jeté (`swallowHostEvent`, `IMPACT_MATCH` 24 px, `TELE_DONE_TTL` 2 s). Mesure `sim:netloss -- tele` : impact vu 7-9 ticks trop tard → 0-1 tick (saut du crabe 13,5 → 1,
    kamikaze 7,5-9,5 → 0-1). **Plongée du Scarab** (`advanceBurrow`) : minuteurs avancés, onde de choc de sortie jouée ici ; s'il vise ma squad (déduit de
    la zone de l'hôte), la zone est suivie ici (`trackBurrows` : centre de ma squad affichée, puis axe figé à la vitesse lissée de mon ancre prédite,
-   `myVel`) : sortie 14,6 → 0,8 tick, à 8 px de celle de l'hôte. Pas traités : charge (l'alien bouge, affiché en retard), apparition des rochers d'un mur (obstacles de la prédiction). Détail : `docs/AUDIT_NETCODE.md` § 1.9.
+   `myVel`) : sortie 14,6 → 0,8 tick, à 8 px de celle de l'hôte. **Charges simulées** (`Mirror.charges`) : départ à la fin du télégraphe avancé, loi de l'hôte
+   (accélération, arrêt contre le décor `rushStop`, rochers brisés ici `rushSmashes`), recalage latéral quand l'hôte annonce la charge : alien qui charge à 40-50 px de sa
+   position chez l'hôte au lieu de 140-190. Pas traités : ruée du Scarab, apparition des rochers d'un mur (obstacles de la prédiction). Détail : `docs/AUDIT_NETCODE.md` § 1.9.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant
 son annonce** (un aller-retour de retard au début d'une retenue), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,

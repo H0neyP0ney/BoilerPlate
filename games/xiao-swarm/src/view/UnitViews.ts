@@ -50,6 +50,9 @@ function muzzleOf(b: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, id: s
   return { x: b.x + (fx - b.originX) * b.displayWidth, y: b.y + (m[1] - b.originY) * b.displayHeight };
 }
 
+/** Constante de temps (s) du lissage de la vitesse qui oriente le sprite d'un soldat. */
+const VELOCITY_SMOOTH = 0.12;
+
 export class SoldierView {
   /** Glaçon du soldat gelé (`SoldierState.frozen`) : créé au premier gel, fissures par étages, éclats à chaque coup (`onIceHit`). */
   private ice?: Phaser.GameObjects.Sprite;
@@ -69,6 +72,9 @@ export class SoldierView {
   private lastHp: number;
   private lastMaxHp: number;
   private healT = 0;
+  /** Vitesse lissée (px/s) : le sens du sprite et l'animation de marche ne suivent pas les à-coups de vitesse (poussées, séparation) mais la tendance. */
+  private svx = 0;
+  private svy = 0;
   private healAcc = 0;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly bodyId: string;
@@ -133,11 +139,14 @@ export class SoldierView {
     const s = this.state;
     this.rx = lerp(s.px, s.x, alpha);
     this.ry = lerp(s.py, s.y, alpha);
-    const moving = Math.hypot(s.vx, s.vy) > 20;
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) / VELOCITY_SMOOTH);
+    this.svx += (s.vx - this.svx) * k;
+    this.svy += (s.vy - this.svy) * k;
+    const moving = Math.hypot(this.svx, this.svy) > 20;
     const depth = DEPTH.actors + this.ry;
 
     let facing = s.facing;
-    if (!s.target && Math.abs(s.vx) > 15) facing = s.vx > 0 ? 1 : -1;
+    if (!s.target && Math.abs(this.svx) > 15) facing = this.svx > 0 ? 1 : -1;
 
     // Animation : planche si dispo (tir vers la cible > marche orientée > idle), sinon rebond procédural.
     let bob = 0;
@@ -145,8 +154,8 @@ export class SoldierView {
       const id = this.bodyId;
       const b = this.body;
       // Avec une cible, le sprite regarde toujours vers elle (même en marchant dans l'autre sens) : direction du tir, pas du déplacement.
-      const dirX = s.target ? Math.cos(s.aim) : s.vx;
-      const dirY = s.target ? 0 : s.vy;
+      const dirX = s.target ? Math.cos(s.aim) : this.svx;
+      const dirY = s.target ? 0 : this.svy;
       const played =
         (s.target && sprites.playDirectional(b, id, 'shoot', Math.cos(s.aim), 0)) ||
         (moving && sprites.playDirectional(b, id, 'walk', dirX, dirY)) ||

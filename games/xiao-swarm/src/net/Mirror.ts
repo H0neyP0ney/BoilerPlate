@@ -43,6 +43,12 @@ const SOLDIER_SNAP = 80;
 /** Vitesse (px/s) sous laquelle un soldat est « au repos » (son slot se lit directement) et écart de slot (px) au-delà duquel on le considère réattribué. */
 const SLOT_REST = 8;
 const SLOT_TOLERANCE = 30;
+/** Fraction de la vitesse maximale d'un soldat (`speed × CROWD.maxSpeedMul`) au-delà de laquelle sa vitesse est considérée comme plafonnée. */
+const CAPPED_FRACTION = 0.92;
+/** Vitesse (1/s) à laquelle l'écart d'entrée dans le modèle de foule se résorbe (2 : ~0,5 s). */
+const ENTER_DECAY = 2;
+/** Plus grand pas (px par tick client) d'un soldat qui rattrape sa position hôte : un peu plus que sa vitesse maximale (~10 px/tick). */
+const SOLDIER_MAX_STEP = 14;
 
 /** État de foule simulé chez le client pour un soldat de ma squad : position, vitesse et slot visé (relatif à l'ancre). */
 interface CrowdState {
@@ -52,6 +58,9 @@ interface CrowdState {
   vy: number;
   sx: number;
   sy: number;
+  /** Écart d'affichage à résorber (position affichée avant l'entrée dans le modèle − position du modèle) : s'éteint à `ENTER_DECAY` /s. */
+  ox: number;
+  oy: number;
 }
 
 /** Input du tick client courant, pour la prédiction de la squad locale. */
@@ -123,13 +132,13 @@ export class Mirror {
     const squad = this.sim.squads.find((s) => s.owner === this.localPlayer); // jamais créée ici : l'ordre des squads est celui de `apply`
     if (!sq || !squad) return;
     this.localChoiceT = snap.choiceT;
-    this.applyLocalSquad(squad, sq, snap.choiceT > 0);
+    this.applyLocalSquad(squad, sq, snap.choiceT > 0, Mirror.limitOf(snap, sq));
   }
 
   /** Réconciliation de l'ancre prédite et reprise des positions hôte des soldats d'une squad (la mienne : prédiction ; une autre : suivi simple). */
-  private applyLocalSquad(squad: Squad, sq: Snapshot['squads'][number], frozen: boolean, seen?: Set<number>): void {
+  private applyLocalSquad(squad: Squad, sq: Snapshot['squads'][number], frozen: boolean, limitN: number, seen?: Set<number>): void {
     if (sq.owner === this.localPlayer) {
-      this.predictor.reconcile(this.sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen);
+      this.predictor.reconcile(this.sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen, limitN);
       squad.anchor.x = this.predictor.anchor.x;
       squad.anchor.y = this.predictor.anchor.y;
     }
@@ -142,6 +151,16 @@ export class Mirror {
     }
   }
 
+  /**
+   * Dernier input que l'hôte jouera avant sa pause de choix d'upgrade : pause ouverte = l'ack, annoncée dans `choiceIn` ticks = l'ack + (choiceIn − 1)
+   * (au tick d'ouverture il ne joue plus rien). Le client arrête alors sa prédiction à cet input au lieu d'avancer d'un aller-retour puis de revenir en arrière.
+   */
+  private static limitOf(snap: Snapshot, sq: { ack: number }): number {
+    if (snap.choiceT > 0) return sq.ack;
+    if (snap.choiceIn > 0) return sq.ack + snap.choiceIn - 1;
+    return Infinity;
+  }
+
   /** Soldat de ma squad dans un état où l'hôte le déplace lui-même (gelé, étourdi, bulle, saut, souffle) : il suit sa position hôte, sans modèle de foule. */
   private static hostDriven(s: SoldierState): boolean {
     return s.frozen > 0 || s.stun > 0 || !!s.capturedBy || s.jumpT > 0 || s.knockT > 0;
@@ -149,6 +168,8 @@ export class Mirror {
 
   /** Modèles de foule locaux des soldats de ma squad (état simulé au tick client courant). */
   private readonly crowd = new WeakMap<SoldierState, CrowdState>();
+  /** Ma squad est arrêtée en attendant la pause de choix d'upgrade annoncée par l'hôte (voir `limitOf`). */
+  private localHold = false;
 
   /**
    * Un soldat de ma squad est simulé ici avec la MÊME loi que chez l'hôte (rejoint son slot avec inertie : `Squad.update`), en suivant l'ancre prédite.
@@ -167,14 +188,32 @@ export class Mirror {
     const old = this.crowd.get(s);
     const estX = u.x + u.vx / CROWD_GAIN - anchorX;
     const estY = u.y + u.vy / CROWD_GAIN - anchorY;
-    const atRest = u.vx * u.vx + u.vy * u.vy < SLOT_REST * SLOT_REST;
+    const speed2 = u.vx * u.vx + u.vy * u.vy;
+    const atRest = speed2 < SLOT_REST * SLOT_REST;
+    // vitesse plafonnée : le soldat est loin de son slot (revient de l'isolement, poussé, recruté) ; sa vitesse ne dit plus où est son slot, le modèle serait faux
+    const cap = this.predictor.anchorSpeed * CROWD.maxSpeedMul * CAPPED_FRACTION;
+    if (!atRest && speed2 > cap * cap) {
+      this.crowd.delete(s);
+      return;
+    }
     const moved = old ? (estX - old.sx) ** 2 + (estY - old.sy) ** 2 > SLOT_TOLERANCE * SLOT_TOLERANCE : true;
     const sx = old && !atRest && !moved ? old.sx : estX;
     const sy = old && !atRest && !moved ? old.sy : estY;
-    const n: CrowdState = { x: u.x, y: u.y, vx: u.vx, vy: u.vy, sx, sy };
+    const n: CrowdState = { x: u.x, y: u.y, vx: u.vx, vy: u.vy, sx, sy, ox: 0, oy: 0 };
     const dtTick = 1 / TICK_RATE;
     for (const p of this.predictor.path) this.crowdStep(n, p.x, p.y, this.predictor.anchorSpeed, dtTick, s.radius);
-    if (!old || (n.x - old.x) ** 2 + (n.y - old.y) ** 2 > SOLDIER_SNAP * SOLDIER_SNAP) {
+    if (!old) {
+      // entrée dans le modèle (fin d'un isolement, d'un gel, nouvelle recrue…) : l'affichage reste où il est et l'écart (la position hôte affichée avait un aller-retour
+      // de retard) se résorbe en douceur (`ox` / `oy`, décroissance exponentielle), au lieu d'une téléportation
+      const gap2 = (s.x - n.x) ** 2 + (s.y - n.y) ** 2;
+      if (gap2 < SOLDIER_SNAP * SOLDIER_SNAP * 4) {
+        n.ox = s.x - n.x;
+        n.oy = s.y - n.y;
+      }
+      this.crowd.set(s, n);
+      return;
+    }
+    if ((n.x - old.x) ** 2 + (n.y - old.y) ** 2 > SOLDIER_SNAP * SOLDIER_SNAP) {
       this.crowd.set(s, n);
       return;
     }
@@ -253,7 +292,7 @@ export class Mirror {
         for (const s of squad.soldiers) seenSoldiers.add(s.id);
         continue;
       }
-      this.applyLocalSquad(squad, sq, snap.choiceT > 0, seenSoldiers);
+      this.applyLocalSquad(squad, sq, snap.choiceT > 0, Mirror.limitOf(snap, sq), seenSoldiers);
     }
     prune(this.soldiers, seenSoldiers);
     // Joueurs partis : leur squad n'est plus dans le snapshot.
@@ -355,6 +394,7 @@ export class Mirror {
     const dt = this.frozen ? 0 : dtReal;
     const predicting = !!local;
     if (local) this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, (this.directLocal ? this.localChoiceT : sim.choiceT) > 0);
+    this.localHold = !!local && local.n > this.predictor.limitN; // les inputs après la limite seront jetés par l'hôte (pause annoncée) : ma squad ne bouge plus
     const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
       if (predicted && sq.owner === this.localPlayer) {
@@ -805,9 +845,14 @@ export class Mirror {
       // modèle de foule local (voir `reconcileSoldier`) : un pas par tick, le long de l'ancre prédite
       u.px = u.x;
       u.py = u.y;
-      if (dt > 0) this.crowdStep(c, this.predictor.anchor.x, this.predictor.anchor.y, this.predictor.anchorSpeed, dt, u.radius);
-      u.x = c.x;
-      u.y = c.y;
+      if (dt > 0 && !this.localHold) {
+        this.crowdStep(c, this.predictor.anchor.x, this.predictor.anchor.y, this.predictor.anchorSpeed, dt, u.radius);
+        const f = Math.exp(-ENTER_DECAY * dt);
+        c.ox *= f;
+        c.oy *= f;
+      }
+      u.x = c.x + c.ox;
+      u.y = c.y + c.oy;
       u.vx = c.vx;
       u.vy = c.vy;
       return;
@@ -819,11 +864,11 @@ export class Mirror {
     this.approachTo(u, g.x + this.predictor.dx, g.y + this.predictor.dy);
   }
 
-  private approach(u: { x: number; y: number }, g: Goal): void {
+  private approach(u: { x: number; y: number; kind?: string }, g: Goal): void {
     this.approachTo(u, g.x, g.y);
   }
 
-  private approachTo(u: { x: number; y: number }, gx: number, gy: number): void {
+  private approachTo(u: { x: number; y: number; kind?: string }, gx: number, gy: number): void {
     const dx = gx - u.x;
     const dy = gy - u.y;
     if (dx * dx + dy * dy > TELEPORT * TELEPORT) {
@@ -831,8 +876,19 @@ export class Mirror {
       u.y = gy;
       return;
     }
-    u.x += dx * CATCH_UP;
-    u.y += dy * CATCH_UP;
+    let sx = dx * CATCH_UP;
+    let sy = dy * CATCH_UP;
+    if (u.kind === 'soldier') {
+      // un soldat ne « glisse » jamais plus vite que `SOLDIER_MAX_STEP` px par tick (un peu plus que sa course) : un rattrapage de position hôte
+      // (fin d'un étourdissement, d'une bulle, d'un glaçon : la position affichée avait un aller-retour de retard) est une course, pas un saut
+      const len = Math.hypot(sx, sy);
+      if (len > SOLDIER_MAX_STEP) {
+        sx *= SOLDIER_MAX_STEP / len;
+        sy *= SOLDIER_MAX_STEP / len;
+      }
+    }
+    u.x += sx;
+    u.y += sy;
   }
 }
 

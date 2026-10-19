@@ -80,7 +80,16 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   de `Squad.update` (rejoint son slot, `CROWD.velDamp` / `gain`), puis `crowdStep` fait un pas par tick client : la squad accélère et freine comme chez
   l'hôte, sans attendre l'aller-retour. Slot = position + vitesse / gain (gain moyen : le gain propre à chaque soldat n'est pas transmis), conservé pendant
   les transitoires. Non modélisés (corrigés par le snapshot, fondu à 40 %) : séparation entre soldats, repoussement des aliens et recul des coups. Les
-  soldats gelés, étourdis, dans une bulle, en vol ou soufflés restent suivis depuis l'hôte. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.
+  soldats gelés, étourdis, dans une bulle, en vol ou soufflés restent suivis depuis l'hôte.
+  **Correctifs du 19/10 au soir (v77)** : (1) **pause de choix d'upgrade** : l'hôte fige sa simulation LEVEL_UP_DELAY (1 s) après le level up et jette les
+  inputs suivants ; le client, lui, avait prédit d'un aller-retour de plus, puis revenait en arrière à l'ouverture (36 à 66 px mesurés pour 2 à 4 ticks de
+  latence). Le snapshot porte maintenant `choiceIn` (ticks avant la pause) : `Mirror.limitOf` en déduit le dernier input que l'hôte jouera et la prédiction
+  (ancre et soldats) s'y arrête (`AnchorPredictor.limitN`) : recul mesuré 0 px. (2) **soldats isolés qui reviennent vers la squad** (fin d'un grab, d'un stun, d'un
+  glaçon) : leur vitesse est plafonnée (`speed × maxSpeedMul`), donc `position + vitesse / gain` ne donne plus leur slot : le modèle de foule est coupé tant que
+  la vitesse est ≥ 92 % du plafond (suivi de la position hôte, lisse), l'entrée dans le modèle garde la position affichée et résorbe l'écart en ~0,5 s (`ox` /
+  `oy`), et un soldat qui rattrape sa position hôte ne se déplace jamais de plus de 14 px par tick (course, pas téléportation) : pas max mesuré 52 → 14 px.
+  (3) **sens des sprites** : la vue lisse la vitesse (`VELOCITY_SMOOTH` 0,12 s) pour le sens et l'animation de marche : en courant vers le haut ou le bas, les
+  petites poussées latérales (séparation, aliens) ne retournent plus les soldats gauche / droite. Mesures : `npm run sim:startstop`. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot appliqué (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
 - **Effets de tir** (v38) : l'hôte range `shot` (id du tireur + position), `impact` (position + texture) et `hit` (id) dans le snapshot au lieu

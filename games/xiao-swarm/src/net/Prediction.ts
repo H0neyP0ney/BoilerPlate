@@ -31,6 +31,8 @@ export class AnchorPredictor {
   private speed = 0;
   private ready = false;
   private readonly history: Frame[] = [];
+  /** Dernier input (numéro) que l'hôte jouera avant sa pause de choix d'upgrade : au-delà, la prédiction s'arrête (l'hôte les jettera). Infinity = pas de pause en vue. */
+  limitN = Infinity;
   private readonly scratch: Circle = { x: 0, y: 0, radius: 18 };
   /** Ancre après chacun des inputs rejoués au dernier snapshot (de l'input suivant l'ack au tick courant) : les soldats la suivent avec leur inertie (`Mirror`). */
   readonly path: { x: number; y: number }[] = [];
@@ -56,13 +58,14 @@ export class AnchorPredictor {
   step(arena: Arena, n: number, mx: number, my: number, dt: number, frozen: boolean): void {
     this.history.push({ n, mx, my });
     if (this.history.length > HISTORY) this.history.shift();
-    if (!this.ready || frozen) return;
+    if (!this.ready || frozen || n > this.limitN) return;
     stepAnchor(arena, this.anchor, mx, my, this.speed, dt);
   }
 
   /** Un snapshot : ancre de l'hôte, vitesse de l'ancre, dernier input acquitté. `alive` faux : on suit simplement l'hôte. */
-  reconcile(arena: Arena, hostX: number, hostY: number, speed: number, ack: number, dt: number, alive: boolean, frozen: boolean): void {
+  reconcile(arena: Arena, hostX: number, hostY: number, speed: number, ack: number, dt: number, alive: boolean, frozen: boolean, limitN = Infinity): void {
     this.speed = speed;
+    this.limitN = limitN;
     this.base.x = hostX;
     this.base.y = hostY;
     while (this.history.length > 0 && this.history[0].n <= ack) this.history.shift();
@@ -72,6 +75,7 @@ export class AnchorPredictor {
     this.path.length = 0;
     if (alive && !frozen) {
       for (const f of this.history) {
+        if (f.n > this.limitN) break;
         stepAnchor(arena, t, f.mx, f.my, speed, dt);
         this.path.push({ x: t.x, y: t.y });
       }

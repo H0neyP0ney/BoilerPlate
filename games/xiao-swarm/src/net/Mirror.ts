@@ -45,8 +45,8 @@ const SLOT_REST = 8;
 const SLOT_TOLERANCE = 30;
 /** Fraction de la vitesse maximale d'un soldat (`speed × CROWD.maxSpeedMul`) au-delà de laquelle sa vitesse est considérée comme plafonnée. */
 const CAPPED_FRACTION = 0.92;
-/** Vitesse (1/s) à laquelle l'écart d'entrée dans le modèle de foule se résorbe (2 : ~0,5 s). */
-const ENTER_DECAY = 2;
+/** Vitesse (px/s) à laquelle l'écart d'entrée dans le modèle de foule se résorbe : 60 px de retard en ~0,3 s, sans longue queue. */
+const ENTER_CLOSE_SPEED = 200;
 /** Plus grand pas (px par tick client) d'un soldat qui rattrape sa position hôte : un peu plus que sa vitesse maximale (~10 px/tick). */
 const SOLDIER_MAX_STEP = 14;
 
@@ -58,7 +58,7 @@ interface CrowdState {
   vy: number;
   sx: number;
   sy: number;
-  /** Écart d'affichage à résorber (position affichée avant l'entrée dans le modèle − position du modèle) : s'éteint à `ENTER_DECAY` /s. */
+  /** Écart d'affichage à résorber (position affichée avant l'entrée dans le modèle − position du modèle) : se ferme à `ENTER_CLOSE_SPEED` px/s. */
   ox: number;
   oy: number;
 }
@@ -847,9 +847,12 @@ export class Mirror {
       u.py = u.y;
       if (dt > 0 && !this.localHold) {
         this.crowdStep(c, this.predictor.anchor.x, this.predictor.anchor.y, this.predictor.anchorSpeed, dt, u.radius);
-        const f = Math.exp(-ENTER_DECAY * dt);
-        c.ox *= f;
-        c.oy *= f;
+        const gap = Math.hypot(c.ox, c.oy);
+        if (gap > 0) {
+          const k = Math.max(0, gap - ENTER_CLOSE_SPEED * dt) / gap; // l'écart se ferme à vitesse constante (pas de longue queue exponentielle)
+          c.ox *= k;
+          c.oy *= k;
+        }
       }
       u.x = c.x + c.ox;
       u.y = c.y + c.oy;

@@ -86,7 +86,7 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   latence). Le snapshot porte maintenant `choiceIn` (ticks avant la pause) : `Mirror.limitOf` en déduit le dernier input que l'hôte jouera et la prédiction
   (ancre et soldats) s'y arrête (`AnchorPredictor.limitN`) : recul mesuré 0 px. (2) **soldats isolés qui reviennent vers la squad** (fin d'un grab, d'un stun, d'un
   glaçon) : leur vitesse est plafonnée (`speed × maxSpeedMul`), donc `position + vitesse / gain` ne donne plus leur slot : le modèle de foule est coupé tant que
-  la vitesse est ≥ 92 % du plafond (suivi de la position hôte, lisse), l'entrée dans le modèle garde la position affichée et résorbe l'écart en ~0,5 s (`ox` /
+  la vitesse est ≥ 92 % du plafond (suivi de la position hôte, lisse), l'entrée dans le modèle garde la position affichée et résorbe l'écart à 200 px/s (`ox` /
   `oy`), et un soldat qui rattrape sa position hôte ne se déplace jamais de plus de 14 px par tick (course, pas téléportation) : pas max mesuré 52 → 14 px.
   (3) **sens des sprites** : la vue lisse la vitesse (`VELOCITY_SMOOTH` 0,12 s) pour le sens et l'animation de marche : en courant vers le haut ou le bas, les
   petites poussées latérales (séparation, aliens) ne retournent plus les soldats gauche / droite. Mesures : `npm run sim:startstop`. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.

@@ -88,7 +88,7 @@ try {
     for (let i = 0; i < 40; i++) await tick(client);
     const victim = gsq.soldiers[3];
     victim.stun = 1.0; victim.x += 130; victim.y -= 90; // éjecté puis étourdi 1 s, ensuite il rejoint la squad en marchant
-    let prevPos = null, maxStep = 0, reversals = 0, prevD = null, ticks = 0;
+    let prevPos = null, maxStep = 0, reversals = 0, prevD = null, ticks = 0, arrHost = -1, arrGuest = -1, rest0 = null;
     for (let i = 0; i < 120; i++) {
       await tick(client);
       const c = mine().soldiers.find((q) => q.id === victim.id);
@@ -98,7 +98,9 @@ try {
       const d = Math.hypot(c.x - victim.x, c.y - victim.y);
       if (i > 45 && prevD !== null && d > prevD + 6) reversals++;
       prevD = d; prevPos = { x: c.x, y: c.y }; ticks++;
+      if (i > 35) { const hv = Math.hypot(victim.vx, victim.vy); if (arrHost < 0 && hv < 150) arrHost = i; if (arrHost >= 0 && arrGuest < 0 && d < 6) arrGuest = i; }
     }
+    console.log(`  arrivée : hôte au tick ${arrHost}, invité au tick ${arrGuest} (écart ${arrGuest - arrHost} ticks)`);
     console.log(`SOLDAT ISOLÉ (${label}) — pas max ${maxStep.toFixed(1)} px/tick (plafond 10,2 en marche), ${reversals} remontées d'écart avec l'hôte`);
   }
   client.setLocalInput(0, 0);

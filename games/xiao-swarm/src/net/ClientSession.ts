@@ -237,6 +237,8 @@ export class ClientSession implements Session {
     if (msg?.t !== 'events') return;
     if (INTERP_DELAY_MS <= 0 || msg.seq <= this.appliedSeq) this.pushEvents(msg.list);
     else this.eventBuffer.push({ seq: msg.seq, list: msg.list });
+    // onglet en arrière-plan : `playback` ne tourne plus, la file grossirait sans fin (~250 paquets par minute en combat) ; les plus vieux passent dans `pending` (plafonné)
+    while (this.eventBuffer.length > MAX_BUFFER * 4) this.pushEvents(this.eventBuffer.shift()!.list);
   };
 
   /**

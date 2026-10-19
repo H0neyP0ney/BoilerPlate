@@ -295,6 +295,27 @@ try {
     console.log(`  UPGRADE — sur ${N} clics : ${wrong} appliqués à une carte jamais vue, ${rejected} refusés (proposition périmée), ${N - wrong - rejected} conformes`);
   }
 
+  // ---------- hidden ----------
+  if (want('hidden')) {
+    console.log('\n=== hidden : onglet de l\'invité en arrière-plan 60 s (il reçoit mais n\'avance plus), en plein combat ===');
+    const w = await setup({ latency: 2, seed: 17 });
+    const client = w.clients[0];
+    const hs = w.host.sim;
+    const a = hs.squadOf(w.host.localPlayer);
+    let maxBuf = 0;
+    for (let i = 0; i < 1800; i++) {
+      if (i % 30 === 0) for (let k = 0; k < 20; k++) hs.horde.spawnAt('slime', a.center.x + 300 * Math.cos(k), a.center.y + 300 * Math.sin(k), 1, false, true);
+      for (const q of hs.squads) for (const s of q.soldiers) s.hp = s.maxHp;
+      w.host.advance(1000 / 30, () => {}); // le client ne fait plus que recevoir (rAF suspendu)
+      w.hub.pump();
+      maxBuf = Math.max(maxBuf, client.eventBuffer.length);
+    }
+    console.log(`  HIDDEN — file d'événements en attente : ${client.eventBuffer.length} paquets (max ${maxBuf}), snapshots en attente ${client.buffer.length}`);
+    for (let i = 0; i < 60; i++) await w.tick();
+    check(client.eventBuffer.length < 10 && client.buffer.length < 10, 'au retour, les files se vident', `${client.eventBuffer.length} / ${client.buffer.length}`);
+    check(Math.abs(client.sim.aliens.length - hs.aliens.length) <= 25, 'au retour, l\'invité voit les aliens de l\'hôte', `${client.sim.aliens.length} contre ${hs.aliens.length}`);
+  }
+
   // ---------- big ----------
   if (want('big')) {
     console.log('\n=== big : 4 joueurs, 40 soldats chacun, ~600 aliens + 2 boss, un invité rejoint en plein combat ===');

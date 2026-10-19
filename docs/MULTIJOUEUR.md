@@ -67,6 +67,12 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   l'ancre et l'`ack` 100 ms plus vieux : fenêtre de rejeu d'inputs de RTT + 100 ms + 66 ms, donc des corrections plus grandes et des soldats
   tirés dans un sens puis ramenés quand on inversait la direction avec de petits inputs (ressenti « je me bats avec la réconciliation »). Testé
   par `sim:net` et `sim:predict`.
+  **Inputs joués un par tick (19/10, v76)** : avant, l'hôte appliquait « le dernier input reçu » à chaque tick ; avec de la gigue, des numéros étaient
+  sautés ou joués deux fois, donc l'ancre chez l'hôte s'écartait de ce que le client avait prédit (`ack` = numéro reçu, pas joué) et chaque snapshot
+  la corrigeait (mesure `sim:jitter` : correction moyenne 3 à 4 px, jusqu'à 20 px, avec 2-3 ticks de gigue). Maintenant : file d'inputs par joueur
+  (`HostSession.consumeInput`, un par tick, trous comblés en répétant le dernier input, file qui grossit d'un cran sur un retard et raccourcit
+  après 3 s sans gigue, plafond 6), `ack` = dernier input JOUÉ, et le client envoie les deux inputs précédents avec chaque paquet (`prev`).
+  Correction moyenne mesurée : 0,04 px. Coût : un joueur distant est joué avec 0 à 2 ticks de retard de plus chez l'hôte, masqué chez lui par la prédiction.
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot appliqué (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
 - **Effets de tir** (v38) : l'hôte range `shot` (id du tireur + position), `impact` (position + texture) et `hit` (id) dans le snapshot au lieu

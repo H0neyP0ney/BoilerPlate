@@ -57,9 +57,23 @@ export interface HostSessionOptions {
 interface RemotePlayer {
   input: PlayerInput;
   lastInputTick: number;
-  /** Numéro (tick client) du dernier input reçu : renvoyé dans le snapshot pour la prédiction du client. */
+  /** Numéro (tick client) du plus récent input reçu (dédoublonnage). */
   seq: number;
+  /** Inputs reçus pas encore joués, contigus et dans l'ordre : l'hôte en joue UN par tick, comme le client les a joués dans sa prédiction. */
+  queue: { n: number; mx: number; my: number }[];
+  /** Numéro du dernier input réellement joué par la simulation : c'est lui qui est renvoyé dans le snapshot (`ack`). */
+  applied: number;
+  /** Plus petite taille de la file sur la fenêtre en cours (pour la raccourcir quand la gigue du réseau a disparu). */
+  minDepth: number;
+  depthTicks: number;
 }
+
+/** File d'inputs d'un joueur distant : au-delà, les plus vieux sont abandonnés (rafale après un gel du réseau). */
+const MAX_INPUT_QUEUE = 6;
+/** Fenêtre (ticks) au bout de laquelle une file toujours ≥ 2 est raccourcie d'un cran. */
+const INPUT_QUEUE_WINDOW = 90;
+/** Trou maximal (ticks) comblé en répétant le dernier input ; au-delà, on saute. */
+const MAX_INPUT_GAP = 8;
 
 /**
  * L'hôte fait tourner LA simulation (autoritaire) : il applique ses propres inputs
@@ -188,9 +202,32 @@ export class HostSession implements Session {
     this.local.my = my;
   }
 
+  /**
+   * Joue UN input de la file d'un joueur distant par tick d'hôte, dans l'ordre des numéros : la trajectoire de son ancre chez l'hôte est alors
+   * exactement celle que son client a prédite (il rejoue seulement les inputs après `ack`). Avant, l'hôte gardait « le dernier input reçu » : une
+   * rafale ou un paquet en retard faisait sauter des numéros, donc l'ancre divergeait de la prédiction et chaque snapshot la corrigeait (à-coups).
+   * File vide : on garde le dernier input ; la file grossit alors d'un cran dès que le paquet arrive (tampon adaptatif contre la gigue).
+   */
+  private consumeInput(id: PlayerId, r: RemotePlayer): void {
+    r.minDepth = r.depthTicks === 0 ? r.queue.length : Math.min(r.minDepth, r.queue.length);
+    let shrink = false;
+    if (++r.depthTicks >= INPUT_QUEUE_WINDOW) {
+      shrink = r.minDepth >= 2; // la file n'est pas tombée sous 2 de toute la fenêtre : la gigue a disparu, on la raccourcit d'un cran
+      r.depthTicks = 0;
+    }
+    while (r.queue.length > MAX_INPUT_QUEUE) r.queue.shift();
+    let e = r.queue.shift();
+    if (e && shrink && r.queue.length > 0) e = r.queue.shift();
+    if (!e) return;
+    r.input = { mx: e.mx, my: e.my };
+    r.applied = e.n;
+    this.acks.set(id, e.n);
+  }
+
   advance(deltaMs: number, onEvent: (e: SimEvent) => void): void {
     this.loop.advance(deltaMs, (dt) => {
       for (const [id, r] of this.remotes) {
+        this.consumeInput(id, r);
         const stale = this.sim.tick - r.lastInputTick > INPUT_TIMEOUT * TICK_RATE;
         this.inputs.set(id, stale ? NO_INPUT : r.input);
       }
@@ -309,11 +346,26 @@ export class HostSession implements Session {
         const r = this.remotes.get(peer);
         if (!r) return;
         const n = typeof msg.n === 'number' && Number.isFinite(msg.n) ? Math.floor(msg.n) : 0;
-        if (n <= r.seq) return; // paquet en retard ou dupliqué : l'input plus récent est déjà en place
-        r.input = { mx: finite(msg.mx), my: finite(msg.my) };
-        r.lastInputTick = this.sim.tick;
+        if (n <= r.seq) return; // paquet en retard ou dupliqué : déjà reçu
+        // le paquet redonde les deux inputs précédents (`prev`) : un paquet perdu ou en retard ne laisse pas de trou
+        const entries: { n: number; mx: number; my: number }[] = [];
+        const prev: unknown[] = Array.isArray(msg.prev) ? msg.prev : [];
+        for (let k = 1; k >= 0; k--) {
+          const pn = n - (k + 1);
+          if (pn > r.seq && prev.length >= 2 * (k + 1)) entries.push({ n: pn, mx: finite(prev[2 * k]), my: finite(prev[2 * k + 1]) });
+        }
+        entries.push({ n, mx: finite(msg.mx), my: finite(msg.my) });
+        let last = r.queue.length > 0 ? r.queue[r.queue.length - 1] : { mx: r.input.mx, my: r.input.my };
+        let expect = r.seq === 0 ? entries[0].n : r.seq + 1;
+        for (const e of entries) {
+          if (e.n - expect > MAX_INPUT_GAP) expect = e.n; // trou trop grand : on ne fabrique rien
+          while (expect < e.n) r.queue.push({ n: expect++, mx: last.mx, my: last.my }); // trou : on répète le dernier input connu
+          r.queue.push(e);
+          expect = e.n + 1;
+          last = e;
+        }
         r.seq = n;
-        this.acks.set(peer, n);
+        r.lastInputTick = this.sim.tick;
         return;
       }
     }
@@ -341,7 +393,7 @@ export class HostSession implements Session {
     if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS && this.bots.size > 0) this.removeBot([...this.bots.keys()][this.bots.size - 1]); // un humain prend la place d'un bot
     if (!this.remotes.has(peer) && this.playerCount >= MAX_PLAYERS) return this.send(peer, { t: 'refused', reason: 'full' });
     if (!this.remotes.has(peer)) {
-      this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0 });
+      this.remotes.set(peer, { input: { mx: 0, my: 0 }, lastInputTick: this.sim.tick, seq: 0, queue: [], applied: 0, minDepth: 0, depthTicks: 0 });
       this.sim.spawnLate(peer, this.sim.rng.pick(START_SQUADS));
       if (this.lobby) this.lobby.humans = 1 + this.remotes.size;
     }

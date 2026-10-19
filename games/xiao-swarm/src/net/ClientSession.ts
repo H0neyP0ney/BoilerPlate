@@ -183,9 +183,14 @@ export class ClientSession implements Session {
    * (réconciliation). Un paquet perdu ou en retard est sans conséquence : le suivant arrive 33 ms après.
    */
   private sendInput(): void {
-    const msg: ClientMessage = { t: 'input', mx: round(this.mx), my: round(this.my), n: this.ticks };
+    const mx = round(this.mx);
+    const my = round(this.my);
+    // `prev` : les deux inputs précédents (n-1 puis n-2), pour que l'hôte comble un paquet perdu ou arrivé dans le désordre
+    const msg: ClientMessage = { t: 'input', mx, my, n: this.ticks, prev: this.prevInputs.length > 0 ? this.prevInputs : undefined };
     this.transport.send(this.hostId, 'unreliable', JSON.stringify(msg));
+    this.prevInputs = [mx, my, ...this.prevInputs.slice(0, 2)];
   }
+  private prevInputs: number[] = [];
 
   private readonly onMessage = (peer: string, data: Payload): void => {
     if (peer !== this.hostId) return;

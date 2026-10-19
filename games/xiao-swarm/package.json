@@ -17,6 +17,7 @@
     "sim:chase": "node scripts/chase-headless.mjs",
     "sim:calibrate": "node scripts/bench-calibrate.mjs",
     "sim:predict": "node scripts/net-predict-headless.mjs",
+    "sim:jitter": "node scripts/net-jitter-headless.mjs",
     "sim:bot": "node scripts/bot-headless.mjs",
     "sim:crowd": "node scripts/crowd-headless.mjs",
     "sim:recruit": "node scripts/recruit-slot-headless.mjs"

@@ -53,7 +53,7 @@ try {
   };
   const compare = () => {
     const r = remote();
-    const p = predicted.get(r.seq - 1); // l'hôte a appliqué jusqu'à r.seq - 1 à la fin de son dernier pas
+    const p = predicted.get(r.applied); // l'hôte a joué jusqu'à r.applied à son dernier pas
     if (p) errors.push(Math.hypot(p.x - hostSquad.anchor.x, p.y - hostSquad.anchor.y));
   };
 

@@ -11,6 +11,8 @@ import type { PlayerId, PlayerInput } from './types';
 /** Partie qui commence par le tutoriel : les `TUTORIAL_NO_PRISM_LEVELUPS` premiers level up n'ont aucune carte prismatique, le suivant en impose une, `TUTORIAL_PRISM_UPGRADE`. */
 const TUTORIAL_NO_PRISM_LEVELUPS = 2;
 const TUTORIAL_PRISM_UPGRADE: UpgradeId = 'range';
+/** La laisse est annoncée à l'invité dès que l'ancre est à plus de cette part de son rayon (avant qu'elle ne se tende : sinon il l'apprenait un aller-retour trop tard). */
+const LEASH_WARN = 0.5;
 
 const anchorV = { x: 0, y: 0 };
 
@@ -49,6 +51,14 @@ export class Squad {
   private readonly steerV = { x: 0, y: 0 };
   private readonly slotTarget = { x: 0, y: 0, radius: 0 };
   readonly center: Point = { x: 0, y: 0 };
+  /**
+   * Laisse au dernier tick : `on` = l'ancre est à plus de `LEASH_WARN` × rayon du cœur (laisse tendue ou sur le point de l'être, § 2 de `update`), cœur
+   * `x` / `y`, rayon `r` et vitesse du cœur `vx` / `vy` à cet instant. Envoyé dans le snapshot : la prédiction de l'invité propriétaire rejoue la laisse
+   * seulement dans ce cas, sur ce cœur (`AnchorPredictor`).
+   */
+  readonly leashed = { on: false, x: 0, y: 0, r: 0, vx: 0, vy: 0 };
+  /** Vitesse du cœur de la squad (px/s, lissée) : quand une horde repousse les soldats, le cœur recule et la laisse tire l'ancre en arrière ; l'invité extrapole le cœur avec. */
+  private readonly centerVel: Point = { x: 0, y: 0 };
   /** Vitesse de course de la squad (px/s, lissée, d'après l'ancre) : les aliens trop loin sont replacés devant elle (`Horde.relocateStragglers`). */
   readonly vel: Point = { x: 0, y: 0 };
   /** Vitesse de virage de la squad (rad/s, lissée, > 0 dans le sens trigonométrique) : les aliens en contournement anticipent une course en rond. */
@@ -526,6 +536,7 @@ export class Squad {
       this.electroAngle = (this.electroAngle + ELECTRO.speed * dt) % (Math.PI * 2);
     }
     const total = this.soldiers.length;
+    this.leashed.on = false;
     if (total === 0) return;
     this.updateDetached();
     this.updateReleased(dt);
@@ -558,7 +569,14 @@ export class Squad {
     this.turn = damp(this.turn, fast0 && Math.hypot(this.vel.x, this.vel.y) > CHASE.minSpeed ? dh / dt : 0, 2, dt);
 
     // 2. Laisse autour du coeur de la squad
+    const cx0 = this.center.x;
+    const cy0 = this.center.y;
     this.updateCenter();
+    let cvx = (this.center.x - cx0) / dt;
+    let cvy = (this.center.y - cy0) / dt;
+    if (Math.hypot(cvx, cvy) > speed * 2) cvx = cvy = 0; // squad replacée, soldat qui quitte le cœur : pas une vitesse
+    this.centerVel.x = damp(this.centerVel.x, cvx, 10, dt);
+    this.centerVel.y = damp(this.centerVel.y, cvy, 10, dt);
     const dx = this.anchor.x - this.center.x;
     const dy = this.anchor.y - this.center.y;
     const d = Math.hypot(dx, dy);
@@ -566,6 +584,14 @@ export class Squad {
     if (d > leash) {
       this.anchor.x = this.center.x + (dx / d) * leash;
       this.anchor.y = this.center.y + (dy / d) * leash;
+    }
+    if (d > leash * LEASH_WARN) {
+      this.leashed.on = true;
+      this.leashed.x = this.center.x;
+      this.leashed.y = this.center.y;
+      this.leashed.r = leash;
+      this.leashed.vx = this.centerVel.x;
+      this.leashed.vy = this.centerVel.y;
     }
 
     // 3. Slots (recalculés quand la taille ou l'espacement change)

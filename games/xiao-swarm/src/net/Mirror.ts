@@ -146,7 +146,7 @@ export class Mirror {
   /** Réconciliation de l'ancre prédite et reprise des positions hôte des soldats d'une squad (la mienne : prédiction ; une autre : suivi simple). */
   private applyLocalSquad(squad: Squad, sq: Snapshot['squads'][number], frozen: boolean, limitN: number, seen?: Set<number>): void {
     if (sq.owner === this.localPlayer) {
-      this.predictor.reconcile(this.sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen, limitN);
+      this.predictor.reconcile(this.sim.arena, sq.anchorX, sq.anchorY, sq.speed, sq.ack, 1 / TICK_RATE, sq.soldiers.length > 0, frozen, limitN, sq.leash);
       squad.anchor.x = this.predictor.anchor.x;
       squad.anchor.y = this.predictor.anchor.y;
     }

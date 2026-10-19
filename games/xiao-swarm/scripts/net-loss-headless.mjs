@@ -4,7 +4,8 @@
 //   resume : reprise après la pause de choix d'upgrade (saut en avant de la squad affichée de l'invité)
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
-//   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots
+//   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
+//            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
 import { createServer } from 'vite';
 
@@ -89,6 +90,7 @@ try {
     const corr = [];
     const orig = p.reconcile.bind(p);
     p.reconcile = (...args) => {
+      if (process.env.NOLEASHBIT) args[9] = undefined; // essai : l'invité ignore la laisse annoncée par l'hôte (comportement d'avant la v78)
       const bx = p.anchor.x, by = p.anchor.y;
       orig(...args);
       corr.push(Math.hypot(p.anchor.x - bx, p.anchor.y - by));
@@ -362,11 +364,27 @@ try {
     evTypes.clear();
     const corr = probeRecon(late);
     const lsq = hs.squadOf(late.localPlayer);
-    for (let i = 0; i < 150; i++) {
+    // écart réel : ancre prédite par l'invité après son input n contre ancre de l'hôte après avoir joué ce même input (ce que l'invité voit de faux)
+    const predicted = new Map(), played = new Map(), moves = [];
+    const pr = late.mirror.predictor;
+    const origStep = pr.step.bind(pr);
+    let px = null, py = null;
+    pr.step = (arena, n, ...rest) => {
+      const held = origStep(arena, n, ...rest);
+      if (px !== null) moves.push(Math.hypot(pr.anchor.x - px, pr.anchor.y - py)); // pas affiché de l'ancre prédite (rejeu du snapshot compris)
+      px = pr.anchor.x;
+      py = pr.anchor.y;
+      if (pr.active && !held) predicted.set(n, { x: pr.anchor.x, y: pr.anchor.y });
+      return held;
+    };
+    const ticks = Number(process.env.BIGTICKS ?? 150);
+    for (let i = 0; i < ticks; i++) {
       fill();
       for (let c = 0; c < w.clients.length; c++) w.clients[c].setLocalInput(Math.cos(i / 20 + c), Math.sin(i / 20 + c));
       const n0 = corr.length;
       await w.tick();
+      const ack = w.host.acks.get(late.localPlayer);
+      if (ack !== undefined && !played.has(ack)) played.set(ack, { x: lsq.anchor.x, y: lsq.anchor.y });
       if (process.env.TRACE && corr.length > n0 && corr[corr.length - 1] > 10) {
         const mine = late.sim.squadOf(late.localPlayer);
         console.log(`  tick ${i} correction ${corr[corr.length - 1].toFixed(1)} | hôte : ancre ${lsq.anchor.x.toFixed(0)},${lsq.anchor.y.toFixed(0)} centre ${lsq.center.x.toFixed(0)},${lsq.center.y.toFixed(0)} soldats ${lsq.soldiers.length} | invité : ancre ${mine.anchor.x.toFixed(0)},${mine.anchor.y.toFixed(0)} centre ${mine.center.x.toFixed(0)},${mine.center.y.toFixed(0)} soldats ${mine.soldiers.length}`);
@@ -385,6 +403,9 @@ try {
     const seen = late.sim.aliens.length;
     check(Math.abs(seen - hs.aliens.length) <= hs.aliens.length * 0.1 + 10, 'le joueur arrivé en plein combat voit les aliens de l\'hôte', `${seen} contre ${hs.aliens.length}`);
     console.log(`  correction d'ancre de l'invité arrivé en dernier (latence 5 / 3, 3 % de perte) : ${fmt(stat(corr.slice(5)))}`);
+    const gaps = [...played].filter(([n]) => predicted.has(n)).slice(10).map(([n, h]) => Math.hypot(predicted.get(n).x - h.x, predicted.get(n).y - h.y));
+    console.log(`  écart réel ancre prédite / ancre hôte au même input (px) : ${fmt(stat(gaps))} (${gaps.length} inputs, ${ticks} ticks)`);
+    console.log(`  pas de l'ancre prédite par tick (px, croisière ≈ 7,6) : ${fmt(stat(moves.slice(10)))}`);
   }
 } finally {
   await vite.close();

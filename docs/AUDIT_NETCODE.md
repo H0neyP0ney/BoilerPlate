@@ -6,6 +6,7 @@ correctif fait ou proposé.
 
 **Compatibilité** : tous les correctifs gardent le protocole **v77** et restent compatibles avec un hôte ou un client 0.1.153 (champs JSON optionnels,
 même message sur un autre canal). Tes amis peuvent jouer avec une version d'écart sans « refused: version ». Rien n'est déployé ni poussé.
+**Sauf le § 2.1 (laisse de l'ancre, après l'audit)** : protocole **v78**, incompatible avec la 0.1.153 / 0.1.154 (même version pour tous).
 
 ## Résumé
 
@@ -18,7 +19,7 @@ même message sur un autre canal). Tes amis peuvent jouer avec une version d'éc
 | 5 | Input arrondi par l'hôte, pas par la prédiction | bug confirmé (mineur) | correction en réseau parfait 0,04 → 0,01 px | `2456679` |
 | 6 | Snapshot reçu deux fois appliqué deux fois (monde cru figé ~66 ms) | bug confirmé (impact faible) | 28 → 0 doubles applications | `1f1a570` |
 | 7 | File d'événements du client sans borne quand son onglet est caché | bug confirmé (mineur) | 247 → 64 paquets après 60 s | `7ded61f` |
-| 8 | Laisse de l'ancre et poussée des aliens non prédites : la squad « tire » dans une horde | **risque, le plus gros restant** | p95 22 px par snapshot (1,1 px sans laisse) ; 2 essais rejetés | proposé |
+| 8 | Laisse de l'ancre et poussée des aliens non prédites : la squad « tire » dans une horde | **risque, le plus gros restant** | correction p95 22 → 8,2 px par snapshot, écart réel p95 143 → 73 px, plus de recalage (v78) | v78 (§ 2.1) |
 | 9 | Débit à 4 joueurs : 11,4 Ko par snapshot, 514 Ko/s en sortie chez l'hôte, 11 fragments | risque | mesure | proposé |
 | 10 | Retard de la squad de l'invité chez l'hôte (file d'inputs) : équité des dégâts | risque | +1,9 tick (gigue 0-2), +3,7 (rafales) | proposé (essai mesuré) |
 
@@ -106,24 +107,45 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
 
 ## 2. Risques (non corrigés)
 
-### 2.1 Laisse de l'ancre et poussée des aliens non prédites — le plus gros écart restant
-- **Où** : `sim/Squad.ts:561-569` (laisse : `CROWD.leash + √n × leashPerRoot` autour du cœur de la squad) ; le client n'a ni la laisse ni la poussée des
+### 2.1 Laisse de l'ancre et poussée des aliens non prédites — le plus gros écart restant (réduit en v78)
+- **Où** : `sim/Squad.ts` § 2 de `update` (laisse : `CROWD.leash + √n × leashPerRoot` autour du cœur de la squad) ; le client n'a pas la poussée des
   aliens sur les soldats (`Mirror.crowdStep` : « sans séparation ni répulsion des aliens »).
-- **Mesure** (`big`, invité de 40 soldats dans une horde, latence 5 / 3, 3 % de perte) : correction d'ancre moy 2,5 px, **p95 22 px**, max 25 px à
-  chaque snapshot (15/s). Avec `NOLEASH=1` (laisse coupée chez l'hôte) : p95 **1,1 px**. La laisse explique donc presque tout. `TRACE=1` montre pourquoi
-  : chez l'hôte, la horde repousse les soldats à ~100 px de l'ancre (laisse atteinte) ; chez l'invité, ses soldats simulés restent collés à l'ancre.
-  Ressenti attendu : en poussant dans une horde, la squad avance puis est retenue par à-coups (~9 px par snapshot avec `BLEND` 0,4).
-- **Essais rejetés** (code annulé, chiffres ici pour ne pas les refaire) :
-  1. Laisse rejouée avec le cœur calculé sur les soldats **simulés** chez le client : p95 22 → 16 mais max 25 → **86 px** (recalage) ; le modèle de
-     foule ignore la poussée, le cœur estimé est faux de ~130 px.
-  2. Laisse sur le cœur **hôte** reçu, extrapolé à sa vitesse mesurée d'un snapshot à l'autre : pire partout (profils `recon` p95 1 → 8-12 px,
-     recalages de 110 px) ; la vitesse du cœur est trop bruitée avec des petits inputs.
-- **Pistes** (par coût croissant) :
-  - (a) L'hôte transmet un bit « ancre retenue par la laisse » (octet de drapeaux de la squad, v78) et le cœur ; le client ne rejoue la laisse que
-    quand ce bit est vrai, sur ce cœur figé. À mesurer avec `big` ; risque faible car inactif hors horde.
-  - (b) Modéliser la poussée : pour chaque soldat, part de sa vitesse hôte qui n'est pas la loi de foule (= poussée), appliquée décroissante pendant
-    le rejeu. Plus fidèle, plus cher, à mesurer avec `big` et `recon`.
-  - (c) Baisser `BLEND` quand la correction est due à la laisse (fondu plus lent = moins d'à-coups, plus de dérive). Subjectif : à essayer en réel.
+- **Mesure de départ** (`big`, invité de 40 soldats dans une horde, latence 5 / 3, 3 % de perte) : correction d'ancre moy 2,5 px, **p95 22 px**, max
+  25 px à chaque snapshot (15/s). Avec `NOLEASH=1` (laisse coupée chez l'hôte) : p95 **1,1 px**. `TRACE=1` : chez l'hôte, la horde repousse les soldats,
+  le cœur recule (jusqu'à ~9 px/tick) et la laisse tire l'ancre en arrière ; chez l'invité, l'ancre prédite file librement.
+- **Nouvelles mesures du scénario `big`** (`net-loss-headless.mjs`) : *écart réel* = ancre prédite par l'invité après son input n contre ancre de l'hôte
+  après avoir joué ce même input (ce que l'invité voit de faux) ; *pas de l'ancre prédite par tick* (un rappel dans le pas client ne se voit pas dans la
+  correction par snapshot) ; `BIGTICKS=300` allonge la partie (deux épisodes de retenue au lieu d'un, le premier tombe à la toute fin des 150 ticks par
+  défaut) ; `NOLEASHBIT=1` fait ignorer la laisse annoncée par l'invité (comportement v77). Écart réel en v77 : moy 18 px, **p95 143 px**, max 163 px.
+- **Correctif (v78)** : piste (a) étendue. L'hôte annonce la laisse dans le snapshot (bit 4 de l'octet de drapeaux de squad, puis cœur, rayon et vitesse
+  lissée du cœur : `SquadSnap.leash`, `Squad.leashed`) dès que l'ancre est à plus de `LEASH_WARN` 0,5 × le rayon (pas seulement quand elle est retenue :
+  sinon l'invité l'apprenait encore plus tard). L'invité rejoue la laisse (`AnchorPredictor.applyLeash`, rejeu et pas client) autour du cœur de l'hôte,
+  extrapolé à sa vitesse (≤ 15 ticks) seulement s'il avance vers l'ancre, figé quand la horde le repousse ; dans le pas client, rappel limité à
+  `LEASH_PULL` 16 px par tick. Les soldats suivent l'ancre rejouée (`predictor.path`), donc la laisse aussi.
+
+  | `big` (latence 5 / 3, 3 % de perte) | v77 150 ticks | v78 150 ticks | v77 300 ticks | v78 300 ticks |
+  |---|---|---|---|---|
+  | correction d'ancre / snapshot (moy / p95 / max) | 2,5 / **22,0** / 25,1 | 1,3 / **8,2** / 19,1 | 2,6 / 16,8 / **83,8** | 2,0 / 13,4 / **19,1** |
+  | écart réel prédite / hôte (moy / p95 / max) | 18,1 / **143** / 163 | 9,9 / **73** / 123 | 18,4 / 143 / 163 | 13,5 / 73 / 123 |
+  | pas de l'ancre prédite par tick, max (croisière 7,6) | 32,8 | 29,0 | **80,6** | **29,0** |
+
+  `recon` (5 profils) et `resume` : sortie **identique** au bit près (la laisse n'y est jamais annoncée). `sim:net`, `sim:predict -- 4`,
+  `sim:startstop -- 3 no 2` (creux au démarrage dus à sa gigue `Math.random`, présents aussi avec `LEASH_WARN` = 1), `sim:jitter`, `sim:netloss -- dup
+  events upgrade hidden` : OK. **Casse la compatibilité avec la 0.1.153 / 0.1.154** (v77 → v78) : hôte et invités doivent avoir la même version.
+- **Variantes mesurées et écartées** (`big`, 150 / 300 ticks ; à ne pas refaire) :
+  - Laisse annoncée seulement quand elle retient l'ancre, cœur figé, correction normale : écart p95 66 / 69 mais **recalage de 81-86 px** au début de la
+    retenue (l'écart déjà accumulé dépasse `SNAP`).
+  - Idem avec correction plafonnée à 24-34 px par snapshot : le pas client ramenait l'ancre dans la laisse d'un coup (**pas de 81 px**, invisible dans la
+    correction) ; avec un rappel limité à 4-14 px/tick, écart p95 92-115.
+  - Cœur toujours extrapolé à sa vitesse : il dépasse l'hôte quand la poussée s'arrête (correction max 134-150 px, écart p95 97).
+  - Annonce dès 0,5 × rayon, cœur toujours figé : correction max 11-14, mais dent de scie quand le cœur de l'hôte repart en avant (écart moyen 24 px sur
+    300 ticks, pire que la v77).
+  - Rappel limité à 10 px/tick (au lieu de 16) : pas max 23-26 mais écart p95 84.
+  - Essais rejetés de l'audit initial : laisse rejouée sur le cœur des soldats **simulés** (p95 16 mais recalage de 86 px : le modèle de foule ignore la
+    poussée, cœur faux de ~130 px) ; cœur hôte extrapolé à sa vitesse mesurée d'un snapshot à l'autre (bruitée : `recon` p95 1 → 8-12 px).
+- **Reste** : le début d'une retenue arrive un aller-retour en retard (≈ 10 inputs à ~15 px d'écart de plus chacun), d'où l'écart max ~120 px. Pistes :
+  (b) modéliser la poussée des aliens sur chaque soldat pendant le rejeu (part de sa vitesse hôte qui n'est pas la loi de foule, appliquée décroissante),
+  pour un cœur estimé juste avant l'annonce ; (c) régler `LEASH_PULL` / `BLEND` en réel (subjectif).
 
 ### 2.2 Débit et fragmentation à 4 joueurs
 - **Mesure** (`big` : 4 × 40 soldats, ~470 aliens, 2 boss) : snapshot moyen **11,4 Ko** (squads 3,7, aliens 6,5), plus gros 12,2 Ko ;
@@ -194,7 +216,8 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
 2. **Victoire en ligne** (§ 1.2) : un invité qui gagne en Normal doit voir Hard débloqué sur son écran Solo.
 3. **Choix tardif** (§ 1.3) : invité qui clique pile à la fin de la jauge avec deux niveaux d'avance → soit sa carte est prise, soit l'écran repart sur
    le niveau suivant (jamais une carte non vue).
-4. **Horde** (§ 2.1) : invité de 30-40 soldats qui pousse dans une grosse vague → noter s'il sent des « coups de laisse ». C'est le point à prioriser.
+4. **Horde** (§ 2.1, v78) : invité de 30-40 soldats qui pousse dans une grosse vague → noter s'il sent encore des « coups de laisse » (début d'une
+   retenue : rappel de 16 px/tick au plus, `LEASH_PULL`). C'est le point à prioriser.
 5. **Débit** (§ 2.2) : à 4 joueurs, F12 → Réseau → onglet WebRTC (`chrome://webrtc-internals`) chez l'hôte : débit sortant et paquets perdus quand
    les vagues sont pleines.
 6. **WiFi instable** (§ 1.4) : invité en WiFi loin de la box ; regarder les sauts de sa squad après une microcoupure.
@@ -206,5 +229,6 @@ cd games/xiao-swarm
 npm run sim:netloss                     # tous les scénarios ci-dessus (≈ 3 min)
 npm run sim:netloss -- recon resume     # quelques scénarios
 NOLEASH=1 npm run sim:netloss -- big    # part de la laisse dans les corrections
+NOLEASHBIT=1 BIGTICKS=300 npm run sim:netloss -- big   # l'invité ignore la laisse annoncée (v77), partie plus longue
 npm run sim:net && npm run sim:lobby && npm run sim:predict -- 4 && npm run sim:startstop -- 3 no 2
 ```

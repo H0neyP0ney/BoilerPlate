@@ -11,7 +11,7 @@ import { skinIndex } from '../data/skins';
 import { trailIndex } from '../data/trails';
 
 /** Version du protocole : hôte et client doivent être identiques. */
-export const PROTOCOL_VERSION = 77; // 77 : `choiceIn` (ticks avant la pause de choix d'upgrade) après `choiceT` ; 76 : l'hôte joue les inputs d'un client UN par tick dans l'ordre de leur numéro (file) et renvoie dans `ack` le dernier input joué ; le message `input` redonde les deux précédents (`prev`) ; 75 : octet d'état par soldat après les drapeaux (bit 0 = enflammé) ; 74 : alien doré (`golden`, ajouté en fin de liste des aliens) ; 73 : power-up `fireball` (ajouté en fin de liste) et orbes enflammées par squad (temps restant + angle, après le stimpack) ; 72 : pics en croix du Rhino Alpha (liste `crosses` après les stalactites) ; 71 : bit 128 des drapeaux de soldat = soufflé en cloche par un kamikaze ; 70 : toiles de la Gling Mère (octet 254 de `slow` des flaques) et soldat en vol vers elle (bit 64 des drapeaux de soldat) ; 69 : la caisse de pièces est retirée (plus d'alien `coin_crate` ; le coffre à diamants descend en parachute) ; 68 : la boîte de power-up est remplacée par la caisse de pièces (`coin_crate`, même place en fin de liste) ; 67 : caisses de pièces et de TNT retirées (un seul type de boîte reste, `powerup_box`) ; 66 : caisse de TNT (`tnt_crate`, un type d'alien de plus) ; 65 : deux nouveaux types d'alien en fin de liste (`powerup_box`, `coin_crate`) ; 64 : pièces d'or au sol (liste `coins`) et cumul de pièces ramassées par squad (`coins` de SquadSnap) ; 63 : le `hello` annonce aussi l'armurerie du joueur (`units`, `perks`) ; 62 : skin et trail de chaque squad (un octet chacun dans le snapshot ; `hello` les annonce) ; 61 : salle d'attente (message `lobby` de l'hôte, champ `lobby` du welcome, message `start`) ; 60 : tourelles supprimées (plus de liste `turrets` ni de sorte de power-up `turrets`, plus de texture de tir électrique) ; 59 : le welcome annonce le niveau de difficulté de la room (`difficulty`), message `difficulty` de l'hôte, bouclier écrit aussi pour tous les boss ; 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
+export const PROTOCOL_VERSION = 78; // 78 : bit 4 de l'octet de drapeaux de squad = laisse de l'ancre annoncée (ancre à plus de la moitié du rayon de la laisse au tick de l'ack), suivi du cœur (2 × pos), du rayon (u16, 1/4 px) et de la vitesse du cœur (2 × i16, 1/10 px/s) ; 77 : `choiceIn` (ticks avant la pause de choix d'upgrade) après `choiceT` ; 76 : l'hôte joue les inputs d'un client UN par tick dans l'ordre de leur numéro (file) et renvoie dans `ack` le dernier input joué ; le message `input` redonde les deux précédents (`prev`) ; 75 : octet d'état par soldat après les drapeaux (bit 0 = enflammé) ; 74 : alien doré (`golden`, ajouté en fin de liste des aliens) ; 73 : power-up `fireball` (ajouté en fin de liste) et orbes enflammées par squad (temps restant + angle, après le stimpack) ; 72 : pics en croix du Rhino Alpha (liste `crosses` après les stalactites) ; 71 : bit 128 des drapeaux de soldat = soufflé en cloche par un kamikaze ; 70 : toiles de la Gling Mère (octet 254 de `slow` des flaques) et soldat en vol vers elle (bit 64 des drapeaux de soldat) ; 69 : la caisse de pièces est retirée (plus d'alien `coin_crate` ; le coffre à diamants descend en parachute) ; 68 : la boîte de power-up est remplacée par la caisse de pièces (`coin_crate`, même place en fin de liste) ; 67 : caisses de pièces et de TNT retirées (un seul type de boîte reste, `powerup_box`) ; 66 : caisse de TNT (`tnt_crate`, un type d'alien de plus) ; 65 : deux nouveaux types d'alien en fin de liste (`powerup_box`, `coin_crate`) ; 64 : pièces d'or au sol (liste `coins`) et cumul de pièces ramassées par squad (`coins` de SquadSnap) ; 63 : le `hello` annonce aussi l'armurerie du joueur (`units`, `perks`) ; 62 : skin et trail de chaque squad (un octet chacun dans le snapshot ; `hello` les annonce) ; 61 : salle d'attente (message `lobby` de l'hôte, champ `lobby` du welcome, message `start`) ; 60 : tourelles supprimées (plus de liste `turrets` ni de sorte de power-up `turrets`, plus de texture de tir électrique) ; 59 : le welcome annonce le niveau de difficulté de la room (`difficulty`), message `difficulty` de l'hôte, bouclier écrit aussi pour tous les boss ; 57 : prises prismatiques par upgrade dans le quartet haut de l'octet `picked` (carré prismatique des cartes d'upgrade) ; 56 : 8 paliers de couleur du tir (cyan et rose ajoutés : liste des textures changée) ; 55 : power-up / loot `prism` (booster prismatique, ajouté en fin de liste) ; 54 : tir électrique des tourelles (texture ajoutée en tête de la liste des textures) ; 53 : power-up `turrets` (ajouté en fin de liste) et liste des tourelles après les globes d'upgrade ; 52 : upgrades `reinforce` et `bossHunter` supprimées (liste `picked` raccourcie de deux entrées) ; 51 : plus de coffres dans le snapshot (œuf de boss = alien `boss_egg`, ajouté en fin de liste) ; 50 : boules du Giant Crab rouges (`fx_blob_red`, liste des textures) ; 49 : couronne de pics du Giant Crab (phase / minuteur / angle envoyés aussi pour `spikeRing`) ; 48 : bit 64 des drapeaux d'alien = apparaît sur place, sans trou (araignées du chaman) ; 47 : alien `spider` (ajouté en fin de liste, l'essaim de la Gling Mère le fait apparaître à la place du gling) ; 46 : power-up `reroll`, upgrades teamSpirit / lastStand / bossHunter (liste `picked` allongée), Dernier rempart actif = bit 2 de l'octet `healing` ; 45 : rhinos jumeaux (boss_rhino_fire / boss_rhino_ice) et orbe de feu (liste des aliens changée) ; 44 : coffres de boss et globes d'upgrade réservés à leur joueur (listes après les stalactites) ; 43 : aliens compressés (id sur 24 bits, plus de vitesse : le client la déduit des snapshots, PV max en u16 sauf drapeau 32 → f32) ; 42 : modes survie et coop fusionnés (le welcome annonce 'survival') ; 41 : orbe de glace = alien-projectile `ice_orb` (liste des aliens et des textures changée) ; 40 : stalactites du Scarab (liste après les flammes) ; 39 : alien qui s'enterre avant le recyclage (bit 16 des drapeaux) ; 38 : positions en 16 bits, effets de tir (shot / impact / hit) en binaire dans le snapshot, numéro de séquence ; 37 : flammes dans le snapshot
 
 /** Un snapshot toutes les N ticks de simulation (30 Hz / N). */
 export const SNAPSHOT_EVERY = 2;
@@ -97,6 +97,15 @@ export interface SoldierSnap {
   frozen: number;
 }
 
+/** Laisse de l'ancre d'une squad (`Squad.leashed`) : cœur, rayon, vitesse du cœur (px/s). */
+export interface LeashSnap {
+  x: number;
+  y: number;
+  r: number;
+  vx: number;
+  vy: number;
+}
+
 export interface SquadSnap {
   owner: PlayerId;
   /** Ancre de la squad, vitesse de l'ancre (px/s) et dernier input client pris en compte (`n`) : base de la prédiction du joueur local. */
@@ -118,6 +127,8 @@ export interface SquadSnap {
   healing: boolean;
   /** Dernier rempart actif (upgrade `lastStand`) : aura et texte chez tous les joueurs. */
   lastStand: boolean;
+  /** Laisse de l'ancre annoncée au dernier tick (`Squad.leashed`) : l'invité propriétaire la rejoue dans sa prédiction (`AnchorPredictor`). */
+  leash?: LeashSnap;
   /** Progression (XP) : niveau, XP dans le niveau, propositions d'upgrade (index dans UPGRADE_IDS) et nombre de prises de chacune. */
   level: number;
   xp: number;
@@ -295,6 +306,7 @@ export function takeSnapshot(sim: Sim, acks?: ReadonlyMap<PlayerId, number>): Sn
       maxSize: sq.maxSize,
       healing: sq.isHealing,
       lastStand: sq.lastStand,
+      leash: sq.leashed.on ? { x: sq.leashed.x, y: sq.leashed.y, r: sq.leashed.r, vx: sq.leashed.vx, vy: sq.leashed.vy } : undefined,
       level: sq.level,
       xp: sq.xp,
       offer: sq.offer ? sq.offer.map((id) => UPGRADE_IDS.indexOf(id)) : [],
@@ -524,7 +536,15 @@ export function encodeSnapshot(s: Snapshot, sizes?: Record<string, number>): Arr
     w.u8(sq.maxSize);
     w.u8(sq.skin);
     w.u8(sq.trail);
-    w.u8((sq.healing ? 1 : 0) | (sq.lastStand ? 2 : 0));
+    const sqFlags = (sq.healing ? 1 : 0) | (sq.lastStand ? 2 : 0) | (sq.leash ? 4 : 0);
+    w.u8(sqFlags);
+    if (sqFlags & 4 && sq.leash) {
+      w.pos(sq.leash.x);
+      w.pos(sq.leash.y);
+      w.u16(Math.min(65535, Math.round(sq.leash.r * 4)));
+      w.i16(sq.leash.vx * 10);
+      w.i16(sq.leash.vy * 10);
+    }
     w.u8(Math.min(255, sq.level));
     w.u16(Math.min(65535, Math.round(sq.xp * 10)));
     w.u8(sq.offer.length);
@@ -777,6 +797,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
       const flags = r.u8();
       sq.healing = (flags & 1) !== 0;
       sq.lastStand = (flags & 2) !== 0;
+      if (flags & 4) sq.leash = { x: r.pos(), y: r.pos(), r: r.u16() / 4, vx: r.i16() / 10, vy: r.i16() / 10 };
       sq.level = r.u8();
       sq.xp = r.u16() / 10;
       const nOffer = r.u8();

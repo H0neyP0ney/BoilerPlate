@@ -30,7 +30,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
   tailles ±10 %) sont dérivées de la seed et de `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
-## Netcode : fonctionnement actuel (protocole v77)
+## Netcode : fonctionnement actuel (protocole v78)
 
 ### Paramètres
 | Quoi | Valeur | Où |
@@ -45,7 +45,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 21 octets / alien, 23 / soldat, 12,5 / projectile, 7 / globe, 7 / flamme (v38) ; ≈ 6 Ko pour 145 aliens + 60 soldats + 200 globes | `encodeSnapshot(…, sizes)` |
 | Positions | 1/4 de pixel sur 16 bits signés (−8192 → 8191 px) : soldats, aliens, recrues, projectiles, globes, effets de tir. Ancres des squads et télégraphes restent en f32 | `Writer.pos` / `POS_SCALE` (`Protocol.ts`) |
-| Version du protocole | **77** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
+| Version du protocole | **78** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v78 laisse de l'ancre annoncée dans le snapshot (bit 4 des drapeaux de squad + cœur, rayon, vitesse du cœur : `SquadSnap.leash`) ; v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
 
 ### Hôte autoritaire
 L'hôte fait tourner `Sim` et applique les inputs reçus (le dernier input connu est maintenu d'un tick à l'autre). Tout ce qu'un client doit voir passe
@@ -73,7 +73,7 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
   des vagues de burners, ≈ 4 min).
 - **Squad locale d'un client invité** : **prédite et simulée chez le client** (chaîne complète ci-dessous).
 
-### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v77)
+### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v78)
 
 Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (aucun aller-retour), sans que la correction par l'hôte se voie.
 
@@ -89,6 +89,11 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    ma squad (`directLocal`). Avant le 19/10 la réconciliation passait par le tampon : fenêtre de rejeu RTT + 100 ms + 66 ms, donc des corrections plus grandes.
 4. **Réconciliation de l'ancre** (`AnchorPredictor.reconcile`) : on repart de l'ancre hôte (état après l'input `ack`), on rejoue les inputs `n > ack` (le chemin est gardé : `predictor.path`), l'écart avec
    l'ancre prédite est fondu (`BLEND` 0,4) ; au-delà de `SNAP` 80 px on recale d'un coup. Gelée quand la squad est morte ou pendant la pause.
+   **Laisse** (v78, 19/10) : dès que l'ancre hôte est à plus de `LEASH_WARN` (0,5) × le rayon de la laisse du cœur de la squad (`Squad.leashed`), le snapshot porte la laisse (`SquadSnap.leash` :
+   cœur, rayon, vitesse lissée du cœur). Le rejeu et le pas client (`AnchorPredictor.applyLeash`) retiennent alors l'ancre prédite dans cette laisse (même formule que `Squad.update` § 2), autour du
+   cœur **de l'hôte** (les soldats simulés ici ignorent la poussée des aliens), extrapolé à sa vitesse (≤ `LEASH_HORIZON` 15 ticks) **seulement s'il avance vers l'ancre**, figé quand la horde le
+   repousse. Dans le pas client, la laisse ne ramène l'ancre que de `LEASH_PULL` 16 px par tick au plus (le début d'une retenue arrive un aller-retour en retard : pas de saut de 80 px).
+   Hors horde la laisse n'est jamais annoncée : `recon` / `resume` identiques au bit près.
 5. **Soldats de ma squad** (`Mirror.reconcileSoldier` / `crowdStep` / `followPredicted`) : chaque soldat est **simulé localement avec la loi de `Squad.update`** (`desired = (ancre + slot − position) × gain`
    plafonné à `speed × CROWD.maxSpeedMul`, `damp(v, desired, CROWD.velDamp)`, contraintes de l'arène). À chaque snapshot : état hôte (position, vitesse à l'instant de l'`ack`), rejeu le long de
    `predictor.path`, écart avec l'état simulé fondu (`SOLDIER_BLEND` 0,4, recalage au-delà de `SOLDIER_SNAP` 80 px). Avant, chaque soldat visait « position hôte périmée + déplacement rigide de l'ancre » :
@@ -108,12 +113,12 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
 7. **Vue** (`view/UnitViews.ts`, `SoldierView.sync`) : le sens du sprite et l'animation de marche suivent une vitesse **lissée** (`VELOCITY_SMOOTH` 0,12 s), pas la vitesse brute : les petites poussées
    latérales (séparation, aliens) ne retournent plus les soldats gauche / droite en courant vers le haut ou le bas. Vaut aussi pour l'hôte et le solo.
 
-**Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre autour du cœur de la squad
-(`Squad.update` § 2 : l'ancre hôte peut être tirée en arrière, pas la prédite), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,
-sans prédiction. **Mesure (audit du 19/10)** : la laisse est le plus gros écart restant : invité de 40 soldats dans une horde, correction p95 22 px par snapshot (1,1 px laisse coupée) ; deux façons de la
-prédire ont été essayées et rejetées (chiffres et pistes : `docs/AUDIT_NETCODE.md` § 2.1).
+**Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant
+son annonce** (un aller-retour de retard au début d'une retenue), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,
+sans prédiction. **Mesure** (`sim:netloss -- big`, invité de 40 soldats dans une horde) : avant la v78, correction p95 22 px par snapshot et écart réel ancre prédite / hôte p95 143 px ; depuis, correction
+p95 8,2 px (max 19, aucun recalage), écart réel p95 73 px (moyenne 18 → 9,9) ; ce qui reste vient du retard d'annonce (chiffres, essais rejetés : `docs/AUDIT_NETCODE.md` § 2.1).
 
-**Constantes** : `SNAP` 80, `BLEND` 0,4, `HISTORY` 120 (`Prediction.ts`) ; `SOLDIER_BLEND` 0,4, `SOLDIER_SNAP` 80, `SLOT_REST` 8, `SLOT_TOLERANCE` 30, `CAPPED_FRACTION` 0,92, `ENTER_CLOSE_SPEED` 200,
+**Constantes** : `SNAP` 80, `BLEND` 0,4, `HISTORY` 120, `LEASH_HORIZON` 15, `LEASH_PULL` 16 (`Prediction.ts`) ; `LEASH_WARN` 0,5 (`sim/Squad.ts`) ; `SOLDIER_BLEND` 0,4, `SOLDIER_SNAP` 80, `SLOT_REST` 8, `SLOT_TOLERANCE` 30, `CAPPED_FRACTION` 0,92, `ENTER_CLOSE_SPEED` 200,
 `SOLDIER_MAX_STEP` 14, `CATCH_UP` 0,5, `TELEPORT` 240 (`Mirror.ts`) ; `VELOCITY_SMOOTH` 0,12 (`view/UnitViews.ts`) ; `MAX_INPUT_QUEUE` 6, `INPUT_QUEUE_WINDOW` 90, `MAX_INPUT_GAP` 8 (`HostSession.ts`) ;
 `INTERP_DELAY_MS` 100, `MAX_BUFFER` 16 (et `eventBuffer` borné à 64 paquets, onglet caché), `MAX_PREV_INPUTS` 8 (`ClientSession.ts`).
 
@@ -122,7 +127,7 @@ ma squad, puis l'hôte rejouait les inputs dans le désordre ; (b) « le départ
 saccades, puis trop lentement » → modèle de foule faux quand la vitesse est plafonnée, puis queue exponentielle de la résorption ; (d) « les sprites changent de direction en courant » → vue (vitesse brute) ;
 (e) « petit jitter à la pause de level up » → la prédiction dépassait la pause annoncée.
 
-**Pistes ouvertes** (non traitées ; détail, mesures et essais rejetés : `docs/AUDIT_NETCODE.md`) : prédire la laisse de l'ancre et la poussée des aliens (§ 2.1, le plus gros écart restant) ; débit à
+**Pistes ouvertes** (non traitées ; détail, mesures et essais rejetés : `docs/AUDIT_NETCODE.md`) : poussée des aliens sur les soldats et début de la retenue par la laisse (§ 2.1, le plus gros écart restant, réduit en v78) ; débit à
 4 joueurs (§ 2.2 : 11,4 Ko par snapshot, 514 Ko/s en sortie chez l'hôte) ; retard ajouté par la file d'inputs de l'hôte, équité des dégâts (§ 2.3 : +1,9 tick avec de la gigue) ; transmettre le `gain`
 de chaque soldat ou ses slots ; prédire les soldats isolés qui reviennent (retard d'un aller simple aujourd'hui) ; tampon d'interpolation adaptatif ; annoncer la reprise après la pause de choix (v78).
 

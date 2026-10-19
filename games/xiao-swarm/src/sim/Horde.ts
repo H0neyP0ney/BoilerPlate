@@ -210,6 +210,7 @@ export class Horde {
       lurkPhase: 0,
       lurkT: 0,
       spikeAng: 0,
+      burrowSq: '',
     };
   }
 
@@ -1345,6 +1346,7 @@ export class Horde {
         if (W && cd > B.every / 2 && a.leapCd <= B.every / 2) this.castStalactites(a, W.count, W.onSoldiers);
         const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (a.leapCd <= 0 && sq && sq.alive) {
+          a.burrowSq = sq.owner; // squad visée jusqu'à la sortie (avant : la plus proche à chaque tick, elle pouvait changer en route et la zone se figeait)
           a.lurkPhase = 1;
           a.lurkT = B.dig;
           a.vx = a.vy = a.kx = a.ky = 0;
@@ -1368,7 +1370,7 @@ export class Horde {
         // squad (part de sa vitesse le long de l'axe), donc filer tout droit ne suffit pas, il faut s'écarter sur le côté
         if (a.lurkT > B.lock) this.aimBurrow(a);
         else {
-          const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+          const sq = this.burrowSquad(a);
           if (before > B.lock) {
             const n = sq ? Math.hypot(sq.vel.x, sq.vel.y) : 0;
             a.rushDx = n > 1 ? sq!.vel.x / n : 0; // direction figée (squad immobile : le télégraphe ne bouge plus)
@@ -1427,9 +1429,15 @@ export class Horde {
    * Scarab qui ressort : point visé = où sera la squad dans `burrow.lead` s (centre + vitesse de course, `Squad.vel`), mémorisé dans
    * `leapX` / `leapY` ; direction verrouillée dans `rushDx` / `rushDy` (il ne la change plus jusqu'à l'atteindre).
    */
+  /** Squad visée par la plongée du Scarab (`burrowSq`), sinon comme avant (sa cible, ou la plus proche). */
+  private burrowSquad(a: AlienState): Squad | undefined {
+    const sq = a.burrowSq ? this.sim.squadOf(a.burrowSq) : undefined;
+    return (sq && sq.alive ? sq : undefined) ?? ((a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y)) ?? undefined;
+  }
+
   private aimLunge(a: AlienState): void {
     const B = a.def.burrow!;
-    const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    const sq = this.burrowSquad(a);
     const px = sq ? sq.center.x + sq.vel.x * B.lead : a.x;
     const py = sq ? sq.center.y + sq.vel.y * B.lead : a.y;
     const d = Math.hypot(px - a.x, py - a.y);
@@ -1451,7 +1459,7 @@ export class Horde {
    * plus proche autour (anneaux de 60 et 120 px), sinon ramené dans la carte.
    */
   private aimBurrow(a: AlienState): void {
-    const sq = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
+    const sq = this.burrowSquad(a);
     if (!sq) return;
     const c = sq.center;
     const r = a.radius * 0.6;

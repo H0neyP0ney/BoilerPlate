@@ -5,7 +5,7 @@
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
 //   shots  : balles de ma squad pendant une course (écart visuel balle / tireur, invité contre hôte)
-//   tele   : stalactites, croix de pics, boules en cloche, kamikazes sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
+//   tele   : stalactites, croix de pics, boules en cloche, kamikazes, Giant Crab, sortie du Scarab sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
 //   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
 //            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
@@ -477,6 +477,55 @@ try {
       const sfmt = (a) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a)} à ${Math.max(...a)} (${a.length})` : '-');
       console.log('- Giant Crab, latence 5 / 3 + gigue 0-2, 3 % de perte');
       console.log(`    atterrissage du saut : ${sfmt(j)} ; départ de la couronne de pics : ${sfmt(r)}`);
+    }
+    // Scarab : sortie de terre (onde de choc) sur la squad de l'invité ; quand (ticks) et où (px) l'invité la voit, contre l'hôte
+    {
+      const w = await setup({ latency: 3, seed: 3 });
+      const client = w.clients[0];
+      w.hub.latencyTo.set(client.localPlayer, 5);
+      Object.assign(w.hub.conditions, { loss: 0.03, jitter: 2, reorder: true });
+      if (process.env.NOTELE) client.mirror.measureTeleLead = () => { client.mirror.teleLead = 0; };
+      const hs = w.host.sim;
+      const gsq = hs.squadOf(client.localPlayer);
+      const hostSlams = [], cliSlams = [];
+      w.onHostEvent = (e) => { if (e.t === 'slam') hostSlams.push({ n: w.host.acks.get(client.localPlayer) ?? 0, x: e.x, y: e.y }); };
+      let sc = null;
+      for (let i = 0; i < 900; i++) {
+        if (!sc || !sc.alive) {
+          hs.aliens.length = 0;
+          hs.horde.spawnAt('boss_scarab', gsq.center.x + 300, gsq.center.y, 1, false, true);
+          sc = hs.aliens.find((a) => a.def.id === 'boss_scarab');
+        }
+        for (let k = hs.aliens.length - 1; k >= 0; k--) if (hs.aliens[k] !== sc) hs.aliens.splice(k, 1);
+        hs.stalactites.length = 0;
+        sc.hp = sc.maxHp;
+        if (sc.lurkPhase === 0) sc.leapCd = Math.min(sc.leapCd, 0.3);
+        for (const s of gsq.soldiers) s.hp = s.maxHp;
+        // course en zigzag : le verrouillage de l'axe et la poursuite sur l'axe comptent
+        client.setLocalInput(Math.cos(i / 18), Math.sin(i / 31));
+        await w.tick();
+        for (const e of w.events.get(client).splice(0)) if (e.t === 'slam') cliSlams.push({ n: client.ticks, x: e.x, y: e.y });
+      }
+      // appariement : la sortie vue par l'invité la plus proche (moment ± 60 ticks, position à moins de 250 px) ; une sortie jamais vue compte à part
+      const dn = [], dp = [];
+      let missed = 0;
+      const used = new Set();
+      for (const h of hostSlams) {
+        let best = -1;
+        for (let i = 0; i < cliSlams.length; i++) {
+          const c = cliSlams[i];
+          if (used.has(i) || Math.abs(c.n - h.n) > 60 || Math.hypot(c.x - h.x, c.y - h.y) > 250) continue;
+          if (best < 0 || Math.abs(c.n - h.n) < Math.abs(cliSlams[best].n - h.n)) best = i;
+        }
+        if (best < 0) { missed++; continue; }
+        used.add(best);
+        dn.push(cliSlams[best].n - h.n);
+        dp.push(Math.hypot(cliSlams[best].x - h.x, cliSlams[best].y - h.y));
+        if (process.env.TRACE) console.log(`    sortie hôte ${h.x.toFixed(0)},${h.y.toFixed(0)} (input ${h.n}) invité ${cliSlams[best].x.toFixed(0)},${cliSlams[best].y.toFixed(0)} (input ${cliSlams[best].n})`);
+      }
+      const sfmt = (a, f = 0) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a).toFixed(f)} à ${Math.max(...a).toFixed(f)} (${a.length})` : '-');
+      console.log('- Scarab, latence 5 / 3 + gigue 0-2, 3 % de perte');
+      console.log(`    sortie de terre : moment ${sfmt(dn)} ; écart de position ${sfmt(dp)} px ; jamais vues ${missed} / ${hostSlams.length}`);
     }
   }
 

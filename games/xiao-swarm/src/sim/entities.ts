@@ -170,6 +170,8 @@ export interface AlienState extends Body {
   lurkPhase: number;
   lurkT: number;
   spikeAng: number;
+  /** Scarab : squad visée par la plongée en cours (choisie quand il s'enterre, '' = aucune) : la zone de sortie la suit jusqu'au bout. */
+  burrowSq: PlayerId;
   /** Aliens à `def.shield` : secondes écoulées depuis les derniers dégâts reçus (le bouclier ne se régénère qu'après `regenDelay`). */
   shieldT: number;
   /** Tutoriel seulement : écrase ce que l'alien lâche en mourant (XP, recrue, power-up). Absent hors tutoriel. */

@@ -136,13 +136,23 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
   - latence 3 / 3 : stalactites 7 → 0, croix de pics 7,5 → −0,8, boules en cloche 7 → −1 ;
   - latence 5 / 3 + gigue 0-2 + 3 % de perte : stalactites 9 → −0,8, croix 9,5 → −0,4, boules 9 → −0,9 ;
   - Giant Crab (même réseau) : atterrissage du saut 13,5 → 1, départ de la couronne de pics 13 → 1 ;
-  - kamikaze (v80) : 7,5 → −0,4 (latence 3 / 3), 9,5 → −0,9 (gigue + perte).
+  - kamikaze (v80) : 7,5 → −0,4 (latence 3 / 3), 9,5 → −0,9 (gigue + perte) ;
+  - sortie du Scarab (gigue + perte) : moment 14,6 → 0,8 tick, une sortie sur 6 jamais vue (événement perdu) → 0, position de l'onde de choc à
+    8 px en moyenne de celle de l'hôte (19 au plus, zone de 180 px de rayon).
   (`NOTELE=1` : télégraphes non avancés, pour comparer.) `recon` / `resume` identiques, `sim:net`, `sim:predict`, `sim:combat`, `sim:jitter`, autres
   scénarios de `sim:netloss` : OK.
 - **Kamikaze (v80)** : sa mèche n'était pas dans le snapshot mais un événement `fuse` (canal non fiable : perdu = aucun télégraphe, explosion sans
   prévenir) dont la vue tenait le compte à rebours. Les mèches (`Sim.fuses`, type `Fuse`) passent maintenant dans le snapshot (liste `fuses` après les
   croix, 9 octets par mèche), `Mirror` les avance comme les stalactites (explosion `fire` jouée ici, double de l'hôte jeté), la vue les lit dans
   `sim.fuses` (hôte et invité) ; l'événement `fuse` est supprimé. **Incompatible avec la 0.1.155** (v79 → v80).
+- **Sortie du Scarab** : sa plongée (`lurkPhase` 1-4) est avancée (`Mirror.advanceBurrow`) ; quand il vise MA squad, la zone de sortie est suivie
+  ici (`trackBurrows`) : sur le centre de ma squad affichée avant le verrouillage (comme `Horde.aimBurrow`), puis sur l'axe figé à la vitesse
+  lissée de mon ancre prédite (`myVel`, même lissage que `Squad.vel`, celle que l'hôte aura en jouant mes inputs). La squad visée est déduite de la
+  zone de l'hôte (ancre la plus proche dans le snapshot). Essai écarté : recaler la zone sur celle de l'hôte avancée du déplacement de mon ancre
+  depuis l'`ack` (l'hôte glisse avec une vitesse lissée, pas le déplacement : écart moyen 8 → 37 px). **Défaut de l'hôte corrigé au passage** :
+  sous terre, le Scarab n'a pas de cible et la zone suivait « la squad la plus proche de l'endroit où il a plongé », recalculée à chaque tick ; en
+  multi, elle pouvait changer de squad en route et se figer. La squad visée est maintenant fixée quand il s'enterre (`AlienState.burrowSq`,
+  `Horde.burrowSquad`) ; en solo rien ne change.
 - **Pas traité** : charge (`rushWind`) et autres attaques rattachées à un alien qui bouge (l'alien lui-même est affiché en retard : il faudrait
   l'extrapoler sur sa ligne de charge), apparition des rochers d'un mur (obstacles que la prédiction contourne, positions calculées par l'hôte). Visuel seulement : les dégâts restent calculés chez l'hôte.
   Non vérifié en navigateur.

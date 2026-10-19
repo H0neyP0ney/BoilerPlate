@@ -123,6 +123,17 @@ export class Mirror {
   private readonly localImpacts: { t: SimEvent['t']; x: number; y: number; ttl: number }[] = [];
   /** Effets d'impact joués ici au moment où le télégraphe avancé se termine : `ClientSession` les envoie à la vue. */
   readonly localEvents: SimEvent[] = [];
+  /**
+   * Plongée du Scarab (par alien) : zone de sortie suivie ici quand il vise MA squad (`mine`) : avant le verrouillage elle suit le centre de ma squad
+   * affichée (comme `Horde.aimBurrow` chez l'hôte), après elle avance sur l'axe figé au rythme de ma squad prédite (`myVel`, même lissage que
+   * `Squad.vel`) ; `emerged` : sortie déjà jouée ici, l'hôte ne l'a pas encore annoncée.
+   */
+  private readonly burrows = new Map<number, { mine: boolean; checked: boolean; locked: boolean; dx: number; dy: number; x: number; y: number; emerged: boolean }>();
+  /** Ancres de toutes les squads dans le snapshot affiché : la squad visée par un Scarab est celle dont l'ancre est la plus proche de sa zone. */
+  private snapAnchors: { owner: PlayerId; x: number; y: number }[] = [];
+  /** Vitesse lissée de mon ancre prédite (px/s) : celle que l'hôte aura (`Squad.vel`) quand il jouera mes inputs. */
+  private readonly myVel = { x: 0, y: 0 };
+  private myPrev?: { x: number; y: number };
   /** Saut du crabe : dernier `leapT` reçu de l'hôte (nouveau saut = il remonte) et point de départ (NaN = vu en plein vol, inconnu). */
   private readonly leapSeen = new Map<number, number>();
 
@@ -422,10 +433,12 @@ export class Mirror {
     this.syncProjectiles(snap.projectiles, this.projectiles, (p) => (p.squad !== mine || mine < 0) && !this.teleDone.has('l' + p.id));
     for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
     this.advanceTelegraphs(this.teleLead); // l'avance (les boules en cloche sont avancées dans `upsertProjectile`)
+    this.applyBurrows();
   }
 
   /** Avance des télégraphes d'après le snapshot affiché (voir `teleLead`). Monde figé : on garde la valeur (l'`ack` ne bouge plus, l'écart ne veut rien dire). */
   private measureTeleLead(snap: Snapshot): void {
+    this.snapAnchors = snap.squads.filter((q) => q.soldiers.length > 0).map((q) => ({ owner: q.owner, x: q.anchorX, y: q.anchorY }));
     const sq = snap.squads.find((q) => q.owner === this.localPlayer);
     if (!sq || sq.soldiers.length === 0 || !this.predictor.active || this.lastN === 0) {
       this.teleLead = 0;
@@ -445,7 +458,8 @@ export class Mirror {
   /** Vrai si cet événement de l'hôte est l'impact d'un télégraphe déjà joué ici (`localImpact`) : la vue ne le rejoue pas. */
   swallowHostEvent(e: SimEvent): boolean {
     if (e.t !== 'stalactite' && e.t !== 'explosion' && e.t !== 'slam') return false;
-    const i = this.localImpacts.findIndex((l) => l.t === e.t && Math.hypot(l.x - e.x, l.y - e.y) < IMPACT_MATCH);
+    const tol = e.t === 'slam' ? Math.max(IMPACT_MATCH, e.r * 0.5) : IMPACT_MATCH; // sortie du Scarab : sa zone, suivie ici, peut différer un peu de celle de l'hôte
+    const i = this.localImpacts.findIndex((l) => l.t === e.t && Math.hypot(l.x - e.x, l.y - e.y) < tol);
     if (i < 0) return false;
     this.localImpacts.splice(i, 1);
     return true;
@@ -495,6 +509,7 @@ export class Mirror {
           a.lurkT = Math.max(0, L.sweep + a.lurkT);
         }
       } else if (L && a.lurkPhase === 4) a.lurkT = Math.max(0, a.lurkT - dt);
+      if (a.def.burrow && a.lurkPhase > 0) this.advanceBurrow(a, dt);
       const J = a.def.leap;
       if (J && a.leapT > 0) {
         const land = J.recover; // `leapT` restant à l'atterrissage
@@ -505,6 +520,140 @@ export class Mirror {
           this.teleDone.set(key, J.recover + 0.5);
           this.localImpact({ t: 'slam', x: a.leapX, y: a.leapY, r: J.radius });
         }
+      }
+    }
+  }
+
+  /**
+   * Plongée du Scarab avancée de `dt` (phases de `Horde.updateBurrow` : 1 s'enterre, 2 sous terre, 3 ressort, 4 ruée) ; à la fin de la phase 2, l'onde
+   * de choc de sortie est jouée ici, sur la zone affichée.
+   */
+  private advanceBurrow(a: AlienState, dt: number): void {
+    const B = a.def.burrow!;
+    if (!this.burrows.has(a.id)) this.burrowStart(a);
+    let t = dt;
+    if (a.lurkPhase === 1) {
+      if (a.lurkT > t) {
+        a.lurkT -= t;
+        t = 0;
+      } else {
+        t -= a.lurkT;
+        a.lurkPhase = 2;
+        a.lurkT = B.wait;
+        const b = this.burrows.get(a.id);
+        if (b?.mine) this.aimAtMine(a, b);
+      }
+    }
+    if (t > 0 && a.lurkPhase === 2) {
+      const before = a.lurkT;
+      a.lurkT -= t;
+      t = Math.max(0, -a.lurkT);
+      const b = this.burrows.get(a.id);
+      if (b && b.mine && !b.locked && before > B.lock && a.lurkT <= B.lock) {
+        // verrouillage : l'axe est la direction de course de ma squad à cet instant (comme l'hôte avec `Squad.vel` quand il jouera ces inputs)
+        const n = Math.hypot(this.myVel.x, this.myVel.y);
+        b.locked = true;
+        b.dx = n > 1 ? this.myVel.x / n : 0;
+        b.dy = n > 1 ? this.myVel.y / n : 0;
+      }
+      if (a.lurkT <= 0) {
+        if (b && b.mine) {
+          a.leapX = b.x;
+          a.leapY = b.y;
+        }
+        a.lurkPhase = 3;
+        a.lurkT = B.rise;
+        a.x = a.px = a.leapX;
+        a.y = a.py = a.leapY;
+        if (b) b.emerged = true;
+        const key = 'b' + a.id;
+        if (!this.teleDone.has(key)) {
+          this.teleDone.set(key, TELE_DONE_TTL);
+          this.localImpact({ t: 'slam', x: a.leapX, y: a.leapY, r: B.radius });
+        }
+      }
+    }
+    if (t > 0 && a.lurkPhase === 3) {
+      if (a.lurkT > t) {
+        a.lurkT -= t;
+        t = 0;
+      } else {
+        t -= a.lurkT;
+        a.lurkPhase = 4;
+        a.lurkT = B.lunge;
+      }
+    }
+    if (t > 0 && a.lurkPhase === 4) a.lurkT = Math.max(0, a.lurkT - t);
+  }
+
+  /** Début de la plongée du Scarab (vue ici) : vise-t-il ma squad ? la plus proche de lui, comme `Horde` sans cible (`burrowSq`, vérifié dès que l'hôte a visé). */
+  private burrowStart(a: AlienState): void {
+    const mine = this.sim.squads.find((q) => q.owner === this.localPlayer);
+    let nearest: Squad | undefined;
+    let best = Infinity;
+    for (const q of this.sim.squads) {
+      if (q.soldiers.length === 0) continue;
+      const d = Math.hypot(q.center.x - a.x, q.center.y - a.y);
+      if (d < best) {
+        best = d;
+        nearest = q;
+      }
+    }
+    const b = { mine: !!mine && nearest === mine && this.predictor.active, checked: false, locked: false, dx: 0, dy: 0, x: a.leapX, y: a.leapY, emerged: false };
+    this.burrows.set(a.id, b);
+    if (b.mine && a.lurkPhase === 2) this.aimAtMine(a, b);
+  }
+
+  /** Zone de sortie sur le centre de ma squad affichée, ou le point libre le plus proche (anneaux de 60 et 120 px), comme `Horde.aimBurrow`. */
+  private aimAtMine(a: AlienState, b: { x: number; y: number }): void {
+    const sq = this.sim.squads.find((q) => q.owner === this.localPlayer);
+    if (!sq) return;
+    const r = a.radius * 0.6;
+    for (const d of [0, 60, 120]) {
+      for (let k = 0; k < (d === 0 ? 1 : 8); k++) {
+        const ang = (k / 8) * Math.PI * 2;
+        const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d };
+        if (this.sim.arena.isFree(p, r)) {
+          b.x = p.x;
+          b.y = p.y;
+          return;
+        }
+      }
+    }
+    const p = { x: sq.center.x, y: sq.center.y, radius: a.radius };
+    this.sim.arena.constrain(p);
+    b.x = p.x;
+    b.y = p.y;
+  }
+
+  /** Chaque tick : zone de sortie du Scarab qui vise ma squad (suit ma squad affichée, puis glisse sur l'axe figé) ; Scarab déjà ressorti ici, tenu à sa sortie. */
+  private trackBurrows(dt: number): void {
+    for (const a of this.sim.aliens) {
+      const b = this.burrows.get(a.id);
+      if (!b) continue;
+      if (b.mine && a.lurkPhase === 2) {
+        if (!b.locked) this.aimAtMine(a, b);
+        else {
+          const along = (this.myVel.x * b.dx + this.myVel.y * b.dy) * dt;
+          const p = { x: b.x + b.dx * along, y: b.y + b.dy * along, radius: a.radius * 0.6 };
+          this.sim.arena.constrain(p);
+          b.x = p.x;
+          b.y = p.y;
+        }
+        a.leapX = b.x;
+        a.leapY = b.y;
+      }
+    }
+  }
+
+  /** Après un snapshot : la zone suivie ici remplace celle de l'hôte (en retard). */
+  private applyBurrows(): void {
+    for (const a of this.sim.aliens) {
+      const b = this.burrows.get(a.id);
+      if (!b) continue;
+      if (b.mine && a.lurkPhase === 2) {
+        a.leapX = b.x;
+        a.leapY = b.y;
       }
     }
   }
@@ -531,6 +680,17 @@ export class Mirror {
     const localFrozen = this.directLocal ? this.localFrozen : this.frozen;
     this.inputHeld = !!local && this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, localFrozen);
     if (local) this.lastN = local.n;
+    if (this.predictor.active && !localFrozen) {
+      const a = this.predictor.anchor;
+      if (this.myPrev) {
+        let vx = (a.x - this.myPrev.x) / dtReal;
+        let vy = (a.y - this.myPrev.y) / dtReal;
+        if (Math.hypot(vx, vy) > this.predictor.anchorSpeed * 2) vx = vy = 0; // saut (recalage) : pas une vitesse, comme `Squad.update`
+        this.myVel.x = damp(this.myVel.x, vx, 4, dtReal);
+        this.myVel.y = damp(this.myVel.y, vy, 4, dtReal);
+      }
+      this.myPrev = { x: a.x, y: a.y };
+    }
     for (const [k, t] of this.teleDone) if (t - dtReal <= 0) this.teleDone.delete(k); else this.teleDone.set(k, t - dtReal);
     for (let i = this.localImpacts.length - 1; i >= 0; i--) if ((this.localImpacts[i].ttl -= dtReal) <= 0) this.localImpacts.splice(i, 1);
     this.localHold = !!local && local.n > this.predictor.limitN; // les inputs après la limite seront jetés par l'hôte (pause annoncée) : ma squad ne bouge plus
@@ -554,7 +714,7 @@ export class Mirror {
       if (a.slamWind > 0) a.slamWind = Math.max(0, a.slamWind - dt);
       if (a.rushWind > 0) a.rushWind = Math.max(0, a.rushWind - dt); // négatif après la charge : on n'y touche pas
       if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
-      const telegraph = (a.def.lurk || a.def.spikeRing) && (a.lurkPhase === 3 || a.lurkPhase === 4); // pics du lurker et du crabe : `advanceTelegraphs`
+      const telegraph = ((a.def.lurk || a.def.spikeRing) && (a.lurkPhase === 3 || a.lurkPhase === 4)) || (!!a.def.burrow && a.lurkPhase > 0); // pics, plongée du Scarab : `advanceTelegraphs`
       if (!telegraph && a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
       if (!a.def.leap && a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt); // saut du crabe : `advanceTelegraphs` (Scarab : `leapT` = temps restant, ici)
       if (a.sinkT > 0) a.sinkT = Math.max(1e-3, a.sinkT - dt);
@@ -569,7 +729,8 @@ export class Mirror {
         sq.buffs.electro = Math.max(0, sq.buffs.electro - dt);
       }
     }
-    this.advanceTelegraphs(dt); // stalactites, croix, murs, pics, saut du crabe : décompte entre deux snapshots (impact joué ici à la fin)
+    this.advanceTelegraphs(dt); // stalactites, croix, murs, pics, saut du crabe, plongée du Scarab : décompte entre deux snapshots (impact joué ici à la fin)
+    this.trackBurrows(dt);
     for (const p of sim.puddles) tick(p);
     for (const k of sim.arena.rocks) tick(k);
     for (const f of sim.powerups.fields) tick(f);
@@ -797,6 +958,7 @@ export class Mirror {
         lurkPhase: 0,
         lurkT: 0,
         spikeAng: 0,
+        burrowSq: '',
       };
       this.aliens.set(a.id, s);
     }
@@ -858,6 +1020,30 @@ export class Mirror {
     s.lurkT = a.lurkT;
     s.spikeAng = a.spikeAng;
     this.setGoal(s, a.x, a.y);
+    if (s.def.burrow) {
+      const b = this.burrows.get(a.id);
+      if (a.lurkPhase === 0 || a.lurkPhase === 4) this.burrows.delete(a.id); // plongée finie chez l'hôte
+      else if (b && a.lurkPhase === 2 && !b.checked) {
+        // l'hôte a visé : sa zone est sur la squad visée (± 120 px) ; la plus proche des ancres du snapshot dit si c'est moi
+        b.checked = true;
+        let best = Infinity;
+        let owner = '';
+        for (const q of this.snapAnchors) {
+          const d = Math.hypot(q.x - a.leapX, q.y - a.leapY);
+          if (d < best) {
+            best = d;
+            owner = q.owner;
+          }
+        }
+        const mine = owner === this.localPlayer && this.predictor.active;
+        if (mine && !b.mine) {
+          b.mine = true;
+          b.locked = false;
+          this.aimAtMine(s, b);
+        } else if (!mine) b.mine = false; // la zone de l'hôte, en retard, reprend la main
+      }
+      if (b && b.emerged && a.lurkPhase <= 2) this.setGoal(s, b.x, b.y); // ressorti ici, pas encore chez l'hôte : il reste à sa sortie
+    }
     return s;
   }
 

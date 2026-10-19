@@ -48,12 +48,12 @@ export interface SoldierClassDef {
 export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
   trooper: {
     id: 'trooper',
-    hp: 91,
+    hp: 100,
     radius: 14,
     mass: 3,
     color: 0x3d7fe0,
     // Blaster bleu : tir quasi rectiligne vers la cible (très faible dispersion).
-    weapon: { kind: 'bullet', range: 290, cooldown: 0.2783, damage: 12, projectileSpeed: 760, spread: 0.015, texture: 'fx_blaster_blue' },
+    weapon: { kind: 'bullet', range: 290, cooldown: 0.25, damage: 12, projectileSpeed: 760, spread: 0.015, texture: 'fx_blaster_blue' },
   },
   medic: {
     id: 'medic',
@@ -61,7 +61,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     radius: 14,
     mass: 3,
     color: 0xf2f2f2,
-    weapon: { kind: 'bullet', range: 240, cooldown: 0.6087, damage: 7.2, projectileSpeed: 620, spread: 0.05, texture: 'fx_bolt_green' },
+    weapon: { kind: 'bullet', range: 240, cooldown: 0.5478, damage: 7.2, projectileSpeed: 620, spread: 0.05, texture: 'fx_bolt_green' },
     heal: { radius: 230, perSecond: 7 },
   },
   flammer: {
@@ -73,7 +73,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     weapon: {
       kind: 'flame',
       range: 160,
-      cooldown: 0.0522,
+      cooldown: 0.047,
       damage: 3.84,
       projectileSpeed: 420,
       spread: 0.28,
@@ -89,7 +89,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     radius: 14,
     mass: 3,
     color: 0x5aa84a,
-    weapon: { kind: 'beam', range: 520, cooldown: 1.1304, damage: 66, texture: 'fx_beam' },
+    weapon: { kind: 'beam', range: 520, cooldown: 1.0174, damage: 66, texture: 'fx_beam' },
   },
   bruiser: {
     id: 'bruiser',
@@ -100,7 +100,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     weapon: {
       kind: 'bullet',
       range: 200,
-      cooldown: 0.8261,
+      cooldown: 0.7435,
       damage: 10.8,
       projectileSpeed: 640,
       pellets: 4,
@@ -116,7 +116,7 @@ export const CLASSES: Record<SoldierClassId, SoldierClassDef> = {
     mass: 3,
     color: 0x9a5ad8,
     // Tir lent, en cloche : dégâts de zone (petit rayon) à l'atterrissage, pas de collision en vol.
-    weapon: { kind: 'grenade', range: 340, cooldown: 1.6522, damage: 45.6, projectileSpeed: 300, aoe: 70, texture: 'fx_grenade' },
+    weapon: { kind: 'grenade', range: 340, cooldown: 1.487, damage: 45.6, projectileSpeed: 300, aoe: 70, texture: 'fx_grenade' },
   },
 };
 

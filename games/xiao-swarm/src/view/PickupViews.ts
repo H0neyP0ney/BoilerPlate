@@ -7,7 +7,7 @@ import type { Sim } from '../sim/Sim';
 import type { PlayerId } from '../sim/types';
 import { GLOBE_TINTS } from '../art/globeTints';
 import { globeTexture, starTexture } from '../art/upgradeOrbs';
-import { createEnragedFlames } from './EnragedFx';
+import { StimBloodFx } from './StimBloodFx';
 import { soldierOffsetY } from './spriteOffset';
 import { BEAM_PINK, BEAM_PRISM, createLootBeam, type LootBeam } from './LootBeam';
 import { createGlobeGlitter, GLOBE_LIFT, POWERUP_GREEN, RECRUIT_COLOR, UPGRADE_PINK, type GlobeGlitter } from './GlobeGlitter';
@@ -111,8 +111,8 @@ export function drawReviveZone(g: Phaser.GameObjects.Graphics, x: number, y: num
  * centre de chaque squad. Tout est recalé chaque frame sur l'état de la simulation (snapshot en ligne) : pas d'image orpheline.
  */
 export class PickupViews {
-  /** Flammes d'enragé de chaque soldat sous stimpack (même effet que les aliens ressuscités). */
-  private readonly rageFx = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
+  /** Sang chaud qui jaillit de chaque soldat sous stimpack (`StimBloodFx`). */
+  private readonly rageFx = new Map<number, StimBloodFx>();
   private readonly powerups = new Map<number, Phaser.GameObjects.Container>();
   /** Étoiles et paillettes vertes qui montent autour de chaque power-up (même effet que les recrues et les globes d'upgrade). */
   private readonly powerupGlitter = new Map<number, GlobeGlitter>();
@@ -293,7 +293,7 @@ export class PickupViews {
     }
   }
 
-  // ---------- Stimpack : les soldats boostés sont enragés (flammes rouges) ----------
+  // ---------- Stimpack : les soldats boostés jaillissent de sang chaud ----------
 
   private syncSyringes(time: number): void {
     const seen = new Set<number>();
@@ -304,11 +304,11 @@ export class PickupViews {
         seen.add(s.id);
         let fx = this.rageFx.get(s.id);
         if (!fx) {
-          fx = createEnragedFlames(this.scene, s.def.radius, 45); // plus espacées que sur un alien : toute une escouade en porte
+          fx = new StimBloodFx(this.scene, s.def.radius, 32); // gouttes plus espacées que sur un alien : toute une escouade en porte
           this.rageFx.set(s.id, fx);
         }
         const p = this.posOf(s.id) ?? s;
-        fx.setPosition(p.x, p.y + soldierOffsetY(s.def.id) - s.def.radius * 0.6).setVisible(!blink); // flammes sur le sprite décalé
+        fx.setPosition(p.x, p.y + soldierOffsetY(s.def.id) - s.def.radius * 0.6).setVisible(!blink); // effet sur le sprite décalé
       }
     }
     for (const [id, fx] of this.rageFx) {

@@ -26,7 +26,7 @@ export const FX_DEFAULTS = {
   /** Impact d'une balle qui disparaît : quelques petites particules (fx_dot), teinte donnée par l'appelant (bleu pour le Gunner). */
   impact: { count: 5, speedMin: 30, speedMax: 110, scaleStart: 0.5, scaleEnd: 0, lifeMin: 120, lifeMax: 260 },
   /** Éclatement du slime à sa mort : grosses gouttes qui retombent (gravité, px/s²) + fines gouttelettes (fx_dot). */
-  gloop: { count: 14, speedMin: 50, speedMax: 220, scaleStart: 1.3, scaleEnd: 0.2, lifeMin: 350, lifeMax: 700, gravity: 260 },
+  gloop: { count: 17, speedMin: 50, speedMax: 255, scaleStart: 2, scaleEnd: 0.2, lifeMin: 350, lifeMax: 700, gravity: 390 },
   /**
    * Flaques au sol à la mort d'un alien (fx_puddle) : 1 à `countMax` flaques, taille et durée aléatoires, qui s'effacent en alpha et en taille.
    * Taille de base = largeur de l'ombre portée de l'alien × `shadowMul` (pour tous les aliens, flaque de cadavre comprise).
@@ -59,6 +59,23 @@ export const FX_DEFAULTS = {
   crit: { scale: 0.7, textGrow: 1.35, popMs: 140, holdMs: 300, riseMs: 420, rise: 34 },
   /** Flammes d'enragé (fx_flame, additif) : aliens ressuscités par un chaman et soldats sous stimpack. `spreadX` = largeur de la source, en part du rayon de l'unité. */
   enraged: { spreadX: 0.7, speedYMin: 45, speedYMax: 100, speedX: 14, scaleStart: 0.8, alpha: 0.95, lifeMin: 380, lifeMax: 650 },
+  /**
+   * Unité enflammée (`view/BurnFx.ts`) : 3 petites flammes (fx_flame, additif) et 3 volutes de fumée (fx_smoke). Flammes : `spacing` = écart entre elles, `baseY` = hauteur au-dessus du pied, `hop` = sautillement,
+   * `flameScale` / `flameHeight` = taille, `flicker` = vacillement, `alpha`. Fumée : `smokeY` = départ, `smokeRise` = montée (px), `smokeScale` + `smokeGrow` = taille au départ / gain, `smokeSpeed` = cycles par seconde,
+   * `smokeSpread` = écart entre les volutes, `smokeAlpha`. Couleurs : flammes du côté (`flameColor`) et du milieu (`flameColorMid`), fumée.
+   */
+  burn: { spacing: 9, baseY: -18, hop: 5, flameScale: 0.64, flameHeight: 1.06, flicker: 0.1, alpha: 0.8, flameColor: 0xff6a1a, flameColorMid: 0xffd24a, smokeY: -26, smokeRise: 27, smokeScale: 0.3, smokeGrow: 0.6, smokeSpeed: 0.9, smokeSpread: 4.5, smokeAlpha: 0.5, smokeColor: 0x000000 },
+  /**
+   * Montée de niveau, par soldat (`Fx.levelUpSoldier`) : colonne bleue CREUSE (un tube : parois translucides, ellipses haut et bas, rien à l'intérieur) de rayon `colR` et de hauteur `colH` qui monte de `colRise` px en
+   * `colMs` ms en s'effaçant ; cercle bleu au sol qui s'élargit jusqu'à `ringR` en `ringMs` ms ; `particles` particules bleu-blanc qui montent avec la colonne (`partRiseMin`-`partRiseMax` px, `partSize` = taille).
+   * Couleurs : `color` (bleu) et `colorLight` (particules claires, blanc bleuté).
+   */
+  levelUp: { colR: 22, colH: 56, colRise: 49, colMs: 800, colAlpha: 0.75, ringR: 70, ringMs: 700, particles: 14, partRiseMin: 35, partRiseMax: 77, partSize: 0.8, color: 0x4aa8ff, colorLight: 0xd6edff },
+  /**
+   * Stimpack (`view/StimBloodFx.ts`) : sang chaud qui jaillit du soldat. Gouttes (fx_dot, opaques) : `spreadX` = largeur de la source (× rayon), `speedYMin` / `speedYMax` = jet vers le haut, `speedX` = dérive, `gravity` = retombée,
+   * `scaleStart` / `scaleEnd` = taille, `lifeMin` / `lifeMax` = durée (ms), couleurs `bloodColor` / `bloodDark` / `bloodLight`. Vapeur rouge (fx_smoke) : `mistAlpha`, `mistScale`, `mistLife` (ms), `mistRise` (px/s), `mistColor`.
+   */
+  stimBlood: { spreadX: 0.6, speedYMin: 70, speedYMax: 170, speedX: 45, gravity: 420, scaleStart: 0.8, scaleEnd: 0.2, lifeMin: 450, lifeMax: 750, bloodColor: 0xc4001a, bloodDark: 0x7a0010, bloodLight: 0xff3b30, mistAlpha: 0.3, mistScale: 0.7, mistLife: 900, mistRise: 40, mistColor: 0xb01020 },
   /** Montée de niveau : chaque soldat de la squad devient tout blanc `holdMs` ms puis repasse à sa couleur en fondu (`fadeMs`). */
   levelFlash: { holdMs: 100, fadeMs: 650 },
   /** Colonne de lumière (fx_column) qui monte et s'estompe, avec halo : nouvelle recrue dans la squad (taille et durée par défaut). */
@@ -89,9 +106,9 @@ export const FX_DEFAULTS = {
   /** Petit « + » qui monte : soin du Medic (fx_plus). */
   heal: { rise: 34, durationMs: 700, jitter: 10 },
   /** Roquettes du power-up (fx_rocket, ligne droite) et leur traînée de fumée blanche opaque qui rétrécit jusqu'à 0 (fx_smoke). */
-  rocket: { scale: 1.1, smokeScale: 0.55, smokeLifeMin: 300, smokeLifeMax: 520, smokeSpeed: 18, smokeSpread: 3 },
+  rocket: { scale: 1.1, smokeScale: 0.5, smokeLifeMin: 300, smokeLifeMax: 520, smokeSpeed: 30, smokeSpread: 3 },
   /** Texte flottant : « +1 Gunner ! », « BOSS DOWN! » (taille fixée par l'appelant). */
-  text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 600, rise: 30 },
+  text: { popMs: 140, popFrom: 0.6, holdMs: 450, fadeMs: 600, rise: 25 },
   /**
    * Recrue « bonus +1 » composée (art/recruits.ts) : position (en part de la taille du globe, depuis son centre), taille
    * (part de la taille du globe) et opacité de chaque pièce ; étoiles qui scintillent autour (`view/GlobeGlitter.ts`, COMMUNES aux trois sortes de globes, à la couleur du globe). `displayScale` = taille affichée COMMUNE à tous les

@@ -563,7 +563,14 @@ export class WorldView {
         break;
       case 'levelUp': {
         // tous les soldats de la squad qui monte de niveau flashent en blanc puis repassent à leur couleur (FX.levelFlash)
-        for (const s of this.sim.squadOf(e.owner)?.soldiers ?? []) this.soldiers.get(s.id)?.levelFlash();
+        for (const s of this.sim.squadOf(e.owner)?.soldiers ?? []) {
+          this.soldiers.get(s.id)?.levelFlash();
+          // colonne bleue creuse + cercle au sol + particules, sur chaque soldat ET qui le suit (position interpolée de sa vue ; dernière position connue s'il tombe)
+          this.fx.levelUpSoldier(() => {
+            const v = this.soldiers.get(s.id);
+            return v ? { x: v.rx, y: v.ry } : undefined;
+          });
+        }
         if (e.owner !== this.localPlayer) break;
         const c = this.sim.squadOf(e.owner)?.center;
         if (!c) break;

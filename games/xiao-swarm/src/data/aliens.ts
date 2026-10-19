@@ -268,7 +268,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 4.5,
     attackCooldown: 0.55,
     target: 'nearest',
-    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 19.8, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 2, deathMin: 50, deathMax: 130, deathGap: 0.1 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
+    lob: { range: 240, cooldown: 2.6, flight: 1.1, damage: 19.8, aoe: 75, texture: 'fx_slime_ball', lead: [0.2, 0.8], scatter: 45, deathBlobs: 3, deathMin: 50, deathMax: 130, deathGap: 0.1 }, // à sa mort : 2 boules rouges en cloche autour de lui (17/10) ; // portée -20 % ; anticipation partielle au hasard + dispersion (08/10 : il anticipait trop)
     revivable: true,
     xp: 6,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
@@ -694,7 +694,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd24a,
     goo: 0xe0a800,
     hpBarWidth: 50,
-    golden: { spawnFrom: 180, spawnTo: 300, spawnDist: 650, engage: 220, fleeSpeed: 260, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+    golden: { spawnFrom: 180, spawnTo: 300, spawnDist: 650, engage: 220, fleeSpeed: 208, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).

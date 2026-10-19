@@ -8,7 +8,7 @@ import { chestButton, chestWidth } from './chestButtons';
 import { settings } from '../settings';
 import type { GameScene } from './GameScene';
 
-const FILLS: Record<DifficultyLevel, number | undefined> = { normal: undefined, expert: 0xe8892b, impossible: 0xc63b3b };
+const FILLS: Record<DifficultyLevel, number> = { normal: 0x2f9e5b, expert: 0xe8892b, impossible: 0xc63b3b }; // niveau choisi : vert (Normal), orange (Hard, id `expert`), rouge (Expert, id `impossible`)
 
 /**
  * Écran Solo (`SoloScreen`) : trois boutons de difficulté (la dernière difficulté jouée est présélectionnée, mémorisée dans `settings.difficulty`)
@@ -58,7 +58,7 @@ export class SoloScene extends Phaser.Scene {
           label: locked ? `🔒 ${t(DIFFICULTY_LABEL_KEYS[l])}` : t(DIFFICULTY_LABEL_KEYS[l]),
           variant: on ? 'primary' : 'secondary',
           fill: on ? FILLS[l] : undefined,
-          textColor: on && FILLS[l] !== undefined ? '#ffffff' : undefined,
+          textColor: on ? '#ffffff' : undefined,
           width: bw,
           height: 64,
           onClick: () => {

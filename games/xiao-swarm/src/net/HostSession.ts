@@ -31,7 +31,7 @@ const INPUT_TIMEOUT = 1.5;
 /** Délai (s) entre l'anéantissement d'une squad et sa réapparition. */
 const RESPAWN_DELAY = 2.5;
 /** Coop : temps (s) d'affichage de l'écran de fin (victoire / défaite) avant de relancer la partie. */
-const END_DELAY = 3;
+const END_DELAY = 9; // s : durée d'affichage du tableau des stats de fin de partie en multi avant le retour au salon (3 s avant le 19/10)
 
 export interface HostSessionOptions {
   mode: ModeDef;

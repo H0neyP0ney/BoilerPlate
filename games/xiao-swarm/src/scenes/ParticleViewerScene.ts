@@ -4,6 +4,8 @@ import { DEPTH, FREEZE, SCENES, UPGRADE_REPEL, VISUAL, VIEW_BG } from '../config
 import { fxSnippet, resetFx, saveFxToCode, setFx } from '../debugFx';
 import { button, checkbox, colorInput, header, heading, line, note, panel, select, slider } from '../dev/devUi';
 import { FX, type FxName } from '../fxParams';
+import { BurnFx } from '../view/BurnFx';
+import { StimBloodFx } from '../view/StimBloodFx';
 import { createEnragedFlames } from '../view/EnragedFx';
 import { iceLook } from '../view/IceBlockFx';
 import { Fx } from '../view/Fx';
@@ -227,7 +229,7 @@ const EFFECTS: EffectDef[] = [
   {
     id: 'upgradeOrb',
     label: "Globe d'upgrade (coffre de boss)",
-    where: "Même modèle que la recrue et le power-up, en rose : globe (l'or de la recrue recoloré à la teinte `upgrade`, réglable dans la visionneuse de bonus), icône de l'upgrade, étoiles, rond rose au sol. Taille et étoiles se règlent dans l'entrée « Recrue gunner » (communs aux trois globes). L'aperçu dure 4 s.",
+    where: "Même modèle que la recrue et le power-up, en rose : globe (l'or de la recrue recoloré à la teinte `upgrade`, réglable dans la visionneuse de bonus), icône de l'upgrade, étoiles, rond rose au sol. Taille et étoiles se règlent dans l'entrée « Recrue gunner » (communs aux trois globes). La couleur du globe ne se règle PAS ici : sélecteur de globe « upgrade » de la visionneuse de bonus. L'aperçu dure 4 s.",
     specs: [],
   },
   {
@@ -322,6 +324,74 @@ const EFFECTS: EffectDef[] = [
       { key: 'alpha', label: 'Opacité au départ', min: 0, max: 1, step: 0.05 },
       { key: 'lifeMin', label: 'Durée min (ms)', min: 100, max: 2000, step: 10 },
       { key: 'lifeMax', label: 'Durée max (ms)', min: 100, max: 3000, step: 10 },
+    ],
+  },
+  {
+    id: 'burn',
+    label: 'Unité enflammée (flammes + fumée)',
+    where: "Soldat touché par le feu (flaque de flammes, orbe de feu) : 3 petites flammes qui vacillent sur lui et un peu de fumée grise qui monte. Aperçu : un Trooper qui brûle 4 s.",
+    specs: [
+      { key: 'spacing', label: 'Écart entre les flammes', min: 0, max: 24, step: 0.5 },
+      { key: 'baseY', label: 'Hauteur au-dessus du pied (px, négatif = vers le haut)', min: -40, max: 10, step: 1 },
+      { key: 'hop', label: 'Sautillement', min: 0, max: 20, step: 0.5 },
+      { key: 'flameScale', label: 'Largeur des flammes', min: 0.1, max: 1.5, step: 0.02 },
+      { key: 'flameHeight', label: 'Hauteur des flammes', min: 0.1, max: 2, step: 0.02 },
+      { key: 'flicker', label: 'Vacillement', min: 0, max: 0.5, step: 0.01 },
+      { key: 'alpha', label: 'Opacité des flammes', min: 0, max: 1, step: 0.05 },
+      { key: 'flameColor', label: 'Couleur des flammes (côtés)', min: 0, max: 0, step: 1, color: true },
+      { key: 'flameColorMid', label: 'Couleur de la flamme du milieu', min: 0, max: 0, step: 1, color: true },
+      { key: 'smokeY', label: 'Fumée : départ (px, négatif = vers le haut)', min: -60, max: 10, step: 1 },
+      { key: 'smokeRise', label: 'Fumée : montée (px)', min: 0, max: 80, step: 1 },
+      { key: 'smokeScale', label: 'Fumée : taille au départ', min: 0.05, max: 1.5, step: 0.05 },
+      { key: 'smokeGrow', label: 'Fumée : grossissement', min: 0, max: 1.5, step: 0.05 },
+      { key: 'smokeSpeed', label: 'Fumée : cycles par seconde', min: 0.2, max: 3, step: 0.05 },
+      { key: 'smokeSpread', label: 'Fumée : écart entre les volutes', min: 0, max: 24, step: 0.5 },
+      { key: 'smokeAlpha', label: 'Fumée : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'smokeColor', label: 'Couleur de la fumée', min: 0, max: 0, step: 1, color: true },
+    ],
+  },
+  {
+    id: 'levelUp',
+    label: 'Montée de niveau (par soldat)',
+    where: "Sur CHAQUE soldat de la squad quand elle monte de niveau : colonne bleue creuse qui monte, cercle bleu au sol qui s'élargit, particules bleu-blanc qui montent avec la colonne (s'ajoute au flash blanc et aux ondes).",
+    specs: [
+      { key: 'colR', label: 'Colonne : rayon', min: 5, max: 80, step: 1 },
+      { key: 'colH', label: 'Colonne : hauteur', min: 20, max: 250, step: 5 },
+      { key: 'colRise', label: 'Colonne : montée (px)', min: 0, max: 200, step: 5 },
+      { key: 'colMs', label: 'Durée de la colonne (ms)', min: 200, max: 2500, step: 50 },
+      { key: 'colAlpha', label: 'Colonne : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'ringR', label: 'Cercle au sol : rayon final', min: 20, max: 220, step: 5 },
+      { key: 'ringMs', label: 'Cercle au sol : durée (ms)', min: 100, max: 2000, step: 50 },
+      { key: 'particles', label: 'Particules (nombre)', min: 0, max: 60, step: 1 },
+      { key: 'partRiseMin', label: 'Particules : montée min', min: 0, max: 250, step: 5 },
+      { key: 'partRiseMax', label: 'Particules : montée max', min: 0, max: 300, step: 5 },
+      { key: 'partSize', label: 'Particules : taille', min: 0.2, max: 3, step: 0.05 },
+      { key: 'color', label: 'Bleu', min: 0, max: 0, step: 1, color: true },
+      { key: 'colorLight', label: 'Bleu clair (particules, bords)', min: 0, max: 0, step: 1, color: true },
+    ],
+  },
+  {
+    id: 'stimBlood',
+    label: 'Stimpack (sang chaud)',
+    where: "Chaque soldat sous stimpack : des gouttes de sang rouge opaques jaillissent de lui en gerbes, retombent, avec une légère vapeur rouge. (Les flammes rouges de l'entrée « Flammes d'enragé » ne servent plus qu'aux aliens ressuscités.) Aperçu : 2 s.",
+    specs: [
+      { key: 'spreadX', label: 'Largeur de la source (× rayon)', min: 0.1, max: 1.5, step: 0.05 },
+      { key: 'speedYMin', label: 'Jet min', min: 0, max: 400, step: 5 },
+      { key: 'speedYMax', label: 'Jet max', min: 0, max: 500, step: 5 },
+      { key: 'speedX', label: 'Dérive latérale', min: 0, max: 200, step: 1 },
+      { key: 'gravity', label: 'Gravité (retombée)', min: 0, max: 1200, step: 10 },
+      { key: 'scaleStart', label: 'Gouttes : taille au départ', min: 0.1, max: 3, step: 0.05 },
+      { key: 'scaleEnd', label: 'Gouttes : taille à la fin', min: 0, max: 2, step: 0.05 },
+      { key: 'lifeMin', label: 'Gouttes : durée min (ms)', min: 100, max: 2000, step: 10 },
+      { key: 'lifeMax', label: 'Gouttes : durée max (ms)', min: 100, max: 3000, step: 10 },
+      { key: 'bloodColor', label: 'Sang', min: 0, max: 0, step: 1, color: true },
+      { key: 'bloodDark', label: 'Sang sombre', min: 0, max: 0, step: 1, color: true },
+      { key: 'bloodLight', label: 'Sang vif', min: 0, max: 0, step: 1, color: true },
+      { key: 'mistAlpha', label: 'Vapeur : opacité', min: 0, max: 1, step: 0.05 },
+      { key: 'mistScale', label: 'Vapeur : taille finale', min: 0.1, max: 3, step: 0.05 },
+      { key: 'mistLife', label: 'Vapeur : durée (ms)', min: 100, max: 3000, step: 50 },
+      { key: 'mistRise', label: 'Vapeur : montée (px/s)', min: 0, max: 200, step: 1 },
+      { key: 'mistColor', label: 'Vapeur : couleur', min: 0, max: 0, step: 1, color: true },
     ],
   },
   {
@@ -456,6 +526,8 @@ export class ParticleViewerScene extends Phaser.Scene {
   private shakeKind: 'slam' | 'death' | 'bigKill' | 'boss' | 'egg' = 'slam';
   private shock!: ShockDistort;
   /** Aperçu du globe de stase : zone dessinée à chaque image jusqu'à `until` (ms de la scène). */
+  /** Aperçu du globe d'upgrade en cours (un seul à la fois : les textures de globe sont refaites à chaque lecture). */
+  private orbPreview?: { stop: () => void };
   private field?: { kind: 'heal' | 'stasis'; x: number; y: number; until: number; nextCross: number };
   /** Aperçu du glaçon : image, fissures, PV restants (sur 20) et prochain coup. */
   private ice?: { body: Phaser.GameObjects.Image; cracks: Phaser.GameObjects.Image; x: number; y: number; hp: number; next: number };
@@ -552,10 +624,17 @@ export class ParticleViewerScene extends Phaser.Scene {
         break;
       case 'upgradeOrb': {
         // aperçu : un globe (upgrade « dégâts ») posé là, avec son rond rose au sol, pendant 4 s ; textures refaites (teinte modifiée)
+        this.orbPreview?.stop(); // l'aperçu précédent doit disparaître AVANT la suppression des textures : son image ferait planter le rendu
         clearGlobeTextures(this);
         const orb = new UpgradeOrbView(this, { id: 0, owner: 'p1', upgrade: 'damage', x, y, px: x, py: y, life: 1e9, age: 9 });
         const ground = this.add.graphics().setDepth(DEPTH.ground + 4);
         const end = this.time.now + 4000;
+        const stop = (): void => {
+          timer.remove();
+          orb.kill();
+          ground.destroy();
+          if (this.orbPreview?.stop === stop) this.orbPreview = undefined;
+        };
         const timer = this.time.addEvent({
           delay: 16,
           loop: true,
@@ -564,13 +643,10 @@ export class ParticleViewerScene extends Phaser.Scene {
             ground.clear();
             drawPickupSpot(ground, x, y, UPGRADE_PINK, t, 0);
             orb.sync(x, y - GLOBE_LIFT * FX.recruit.displayScale + Math.sin(t * 5) * 4, y, t);
-            if (this.time.now > end) {
-              timer.remove();
-              orb.kill();
-              ground.destroy();
-            }
+            if (this.time.now > end) stop();
           },
         });
+        this.orbPreview = { stop };
         break;
       }
       case 'gain':
@@ -598,6 +674,36 @@ export class ParticleViewerScene extends Phaser.Scene {
         this.time.delayedCall(2000, () => {
           flames.stop();
           this.time.delayedCall(900, () => flames.destroy());
+        });
+        break;
+      }
+      case 'burn': {
+        const body = sprites.add(this, 'soldier_trooper', x, y).setDepth(6).setScale(sprites.scaleOf('soldier_trooper'));
+        sprites.place(body, 'soldier_trooper');
+        const burn = new BurnFx(this);
+        const end = this.time.now + 4000;
+        const timer = this.time.addEvent({
+          delay: 16,
+          loop: true,
+          callback: () => {
+            burn.update(x, y, this.time.now / 1000, 0, 6);
+            if (this.time.now > end) {
+              timer.remove();
+              burn.destroy();
+              body.destroy();
+            }
+          },
+        });
+        break;
+      }
+      case 'levelUp':
+        this.fx.levelUpSoldier(() => ({ x, y }));
+        break;
+      case 'stimBlood': {
+        const blood = new StimBloodFx(this, 20).setPosition(x, y);
+        this.time.delayedCall(2000, () => {
+          blood.stop();
+          this.time.delayedCall(1000, () => blood.destroy());
         });
         break;
       }
@@ -778,7 +884,7 @@ export class ParticleViewerScene extends Phaser.Scene {
     this.paramBox.append(note(e.where));
 
     // réglages d'aperçu propres à l'effet (non enregistrés : ce sont ceux de l'événement en jeu)
-    if (['impact', 'gloop', 'puddle', 'column', 'death', 'gain', 'upgradeOrb'].includes(e.id)) this.paramBox.append(colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row);
+    if (['impact', 'gloop', 'puddle', 'column', 'death', 'gain'].includes(e.id)) this.paramBox.append(colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row);
     if (e.id === 'burst') {
       this.paramBox.append(
         colorInput('Teinte (aperçu)', () => this.tint, (v) => (this.tint = v)).row,

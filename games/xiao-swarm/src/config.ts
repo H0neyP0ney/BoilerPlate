@@ -58,7 +58,7 @@ export const TEST_FLAGS = { allBossAbilities: false }; // objet mutable : les sc
  * Power-up Orbes électriques (17/10, ex-Fireball) : `count` orbes électriques tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
  * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
  */
-export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 3.4, damage: 20, rehit: 0.5, hit: 16 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 % puis +15 % : 1,38 ; 4 orbes au lieu de 3, 17/10)
+export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 3.4, damage: 16, rehit: 0.5, hit: 16 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 % puis +15 % : 1,38 ; 4 orbes au lieu de 3, 17/10)
 /**
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.
@@ -201,10 +201,10 @@ export const DIFFICULTY_DEFAULTS = {
    * d'attaque, vitesse ; ni XP ni recrues) ; `…ScaleMul` agit sur les stats qui GRANDISSENT avec les boss tués : il multiplie chaque gain d'escalade ci-dessus
    * (1,1 : +15 % par boss devient +16,5 %). Voir `Sim.escalation*`.
    */
-  expertBaseMul: 1.1,
-  expertScaleMul: 1.1,
-  impossibleBaseMul: 1.2,
-  impossibleScaleMul: 1.2,
+  expertBaseMul: 1.15,
+  expertScaleMul: 1.15,
+  impossibleBaseMul: 1.3,
+  impossibleScaleMul: 1.3,
   /**
    * Diamants du coffre des boss (17/10) : la quantité MOYENNE vient du boss (`AlienDef.diamonds`, vue d'unité) ; ces multiplicateurs la règlent par niveau (Normal, Hard = id `expert`, Expert = id
    * `impossible`) ; `gemFreeShare` = part (du contenu du coffre) qui jaillit tout de suite autour de l'œuf quand on l'ouvre.
@@ -219,7 +219,7 @@ export const DIFFICULTY_DEFAULTS = {
    * PV de l'œuf d'un boss (17/10) : adaptés au DPS théorique des squads vivantes pour que sa destruction dure `eggBreakTime` s ; `eggEfficiency` = part de ce DPS réellement appliquée (portée, soldats
    * hors de portée, balles perdues) ; `eggMinHp` = plancher.
    */
-  eggBreakTime: 2,
+  eggBreakTime: 4,
   eggEfficiency: 0.7,
   eggMinHp: 200,
   /** Boss final : multiplicateur de son or (`COINS.bossCoins` pièces pour un boss ordinaire). */

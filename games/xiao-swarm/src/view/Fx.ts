@@ -469,6 +469,82 @@ export class Fx {
     ];
   }
 
+  /**
+   * Montée de niveau, sur UN soldat (appelé pour chacun de la squad) : colonne bleue creuse qui monte (tube : parois translucides + ellipses haut et bas), cercle bleu au sol qui s'élargit,
+   * particules bleu-blanc qui montent avec la colonne. `pos` donne la position COURANTE du soldat (lue à chaque image : l'effet le suit ; s'il disparaît, la dernière position est gardée). Réglages : `FX.levelUp`.
+   */
+  levelUpSoldier(pos: () => { x: number; y: number } | undefined): void {
+    const k = FX.levelUp;
+    const flat = FX.ring.squash; // même écrasement que les ellipses du sol
+    const first = pos();
+    if (!first) return;
+    let at = first; // dernière position connue du soldat
+    // cercle au sol (sous les unités) : l'échelle et l'opacité sont animées par `ring`, la position suit le soldat
+    const ring = this.ring(first.x, first.y, k.ringR, k.color, k.ringMs);
+    ring.setDepth(DEPTH.groundFx);
+    const g = this.scene.add.graphics().setDepth(DEPTH.fx); // mélange normal : en additif le bleu se délave en blanc sur le sol orange
+    const dots = Array.from({ length: k.particles }, () => {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * k.colR;
+      return {
+        img: this.scene.add
+          .image(0, 0, 'fx_dot')
+          .setTint(Math.random() < 0.5 ? k.colorLight : k.color)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(DEPTH.fx + 1)
+          .setScale(k.partSize * Phaser.Math.FloatBetween(0.6, 1.2))
+          .setAlpha(0),
+        dx: Math.cos(a) * d,
+        dy: Math.sin(a) * d * flat,
+        rise: Phaser.Math.FloatBetween(k.partRiseMin, k.partRiseMax),
+        delay: Math.random() * k.colMs * 0.4,
+        life: k.colMs * Phaser.Math.FloatBetween(0.55, 0.9),
+      };
+    });
+    const total = k.colMs * 1.35; // les particules les plus tardives finissent à ~1,3 × la durée de la colonne
+    const drawColumn = (x: number, y: number, p: number): void => {
+      g.clear();
+      if (p >= 1) return;
+      const rise = k.colRise * Phaser.Math.Easing.Cubic.Out(p);
+      const a = k.colAlpha * (p < 0.15 ? p / 0.15 : 1 - (p - 0.15) / 0.85); // apparition rapide puis fondu
+      const yb = y - rise; // pied de la colonne
+      const yt = yb - k.colH; // sommet
+      const ry = k.colR * flat;
+      // parois : bande verticale translucide, de plus en plus transparente vers le haut (8 tranches)
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const y0 = yb - (k.colH * i) / n;
+        g.fillStyle(k.color, a * 0.5 * (1 - i / (n + 1)));
+        g.fillRect(x - k.colR, y0 - k.colH / n, k.colR * 2, k.colH / n);
+      }
+      // arêtes brillantes à gauche et à droite
+      g.lineStyle(3, k.color, a).lineBetween(x - k.colR, yb, x - k.colR, yt).lineBetween(x + k.colR, yb, x + k.colR, yt);
+      // ellipses du bas (nette) et du haut (plus claire) : l'intérieur reste vide
+      g.lineStyle(4, k.color, a).strokeEllipse(x, yb, k.colR * 2, ry * 2);
+      g.lineStyle(3, k.colorLight, a * 0.8).strokeEllipse(x, yt, k.colR * 2, ry * 2);
+    };
+    const counter = this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: total,
+      onUpdate: (tw) => {
+        at = pos() ?? at; // le soldat a pu bouger : on le suit (dernière position connue s'il a disparu)
+        const ms = (tw.getValue() ?? 0) * total;
+        ring.setPosition(at.x, at.y);
+        drawColumn(at.x, at.y, Math.min(1, ms / k.colMs));
+        for (const d of dots) {
+          const t = Phaser.Math.Clamp((ms - d.delay) / d.life, 0, 1);
+          d.img.setPosition(at.x + d.dx, at.y + d.dy - d.rise * Phaser.Math.Easing.Sine.Out(t)).setAlpha(t <= 0 ? 0 : Math.min(1, t / 0.1) * (t < 0.4 ? 1 : 1 - (t - 0.4) / 0.6));
+        }
+      },
+      onComplete: () => {
+        g.destroy();
+        dots.forEach((d) => d.img.destroy());
+      },
+    });
+    g.once(Phaser.GameObjects.Events.DESTROY, () => counter.remove());
+  }
+
   /** Gain d'un soldat (recrue qui rejoint la squad) : éclats de sa classe, double onde, flash blanc et « +1 » vert qui s'élève (la colonne bleue est posée par `WorldView.syncUnits`). */
   gain(x: number, y: number, color: number): void {
     const g = FX.gain;

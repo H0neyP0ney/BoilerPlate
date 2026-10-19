@@ -466,7 +466,7 @@ try {
     a.x = near.x; a.y = near.y; a.vx = a.vy = 0;
     sim.step(1 / 30, new Map());
     const second = hp0 - a.hp - first;
-    check(active && first === ELECTRO.damage && second === 0, 'orbes électriques : orbes actives 8 s, une collision inflige 20 dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
+    check(active && first === ELECTRO.damage && second === 0, 'orbes électriques : orbes actives 8 s, une collision inflige ELECTRO.damage (16) dégâts (pas à chaque tick)', `actif ${active}, 1er coup ${first}, 2e tick ${second}`);
     for (let i = 0; i < 30 * 9; i++) { sim.step(1 / 30, new Map()); a.hp = a.maxHp; }
     check(sq.buffs.electro <= 0, 'orbes électriques : les orbes disparaissent après 8 s', `${sq.buffs.electro.toFixed(2)} s restant`);
   }
@@ -578,7 +578,7 @@ try {
     check(small.dps > 0 && small.hp === wantSmall && big.hp > small.hp * 2, 'œuf : PV adaptés au DPS de la squad (destruction ~2 s) et à son nombre de soldats', `4 soldats : ${small.dps.toFixed(0)} DPS → ${small.hp} PV ; 12 soldats : ${big.dps.toFixed(0)} DPS → ${big.hp} PV`);
   }
 
-  // ---- shooter : à sa mort, 2 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard), l'une après l'autre (0,1 s d'écart) ; pas pendant un clear screen
+  // ---- shooter : à sa mort, 3 boules rouges en cloche retombent autour de lui (50-130 px, directions au hasard), l'une après l'autre (0,1 s d'écart : 0 / 0,1 / 0,2 s) ; pas pendant un clear screen
   {
     const { sim } = fresh(39);
     clearAliens(sim);
@@ -590,12 +590,12 @@ try {
     sim.damage(sh, 1e9, 'p1');
     const none = new Map();
     const first = lobs().length; // la première part tout de suite
-    for (let i = 0; i < 2; i++) sim.step(1 / 30, none); // ~0,07 s : la seconde attend encore
+    for (let i = 0; i < 2; i++) sim.step(1 / 30, none); // ~0,07 s : la deuxième attend encore
     const early = lobs().length;
-    for (let i = 0; i < 4; i++) sim.step(1 / 30, none); // ~0,2 s en tout : elle est partie
+    for (let i = 0; i < 6; i++) sim.step(1 / 30, none); // ~0,27 s en tout : les trois sont parties
     const blobs = lobs();
     const dists = blobs.map((p) => Math.hypot(p.x + p.vx * p.life - sh.x, p.y + p.vy * p.life - sh.y));
-    check(first === 1 && early === 1 && blobs.length === 2 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 2 boules rouges en cloche autour de lui, l'une après l'autre (0,1 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
+    check(first === 1 && early === 1 && blobs.length === 3 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 3 boules rouges en cloche autour de lui, l'une après l'autre (0,1 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
   }
 
   // ---- rhinos jumeaux (Expert) : 2 orbes électriques tournent en continu autour de chacun (100 px) ; un soldat touché perd 10 PV (au plus une fois par orbe et par 0,5 s) ; rien en Normal

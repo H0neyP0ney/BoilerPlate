@@ -214,6 +214,7 @@ export class ClientSession implements Session {
       this.latestSeq = Math.max(this.latestSeq, snap.seq);
       let i = this.buffer.length;
       while (i > 0 && this.buffer[i - 1].seq > snap.seq) i--;
+      if (i > 0 && this.buffer[i - 1].seq === snap.seq) return; // doublon (le réseau peut livrer deux fois) : rejoué, son `tick` identique ferait croire à un monde figé
       this.buffer.splice(i, 0, snap);
       while (this.buffer.length > MAX_BUFFER) this.applySnapshot(this.buffer.shift()!);
       return;

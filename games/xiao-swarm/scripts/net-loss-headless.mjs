@@ -201,6 +201,13 @@ try {
       const hs = w.host.sim;
       const a = hs.squadOf(w.host.localPlayer);
       Object.assign(w.hub.conditions, cond);
+      let twice = 0, lastSeq = -1;
+      const origApply = client.mirror.apply.bind(client.mirror);
+      client.mirror.apply = (snap, next) => {
+        if (snap.seq === lastSeq) twice++;
+        lastSeq = snap.seq;
+        origApply(snap, next);
+      };
       let stalls = 0, samples = 0;
       const prevPos = new Map();
       for (let i = 0; i < 300; i++) {
@@ -220,7 +227,7 @@ try {
           if (Math.hypot(al.x - p.x, al.y - p.y) < 0.05) stalls++;
         }
       }
-      console.log(`  ${label} : ${stalls} arrêts d'alien affiché sur ${samples} (${((100 * stalls) / Math.max(1, samples)).toFixed(2)} %) ; réseau ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
+      console.log(`  ${label} : ${stalls} arrêts d'alien affiché sur ${samples} (${((100 * stalls) / Math.max(1, samples)).toFixed(2)} %) ; snapshots appliqués deux fois : ${twice} ; réseau ${w.hub.stats.duplicated} doublés / ${w.hub.stats.sent}`);
     }
   }
 

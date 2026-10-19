@@ -37,10 +37,10 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 |---|---|---|
 | Pas de simulation (hôte **et** client) | 30 Hz fixe | `TICK_RATE` (`Session.ts`) |
 | Snapshots hôte → clients | 15 Hz (1 tick sur 2), canal `unreliable`, binaire | `SNAPSHOT_EVERY` (`Protocol.ts`) |
-| Événements hôte → clients | groupés avec chaque snapshot (même `seq`), canal **`unreliable`** (donc non fiables). Sauf `shot` / `impact` / `hit` : en binaire **dans** le snapshot depuis v38 | `HostSession.broadcast` |
+| Événements hôte → clients | groupés avec chaque snapshot (même `seq`), canal **`unreliable`** (donc non fiables). Sauf `shot` / `impact` / `hit` : en binaire **dans** le snapshot depuis v38 ; et `gameEnd`, `restart`, `boss`, `bossDown`, `bossEnrage` : message `events` à part sur le canal **`reliable`** (19/10, `RELIABLE_EVENTS` : écran de fin, déblocage du niveau, `gameplayStop`, bandeaux) | `HostSession.broadcast` |
 | Tampon d'interpolation (client) | **100 ms** : snapshots et événements joués à cadence régulière, 100 ms derrière le plus récent reçu (v38) ; 0 = appliqués dès réception. **Ne concerne PAS la squad locale** (lue sans délai depuis le 19/10, `Mirror.applyLocal`) | `INTERP_DELAY_MS` (`ClientSession.ts`) |
-| Inputs client → hôte | **1 par tick** (30/s), JSON, canal `unreliable`, numérotés `n`, avec les **2 précédents** (`prev`, v76). L'hôte les met dans une **file** et en joue **UN par tick** dans l'ordre (v76) | `ClientSession.sendInput`, `HostSession.consumeInput` |
-| Messages de contrôle (`hello`, `welcome`, `refused`, `upgrade`) | `reliable` | |
+| Inputs client → hôte | **1 par tick** (30/s), JSON, canal `unreliable`, numérotés `n`, avec les **inputs non acquittés** (`prev` : n-1, n-2…, de 2 à `MAX_PREV_INPUTS` 8 ; 2 seulement avant le 19/10). L'hôte les met dans une **file** et en joue **UN par tick** dans l'ordre (v76). Input **tenu** (monde figé, pause annoncée) : envoyé nul (19/10) | `ClientSession.sendInput`, `HostSession.consumeInput` |
+| Messages de contrôle (`hello`, `welcome`, `refused`, `upgrade`, `reroll`) | `reliable`. `upgrade` / `reroll` portent `offer` (cartes affichées, `offerKey`) : l'hôte refuse si sa proposition a changé (19/10) | `HostSession.sameOffer` |
 | Joueurs max (hôte inclus) | 4 | `MAX_PLAYERS` (`HostSession.ts`) |
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 21 octets / alien, 23 / soldat, 12,5 / projectile, 7 / globe, 7 / flamme (v38) ; ≈ 6 Ko pour 145 aliens + 60 soldats + 200 globes | `encodeSnapshot(…, sizes)` |
@@ -77,8 +77,10 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
 
 Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (aucun aller-retour), sans que la correction par l'hôte se voie.
 
-1. **Tick client** (`ClientSession.advance` → `Mirror.step`, 30 Hz) : l'input courant est numéroté `n`, envoyé à l'hôte (avec les 2 précédents, `prev`), et appliqué tout de suite à l'**ancre prédite**
-   (`AnchorPredictor.step` → `stepAnchor` de `sim/Squad.ts`, le même code que l'hôte). L'historique des inputs (`HISTORY` 120 ticks) sert au rejeu.
+1. **Tick client** (`ClientSession.advance` → `Mirror.step`, 30 Hz) : l'input courant est arrondi (comme l'hôte le recevra), numéroté `n`, appliqué tout de suite à l'**ancre prédite**
+   (`AnchorPredictor.step` → `stepAnchor` de `sim/Squad.ts`, le même code que l'hôte), puis envoyé à l'hôte avec les inputs non acquittés (`prev`, 2 à 8). L'historique des inputs (`HISTORY` 120 ticks)
+   sert au rejeu. **Input tenu** : si le monde est figé chez l'hôte d'après le dernier snapshot reçu (`Mirror.localFrozen` : pause de choix, tick qui n'avance plus) ou si l'input dépasse la limite
+   d'une pause annoncée, la prédiction ne bouge pas et l'input part **nul** (`Mirror.inputHeld`) : l'hôte fait la même chose (19/10).
 2. **Hôte** (`HostSession`) : les inputs reçus entrent dans une **file** par joueur (`RemotePlayer.queue`) : dédoublonnés par `n`, trous comblés (`prev`, sinon répétition du dernier input, `MAX_INPUT_GAP` 8),
    file plafonnée à `MAX_INPUT_QUEUE` 6. `consumeInput` en joue **un par tick d'hôte**, dans l'ordre ; file vide = on garde le dernier input ; file toujours ≥ 2 pendant `INPUT_QUEUE_WINDOW` 90 ticks = on la
    raccourcit d'un cran (la gigue a disparu). `ack` = numéro du dernier input **joué** (avant : « reçu »). Avant le 19/10 l'hôte appliquait « le dernier input reçu » : une rafale sautait des numéros et l'ancre
@@ -100,26 +102,29 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    - **États pilotés par l'hôte** (`Mirror.hostDriven` : gelé, étourdi, dans une bulle, en vol vers la Gling Mère, soufflé par un kamikaze) : pas de modèle, position hôte.
 6. **Pause de choix d'upgrade** : l'hôte fige sa simulation `LEVEL_UP_DELAY` (1 s) après le level up et jette ensuite les inputs. Le snapshot porte `choiceT` (pause ouverte) et `choiceIn` (ticks avant
    l'ouverture) : `Mirror.limitOf` en déduit le **dernier input que l'hôte jouera** (`AnchorPredictor.limitN` ; pause ouverte = `ack`) et la prédiction (ancre et soldats, `localHold`) s'y arrête. Avant :
-   recul de 36 à 66 px (2 à 4 ticks de latence) à l'ouverture ; maintenant 0 px. À la reprise de la partie, un petit saut en avant reste possible (non traité).
+   recul de 36 à 66 px (2 à 4 ticks de latence) à l'ouverture ; maintenant 0 px. **Reprise** (19/10) : ma squad (ancre et soldats) repart dès le premier snapshot reçu sans pause (`localFrozen`,
+   plus le gel du snapshot tamponné, 100 ms plus vieux), et les inputs tenus pendant l'aller simple où le client ignore la reprise partent nuls. Avant : squad figée 7 ticks puis 21-23 px/tick ;
+   maintenant 10,8 px/tick au premier pas puis la croisière (7,6) (`sim:netloss -- resume`). Contrepartie : chez l'hôte, la squad de l'invité roule ~260 ms avant de repartir.
 7. **Vue** (`view/UnitViews.ts`, `SoldierView.sync`) : le sens du sprite et l'animation de marche suivent une vitesse **lissée** (`VELOCITY_SMOOTH` 0,12 s), pas la vitesse brute : les petites poussées
    latérales (séparation, aliens) ne retournent plus les soldats gauche / droite en courant vers le haut ou le bas. Vaut aussi pour l'hôte et le solo.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre autour du cœur de la squad
 (`Squad.update` § 2 : l'ancre hôte peut être tirée en arrière, pas la prédite), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,
-sans prédiction.
+sans prédiction. **Mesure (audit du 19/10)** : la laisse est le plus gros écart restant : invité de 40 soldats dans une horde, correction p95 22 px par snapshot (1,1 px laisse coupée) ; deux façons de la
+prédire ont été essayées et rejetées (chiffres et pistes : `docs/AUDIT_NETCODE.md` § 2.1).
 
 **Constantes** : `SNAP` 80, `BLEND` 0,4, `HISTORY` 120 (`Prediction.ts`) ; `SOLDIER_BLEND` 0,4, `SOLDIER_SNAP` 80, `SLOT_REST` 8, `SLOT_TOLERANCE` 30, `CAPPED_FRACTION` 0,92, `ENTER_CLOSE_SPEED` 200,
 `SOLDIER_MAX_STEP` 14, `CATCH_UP` 0,5, `TELEPORT` 240 (`Mirror.ts`) ; `VELOCITY_SMOOTH` 0,12 (`view/UnitViews.ts`) ; `MAX_INPUT_QUEUE` 6, `INPUT_QUEUE_WINDOW` 90, `MAX_INPUT_GAP` 8 (`HostSession.ts`) ;
-`INTERP_DELAY_MS` 100 (`ClientSession.ts`).
+`INTERP_DELAY_MS` 100, `MAX_BUFFER` 16 (et `eventBuffer` borné à 64 paquets, onglet caché), `MAX_PREV_INPUTS` 8 (`ClientSession.ts`).
 
 **Chronologie du ressenti d'un joueur invité (19/10) et ce que chaque retour a révélé** : (a) « je me bats avec la réconciliation, ça jitter avec de petits inputs » → le tampon de 100 ms s'appliquait aussi à
 ma squad, puis l'hôte rejouait les inputs dans le désordre ; (b) « le départ et l'arrêt sont pourris » → soldats sans inertie (déplacement rigide de l'ancre) ; (c) « les soldats isolés reviennent en
 saccades, puis trop lentement » → modèle de foule faux quand la vitesse est plafonnée, puis queue exponentielle de la résorption ; (d) « les sprites changent de direction en courant » → vue (vitesse brute) ;
 (e) « petit jitter à la pause de level up » → la prédiction dépassait la pause annoncée.
 
-**Pistes ouvertes** (non traitées) : prédire la laisse de l'ancre et la séparation / poussée des aliens (réduirait le fondu des soldats) ; transmettre le `gain` de chaque soldat ou ses slots ; saut en
-avant à la reprise après la pause de choix ; prédire les soldats isolés qui reviennent (retard d'un aller simple aujourd'hui) ; tester avec de la **perte de paquets** et du réordonnancement (aucun script
-ne les simule) ; revoir `INTERP_DELAY_MS` (100 ms) et le plafond de file d'inputs ; envisager un tampon adaptatif pour les aliens ; 15 Hz de snapshots contre 30 Hz de simulation.
+**Pistes ouvertes** (non traitées ; détail, mesures et essais rejetés : `docs/AUDIT_NETCODE.md`) : prédire la laisse de l'ancre et la poussée des aliens (§ 2.1, le plus gros écart restant) ; débit à
+4 joueurs (§ 2.2 : 11,4 Ko par snapshot, 514 Ko/s en sortie chez l'hôte) ; retard ajouté par la file d'inputs de l'hôte, équité des dégâts (§ 2.3 : +1,9 tick avec de la gigue) ; transmettre le `gain`
+de chaque soldat ou ses slots ; prédire les soldats isolés qui reviennent (retard d'un aller simple aujourd'hui) ; tampon d'interpolation adaptatif ; annoncer la reprise après la pause de choix (v78).
 
 ### Pièges (déjà rencontrés)
 - **Encodeur / décodeur binaires : mêmes tests, sur la valeur *écrite*.** Un champ conditionnel (`if (def.rush) …`, `if (valeur > 0) w.f32…`) doit tester
@@ -149,9 +154,11 @@ ne les simule) ; revoir `INTERP_DELAY_MS` (100 ms) et le plafond de file d'input
   présents, petits inputs dans tous les sens. Sortie : « correction d'ancre par snapshot » (doit rester ≈ 0,04 px) et à-coup du centre affiché, invité contre hôte.
 - `npm run sim:startstop -- <latence> [aliens] [gigue]` : profil de vitesse du centre de la squad au démarrage et à l'arrêt (invité contre hôte), changements de sens des soldats en course verticale
   (`KICK=1 NS=35` simule des poussées d'aliens), **recul à l'ouverture de la pause de choix** (`NOLIMIT=1` désactive la limite de prédiction pour comparer), retour d'un **soldat isolé** (pas max, remontées
-  d'écart, retard d'arrivée par rapport à l'hôte). Aucun de ces scripts ne simule de **perte de paquets** ni de réordonnancement : seulement latence fixe et gigue.
-  convergence à l'arrêt, téléportation, pause de choix d'upgrade, encodage de l'ack. Le loopback est **parfait** (pas de perte, pas de gigue) :
-  il valide la logique, pas la sensation de jeu.
+  d'écart, retard d'arrivée par rapport à l'hôte). Ces trois scripts ne simulent que latence fixe et gigue (FIFO).
+- `npm run sim:netloss -- [recon|resume|dup|events|upgrade|hidden|big]` (19/10, `scripts/net-loss-headless.mjs`) : réseau **dégradé et seedé** (perte, gigue réordonnée, doublons, rafales,
+  latence asymétrique : `LoopbackHub.conditions`, `latencyTo`, `seed`, `stats`) : réconciliation sous 5 profils et file d'inputs de l'hôte, reprise après la pause de choix, snapshots doublés,
+  `gameEnd` / `restart` avec 30 % de perte, choix d'upgrade tardif, onglet caché, 4 joueurs × 40 soldats + ~470 aliens (débit, fragments). Détail : `docs/AUDIT_NETCODE.md`.
+- Par défaut le loopback est **parfait** (pas de perte, pas de gigue, ordre conservé) : il valide la logique, pas la sensation de jeu.
 - En navigateur : deux **fenêtres** côte à côte + F12 → Réseau → Throttling (latence, hors ligne).
 
 ## Pistes d'amélioration (par ordre de rentabilité)
@@ -160,9 +167,8 @@ ne les simule) ; revoir `INTERP_DELAY_MS` (100 ms) et le plafond de file d'input
 2. ~~**Interpolation des entités distantes**~~ : *fait en v38* (tampon de 100 ms, voir § Optimisations v37-v38). *Fait en v43 pour les aliens* :
    vraie interpolation entre deux snapshots (`Mirror.apply(snap, next)` : vitesse = vers la position du snapshot suivant déjà dans le tampon,
    sinon depuis la précédente ; un saut > 2000 px/s = 0). Reste : soldats des autres squads, projectiles, objets au sol (vitesse reçue).
-3. **Événements fiables** : ils partent aujourd'hui en `unreliable` (un événement perdu = un effet manqué, jamais un état faux). Option : canal
-   `reliable` pour les rares événements structurants (`gameEnd`, `restart`, `levelUp`), ou rediffusion des N derniers événements avec numéro de séquence.
-4. **Test réseau plus dur** : ajouter perte et gigue à `LoopbackHub` (aujourd'hui latence fixe seulement) pour régler la prédiction de façon reproductible.
+3. ~~**Événements fiables**~~ : *fait le 19/10* pour `gameEnd`, `restart`, `boss`, `bossDown`, `bossEnrage` (canal `reliable`, `RELIABLE_EVENTS`) ; les autres restent non fiables (effets).
+4. ~~**Test réseau plus dur**~~ : *fait le 19/10* (`LoopbackHub.conditions`, `npm run sim:netloss`).
 5. **Compensation de latence du ressenti** : un client voit les aliens ~150 ms en retard alors que l'hôte tranche les dégâts. À surveiller en playtest,
    surtout pour les télégraphes de charge (rhino) et de saut (crabe). Pas de remède simple (rewind côté hôte = complexe).
 6. **Bande passante** : snapshots par delta (n'envoyer que ce qui change), filtrage par zone visible (« interest management »), inputs en binaire

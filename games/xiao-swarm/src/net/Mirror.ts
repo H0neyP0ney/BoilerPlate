@@ -8,7 +8,7 @@ import { CLASSES } from '../data/classes';
 import type { AlienState, GemState, PowerUpState, Projectile, RecruitState, SoldierState, UpgradeOrbState, Unit, XpOrb } from '../sim/entities';
 import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
-import type { PlayerId } from '../sim/types';
+import type { PlayerId, SimEvent } from '../sim/types';
 import { AnchorPredictor } from './Prediction';
 import { SNAPSHOT_EVERY, type AlienSnap, type ProjectileSnap, type RecruitSnap, type Snapshot, type SoldierSnap } from './Protocol';
 import { TICK_RATE } from './Session';
@@ -63,6 +63,15 @@ interface CrowdState {
   oy: number;
 }
 
+/** Avance des télégraphes (s) : au plus (au-delà, réseau anormal : on n'en rajoute pas), et part de l'écart à la mesure fondue à chaque snapshot. */
+const MAX_TELE_LEAD = 0.5;
+const TELE_LEAD_SMOOTH = 0.25;
+/** Temps (s) pendant lequel un télégraphe dont l'impact a été joué ici reste écarté des snapshots (l'hôte le garde encore un moment), et pendant lequel un
+ * effet d'impact joué ici attend son double venu de l'hôte (qu'on jette). */
+const TELE_DONE_TTL = 2;
+/** Écart (px) sous lequel un effet d'impact de l'hôte est le même que celui déjà joué ici. */
+const IMPACT_MATCH = 24;
+
 /** Input du tick client courant, pour la prédiction de la squad locale. */
 export interface LocalInput {
   n: number;
@@ -97,6 +106,25 @@ export class Mirror {
   private readonly goals = new WeakMap<object, Goal>();
 
   readonly predictor = new AnchorPredictor();
+
+  /**
+   * Avance des télégraphes (s). Ma squad est prédite (en avance sur l'hôte d'un aller simple + la file d'inputs), le reste du monde arrive en retard (un aller
+   * simple + le tampon de 100 ms) : sans correction, je voyais la fin d'un télégraphe ~230-300 ms après que l'hôte a jugé ma squad (« j'étais sorti et j'ai
+   * pris les dégâts »). L'écart se mesure exactement : mon input courant − l'`ack` du snapshot affiché (l'input que l'hôte avait joué quand il l'a pris).
+   * Les minuteurs des télégraphes (stalactites, croix de pics, murs, pics du lurker et du crabe, saut du crabe, boules en cloche des aliens) sont avancés
+   * d'autant : leur fin tombe quand ma squad affichée est là où l'hôte la juge. 0 sans squad prédite (spectateur, mort).
+   */
+  teleLead = 0;
+  /** Dernier input local joué (`step`). */
+  private lastN = 0;
+  /** Télégraphes dont l'impact a été joué ici (clé → temps restant) : écartés des snapshots tant que l'hôte les garde. */
+  private readonly teleDone = new Map<string, number>();
+  /** Effets d'impact joués ici (`localEvents`), en attente de leur double venu de l'hôte. */
+  private readonly localImpacts: { t: SimEvent['t']; x: number; y: number; ttl: number }[] = [];
+  /** Effets d'impact joués ici au moment où le télégraphe avancé se termine : `ClientSession` les envoie à la vue. */
+  readonly localEvents: SimEvent[] = [];
+  /** Saut du crabe : dernier `leapT` reçu de l'hôte (nouveau saut = il remonte) et point de départ (NaN = vu en plein vol, inconnu). */
+  private readonly leapSeen = new Map<number, number>();
 
   /** Soldat reflété (par id) : `ClientSession` y lit la classe et la visée d'un tir reçu en binaire (`Snapshot.shots`). */
   soldier(id: number): SoldierState | undefined {
@@ -309,6 +337,7 @@ export class Mirror {
       this.applyLocalSquad(squad, sq, snap.choiceT > 0, Mirror.limitOf(snap, sq), seenSoldiers);
     }
     prune(this.soldiers, seenSoldiers);
+    this.measureTeleLead(snap);
     // Joueurs partis : leur squad n'est plus dans le snapshot.
     for (let i = sim.squads.length - 1; i >= 0; i--) {
       if (!snap.squads.some((sq) => sq.owner === sim.squads[i].owner)) sim.squads.splice(i, 1);
@@ -383,12 +412,103 @@ export class Mirror {
     const CX = ALIENS.boss_rhino.spikeCross!;
     for (const c of snap.crosses) sim.crosses.push({ id: c.id, x: c.x, y: c.y, t: c.t, s: c.s, length: CX.length, width: CX.width, aim: CX.aim, sweep: CX.sweep, damage: 0 });
     sim.stalactites.length = 0; // télégraphes seulement (l'impact est calculé chez l'hôte)
-    for (const k of snap.stalactites) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
+    for (const k of snap.stalactites) if (!this.teleDone.has('s' + k.id)) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
+    for (let i = sim.crosses.length - 1; i >= 0; i--) if (this.teleDone.has('c' + sim.crosses[i].id)) sim.crosses.splice(i, 1);
 
     // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits. Ceux de ma squad : lus par `applyLocal`
     const mine = this.directLocal ? snap.squads.findIndex((q) => q.owner === this.localPlayer) : -2;
-    this.syncProjectiles(snap.projectiles, this.projectiles, (p) => p.squad !== mine || mine < 0);
+    this.syncProjectiles(snap.projectiles, this.projectiles, (p) => (p.squad !== mine || mine < 0) && !this.teleDone.has('l' + p.id));
     for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
+    this.advanceTelegraphs(this.teleLead); // l'avance (les boules en cloche sont avancées dans `upsertProjectile`)
+  }
+
+  /** Avance des télégraphes d'après le snapshot affiché (voir `teleLead`). Monde figé : on garde la valeur (l'`ack` ne bouge plus, l'écart ne veut rien dire). */
+  private measureTeleLead(snap: Snapshot): void {
+    const sq = snap.squads.find((q) => q.owner === this.localPlayer);
+    if (!sq || sq.soldiers.length === 0 || !this.predictor.active || this.lastN === 0) {
+      this.teleLead = 0;
+      return;
+    }
+    if (this.frozen) return;
+    const raw = Math.max(0, Math.min(MAX_TELE_LEAD, (this.lastN - sq.ack) / TICK_RATE));
+    this.teleLead = this.teleLead > 0 ? this.teleLead + (raw - this.teleLead) * TELE_LEAD_SMOOTH : raw;
+  }
+
+  /** Effet d'impact joué ici (fin d'un télégraphe avancé) : envoyé à la vue, et son double venu de l'hôte sera jeté (`swallowHostEvent`). */
+  private localImpact(e: SimEvent & { x: number; y: number }): void {
+    this.localEvents.push(e);
+    this.localImpacts.push({ t: e.t, x: e.x, y: e.y, ttl: TELE_DONE_TTL });
+  }
+
+  /** Vrai si cet événement de l'hôte est l'impact d'un télégraphe déjà joué ici (`localImpact`) : la vue ne le rejoue pas. */
+  swallowHostEvent(e: SimEvent): boolean {
+    if (e.t !== 'stalactite' && e.t !== 'explosion' && e.t !== 'slam') return false;
+    const i = this.localImpacts.findIndex((l) => l.t === e.t && Math.hypot(l.x - e.x, l.y - e.y) < IMPACT_MATCH);
+    if (i < 0) return false;
+    this.localImpacts.splice(i, 1);
+    return true;
+  }
+
+  /**
+   * Fait avancer de `dt` s les télégraphes rendus ici (pas du snapshot à `teleLead`, puis chaque tick) : stalactites (impact joué ici, puis retirées), croix de
+   * pics (télégraphe puis poussée), murs, pics du lurker et couronne du crabe (télégraphe puis poussée), saut du crabe (impact joué à l'atterrissage).
+   */
+  private advanceTelegraphs(dt: number): void {
+    if (dt <= 0) return;
+    const { sim } = this;
+    for (let i = sim.stalactites.length - 1; i >= 0; i--) {
+      const k = sim.stalactites[i];
+      if ((k.t -= dt) > 0) continue;
+      sim.stalactites.splice(i, 1);
+      this.teleDone.set('s' + k.id, TELE_DONE_TTL);
+      this.localImpact({ t: 'stalactite', x: k.x, y: k.y, r: k.r });
+    }
+    for (let i = sim.crosses.length - 1; i >= 0; i--) {
+      const c = sim.crosses[i];
+      if (c.t > 0) {
+        c.t -= dt;
+        if (c.t >= 0) continue;
+        c.s += c.t; // le reste du pas passe dans la poussée
+        c.t = 0;
+      } else c.s -= dt;
+      if (c.s > 0) continue;
+      sim.crosses.splice(i, 1);
+      this.teleDone.set('c' + c.id, TELE_DONE_TTL);
+    }
+    for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // les rochers, eux, viennent du snapshot
+    for (const a of sim.aliens) {
+      const L = a.def.lurk ?? a.def.spikeRing;
+      if (L && a.lurkPhase === 3) {
+        if (a.def.spikeRing) a.spikeAng += (a.def.spikeRing.turn / a.def.spikeRing.aim) * Math.min(dt, a.lurkT); // le télégraphe du crabe tourne
+        a.lurkT -= dt;
+        if (a.lurkT <= 0) {
+          a.lurkPhase = 4; // les pics partent (la suite vient du snapshot)
+          a.lurkT = Math.max(0, L.sweep + a.lurkT);
+        }
+      } else if (L && a.lurkPhase === 4) a.lurkT = Math.max(0, a.lurkT - dt);
+      const J = a.def.leap;
+      if (J && a.leapT > 0) {
+        const land = J.recover; // `leapT` restant à l'atterrissage
+        const before = a.leapT;
+        a.leapT = Math.max(0, a.leapT - dt);
+        const key = 'j' + a.id;
+        if (before > land && a.leapT <= land && !this.teleDone.has(key)) {
+          this.teleDone.set(key, J.recover + 0.5);
+          this.localImpact({ t: 'slam', x: a.leapX, y: a.leapY, r: J.radius });
+        }
+      }
+    }
+  }
+
+  /** Saut du crabe : position pendant le vol, d'après le départ, le point d'impact et `leapT` (avancé) ; le snapshot, en retard, la ferait atterrir trop tard. */
+  private placeLeaper(a: AlienState): void {
+    const J = a.def.leap;
+    if (!J || a.leapT <= 0 || Number.isNaN(a.leapFromX)) return;
+    const elapsed = J.windup + J.flight + J.recover - a.leapT;
+    if (elapsed <= J.windup) return;
+    const k = Math.min(1, (elapsed - J.windup) / J.flight);
+    a.x = a.leapFromX + (a.leapX - a.leapFromX) * k;
+    a.y = a.leapFromY + (a.leapY - a.leapFromY) * k;
   }
 
   /** Un tick client : prédiction de la squad locale, extrapolation + lissage du reste, recalcul du centre des squads. */
@@ -401,6 +521,9 @@ export class Mirror {
     // ma squad : figée ou non d'après le dernier snapshot reçu (sans délai), pas d'après celui du tampon
     const localFrozen = this.directLocal ? this.localFrozen : this.frozen;
     this.inputHeld = !!local && this.predictor.step(sim.arena, local.n, local.mx, local.my, dtReal, localFrozen);
+    if (local) this.lastN = local.n;
+    for (const [k, t] of this.teleDone) if (t - dtReal <= 0) this.teleDone.delete(k); else this.teleDone.set(k, t - dtReal);
+    for (let i = this.localImpacts.length - 1; i >= 0; i--) if ((this.localImpacts[i].ttl -= dtReal) <= 0) this.localImpacts.splice(i, 1);
     this.localHold = !!local && local.n > this.predictor.limitN; // les inputs après la limite seront jetés par l'hôte (pause annoncée) : ma squad ne bouge plus
     const predicted = predicting && this.predictor.active;
     for (const sq of sim.squads) {
@@ -417,13 +540,14 @@ export class Mirror {
     }
     for (const a of sim.aliens) {
       this.follow(a, dt);
+      this.placeLeaper(a);
       // compteurs de télégraphes : la sim hôte les décompte à chaque tick, on fait pareil entre deux snapshots (sinon ils avancent par paliers de 66 ms)
       if (a.slamWind > 0) a.slamWind = Math.max(0, a.slamWind - dt);
       if (a.rushWind > 0) a.rushWind = Math.max(0, a.rushWind - dt); // négatif après la charge : on n'y touche pas
-      if (a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt);
       if (a.castT > 0) a.castT = Math.max(0, a.castT - dt);
-      if (a.lurkPhase === 3 && a.def.spikeRing) a.spikeAng += (a.def.spikeRing.turn / a.def.spikeRing.aim) * dt; // télégraphe des pics du crabe : il tourne, la rotation continue entre deux snapshots
-      if (a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
+      const telegraph = (a.def.lurk || a.def.spikeRing) && (a.lurkPhase === 3 || a.lurkPhase === 4); // pics du lurker et du crabe : `advanceTelegraphs`
+      if (!telegraph && a.lurkT > 0) a.lurkT = Math.max(0, a.lurkT - dt);
+      if (!a.def.leap && a.leapT > 0) a.leapT = Math.max(0, a.leapT - dt); // saut du crabe : `advanceTelegraphs` (Scarab : `leapT` = temps restant, ici)
       if (a.sinkT > 0) a.sinkT = Math.max(1e-3, a.sinkT - dt);
     }
     // éléments au sol à durée décroissante (la disparition réelle vient du snapshot : on s'arrête à 0, jamais en dessous)
@@ -436,12 +560,7 @@ export class Mirror {
         sq.buffs.electro = Math.max(0, sq.buffs.electro - dt);
       }
     }
-    for (const c of sim.crosses) {
-      if (c.t > 0) c.t = Math.max(0, c.t - dt);
-      else c.s = Math.max(0, c.s - dt); // pics en croix : le télégraphe puis la poussée se décomptent entre deux snapshots
-    }
-    for (const k of sim.stalactites) if (k.t > 0) k.t = Math.max(0, k.t - dt); // stalactite : décompte jusqu'à l'impact
-    for (const w of sim.walls) if (w.t > 0) w.t = Math.max(0, w.t - dt); // télégraphe d'un mur : `t` décompte jusqu'à l'apparition des rochers
+    this.advanceTelegraphs(dt); // stalactites, croix, murs, pics, saut du crabe : décompte entre deux snapshots (impact joué ici à la fin)
     for (const p of sim.puddles) tick(p);
     for (const k of sim.arena.rocks) tick(k);
     for (const f of sim.powerups.fields) tick(f);
@@ -477,6 +596,7 @@ export class Mirror {
       const g = this.goals.get(o);
       if (g) this.approach(o, this.advance(g, dt)); // un globe attiré par un soldat glisse vers sa nouvelle position au lieu de sauter à la cadence des snapshots
     }
+    const landed: Projectile[] = [];
     for (const p of sim.combat.projectiles.active) {
       p.px = p.x;
       p.py = p.y;
@@ -489,7 +609,20 @@ export class Mirror {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
       }
+      const was = p.life;
       p.life = Math.max(0, p.life - (p.lob ? dt : dt / PROJECTILE_FADE)); // en cloche : vrai temps de vol (télégraphe)
+      if (p.lob && p.team === 'aliens' && p.aoe > 0 && was > 0 && p.life <= 0) landed.push(p);
+    }
+    // boules en cloche des aliens qui touchent le sol ici (vol avancé de `teleLead`) : explosion jouée tout de suite, la boule disparaît
+    for (const p of landed) {
+      const g = this.goals.get(p);
+      const x = g ? g.x : p.x;
+      const y = g ? g.y : p.y;
+      const style = p.texture === 'fx_spit' ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : 'slime'; // comme `Combat.stepProjectile` / `Sim.cleanup`
+      this.localImpact({ t: 'explosion', x, y, r: p.aoe, style });
+      this.teleDone.set('l' + p.id, TELE_DONE_TTL);
+      this.projectiles.delete(p.id);
+      sim.combat.projectiles.release(p);
     }
   }
 
@@ -691,6 +824,17 @@ export class Mirror {
     s.rushDy = a.rushDy;
     s.rushX = a.rushX;
     s.rushY = a.rushY;
+    const J = s.def.leap;
+    if (J && a.leapT > 0) {
+      const prev = this.leapSeen.get(a.id);
+      if (prev === undefined || a.leapT > prev + 0.05) {
+        // nouveau saut : immobile pendant la préparation, sa position est le départ ; vu en plein vol : départ inconnu, on suit le snapshot
+        const fresh = J.windup + J.flight + J.recover - a.leapT <= J.windup;
+        s.leapFromX = fresh ? a.x : NaN;
+        s.leapFromY = fresh ? a.y : NaN;
+      }
+      this.leapSeen.set(a.id, a.leapT);
+    } else this.leapSeen.delete(a.id);
     s.leapT = a.leapT;
     s.leapX = a.leapX;
     s.leapY = a.leapY;
@@ -807,7 +951,7 @@ export class Mirror {
 
   private upsertProjectile(snap: ProjectileSnap, map: Map<number, Projectile>): void {
     let p = map.get(snap.id);
-
+    const fresh = !p;
     if (!p) {
       p = this.sim.combat.projectiles.acquire();
       map.set(snap.id, p);
@@ -818,7 +962,13 @@ export class Mirror {
       p.x = p.px = snap.x + (lead ? this.predictor.dx : 0);
       p.y = p.py = snap.y + (lead ? this.predictor.dy : 0);
     }
-    this.goals.set(p, { x: snap.x, y: snap.y }); // position hôte : le projectile glisse vers elle (pas de saut à chaque snapshot)
+    // boule en cloche d'un alien : vol avancé de `teleLead` (son impact tombe quand ma squad affichée est là où l'hôte la juge), jamais au-delà du sol
+    const ahead = snap.alien && snap.lob ? Math.min(this.teleLead, snap.age * snap.flight) : 0;
+    if (ahead > 0 && fresh) {
+      p.x = p.px = p.x + snap.vx * ahead; // nouvelle : elle naît déjà avancée
+      p.y = p.py = p.y + snap.vy * ahead;
+    }
+    this.goals.set(p, { x: snap.x + snap.vx * ahead, y: snap.y + snap.vy * ahead }); // position hôte : le projectile glisse vers elle (pas de saut à chaque snapshot)
     p.vx = snap.vx;
     p.vy = snap.vy;
     p.texture = snap.texture;
@@ -827,7 +977,7 @@ export class Mirror {
     p.aoe = snap.aoe;
     p.team = snap.alien ? 'aliens' : '';
     p.maxLife = snap.lob ? snap.flight : 1;
-    p.life = snap.age * p.maxLife;
+    p.life = snap.age * p.maxLife - ahead;
   }
 
   // ---------- Lissage ----------

@@ -1,10 +1,11 @@
 // Netcode sous un réseau dégradé (perte, gigue avec réordonnancement, doublons, rafales, latence asymétrique) : scénarios de l'audit (docs/AUDIT_NETCODE.md).
-// Usage : node scripts/net-loss-headless.mjs [scénario…]   (sans argument : tous) — scénarios : recon, resume, dup, events, upgrade, shots, hidden, big
+// Usage : node scripts/net-loss-headless.mjs [scénario…]   (sans argument : tous) — scénarios : recon, resume, dup, events, upgrade, shots, hidden, tele, big
 //   recon  : corrections de l'ancre prédite et à-coups de la squad d'un invité, sous 5 profils de réseau, + file d'inputs de l'hôte
 //   resume : reprise après la pause de choix d'upgrade (saut en avant de la squad affichée de l'invité)
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
 //   shots  : balles de ma squad pendant une course (écart visuel balle / tireur, invité contre hôte)
+//   tele   : stalactites, croix de pics et boules en cloche sur la squad d'un invité : l'impact s'affiche-t-il chez lui au moment où l'hôte le calcule ?
 //   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
 //            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
@@ -377,6 +378,103 @@ try {
     for (let i = 0; i < 60; i++) await w.tick();
     check(client.eventBuffer.length < 10 && client.buffer.length < 10, 'au retour, les files se vident', `${client.eventBuffer.length} / ${client.buffer.length}`);
     check(Math.abs(client.sim.aliens.length - hs.aliens.length) <= 25, 'au retour, l\'invité voit les aliens de l\'hôte', `${client.sim.aliens.length} contre ${hs.aliens.length}`);
+  }
+
+  // ---------- tele ----------
+  // Télégraphes au sol (stalactites, croix de pics, boules en cloche) posés sur la squad d'un invité qui bouge : à quel input de l'invité l'impact s'affiche-t-il
+  // chez lui, comparé à l'input que l'hôte a joué au tick où il calcule les dégâts ? 0 = la fin du télégraphe tombe pile quand sa squad affichée est là où
+  // l'hôte la juge ; > 0 = il voit l'impact trop tard (il croit être sorti à temps et prend les dégâts).
+  if (want('tele')) {
+    console.log('\n=== tele : fin des télégraphes chez l\'invité contre impact chez l\'hôte (en ticks d\'input de l\'invité) ===');
+    const profiles = [
+      ['latence 3 / 3', { latency: 3, cond: {} }],
+      ['latence 5 / 3 + gigue 0-2, 3 % de perte', { latency: 3, cond: { loss: 0.03, jitter: 2, reorder: true }, slowDown: 5 }],
+    ];
+    for (const [label, prof] of profiles) {
+      const w = await setup({ latency: prof.latency, seed: 3, aliens: false });
+      const client = w.clients[0];
+      if (process.env.NOTELE) client.mirror.measureTeleLead = () => { client.mirror.teleLead = 0; }; // essai : télégraphes non avancés (comportement d'avant)
+      if (prof.slowDown) w.hub.latencyTo.set(client.localPlayer, prof.slowDown);
+      const hs = w.host.sim;
+      const gsq = hs.squadOf(client.localPlayer);
+      const C = { aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 0 };
+      const hostAt = new Map(); // clé → ack de l'invité au tick d'impact chez l'hôte
+      const shownAt = new Map(); // clé → input de l'invité quand l'impact s'affiche chez lui
+      const hostPrev = { st: new Map(), cr: new Map(), lob: new Map() };
+      const cliPrev = { st: new Map(), cr: new Map(), lob: new Map() };
+      // impact = un télégraphe vu actif (t > 0) qui passe à t ≤ 0 ou disparaît
+      const scan = (prev, list, key, active, n, out) => {
+        const now = new Map();
+        for (const o of list) now.set(key(o), active(o));
+        for (const [k, was] of prev) if (was && !now.get(k) && !out.has(k)) out.set(k, n);
+        prev.clear();
+        for (const [k, v] of now) prev.set(k, v);
+      };
+      const lobs = (sim) => sim.combat.projectiles.active.filter((p) => p.lob && p.team === 'aliens');
+      for (let i = 0; i < 420; i++) {
+        client.setLocalInput(Math.cos(i / 25), Math.sin(i / 25));
+        if (i > 30 && i % 20 === 0) hs.addStalactite(gsq.center.x, gsq.center.y, 60, 0.8, 0, 0);
+        if (i > 30 && i % 45 === 5) hs.addCross(gsq.center.x, gsq.center.y, C, 1);
+        if (i > 30 && i % 30 === 10) hs.combat.launchLob(gsq.center.x + 200, gsq.center.y, gsq.center.x, gsq.center.y, 1, 0, 60, 'fx_blob_red', 'aliens', 'aliens');
+        await w.tick();
+        const ack = w.host.acks.get(client.localPlayer) ?? 0;
+        scan(hostPrev.st, hs.stalactites, (o) => 's' + o.id, (o) => o.t > 0, ack, hostAt);
+        scan(hostPrev.cr, hs.crosses, (o) => 'c' + o.id, (o) => o.t > 0, ack, hostAt);
+        scan(hostPrev.lob, lobs(hs), (o) => 'l' + (o.id & 0xffff), (o) => o.life > 0, ack, hostAt);
+        const cs = client.mirror.sim;
+        scan(cliPrev.st, cs.stalactites, (o) => 's' + o.id, (o) => o.t > 1e-6, client.ticks, shownAt);
+        scan(cliPrev.cr, cs.crosses, (o) => 'c' + o.id, (o) => o.t > 1e-6, client.ticks, shownAt);
+        scan(cliPrev.lob, lobs(cs), (o) => 'l' + o.id, (o) => o.life > 1e-6, client.ticks, shownAt);
+      }
+      const byKind = { s: [], c: [], l: [] };
+      for (const [k, n] of shownAt) if (hostAt.has(k)) byKind[k[0]].push(n - hostAt.get(k));
+      const sfmt = (a) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a)} à ${Math.max(...a)} (${a.length})` : '-');
+      console.log(`- ${label}`);
+      console.log(`    stalactites : ${sfmt(byKind.s)} ; croix (début des pics) : ${sfmt(byKind.c)} ; boules en cloche : ${sfmt(byKind.l)}`);
+    }
+    // Giant Crab : atterrissage du saut (impact) et départ de la couronne de pics, même mesure
+    {
+      const w = await setup({ latency: 3, seed: 3 });
+      const client = w.clients[0];
+      if (process.env.NOTELE) client.mirror.measureTeleLead = () => { client.mirror.teleLead = 0; };
+      w.hub.latencyTo.set(client.localPlayer, 5);
+      Object.assign(w.hub.conditions, { loss: 0.03, jitter: 2, reorder: true });
+      const hs = w.host.sim;
+      const gsq = hs.squadOf(client.localPlayer);
+      const hostAt = new Map(), shownAt = new Map();
+      let jumps = 0;
+      w.onHostEvent = (e) => { if (e.t === 'slam') hostAt.set('j' + jumps++, w.host.acks.get(client.localPlayer) ?? 0); };
+      let cjumps = 0;
+      let crab = null;
+      const ringH = new Map(), ringC = new Map();
+      for (let i = 0; i < 600; i++) {
+        if (!crab || !crab.alive) {
+          hs.aliens.length = 0;
+          hs.horde.spawnAt('boss_crab', gsq.center.x + 300, gsq.center.y, 1, false, true);
+          crab = hs.aliens.find((a) => a.def.id === 'boss_crab');
+        }
+        for (let k = hs.aliens.length - 1; k >= 0; k--) if (hs.aliens[k] !== crab) hs.aliens.splice(k, 1);
+        crab.hp = crab.maxHp;
+        if (crab.leapT <= 0 && crab.lurkPhase === 0) crab.leapCd = Math.min(crab.leapCd, 0.3);
+        for (const s of gsq.soldiers) s.hp = s.maxHp;
+        client.setLocalInput(Math.cos(i / 25), Math.sin(i / 25));
+        await w.tick();
+        const ack = w.host.acks.get(client.localPlayer) ?? 0;
+        const hp = crab.lurkPhase;
+        if (hp === 4 && ringH.get('p') === 3) hostAt.set('r' + (ringH.get('n') ?? 0), ack), ringH.set('n', (ringH.get('n') ?? 0) + 1);
+        ringH.set('p', hp);
+        for (const e of w.events.get(client).splice(0)) if (e.t === 'slam') shownAt.set('j' + cjumps++, client.ticks);
+        const cc = client.mirror.sim.aliens.find((a) => a.def.id === 'boss_crab');
+        const cp = cc ? cc.lurkPhase : 0;
+        if (cp === 4 && ringC.get('p') === 3) shownAt.set('r' + (ringC.get('n') ?? 0), client.ticks), ringC.set('n', (ringC.get('n') ?? 0) + 1);
+        ringC.set('p', cp);
+      }
+      const j = [], r = [];
+      for (const [k, n] of shownAt) if (hostAt.has(k)) (k[0] === 'j' ? j : r).push(n - hostAt.get(k));
+      const sfmt = (a) => (a.length ? `moy ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)}, de ${Math.min(...a)} à ${Math.max(...a)} (${a.length})` : '-');
+      console.log('- Giant Crab, latence 5 / 3 + gigue 0-2, 3 % de perte');
+      console.log(`    atterrissage du saut : ${sfmt(j)} ; départ de la couronne de pics : ${sfmt(r)}`);
+    }
   }
 
   // ---------- big ----------

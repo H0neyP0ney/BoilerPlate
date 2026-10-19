@@ -119,6 +119,12 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    114 → 4,9 px en moyenne (p95 131 → 17) ; retard d'apparition 6,5 → 2,5 ticks. Les impacts (`impact`) restent tamponnés : une balle peut disparaître ~100 ms avant son étincelle, et, extrapolée entre deux snapshots, dépasser sa
    cible de ~50 px avant de disparaître (correctifs notés : `docs/AUDIT_NETCODE.md` § 4, point 5).
    Visuel seulement : les dégâts restent calculés chez l'hôte.
+9. **Télégraphes à l'heure de ma squad** (19/10, client seulement, sans changement de protocole) : ma squad est en avance (prédite), le monde en retard (aller simple + tampon), et l'hôte juge
+   les dégâts sur SA position de ma squad. `Mirror.teleLead` = mon input courant − `ack` du snapshot affiché (÷ 30, lissé `TELE_LEAD_SMOOTH` 0,25, plafond `MAX_TELE_LEAD` 0,5 s, gardé pendant
+   une pause, 0 sans squad prédite) ; `Mirror.advanceTelegraphs` avance d'autant stalactites, croix de pics, murs, pics du lurker et couronne du crabe, saut du crabe (minuteur et position en vol,
+   `placeLeaper`) et boules en cloche des aliens (`upsertProjectile`). L'impact (stalactite, `slam`, explosion de boule) est joué ici à la fin du télégraphe avancé (`localEvents`) et le double
+   de l'hôte jeté (`swallowHostEvent`, `IMPACT_MATCH` 24 px, `TELE_DONE_TTL` 2 s). Mesure `sim:netloss -- tele` : impact vu 7-9 ticks trop tard → 0-1 tick (saut du crabe 13,5 → 1).
+   Pas traités : charge, explosion retardée du kamikaze, rochers d'un mur. Détail : `docs/AUDIT_NETCODE.md` § 1.9.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant
 son annonce** (un aller-retour de retard au début d'une retenue), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,
@@ -167,9 +173,9 @@ de chaque soldat ou ses slots ; prédire les soldats isolés qui reviennent (ret
 - `npm run sim:startstop -- <latence> [aliens] [gigue]` : profil de vitesse du centre de la squad au démarrage et à l'arrêt (invité contre hôte), changements de sens des soldats en course verticale
   (`KICK=1 NS=35` simule des poussées d'aliens), **recul à l'ouverture de la pause de choix** (`NOLIMIT=1` désactive la limite de prédiction pour comparer), retour d'un **soldat isolé** (pas max, remontées
   d'écart, retard d'arrivée par rapport à l'hôte). Ces trois scripts ne simulent que latence fixe et gigue (FIFO).
-- `npm run sim:netloss -- [recon|resume|dup|events|upgrade|hidden|big]` (19/10, `scripts/net-loss-headless.mjs`) : réseau **dégradé et seedé** (perte, gigue réordonnée, doublons, rafales,
+- `npm run sim:netloss -- [recon|resume|dup|events|upgrade|shots|hidden|tele|big]` (19/10, `scripts/net-loss-headless.mjs`) : réseau **dégradé et seedé** (perte, gigue réordonnée, doublons, rafales,
   latence asymétrique : `LoopbackHub.conditions`, `latencyTo`, `seed`, `stats`) : réconciliation sous 5 profils et file d'inputs de l'hôte, reprise après la pause de choix, snapshots doublés,
-  `gameEnd` / `restart` avec 30 % de perte, choix d'upgrade tardif, onglet caché, 4 joueurs × 40 soldats + ~470 aliens (débit, fragments). Détail : `docs/AUDIT_NETCODE.md`.
+  `gameEnd` / `restart` avec 30 % de perte, choix d'upgrade tardif, onglet caché, fin des télégraphes chez l'invité contre impact chez l'hôte (`tele`), 4 joueurs × 40 soldats + ~470 aliens (débit, fragments). Détail : `docs/AUDIT_NETCODE.md`.
 - Par défaut le loopback est **parfait** (pas de perte, pas de gigue, ordre conservé) : il valide la logique, pas la sensation de jeu.
 - En navigateur : deux **fenêtres** côte à côte + F12 → Réseau → Throttling (latence, hors ligne).
 

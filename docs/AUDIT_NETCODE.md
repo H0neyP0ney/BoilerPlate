@@ -20,6 +20,7 @@ même message sur un autre canal). Tes amis peuvent jouer avec une version d'éc
 | 6 | Snapshot reçu deux fois appliqué deux fois (monde cru figé ~66 ms) | bug confirmé (impact faible) | 28 → 0 doubles applications | `1f1a570` |
 | 7 | File d'événements du client sans borne quand son onglet est caché | bug confirmé (mineur) | 247 → 64 paquets après 60 s | `7ded61f` |
 | 7b | Tirs de ma squad affichés en retard, partis d'où l'invité n'est plus (retour de joueur) | bug confirmé | écart visuel balle / tireur 114 → 4,9 px (p95 131 → 17), retard 6,5 → 2,5 ticks | v79 (§ 1.8) |
+| 7c | Fin des télégraphes vue 230-300 ms trop tard par l'invité (« j'étais sorti et j'ai pris les dégâts ») | bug confirmé | impact affiché 7-9 ticks → 0-1 tick du moment où l'hôte juge (saut du crabe 13,5 → 1) | § 1.9 |
 | 8 | Laisse de l'ancre et poussée des aliens non prédites : la squad « tire » dans une horde | **risque, le plus gros restant** | correction p95 22 → 8,2 px par snapshot, écart réel p95 143 → 73 px, plus de recalage (v78) | v78 (§ 2.1) |
 | 9 | Débit à 4 joueurs : 11,4 Ko par snapshot, 514 Ko/s en sortie chez l'hôte, 11 fragments | risque | mesure | proposé |
 | 10 | Retard de la squad de l'invité chez l'hôte (file d'inputs) : équité des dégâts | risque | +1,9 tick (gigue 0-2), +3,7 (rafales) | proposé (essai mesuré) |
@@ -37,7 +38,7 @@ Outils ajoutés : `LoopbackHub.conditions` (perte, gigue réordonnée, doublons,
 - **Supposé, non vérifié** : le comportement réel de Netlib / WebRTC (taille des fragments ~1,15 Ko, perte réelle, absence de doublons en pratique),
   le ressenti à l'écran. Voir § « À tester en réel ».
 
-### Nouveaux scénarios (`npm run sim:netloss -- [recon|resume|dup|events|upgrade|shots|hidden|big]`)
+### Nouveaux scénarios (`npm run sim:netloss -- [recon|resume|dup|events|upgrade|shots|hidden|tele|big]`)
 
 | Scénario | Ce qu'il mesure |
 |---|---|
@@ -47,6 +48,7 @@ Outils ajoutés : `LoopbackHub.conditions` (perte, gigue réordonnée, doublons,
 | `events` | 12 fins de partie avec 30 % de perte : `gameEnd` / `restart` reçus, ancre recalée après relance |
 | `upgrade` | deux niveaux d'avance, clic de l'invité dans les 100 dernières ms affichées des 5 s |
 | `shots` | balles de ma squad pendant une course : écart visuel balle / tireur (invité contre hôte, au tick du snapshot lu), retard d'apparition |
+| `tele` | stalactites, croix de pics et boules en cloche posées sur la squad d'un invité qui bouge, puis un Giant Crab (saut, couronne de pics) : input de l'invité au moment où l'impact s'affiche chez lui, moins l'input que l'hôte avait joué en calculant les dégâts (0 = juste). `NOTELE=1` : sans avance des télégraphes |
 | `hidden` | onglet de l'invité caché 60 s en combat : files du client, état au retour |
 | `big` | 4 joueurs (hôte + 3 invités, dont un qui rejoint en plein combat), 40 soldats chacun, ~470 aliens gardés en vie + Rhino Alpha + Giant Crab, 3 % de perte : taille et débit des snapshots, événements JSON par type, corrections de l'invité arrivé en dernier. `NOLEASH=1` désactive la laisse chez l'hôte, `TRACE=1` détaille les grosses corrections |
 
@@ -118,6 +120,27 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
 - **Mesure** (`sim:netloss -- shots`, course dans 4 directions, latence 3) : écart visuel balle / tireur (invité contre hôte) moy 114 → 4,9 px,
   p95 131 → 17 ; hors tampon seul (sans le décalage de naissance) : 36,7. Retard d'apparition 6,5 → 2,5 ticks. Coût : +1 octet par projectile.
 - **Reste** : impacts toujours tamponnés (la balle peut disparaître ~100 ms avant l'étincelle) ; dégâts calculés chez l'hôte (visuel seulement).
+
+### 1.9 Fin des télégraphes vue trop tard par l'invité (retour de joueur, après l'audit) — sans changement de protocole
+- **Retour** : « je sors du télégraphe à temps sur mon écran et je prends quand même les dégâts ».
+- **Cause** : sur l'écran de l'invité, sa squad est **en avance** (prédite : un aller simple + la file d'inputs de l'hôte) et les télégraphes **en
+  retard** (un aller simple + le tampon de 100 ms). Les dégâts sont calculés chez l'hôte avec la position de la squad chez l'hôte : la fin d'un
+  télégraphe arrivait chez l'invité ~un aller-retour + 100 ms + la file après que l'hôte l'avait jugé (7 à 9 ticks mesurés, 13 pour le saut du crabe).
+- **Correctif** (`Mirror.teleLead`, client seulement) : l'écart se mesure exactement, input courant de l'invité − `ack` du snapshot affiché (lissé,
+  plafonné à 0,5 s, gardé pendant une pause). Les minuteurs des télégraphes sont avancés d'autant (`Mirror.advanceTelegraphs`) : stalactites, croix de
+  pics, murs (remplissage), pics du lurker et couronne du crabe (télégraphe puis poussée), saut du crabe (minuteur + position en vol, `placeLeaper`, d'après
+  le départ vu pendant la préparation), boules en cloche des aliens (vol avancé dans `upsertProjectile`). L'effet d'impact (stalactite, `slam` du saut,
+  explosion d'une boule) est joué **ici** à la fin du télégraphe avancé (`Mirror.localEvents`) et son double venu de l'hôte est jeté
+  (`Mirror.swallowHostEvent`, même type à moins de 24 px).
+- **Mesure** (`sim:netloss -- tele`, en ticks d'input de l'invité, + = impact vu trop tard) : avant → après
+  - latence 3 / 3 : stalactites 7 → 0, croix de pics 7,5 → −0,8, boules en cloche 7 → −1 ;
+  - latence 5 / 3 + gigue 0-2 + 3 % de perte : stalactites 9 → −0,8, croix 9,5 → −0,4, boules 9 → −0,9 ;
+  - Giant Crab (même réseau) : atterrissage du saut 13,5 → 1, départ de la couronne de pics 13 → 1.
+  (`NOTELE=1` : télégraphes non avancés, pour comparer.) `recon` / `resume` identiques, `sim:net`, `sim:predict`, `sim:combat`, `sim:jitter`, autres
+  scénarios de `sim:netloss` : OK.
+- **Pas traité** : charge (`rushWind`) et autres attaques rattachées à un alien qui bouge (l'alien lui-même est affiché en retard), explosion retardée du
+  kamikaze (`fuses` de la vue, venue d'un événement), apparition des rochers d'un mur (snapshot). Visuel seulement : les dégâts restent calculés chez l'hôte.
+  Non vérifié en navigateur.
 
 ## 2. Risques (non corrigés)
 

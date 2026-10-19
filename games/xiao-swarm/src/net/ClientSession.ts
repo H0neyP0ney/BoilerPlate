@@ -163,6 +163,8 @@ export class ClientSession implements Session {
       if (this.mirror.inputHeld) this.sendInput(0, 0);
       else this.sendInput(mx, my);
     });
+    // impacts de télégraphes joués ici, à la fin du télégraphe avancé (`Mirror.teleLead`)
+    if (this.mirror.localEvents.length > 0) this.pending.push(...this.mirror.localEvents.splice(0));
     const events = this.pending;
     this.pending = [];
     for (const e of events) onEvent(e);
@@ -281,7 +283,7 @@ export class ClientSession implements Session {
   }
 
   private pushEvents(list: SimEvent[]): void {
-    this.pending.push(...list);
+    for (const e of list) if (!this.mirror.swallowHostEvent(e)) this.pending.push(e); // un impact déjà joué ici (télégraphe avancé) n'est pas rejoué
     if (this.pending.length > MAX_PENDING_EVENTS) this.pending.splice(0, this.pending.length - MAX_PENDING_EVENTS);
   }
 }

@@ -6,7 +6,7 @@ correctif fait ou proposé.
 
 **Compatibilité** : tous les correctifs gardent le protocole **v77** et restent compatibles avec un hôte ou un client 0.1.153 (champs JSON optionnels,
 même message sur un autre canal). Tes amis peuvent jouer avec une version d'écart sans « refused: version ». Rien n'est déployé ni poussé.
-**Sauf le § 2.1 (laisse de l'ancre, après l'audit)** : protocole **v78**, incompatible avec la 0.1.153 / 0.1.154 (même version pour tous).
+**Sauf le § 2.1 (laisse de l'ancre, après l'audit)** : protocole **v78**, et le § 1.8 (tirs de ma squad) : **v79**, incompatibles avec la 0.1.153 / 0.1.154 (même version pour tous).
 
 ## Résumé
 
@@ -19,6 +19,7 @@ même message sur un autre canal). Tes amis peuvent jouer avec une version d'éc
 | 5 | Input arrondi par l'hôte, pas par la prédiction | bug confirmé (mineur) | correction en réseau parfait 0,04 → 0,01 px | `2456679` |
 | 6 | Snapshot reçu deux fois appliqué deux fois (monde cru figé ~66 ms) | bug confirmé (impact faible) | 28 → 0 doubles applications | `1f1a570` |
 | 7 | File d'événements du client sans borne quand son onglet est caché | bug confirmé (mineur) | 247 → 64 paquets après 60 s | `7ded61f` |
+| 7b | Tirs de ma squad affichés en retard, partis d'où l'invité n'est plus (retour de joueur) | bug confirmé | écart visuel balle / tireur 114 → 4,9 px (p95 131 → 17), retard 6,5 → 2,5 ticks | v79 (§ 1.8) |
 | 8 | Laisse de l'ancre et poussée des aliens non prédites : la squad « tire » dans une horde | **risque, le plus gros restant** | correction p95 22 → 8,2 px par snapshot, écart réel p95 143 → 73 px, plus de recalage (v78) | v78 (§ 2.1) |
 | 9 | Débit à 4 joueurs : 11,4 Ko par snapshot, 514 Ko/s en sortie chez l'hôte, 11 fragments | risque | mesure | proposé |
 | 10 | Retard de la squad de l'invité chez l'hôte (file d'inputs) : équité des dégâts | risque | +1,9 tick (gigue 0-2), +3,7 (rafales) | proposé (essai mesuré) |
@@ -36,7 +37,7 @@ Outils ajoutés : `LoopbackHub.conditions` (perte, gigue réordonnée, doublons,
 - **Supposé, non vérifié** : le comportement réel de Netlib / WebRTC (taille des fragments ~1,15 Ko, perte réelle, absence de doublons en pratique),
   le ressenti à l'écran. Voir § « À tester en réel ».
 
-### Nouveaux scénarios (`npm run sim:netloss -- [recon|resume|dup|events|upgrade|hidden|big]`)
+### Nouveaux scénarios (`npm run sim:netloss -- [recon|resume|dup|events|upgrade|shots|hidden|big]`)
 
 | Scénario | Ce qu'il mesure |
 |---|---|
@@ -45,6 +46,7 @@ Outils ajoutés : `LoopbackHub.conditions` (perte, gigue réordonnée, doublons,
 | `dup` | snapshots doublés / réordonnés : aliens affichés qui s'arrêtent, snapshots appliqués deux fois |
 | `events` | 12 fins de partie avec 30 % de perte : `gameEnd` / `restart` reçus, ancre recalée après relance |
 | `upgrade` | deux niveaux d'avance, clic de l'invité dans les 100 dernières ms affichées des 5 s |
+| `shots` | balles de ma squad pendant une course : écart visuel balle / tireur (invité contre hôte, au tick du snapshot lu), retard d'apparition |
 | `hidden` | onglet de l'invité caché 60 s en combat : files du client, état au retour |
 | `big` | 4 joueurs (hôte + 3 invités, dont un qui rejoint en plein combat), 40 soldats chacun, ~470 aliens gardés en vie + Rhino Alpha + Giant Crab, 3 % de perte : taille et débit des snapshots, événements JSON par type, corrections de l'invité arrivé en dernier. `NOLEASH=1` désactive la laisse chez l'hôte, `TRACE=1` détaille les grosses corrections |
 
@@ -104,6 +106,18 @@ message = un paquet (pas de fragmentation simulée ; le risque est estimé dans 
 - `net/ClientSession.ts:241`. Onglet caché : `playback` ne tourne plus, les snapshots sont bornés (16) mais `eventBuffer` grossissait (~250 paquets par
   minute en combat). Au-delà de 64, les plus vieux passent dans `pending` (déjà plafonné à 400). 247 → 64 après 60 s ; au retour, files vides et
   aliens à jour.
+
+### 1.8 Tirs de ma squad en retard (retour de joueur, après l'audit) — v79
+- **Retour** : « quand je bouge, ça tire depuis un endroit où mon soldat n'est plus ».
+- **Cause** : ma squad est prédite et lue hors tampon, mais ses balles et ses tirs (flash, son) passaient par le tampon (+100 ms) et naissaient là où
+  l'hôte voyait mes soldats (en retard d'un aller-retour et de la file d'inputs). `WorldView.shiftFreshBullets` ne recalait la balle qu'à sa
+  naissance, et seulement si sa position collait au tir, puis `Mirror` la ramenait sur l'ancienne trajectoire.
+- **Correctif** : octet « squad du tireur » par projectile (`ProjectileSnap.squad`, v79) ; balles de ma squad lues par `Mirror.applyLocal`
+  (`localProjectiles`), tirs rejoués dès réception (`ClientSession.shotEvents`) ; une balle neuve naît décalée de l'avance de la prédiction
+  (`predictor.dx` / `dy`) puis rejoint sa trajectoire hôte par le lissage.
+- **Mesure** (`sim:netloss -- shots`, course dans 4 directions, latence 3) : écart visuel balle / tireur (invité contre hôte) moy 114 → 4,9 px,
+  p95 131 → 17 ; hors tampon seul (sans le décalage de naissance) : 36,7. Retard d'apparition 6,5 → 2,5 ticks. Coût : +1 octet par projectile.
+- **Reste** : impacts toujours tamponnés (la balle peut disparaître ~100 ms avant l'étincelle) ; dégâts calculés chez l'hôte (visuel seulement).
 
 ## 2. Risques (non corrigés)
 

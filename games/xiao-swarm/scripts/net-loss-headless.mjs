@@ -1,9 +1,10 @@
 // Netcode sous un réseau dégradé (perte, gigue avec réordonnancement, doublons, rafales, latence asymétrique) : scénarios de l'audit (docs/AUDIT_NETCODE.md).
-// Usage : node scripts/net-loss-headless.mjs [scénario…]   (sans argument : tous) — scénarios : recon, resume, dup, events, big
+// Usage : node scripts/net-loss-headless.mjs [scénario…]   (sans argument : tous) — scénarios : recon, resume, dup, events, upgrade, shots, hidden, big
 //   recon  : corrections de l'ancre prédite et à-coups de la squad d'un invité, sous 5 profils de réseau, + file d'inputs de l'hôte
 //   resume : reprise après la pause de choix d'upgrade (saut en avant de la squad affichée de l'invité)
 //   dup    : snapshots dupliqués / réordonnés : les aliens affichés chez le client s'arrêtent-ils ?
 //   events : événements structurants (gameEnd / restart) avec 30 % de perte : combien en reçoit le client ?
+//   shots  : balles de ma squad pendant une course (écart visuel balle / tireur, invité contre hôte)
 //   big    : 4 joueurs (hôte + 3 invités), 40 soldats chacun, ~600 aliens et 2 boss, un invité rejoint en plein combat : taille et débit des snapshots,
 //            corrections, écart réel et pas de l'ancre prédite de cet invité dans la horde (BIGTICKS=300 : plus long ; NOLEASHBIT=1 : laisse ignorée, comme en v77)
 // Tout l'aléatoire (réseau, inputs) est seedé : deux lancements donnent les mêmes chiffres.
@@ -44,7 +45,7 @@ try {
     const w = {
       hub, host, hostT, clients: list, events, aliens,
       async tick() {
-        host.advance(1000 / 30, () => {});
+        host.advance(1000 / 30, (e) => w.onHostEvent?.(e));
         for (const c of list) c.advance(1000 / 30, (e) => events.get(c).push(e));
         if (!w.aliens) host.sim.aliens.length = 0;
         hub.pump();
@@ -295,6 +296,66 @@ try {
       for (let i = 0; i < 30; i++) await w.tick();
     }
     console.log(`  UPGRADE — sur ${N} clics : ${wrong} appliqués à une carte jamais vue, ${rejected} refusés (proposition périmée), ${N - wrong - rejected} conformes`);
+  }
+
+  // ---------- shots ----------
+  if (want('shots')) {
+    console.log('\n=== shots : balles de ma squad pendant une course (invité, 20 soldats, aliens devant, latence 3 ticks par sens) ===');
+    const w = await setup({ latency: 3, seed: 23 });
+    const client = w.clients[0];
+    const me = client.localPlayer;
+    const hs = w.host.sim;
+    const gsq = hs.squadOf(me);
+    while (gsq.soldiers.length < 20) gsq.recruit('trooper', { x: gsq.center.x, y: gsq.center.y });
+    for (let i = 0; i < 60; i++) await w.tick();
+    const born = new Map(); // id (mod 65536) d'une balle de ma squad → tick de création chez l'hôte
+    const seen = new Set();
+    const gap = [], delay = [], rel = [];
+    let tick = 0;
+    // tireur de chaque balle : l'événement `shot` du même tick chez l'hôte, au plus près de la balle ; puis, à chaque tick hôte, position de la balle RELATIVE à son tireur
+    let shotsNow = [];
+    w.onHostEvent = (e) => { if (e.t === 'shot') shotsNow.push(e); };
+    const shooter = new Map(); // id de balle → id du soldat tireur
+    const hostRel = new Map(); // `${tick hôte}:${id}` → balle − tireur chez l'hôte
+    for (const [mx, my] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      client.setLocalInput(mx, my);
+      for (let i = 0; i < 75; i++) {
+        tick++;
+        if (i % 25 === 0) for (let k = 0; k < 6; k++) hs.horde.spawnAt('slime', gsq.center.x + mx * 260 + (k - 2.5) * 40 * (my !== 0 ? 1 : 0), gsq.center.y + my * 260 + (k - 2.5) * 40 * (mx !== 0 ? 1 : 0), 1, false, true);
+        for (const q of hs.squads) for (const s of q.soldiers) s.hp = s.maxHp;
+        shotsNow = [];
+        await w.tick();
+        for (const p of hs.combat.projectiles.active) {
+          if (p.owner !== me || p.lob) continue;
+          const id = p.id & 0xffff;
+          if (!born.has(id)) {
+            born.set(id, tick);
+            let best = null, bd = 40;
+            for (const e of shotsNow) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < bd) { bd = d; best = e; } }
+            if (best) shooter.set(id, best.id);
+          }
+          const sid = shooter.get(id);
+          const s = sid !== undefined ? gsq.soldiers.find((q) => q.id === sid) : null;
+          if (s) hostRel.set(`${hs.tick}:${id}`, { x: p.x - s.x, y: p.y - s.y });
+        }
+        const mine = client.sim.squadOf(me)?.soldiers ?? [];
+        for (const p of client.sim.combat.projectiles.active) {
+          if (seen.has(p.id) || !born.has(p.id) || p.lob) continue;
+          seen.add(p.id);
+          let best = Infinity;
+          for (const s of mine) best = Math.min(best, Math.hypot(s.x - p.x, s.y - p.y));
+          gap.push(best);
+          delay.push(tick - born.get(p.id));
+          // écart visuel : balle par rapport à son tireur, chez l'invité (à l'écran) contre chez l'hôte (au tick du snapshot lu)
+          const s = mine.find((q) => q.id === shooter.get(p.id));
+          const h = hostRel.get(`${client.mirror.localTick}:${p.id}`);
+          if (s && h) rel.push(Math.hypot(p.x - s.x - h.x, p.y - s.y - h.y));
+        }
+      }
+    }
+    console.log(`  SHOTS — ${gap.length} balles : distance au soldat affiché le plus proche à leur apparition (px) ${fmt(stat(gap))}`);
+    console.log(`          retard d'apparition par rapport à l'hôte (ticks) ${fmt(stat(delay))}`);
+    console.log(`          ÉCART VISUEL balle / tireur (invité contre hôte, px) ${fmt(stat(rel))} sur ${rel.length} balles`);
   }
 
   // ---------- hidden ----------

@@ -30,7 +30,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
   tailles ±10 %) sont dérivées de la seed et de `data/` : pas de données de carte dans les snapshots.
 - `online.ts` (hors `net/`) : lit l'URL, crée le transport, gère timeout et repli solo. `NETLIB_GAME_ID` y est un id de dev.
 
-## Netcode : fonctionnement actuel (protocole v78)
+## Netcode : fonctionnement actuel (protocole v79)
 
 ### Paramètres
 | Quoi | Valeur | Où |
@@ -45,7 +45,7 @@ de la carte à distance des autres squads, brève invulnérabilité. Pas d'écra
 | Squad d'un client sans input depuis | 1,5 s → arrêtée | `INPUT_TIMEOUT` |
 | Taille d'un snapshot | ≈ 21 octets / alien, 23 / soldat, 12,5 / projectile, 7 / globe, 7 / flamme (v38) ; ≈ 6 Ko pour 145 aliens + 60 soldats + 200 globes | `encodeSnapshot(…, sizes)` |
 | Positions | 1/4 de pixel sur 16 bits signés (−8192 → 8191 px) : soldats, aliens, recrues, projectiles, globes, effets de tir. Ancres des squads et télégraphes restent en f32 | `Writer.pos` / `POS_SCALE` (`Protocol.ts`) |
-| Version du protocole | **78** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v78 laisse de l'ancre annoncée dans le snapshot (bit 4 des drapeaux de squad + cœur, rayon, vitesse du cœur : `SquadSnap.leash`) ; v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
+| Version du protocole | **79** (`PROTOCOL_VERSION` : hôte et client doivent être identiques, sinon `refused: version`). Historique complet dans le commentaire de `PROTOCOL_VERSION` (`Protocol.ts`). Derniers : v78 laisse de l'ancre annoncée dans le snapshot (bit 4 des drapeaux de squad + cœur, rayon, vitesse du cœur : `SquadSnap.leash`) ; v77 `choiceIn` (ticks avant la pause de choix d'upgrade, après `choiceT`) ; v76 file d'inputs côté hôte, `ack` = dernier input JOUÉ, champ `prev` du message `input` | |
 
 ### Hôte autoritaire
 L'hôte fait tourner `Sim` et applique les inputs reçus (le dernier input connu est maintenu d'un tick à l'autre). Tout ce qu'un client doit voir passe
@@ -66,14 +66,14 @@ par le **snapshot** (état, renvoyé 15×/s donc tolérant à la perte) ou par u
 - **Autres entités** (aliens, autres squads, recrues, projectiles) : `Mirror.step` à 30 Hz les fait avancer à la vitesse connue (**extrapolation**)
   et les rapproche du dernier snapshot appliqué (**lissage**, `CATCH_UP = 0.5` par tick) ; au-delà de `TELEPORT = 240` px d'écart, on téléporte.
 - **Effets de tir** (v38) : l'hôte range `shot` (id du tireur + position), `impact` (position + texture) et `hit` (id) dans le snapshot au lieu
-  du JSON ; `ClientSession.applySnapshot` les rejoue en `SimEvent` (classe et visée lues sur le soldat reflété). Un snapshot perdu = ses effets
+  du JSON ; `ClientSession.applySnapshot` les rejoue en `SimEvent` (sauf les tirs de MA squad, rejoués dès réception depuis la v79 : voir § « Squad locale », point 8) (classe et visée lues sur le soldat reflété). Un snapshot perdu = ses effets
   perdus, comme avant avec les événements non fiables.
 - **Flammes des burners** (v37) : dans le snapshot (`fires`), l'affichage suit la liste (`WorldView.syncFires`). Avant, `fire` / `fireEnd` partaient
   en événements non fiables : chaque `fireEnd` perdu laissait chez le client une flamme affichée et animée pour toujours (lag croissant à partir
   des vagues de burners, ≈ 4 min).
 - **Squad locale d'un client invité** : **prédite et simulée chez le client** (chaîne complète ci-dessous).
 
-### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v78)
+### Squad locale d'un client invité : chaîne complète (état au 19/10, protocole v79)
 
 Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (aucun aller-retour), sans que la correction par l'hôte se voie.
 
@@ -112,6 +112,12 @@ Objectif : le joueur invité doit sentir ses commandes comme celles de l'hôte (
    maintenant 10,8 px/tick au premier pas puis la croisière (7,6) (`sim:netloss -- resume`). Contrepartie : chez l'hôte, la squad de l'invité roule ~260 ms avant de repartir.
 7. **Vue** (`view/UnitViews.ts`, `SoldierView.sync`) : le sens du sprite et l'animation de marche suivent une vitesse **lissée** (`VELOCITY_SMOOTH` 0,12 s), pas la vitesse brute : les petites poussées
    latérales (séparation, aliens) ne retournent plus les soldats gauche / droite en courant vers le haut ou le bas. Vaut aussi pour l'hôte et le solo.
+8. **Tirs de ma squad** (v79, 19/10) : chaque projectile du snapshot porte la squad de son tireur (octet après ses drapeaux, 255 = alien). Chez l'invité, les balles de SA squad sont lues par
+   `Mirror.applyLocal` (table `localProjectiles`, hors tampon) et leurs tirs (flash, son : `ClientSession.shotEvents`) rejoués dès réception ; les autres projectiles et tirs restent tamponnés.
+   Une balle neuve de ma squad naît décalée de l'avance de la prédiction (`predictor.dx` / `dy` : ancre prédite − ancre hôte), puis le lissage (`CATCH_UP`) la ramène sur sa trajectoire hôte.
+   Avant, elles partaient ~215 ms trop tard, de l'endroit où l'hôte voyait mes soldats. Mesure (`sim:netloss -- shots`, course, latence 3) : écart visuel balle / tireur, invité contre hôte,
+   114 → 4,9 px en moyenne (p95 131 → 17) ; retard d'apparition 6,5 → 2,5 ticks. Les impacts (`impact`) restent tamponnés : une balle peut disparaître ~100 ms avant son étincelle.
+   Visuel seulement : les dégâts restent calculés chez l'hôte.
 
 **Non modélisé chez le client** (corrigé en fondu par le snapshot) : séparation entre soldats, repoussement des aliens et recul des coups (`kx` / `ky`), laisse de l'ancre **avant
 son annonce** (un aller-retour de retard au début d'une retenue), ralentissement des flaques sur les soldats, tirs. **Autres joueurs et aliens** : extrapolation + lissage + tampon de 100 ms,

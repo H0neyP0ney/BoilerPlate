@@ -141,7 +141,13 @@ export class Mirror {
     const squad = this.sim.squads.find((s) => s.owner === this.localPlayer); // jamais créée ici : l'ordre des squads est celui de `apply`
     if (!sq || !squad) return;
     this.applyLocalSquad(squad, sq, this.localFrozen, Mirror.limitOf(snap, sq));
+    // balles de ma squad : à l'heure de mes soldats (sans tampon), sinon elles partaient ~100 ms trop tard, d'où mes soldats étaient déjà partis
+    const mine = snap.squads.indexOf(sq);
+    this.syncProjectiles(snap.projectiles, this.localProjectiles, (p) => p.squad === mine);
   }
+
+  /** Projectiles tirés par ma squad, lus sans tampon (`applyLocal`) ; les autres sont dans `projectiles` (chemin tamponné). */
+  private readonly localProjectiles = new Map<number, Projectile>();
 
   /** Réconciliation de l'ancre prédite et reprise des positions hôte des soldats d'une squad (la mienne : prédiction ; une autre : suivi simple). */
   private applyLocalSquad(squad: Squad, sq: Snapshot['squads'][number], frozen: boolean, limitN: number, seen?: Set<number>): void {
@@ -379,18 +385,9 @@ export class Mirror {
     sim.stalactites.length = 0; // télégraphes seulement (l'impact est calculé chez l'hôte)
     for (const k of snap.stalactites) sim.stalactites.push({ ...k, damage: 0, knockback: 0 });
 
-    // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits
-    const seenProj = new Set<number>();
-    for (const p of snap.projectiles) {
-      if (seenProj.has(p.id)) continue; // collision d'id (modulo 65536) : extrêmement rare, ignorée
-      seenProj.add(p.id);
-      this.upsertProjectile(p);
-    }
-    for (const [id, p] of this.projectiles) {
-      if (seenProj.has(id)) continue;
-      this.projectiles.delete(id);
-      sim.combat.projectiles.release(p);
-    }
+    // projectiles : persistants (retrouvés par id), lissés vers leur position hôte ; absents du snapshot = détruits. Ceux de ma squad : lus par `applyLocal`
+    const mine = this.directLocal ? snap.squads.findIndex((q) => q.owner === this.localPlayer) : -2;
+    this.syncProjectiles(snap.projectiles, this.projectiles, (p) => p.squad !== mine || mine < 0);
     for (const sq of sim.squads) if (sq.soldiers.length > 0) robustCentroid(sq.soldiers, sq.radius * 1.6, sq.center);
   }
 
@@ -793,15 +790,33 @@ export class Mirror {
     return g;
   }
 
-  private upsertProjectile(snap: ProjectileSnap): void {
-    let p = this.projectiles.get(snap.id);
+  /** Met une table de projectiles reflétés à jour d'après un snapshot (ceux que `keep` retient) : créés, lissés, libérés quand ils disparaissent. */
+  private syncProjectiles(list: readonly ProjectileSnap[], map: Map<number, Projectile>, keep: (p: ProjectileSnap) => boolean): void {
+    const seen = new Set<number>();
+    for (const p of list) {
+      if (!keep(p) || seen.has(p.id)) continue; // collision d'id (modulo 65536) : extrêmement rare, ignorée
+      seen.add(p.id);
+      this.upsertProjectile(p, map);
+    }
+    for (const [id, p] of map) {
+      if (seen.has(id)) continue;
+      map.delete(id);
+      this.sim.combat.projectiles.release(p);
+    }
+  }
+
+  private upsertProjectile(snap: ProjectileSnap, map: Map<number, Projectile>): void {
+    let p = map.get(snap.id);
 
     if (!p) {
       p = this.sim.combat.projectiles.acquire();
-      this.projectiles.set(snap.id, p);
+      map.set(snap.id, p);
       p.id = snap.id;
-      p.x = p.px = snap.x;
-      p.y = p.py = snap.y;
+      // balle de ma squad : elle naît là où l'hôte voit mes soldats, en retard sur ma squad prédite. Elle part donc décalée de l'avance de la prédiction
+      // (ancre prédite − ancre hôte, la même pour toute la squad), puis le lissage (`CATCH_UP`) la ramène sur sa trajectoire hôte en quelques ticks
+      const lead = map === this.localProjectiles && this.predictor.active && !snap.lob;
+      p.x = p.px = snap.x + (lead ? this.predictor.dx : 0);
+      p.y = p.py = snap.y + (lead ? this.predictor.dy : 0);
     }
     this.goals.set(p, { x: snap.x, y: snap.y }); // position hôte : le projectile glisse vers elle (pas de saut à chaque snapshot)
     p.vx = snap.vx;

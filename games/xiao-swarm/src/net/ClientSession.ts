@@ -217,6 +217,7 @@ export class ClientSession implements Session {
       if (INTERP_DELAY_MS > 0 && snap.seq > this.localSeq) {
         this.localSeq = snap.seq;
         this.mirror.applyLocal(snap); // ma squad ne passe pas par le tampon : sa réconciliation lit l'ancre et l'ack les plus récents
+        this.pushEvents(this.shotEvents(snap, true)); // tirs de ma squad (flash, son) : en même temps que ses balles, à l'heure de mes soldats
       }
       if (INTERP_DELAY_MS <= 0) {
         this.applySnapshot(snap);
@@ -258,14 +259,25 @@ export class ClientSession implements Session {
   private applySnapshot(snap: Snapshot): void {
     this.mirror.apply(snap, this.buffer[0]); // le suivant (déjà sorti du tampon pour `snap`) : interpolation des aliens
     this.appliedSeq = snap.seq;
-    const fx: SimEvent[] = [];
-    for (const f of snap.shots) {
-      const s = this.mirror.soldier(f.id);
-      if (s) fx.push({ t: 'shot', id: f.id, cls: s.def.id, x: f.x, y: f.y, aim: s.aim });
-    }
+    const fx = this.shotEvents(snap, false);
     for (const f of snap.impacts) fx.push({ t: 'impact', x: f.x, y: f.y, texture: f.texture });
     for (const id of snap.hits) fx.push({ t: 'hit', id });
     this.pushEvents(fx);
+  }
+
+  /**
+   * Tirs de soldats du snapshot en événements (la classe et la visée se lisent sur le soldat reflété). `mine` : seulement ceux de ma squad (lus sans tampon,
+   * `Mirror.applyLocal`), sinon tous les autres (sans tampon : tous).
+   */
+  private shotEvents(snap: Snapshot, mine: boolean): SimEvent[] {
+    const fx: SimEvent[] = [];
+    const direct = this.mirror.directLocal;
+    for (const f of snap.shots) {
+      const s = this.mirror.soldier(f.id);
+      if (!s || (direct && (s.owner === this.localPlayer) !== mine)) continue;
+      fx.push({ t: 'shot', id: f.id, cls: s.def.id, x: f.x, y: f.y, aim: s.aim });
+    }
+    return fx;
   }
 
   private pushEvents(list: SimEvent[]): void {

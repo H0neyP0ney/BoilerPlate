@@ -157,3 +157,54 @@ else {
     }
   } else console.log('\n(pas de ventilation par catégorie dans ces parties : rejoue avec la version actuelle du jeu)');
 }
+
+// ---------- Données détaillées (parties au format v2, depuis le 20/10) ----------
+const v2 = runs.filter((r) => r.version >= 2);
+console.log('\n── Données détaillées (format v2) ──');
+if (v2.length === 0) console.log('Aucune partie au format v2 : rejoue avec la version actuelle du jeu (npm run dev).');
+else {
+  const tainted = (r) => (r.cheats?.length ?? 0) > 0 || !!r.jump;
+  const clean = v2.filter((r) => !tainted(r));
+  console.log(`${v2.length} partie(s) v2, dont ${v2.length - clean.length} écartée(s) (triche ou partie avancée)${v2.some((r) => r.overrides?.length) ? ' ; attention, réglages de dev mémorisés pendant certaines : ' + [...new Set(v2.flatMap((r) => r.overrides ?? []))].join(', ') : ''}.`);
+  const bagSum = (list, k) => {
+    const o = {};
+    for (const r of list) for (const s of r.samples) for (const [a, v] of Object.entries(s[k] ?? {})) o[a] = (o[a] ?? 0) + v;
+    return o;
+  };
+  const top = (o, n = 12, per = 1) => {
+    const total = Object.values(o).reduce((a, b) => a + b, 0);
+    return Object.entries(o)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, n)
+      .map(([k, v]) => `    ${k.padEnd(28)} ${fmt(v / per).padStart(8)}  ${fmt((v / (total || 1)) * 100).padStart(3)} %`)
+      .join('\n');
+  };
+  for (const diff of [...new Set(clean.map((r) => r.difficulty))]) {
+    const list = clean.filter((r) => r.difficulty === diff);
+    const n = list.length;
+    console.log(`\n  Niveau ${diff} : ${n} partie(s), ${list.filter((r) => r.victory).length} victoire(s), durée moyenne ${fmt(mean(list.map((r) => r.duration)))} s`);
+    console.log(`  Pièces ramassées par partie (moyenne) :\n${top(bagSum(list, 'coins'), 12, n)}`);
+    console.log(`  Diamants ramassés par partie (moyenne) :\n${top(bagSum(list, 'gems'), 12, n)}`);
+    console.log(`  PV perdus par source (moyenne par partie) :\n${top(bagSum(list, 'takenBy'), 15, n)}`);
+    console.log(`  Soldats tués par source (moyenne par partie) :\n${top(bagSum(list, 'deathsBy'), 12, n)}`);
+    console.log(`  PV soignés par source (moyenne par partie) :\n${top(bagSum(list, 'healBy'), 5, n)}`);
+    const causes = {};
+    for (const r of list) if (!r.victory && r.deathCause) causes[r.deathCause] = (causes[r.deathCause] ?? 0) + 1;
+    console.log(`  Cause de la mort de la squad : ${Object.entries(causes).map(([k, v]) => `${k} ×${v}`).join(', ') || '—'}`);
+    const xp = bagSum(list, 'xp');
+    console.log(`  XP des globes : ${fmt((xp.picked ?? 0) / n)} ramassée / ${fmt((xp.dropped ?? 0) / n)} lâchée par partie (${fmt(((xp.expired ?? 0) + (xp.overflow ?? 0)) / ((xp.dropped ?? 0) || 1) * 100)} % perdue)`);
+    // par minute : santé de la squad, pression au contact, contrôle subi, kiting
+    console.log('   min  soldats  PV squad (% max)  aliens contact  PV contact  perdus/s  soignés/s  gelés+étourdis  vitesse  FPS');
+    const maxT = Math.max(...list.map((r) => r.duration));
+    for (let m = 0; m * 60 < maxT; m++) {
+      const ss = list.flatMap((r) => r.samples.filter((s) => s.t > m * 60 && s.t <= (m + 1) * 60));
+      if (ss.length === 0) continue;
+      const avg = (f) => mean(ss.map(f));
+      const healed = avg((s) => Object.values(s.healBy ?? {}).reduce((a, b) => a + b, 0));
+      console.log(
+        `  ${String(m).padStart(4)}  ${fmt(avg((s) => s.soldiers), 1).padStart(7)}  ${fmt(avg((s) => s.squadHp)).padStart(8)} (${fmt(avg((s) => (s.squadMaxHp ? s.squadHp / s.squadMaxHp : 0)) * 100).padStart(3)} %)  ${fmt(avg((s) => s.nearAliens), 1).padStart(14)}  ${fmt(avg((s) => s.nearHp)).padStart(10)}  ${fmt(avg((s) => s.taken)).padStart(8)}  ${fmt(healed).padStart(9)}  ${fmt(avg((s) => s.frozen + s.stunned + s.captured + s.airborne), 2).padStart(14)}  ${fmt(avg((s) => s.speed)).padStart(7)}  ${fmt(avg((s) => s.fps)).padStart(4)}`,
+      );
+    }
+    console.log(`  Aliens tués par type (moyenne par partie) :\n${top(bagSum(list, 'killTypes'), 20, n)}`);
+  }
+}

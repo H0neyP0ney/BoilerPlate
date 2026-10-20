@@ -19,6 +19,7 @@ import { Xp } from './Xp';
 import { WaveRunner } from './WaveRunner';
 import { Squad } from './Squad';
 import { NO_INPUT, type PlayerId, type PlayerInput, type SimEvent } from './types';
+import { tallyAdd } from './tally';
 
 /** Distance minimale entre un point de réapparition et les squads vivantes (hors écran). */
 const SAFE_SPAWN_DISTANCE = 700;
@@ -116,8 +117,33 @@ export class Sim {
   readonly tutorial: Tutorial | null;
   /** Compteurs cumulés depuis la création de la Sim (lus par `RunRecorder`, jamais remis à zéro : le lecteur fait des différences). */
   readonly metrics = { dealt: 0, taken: 0, spawnedHp: 0, kills: 0, soldiersLost: 0, recDropped: 0, recPicked: 0, recExpired: 0, recSwamped: 0 };
+  /**
+   * Compteurs cumulés PAR CLÉ (lus par `RunRecorder`, qui en fait des différences) : aliens tués par type, soldats perdus par classe, pièces et diamants
+   * RAMASSÉS par source (`GemState.src`). Mesure d'équilibrage : jamais lus par la simulation.
+   */
+  readonly tally = {
+    kills: {} as Record<string, number>,
+    lostBy: {} as Record<string, number>,
+    coins: {} as Record<string, number>,
+    gems: {} as Record<string, number>,
+    /** Aliens apparus par type. */
+    spawns: {} as Record<string, number>,
+    /** PV de soldats retirés par source (`blame`), soldats tués par source, PV rendus par source (`medic`, `healField`). */
+    takenBy: {} as Record<string, number>,
+    deathsBy: {} as Record<string, number>,
+    healBy: {} as Record<string, number>,
+    /** XP des globes : `dropped`, `picked`, `expired` (disparus au sol), `overflow` (trop de globes : les plus vieux sont retirés). */
+    xp: {} as Record<string, number>,
+    /** Source du dernier soldat tué (cause de la mort de la squad en fin de partie). */
+    lastDeath: '',
+  };
+  /**
+   * Mesure (RunRecorder) : source à qui sont attribués les dégâts subis par les soldats (`alien:capacité`, ex. `slime:melee`, `boss_scarab:stalactite`), posée juste avant chaque coup
+   * (les zones et projectiles retiennent la source de leur création). Jamais lue par la simulation.
+   */
+  blame = 'other';
   tick = 0;
-  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number; hop?: number }[] = [];
+  private readonly blasts: { x: number; y: number; r: number; dmg: number; team: string; owner: PlayerId; knock: number; style?: 'slime' | 'fire' | 'spit' | 'acid'; poison?: number; hop?: number; src?: string }[] = [];
   /** Explosions retardées (kamikaze mort) : le corps reste sur place jusqu'à la fin de la mèche. Lues par la vue et le snapshot. */
   readonly fuses: Fuse[] = [];
   /** Aliens à faire surgir à la mort d'un alien à `deathSpawn` (posés en fin de tick par `cleanup`, jamais pendant qu'on parcourt `aliens`). */
@@ -567,6 +593,7 @@ export class Sim {
       const f = this.fuses[i];
       f.t -= dt;
       if (f.t > 0) continue;
+      this.blame = `${f.alien}:blast`;
       this.addBlast(f.x, f.y, f.r, f.dmg, 'aliens', 'aliens', f.knock, 'fire', 0, KNOCK_HOP.time); // explosion de kamikaze : les soldats touchés sont soufflés en cloche
       this.fuses.splice(i, 1);
     }
@@ -674,13 +701,13 @@ export class Sim {
     const b = this.arena.bounds; // jamais hors de la carte : la zone tient entièrement dans l'arène
     x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
     y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
-    this.stalactites.push({ id: this.ids.get(), x, y, r, t: delay, dur: delay, damage, knockback });
+    this.stalactites.push({ id: this.ids.get(), x, y, r, t: delay, dur: delay, damage, knockback, src: this.blame });
     if (this.stalactites.length > 60) this.stalactites.shift();
   }
 
   /** Pose une croix de pics (Rhino Alpha) centrée en (x, y) : mesures de `def.spikeCross`, dégâts × `power`. */
   addCross(x: number, y: number, C: { aim: number; sweep: number; length: number; width: number; damage: number }, power: number): void {
-    this.crosses.push({ id: this.ids.get(), x, y, t: C.aim, s: C.sweep, length: C.length, width: C.width, aim: C.aim, sweep: C.sweep, damage: C.damage * power });
+    this.crosses.push({ id: this.ids.get(), x, y, t: C.aim, s: C.sweep, length: C.length, width: C.width, aim: C.aim, sweep: C.sweep, damage: C.damage * power, src: this.blame });
     if (this.crosses.length > 20) this.crosses.shift();
   }
 
@@ -705,6 +732,7 @@ export class Sim {
           const along = dx * cos + dy * sin;
           const across = Math.abs(-dx * sin + dy * cos);
           if (along > prevF && along <= Math.min(curF, this.arena.rayLength(c.x, c.y, cos, sin, c.length)) && across <= c.width / 2 + s.radius * 0.6) {
+            this.blame = c.src ?? 'cross';
             this.damageSoldier(s, c.damage);
             break; // une seule fois par passage de front
           }
@@ -728,6 +756,7 @@ export class Sim {
         if (!s.alive || d > k.r + s.radius) continue;
         s.kx += (dx / d) * k.knockback;
         s.ky += (dy / d) * k.knockback;
+        this.blame = k.src ?? 'stalactite';
         this.damageSoldier(s, k.damage);
       }
     }
@@ -911,7 +940,7 @@ export class Sim {
     const b = this.arena.bounds; // jamais hors de la carte : le centre reste dans l'arène
     x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
     y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
-    const f: FirePatch = { id: this.ids.get(), x, y, r, ttl, dps };
+    const f: FirePatch = { id: this.ids.get(), x, y, r, ttl, dps, src: this.blame };
     this.fires.push(f); // affichage : `WorldView.syncFires` suit cette liste (snapshot en ligne), pas d'événement
     if (this.fires.length > 150) this.endFire(this.fires[0]);
   }
@@ -925,6 +954,7 @@ export class Sim {
   ignite(s: SoldierState, dps: number, time = FIRE.burnTime): void {
     if (s.frozen > 0 || this.ending) return;
     s.burn = Math.max(s.burn, time);
+    if (dps >= s.burnDps) s.burnSrc = this.blame; // mesure : le feu le plus fort est la source de la brûlure
     s.burnDps = Math.max(s.burnDps, dps);
   }
 
@@ -955,11 +985,17 @@ export class Sim {
       for (const s of sq.soldiers) {
         if (!s.alive) continue;
         let dps = 0;
+        let src = 'fire';
         for (const f of this.fires) {
           const rr = f.r + s.radius * 0.5;
-          if ((s.x - f.x) ** 2 + (s.y - f.y) ** 2 < rr * rr) dps = Math.max(dps, f.dps); // les flaques ne se cumulent pas
+          if ((s.x - f.x) ** 2 + (s.y - f.y) ** 2 < rr * rr && f.dps > dps) {
+            dps = f.dps; // les flaques ne se cumulent pas
+            src = f.src ?? 'fire';
+          }
         }
+        this.blame = src;
         if (dps > 0) this.ignite(s, dps * FIRE.dmgMul);
+        this.blame = `${s.burnSrc ?? 'fire'}:burn`;
         if (s.burn > 0) this.damageSoldier(s, s.burnDps * FIRE.tickDmg);
       }
     }
@@ -1017,7 +1053,7 @@ export class Sim {
 
   /** Explosion de zone (résolue en fin de tick, comme la mort d'un Flammeur). `team` / `owner` = camp épargné. */
   addBlast(x: number, y: number, r: number, dmg: number, team: string, owner: PlayerId, knock = 300, style?: 'slime' | 'fire' | 'spit' | 'acid', poison = 0, hop = 0): void {
-    this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison, hop });
+    this.blasts.push({ x, y, r, dmg, team, owner, knock, style, poison, hop, src: this.blame });
   }
 
   /**
@@ -1026,7 +1062,9 @@ export class Sim {
   damageSoldier(s: SoldierState, amount: number, attacker: PlayerId | null = null, force = false): void {
     if (!s.alive || (this.ending && !force)) return;
     if (!force && (s.invulnerable > 0 || s.capturedBy)) return; // avalé par une bulle : protégé (gelé : attaquable)
-    this.metrics.taken += Math.min(amount, Math.max(0, s.hp) + s.shield);
+    const effective = Math.min(amount, Math.max(0, s.hp) + s.shield);
+    this.metrics.taken += effective;
+    tallyAdd(this.tally.takenBy, this.blame, effective);
     s.hp -= this.absorb(s, amount);
     if (this.tutorial?.active && s.hp < 1) s.hp = 1; // onboarding : la squad peut être blessée, jamais tuée
     if (!force) this.events.push({ t: 'hit', id: s.id });
@@ -1037,6 +1075,9 @@ export class Sim {
       this.events.push({ t: 'thaw', soldier: s.id, x: s.x, y: s.y });
     }
     this.metrics.soldiersLost++;
+    tallyAdd(this.tally.lostBy, s.def.id, 1);
+    tallyAdd(this.tally.deathsBy, this.blame, 1);
+    this.tally.lastDeath = this.blame;
     if (attacker && attacker !== s.owner) {
       const k = this.squadOf(attacker);
       if (k) k.kills++;
@@ -1049,11 +1090,12 @@ export class Sim {
   private killAlien(a: AlienState, killer: PlayerId | null, wipe = false, dirX = 0, dirY = 0): void {
     a.alive = false;
     this.metrics.kills++;
+    tallyAdd(this.tally.kills, a.def.id, 1);
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.golden) {
-      this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190); // alien doré tué : une grosse quantité d'argent et quelques diamants
+      this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190, 'golden_death'); // alien doré tué : une grosse quantité d'argent et quelques diamants
       this.gems.dropGemsAt(a.x, a.y, a.def.golden.deathGems);
     }
     if (a.def.egg) {
@@ -1201,7 +1243,7 @@ export class Sim {
     }
   }
 
-  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number; poison?: number; hop?: number }): void {
+  private blastHit(u: Unit, b: { x: number; y: number; r: number; dmg: number; owner: PlayerId; knock: number; poison?: number; hop?: number; src?: string }): void {
     if (!u.alive) return;
     const dx = u.x - b.x;
     const dy = u.y - b.y;
@@ -1212,6 +1254,7 @@ export class Sim {
       u.ky += ((dy / d) * b.knock) / u.mass;
       if (b.hop && u.kind === 'soldier') u.knockT = Math.max(u.knockT, b.hop); // pendant ce temps seul le recul le déplace
     }
+    if (u.kind === 'soldier') this.blame = b.src ?? 'blast';
     this.damage(u, b.dmg, b.owner);
     if (b.poison && u.kind === 'soldier' && u.alive) u.poison = Math.max(u.poison, b.poison); // empoisonné (ou durée remise à plein)
   }

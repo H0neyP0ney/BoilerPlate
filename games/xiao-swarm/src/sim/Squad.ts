@@ -6,6 +6,7 @@ import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type Up
 import type { Arena } from './Arena';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
+import { tallyAdd } from './tally';
 import type { PlayerId, PlayerInput } from './types';
 
 /** Partie qui commence par le tutoriel : les `TUTORIAL_NO_PRISM_LEVELUPS` premiers level up n'ont aucune carte prismatique, le suivant en impose une, `TUTORIAL_PRISM_UPGRADE`. */
@@ -735,7 +736,9 @@ export class Squad {
       const radius = heal.radius + (this.perks.has('medicRange') ? MEDIC_RANGE_UNITS * CROWD.spacing : 0); // upgrade d'armurerie : l'aura couvre 2 unités de plus autour du medic
       for (const s of this.soldiers) {
         if (s.hp >= s.maxHp || Math.hypot(s.x - m.x, s.y - m.y) > radius) continue;
+        const before = s.hp;
         s.hp = Math.min(s.maxHp, s.hp + heal.perSecond * dt);
+        tallyAdd(this.sim.tally.healBy, 'medic', s.hp - before);
         if (fx && this.sim.rng.chance(0.5)) this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
       }
     }

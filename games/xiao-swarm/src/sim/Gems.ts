@@ -68,7 +68,7 @@ export class Gems {
     const ty = clamp(y + Math.sin(ang) * dist, minY + 60, maxY - 60);
     this.chests.push({ id: this.sim.ids.get(), x, y, px: x, py: y, charge: 0, state: 'idle', cool: 0, age: 0, qty, hop: { vx: (tx - x) / GEM_FALL_TIME, vy: (ty - y) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
     const n = Math.max(1, Math.round(qty * DIFFICULTY.gemFreeShare)); // une part du contenu du coffre jaillit tout de suite
-    for (let i = 0; i < n; i++) this.drop(x, y, rng.range(0, Math.PI * 2), rng.range(60, 130)); // autour de l'œuf
+    for (let i = 0; i < n; i++) this.drop(x, y, rng.range(0, Math.PI * 2), rng.range(60, 130), 'chest_free'); // autour de l'œuf
   }
 
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
@@ -78,7 +78,7 @@ export class Gems {
     const n = Math.max(1, Math.round(this.chestQuantity(boss) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
     this.finalT = DIFFICULTY.gemFinalWait;
     const turn = rng.range(0, Math.PI * 2);
-    for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200));
+    for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200), 'final');
     this.finalPending = true;
     this.sim.events.push({ t: 'gemChestOpen', x, y });
   }
@@ -97,25 +97,25 @@ export class Gems {
     for (let i = 0; i < n; i++) {
       const hop = n > 1 ? rng.range(50, 150) : rng.range(15, 45);
       const ang = rng.range(0, Math.PI * 2);
-      this.pushCoin(a.x, a.y, ang, hop);
+      this.pushCoin(a.x, a.y, ang, hop, a.def.boss ? 'boss' : 'alien');
     }
   }
 
   /** `n` pièces d'or qui retombent en cloche autour de (x, y), de `min` à `max` px (alien doré : sur sa route, ou à sa mort). */
-  dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45): void {
+  dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45, src = 'golden_flee'): void {
     if (this.sim.ending) return;
-    for (let i = 0; i < n; i++) this.pushCoin(x, y, this.rng.range(0, Math.PI * 2), this.rng.range(min, max));
+    for (let i = 0; i < n; i++) this.pushCoin(x, y, this.rng.range(0, Math.PI * 2), this.rng.range(min, max), src);
   }
 
   /** `n` diamants qui jaillissent autour de (x, y) (solo seulement). */
-  dropGemsAt(x: number, y: number, n: number): void {
+  dropGemsAt(x: number, y: number, n: number, src = 'golden'): void {
     if (!this.enabled) return;
     const turn = this.rng.range(0, Math.PI * 2);
-    for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + this.rng.range(-0.25, 0.25), this.rng.range(60, 160));
+    for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + this.rng.range(-0.25, 0.25), this.rng.range(60, 160), src);
   }
 
   /** Un diamant qui retombe en cloche autour de (x, y), à `dist` px dans la direction `angle`. */
-  private drop(x: number, y: number, angle: number, dist: number): void {
+  private drop(x: number, y: number, angle: number, dist: number, src: string): void {
     this.items.push({
       id: this.sim.ids.get(),
       x,
@@ -124,6 +124,7 @@ export class Gems {
       py: y,
       life: DIFFICULTY.gemLife,
       age: 0,
+      src,
       hop: { vx: (Math.cos(angle) * dist) / GEM_FALL_TIME, vy: (Math.sin(angle) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME },
     });
   }
@@ -143,7 +144,7 @@ export class Gems {
     const rng = this.rng;
     const n = c.qty;
     const turn = rng.range(0, Math.PI * 2);
-    for (let k = 0; k < n; k++) this.drop(c.x, c.y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 230)); // explosion : en couronne, plus loin que les diamants du début
+    for (let k = 0; k < n; k++) this.drop(c.x, c.y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 230), 'chest'); // explosion : en couronne, plus loin que les diamants du début
     this.sim.events.push({ t: 'gemChestOpen', x: c.x, y: c.y });
   }
 
@@ -182,8 +183,8 @@ export class Gems {
     this.updateList(this.coins, dt, 'coin');
   }
 
-  private pushCoin(x: number, y: number, ang: number, dist: number): void {
-    this.coins.push({ id: this.sim.ids.get(), x, y, px: x, py: y, life: DIFFICULTY.coinLife, age: 0, hop: { vx: (Math.cos(ang) * dist) / GEM_FALL_TIME, vy: (Math.sin(ang) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
+  private pushCoin(x: number, y: number, ang: number, dist: number, src: string): void {
+    this.coins.push({ id: this.sim.ids.get(), x, y, px: x, py: y, life: DIFFICULTY.coinLife, age: 0, src, hop: { vx: (Math.cos(ang) * dist) / GEM_FALL_TIME, vy: (Math.sin(ang) * dist) / GEM_FALL_TIME, t: GEM_FALL_TIME } });
   }
 
   /** Fait vivre une liste d'objets au sol (diamants ou pièces) : chute, durée de vie, aimant, ramassage. */
@@ -212,6 +213,8 @@ export class Gems {
       catchItem(g, a.squad.owner);
       if (inPickRange(a)) {
         list.splice(i, 1);
+        const bag = kind === 'coin' ? this.sim.tally.coins : this.sim.tally.gems;
+        bag[g.src ?? '?'] = (bag[g.src ?? '?'] ?? 0) + 1;
         if (kind === 'coin') a.squad.coinsPicked++;
         else if (this.finalPending) this.finalT = DIFFICULTY.gemFinalReset; // boss final : chaque diamant ramassé remet le compte à rebours à 2 s (pas cumulatif)
         this.sim.events.push(kind === 'gem' ? { t: 'gemPicked', x: g.x, y: g.y, n: 1 } : { t: 'coinPicked', x: g.x, y: g.y, n: 1, owner: a.squad.owner });

@@ -60,6 +60,8 @@ export interface SoldierState extends Body {
   /** Enflammé : temps restant (s) de brûlure et débit de dégâts (PV/s) ; le feu est une brûlure dans le temps, voir `FIRE`. */
   burn: number;
   burnDps: number;
+  /** Mesure (RunRecorder) : source de la brûlure en cours (`Sim.blame` du feu le plus fort). */
+  burnSrc?: string;
   /** Soufflé en cloche par l'explosion d'un kamikaze : temps restant (s) pendant lequel seul le recul le déplace (il ne rejoint pas son slot), puis il revient en marchant. */
   knockT: number;
   jx0: number;
@@ -216,6 +218,8 @@ export interface Projectile {
   texture: string;
   team: Team;
   owner: PlayerId;
+  /** Mesure (RunRecorder) : source des dégâts d'un projectile d'alien (`alien:capacité`), '' sinon ; remis à zéro à la libération. */
+  src: string;
   hit: Set<number>;
 }
 
@@ -270,6 +274,8 @@ export interface Fuse {
 
 /** Stalactite qui va tomber (Scarab) : zone annoncée (télégraphe) puis impact quand `t` atteint 0. */
 export interface Stalactite {
+  /** Mesure (RunRecorder) : source des dégâts (`Sim.blame` à la création). */
+  src?: string;
   id: number;
   x: number;
   y: number;
@@ -283,6 +289,8 @@ export interface Stalactite {
 
 /** Pics en croix (Rhino Alpha) : télégraphe `t` s puis poussée `s` s ; 4 rangées d'angle 0, 90°, 180°, 270° autour de (x, y). Les mesures (`length`, `width`…) viennent de `def.spikeCross`. */
 export interface SpikeCross {
+  /** Mesure (RunRecorder) : source des dégâts (`Sim.blame` à la création). */
+  src?: string;
   id: number;
   x: number;
   y: number;
@@ -336,6 +344,8 @@ export interface ReviveZone {
 }
 
 export interface FirePatch {
+  /** Mesure (RunRecorder) : source des dégâts (`Sim.blame` à la création). */
+  src?: string;
   id: number;
   x: number;
   y: number;
@@ -410,6 +420,8 @@ export interface GemState {
   pulled?: string;
   caught?: boolean;
   pullV?: number;
+  /** Origine du butin (mesure d'équilibrage, `Sim.tally`) : `alien`, `boss`, `golden_flee`, `golden_death` (pièces) ; `golden`, `chest_free`, `chest`, `final` (diamants). */
+  src?: string;
 }
 
 /** Coffre à diamants laissé par un boss (solo) : rester autour charge la jauge, pleine = vidéo récompensée, puis il explose en diamants. */

@@ -5,6 +5,22 @@
  * et signalée dans le jeu (`staleDropped`, affiché par le HUD). Dev seulement.
  */
 
+/** Toutes les copies mémorisées connues (clé localStorage → libellé), remplies par `dropStaleOverride`. */
+const overrideKeys = new Map<string, string>();
+
+/** Libellés des réglages de dev mémorisés dans ce navigateur qui masquent en ce moment les valeurs du code (noté dans les parties enregistrées : `RunRecorder`). */
+export function activeOverrides(): string[] {
+  const out: string[] = [];
+  for (const [key, label] of overrideKeys) {
+    try {
+      if (localStorage.getItem(key) !== null) out.push(label);
+    } catch {
+      // stockage indisponible : rien à signaler
+    }
+  }
+  return out;
+}
+
 /** Libellés des copies supprimées pendant ce démarrage. */
 export const staleDropped: string[] = [];
 
@@ -21,6 +37,7 @@ function hash(value: unknown): string {
  * (réglages déjà faits à la main) ; sinon la supprimer.
  */
 export function dropStaleOverride(key: string, label: string, defaults: unknown, adoptExisting = true): void {
+  overrideKeys.set(key, label);
   try {
     const h = hash(defaults);
     const known = localStorage.getItem(`${key}-base`);

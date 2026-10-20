@@ -3,6 +3,7 @@ import { DIFFICULTY, POWERUP_LIFE, RECRUIT, ELECTRO } from '../config';
 import type { AlienState, Field, PowerUpKind, PowerUpState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
+import { tallyAdd } from './tally';
 import type { Squad } from './Squad';
 
 /** Distance (px) de la chute de la relance autour de l'alien tué : la même que celle des globes d'upgrade autour de l'œuf (`Chests.ts`). */
@@ -175,7 +176,11 @@ export class PowerUps {
         for (const s of sq.soldiers) {
           if (!s.alive || ((s.x - f.x) / f.r) ** 2 + ((s.y - f.y) / (f.r * FIELD_ASPECT)) ** 2 >= 1) continue; // centre du soldat dans l'ellipse dessinée au sol
           const cap = s.maxHp * (1 + HEAL_FIELD.overheal);
-          if (s.hp < cap) s.hp = Math.min(cap, s.hp + s.maxHp * HEAL_FIELD.perSec * dt);
+          if (s.hp < cap) {
+            const before = s.hp;
+            s.hp = Math.min(cap, s.hp + s.maxHp * HEAL_FIELD.perSec * dt);
+            tallyAdd(this.sim.tally.healBy, 'healField', s.hp - before);
+          }
         }
       }
     }

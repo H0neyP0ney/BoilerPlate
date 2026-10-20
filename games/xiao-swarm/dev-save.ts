@@ -404,8 +404,12 @@ function saveTextureModes(d: { pack2b: string[]; launch: string[] }): Result {
 // ---------- Parties enregistrées (calibration) ----------
 
 /** Écrit une partie enregistrée (`RunRecorder`) dans `docs/bench/runs/` ; lue par `npm run sim:calibrate`. */
-function saveBenchRun(run: { mode?: string }): Result {
+function saveBenchRun(run: { mode?: string; build?: unknown }): Result {
   const dir = path.join(SRC, '..', '..', '..', 'docs', 'bench', 'runs');
+  // version du jeu et commit (avec « + » s'il y a des modifications non commitées) : pour comparer des parties d'équilibrages différents
+  const version = (JSON.parse(fs.readFileSync(path.join(SRC, '..', 'package.json'), 'utf8')) as { version?: string }).version ?? '?';
+  const git = (args: string[]): string => spawnSync('git', args, { cwd: SRC, encoding: 'utf8' }).stdout?.trim() ?? '';
+  run.build = { version, commit: git(['rev-parse', '--short', 'HEAD']) + (git(['status', '--porcelain', '--', '.']) ? '+' : '') };
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const name = `${stamp}-${String(run.mode ?? 'run').replace(/[^a-z0-9_-]/gi, '')}.json`;

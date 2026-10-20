@@ -8,7 +8,23 @@ import type { Sim } from '../sim/Sim';
 import type { Squad } from '../sim/Squad';
 import type { PlayerId } from '../sim/types';
 import { JUMPS, jumpAhead, type JumpId } from './jumpAhead';
-import { button, checkbox, floatingPanel, heading, line, note, select, slider, type FloatingPanel } from './devUi';
+import { button as uiButton, checkbox as uiCheckbox, floatingPanel, heading, line, note, select, slider, type FloatingPanel } from './devUi';
+
+/**
+ * Triches utilisées pendant la partie en cours (libellés des boutons, cases et de la vitesse du jeu) : la partie enregistrée les note (`RunRecorder`, champ `cheats`) pour
+ * qu'on puisse l'écarter des stats d'équilibrage. Vidé au début de chaque partie (`GameScene`).
+ */
+export const cheatsUsed = new Set<string>();
+const button = (label: string, fn: () => void): HTMLButtonElement =>
+  uiButton(label, () => {
+    cheatsUsed.add(label);
+    fn();
+  });
+const checkbox = (label: string, checked: boolean, onChange: (v: boolean) => void): HTMLLabelElement =>
+  uiCheckbox(label, checked, (v) => {
+    cheatsUsed.add(label);
+    onChange(v);
+  });
 
 /** Coéquipiers IA du coop (fournis par la session hôte). */
 export interface BotControl {
@@ -269,7 +285,10 @@ export class CheatPanel {
       step: 0.1,
       hint: '0 = figé, 1 = normal, 0,3 = ralenti pour observer',
       get: () => scale,
-      set: (v) => this.host.setTimeScale((scale = v)),
+      set: (v) => {
+        cheatsUsed.add('Vitesse du jeu');
+        this.host.setTimeScale((scale = v));
+      },
     });
     body.append(
       heading('Progression (XP)'),

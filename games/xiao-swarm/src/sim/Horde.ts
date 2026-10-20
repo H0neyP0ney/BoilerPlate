@@ -4,6 +4,7 @@ import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, typ
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
 import type { Sim } from './Sim';
+import { tallyAdd } from './tally';
 import type { Squad } from './Squad';
 
 /** Bulle qui a capturé un soldat : elle l'éloigne de la squad jusqu'à `CAPTURE_DRAG_DIST` px au-delà de son rayon, à cette part de sa vitesse. */
@@ -127,6 +128,7 @@ export class Horde {
     const shield = shieldOf(def, this.sim.difficulty);
     const maxShield = shield ? maxHp * shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
+    tallyAdd(this.sim.tally.spawns, def.id, 1);
     return {
       kind: 'alien',
       id: this.sim.ids.get(),
@@ -426,6 +428,7 @@ export class Horde {
         const key = `${a.id}:${i}:${s.id}`;
         if (this.orbHits.has(key)) continue;
         this.orbHits.set(key, O.rehit);
+        this.blameAs(a, 'orbs');
         this.sim.damageSoldier(s, O.damage * a.escDmg);
       }
     }
@@ -535,6 +538,11 @@ export class Horde {
     this.sim.arena.constrain(a);
   }
 
+  /** Mesure (RunRecorder) : les prochains dégâts aux soldats viennent de la capacité `kind` de `a` (`Sim.blame`, ex. `boss_rhino:rush`). */
+  private blameAs(a: AlienState, kind: string): void {
+    this.sim.blame = `${a.def.id}:${kind}`;
+  }
+
   update(dt: number): void {
     const { alienHash, soldierHash, arena, rng } = this.sim;
     if (this.sim.aliveSquads.length === 0) return;
@@ -545,6 +553,7 @@ export class Horde {
     for (const a of this.sim.aliens) {
       if (!a.alive) continue;
       const def = a.def;
+      this.sim.blame = def.id; // mesure : tout ce que cet alien inflige pendant sa mise à jour lui est attribué (précisé par `blameAs`)
 
       // Œuf de boss : immobile et inoffensif, il attend d'être détruit
       if (def.egg) {
@@ -589,6 +598,7 @@ export class Horde {
         const target = (a.target && this.sim.squadOf(a.target.owner)) || this.sim.nearestSquad(a.x, a.y);
         if (target) {
           const power = (a.revived ? zombieStats().dmgMul : 1) * a.escDmg;
+          this.blameAs(a, 'cross');
           this.sim.addCross(target.center.x, target.center.y, cross, power); // une croix SUR la squad
           // et une autre là où elle se dirige (sa course prolongée jusqu'à la fin de la poussée) ; à l'arrêt, elle ferait doublon : pas de seconde croix
           const ahead = cross.aim + cross.sweep;
@@ -655,6 +665,7 @@ export class Horde {
       if (def.trail) {
         a.trailCd -= dt;
         if (a.trailCd <= 0 && Math.hypot(a.vx, a.vy) > 15) {
+          this.blameAs(a, 'trail');
           this.sim.addFire(a.x, a.y + 4, def.trail.radius, def.trail.ttl, def.trail.dps * a.escDmg);
           a.trailCd = def.trail.every;
         }
@@ -668,6 +679,7 @@ export class Horde {
           s.x = a.x;
           s.y = a.y;
           s.vx = s.vy = s.kx = s.ky = 0;
+          this.blameAs(a, 'digest');
           this.sim.damageSoldier(s, def.capture.dps * a.escDmg * dt, null, true);
           // elle tire sa proie à l'écart de la squad (pour la dévorer tranquille), puis s'immobilise
           const sq = this.sim.squadOf(s.owner);
@@ -967,6 +979,7 @@ export class Horde {
           this.cleave(a, def.damage * power);
           a.attackCd = def.attackCooldown;
         } else if (a.attackCd <= 0) {
+          this.blameAs(a, 'melee');
           if (def.oneShot) this.sim.damageSoldier(s, s.hp + s.shield + 1, null, false); // un coup = un mort
           else this.sim.damageSoldier(s, def.damage * power);
           a.attackCd = def.attackCooldown;
@@ -975,6 +988,7 @@ export class Horde {
 
       arena.constrain(a);
     }
+    this.sim.blame = 'other';
     this.relocateStragglers(dt);
   }
 
@@ -1101,6 +1115,7 @@ export class Horde {
     if (T) {
       a.trailCd -= dt; // orbe de feu : traînée de flammes au sol, comme le slime de feu
       if (a.trailCd <= 0) {
+        this.blameAs(a, 'fire');
         this.sim.addFire(a.x, a.y + 6, T.radius, T.ttl, T.dps * a.escDmg);
         a.trailCd = T.every;
       }
@@ -1113,6 +1128,7 @@ export class Horde {
     }
     for (const s of this.sim.soldierHash.query(a.x, a.y, a.radius + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > a.radius + s.radius) continue;
+      this.blameAs(a, 'hit');
       if (!fire) this.sim.damageSoldier(s, a.def.damage * a.escDmg);
       else this.sim.ignite(s, a.def.damage * a.escDmg * FIRE.orbDps); // orbe de feu : le soldat s'enflamme (débit = dégâts × `FIRE.orbDps`)
       if (fire) {
@@ -1179,6 +1195,7 @@ export class Horde {
         const along = dx * cos + dy * sin;
         const across = Math.abs(-dx * sin + dy * cos);
         if (along > prevF && along <= Math.min(curF, this.sim.arena.rayLength(a.x, a.y, cos, sin, R.length)) && across <= R.width / 2 + s.radius * 0.6) { // la ligne s'arrête au bord de la carte
+          this.blameAs(a, 'spikeRing');
           this.sim.damageSoldier(s, R.damage * power);
           break; // une seule fois par passage de front
         }
@@ -1312,6 +1329,7 @@ export class Horde {
           const dy = s.y - a.y;
           const along = dx * cos + dy * sin;
           const across = Math.abs(-dx * sin + dy * cos);
+          this.blameAs(a, 'spikes');
           if (along > prevF && along <= reach && across <= L.width / 2 + s.radius * 0.6) this.sim.damageSoldier(s, L.damage * power);
         }
         if (a.lurkT <= 0) {
@@ -1502,6 +1520,7 @@ export class Horde {
       const p = { x: sq.center.x + Math.cos(ang) * d, y: sq.center.y + Math.sin(ang) * d * 0.8 };
       if (clear(p)) spots.push(p);
     }
+    this.blameAs(a, 'stalactite');
     spots.forEach((p, i) => this.sim.addStalactite(p.x, p.y, S.radius, S.delay + i * S.stagger, S.damage * a.escDmg, S.knockback));
   }
 
@@ -1516,6 +1535,7 @@ export class Horde {
       if (!s.alive || d > B.radius + s.radius) continue;
       s.kx += (dx / d) * B.knockback;
       s.ky += (dy / d) * B.knockback;
+      this.blameAs(a, 'emerge');
       this.sim.damageSoldier(s, B.damage * a.escDmg);
     }
   }
@@ -1600,6 +1620,7 @@ export class Horde {
     this.sim.events.push({ t: 'slam', x: a.x, y: a.y, r: L.radius });
     for (const s of this.sim.soldierHash.query(a.x, a.y, L.radius + 30, this.scratchS)) {
       if (!s.alive || Math.hypot(s.x - a.x, s.y - a.y) > L.radius + s.radius) continue;
+      this.blameAs(a, 'leap');
       this.sim.damageSoldier(s, s.hp + s.maxHp, null, false); // écrasé : tué d'un coup (sauf invulnérabilité d'une recrue fraîche)
     }
   }
@@ -1618,6 +1639,7 @@ export class Horde {
   }
 
   private rushTrail(a: AlienState, T: NonNullable<NonNullable<AlienState['def']['rush']>['trail']>): void {
+    this.blameAs(a, 'rushTrail');
     if (T.kind === 'fire') this.sim.addFire(a.x, a.y + 4, T.radius, T.ttl, T.dps * a.escDmg);
     else this.sim.addPuddle(a.x, a.y + 4, T.radius, T.ttl, 1, true);
   }
@@ -1644,6 +1666,7 @@ export class Horde {
       const along = dx * a.rushDx + dy * a.rushDy;
       const lateral = Math.abs(dx * a.rushDy - dy * a.rushDx);
       if (along < -a.radius || along > a.radius + s.radius + 26 || lateral > r.width / 2 + s.radius) continue;
+      this.blameAs(a, 'rush');
       this.sim.damageSoldier(s, r.damage * a.escDmg);
       if (r.stun && s.alive) s.stun = Math.max(s.stun, r.stun); // charge électrique (Rhino Alpha) : étourdi
       s.kx += (a.rushDx * r.knockback) / s.mass;
@@ -1663,6 +1686,7 @@ export class Horde {
     s.kx += (dx / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
     s.ky += (dy / d) * pull * CROWD.knockDamp * TONGUE_BOOST;
     s.grabbed = GRAB_IMMUNE;
+    this.blameAs(a, 'tongue');
     this.sim.damageSoldier(s, t.damage * a.escDmg);
     this.sim.events.push({ t: 'tongue', alien: a.id, target: s.id, dur: 0.5 });
     return true;
@@ -1674,6 +1698,7 @@ export class Horde {
     this.sim.events.push({ t: 'cleave', x: a.x, y: a.y, r });
     for (const s of this.sim.soldierHash.query(a.x, a.y, r + 30, this.scratchS)) {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > r + s.radius) continue;
+this.blameAs(a, 'cleave');
       this.sim.damageSoldier(s, dmg);
     }
   }
@@ -1690,6 +1715,7 @@ export class Horde {
       s.kx += (dx / d) * slam.knockback;
       s.ky += (dy / d) * slam.knockback;
       if (slam.stun) s.stun = Math.max(s.stun, slam.stun);
+      this.blameAs(a, 'slam');
       this.sim.damageSoldier(s, slam.damage * a.escDmg);
     }
   }

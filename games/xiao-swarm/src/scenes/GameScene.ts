@@ -13,7 +13,8 @@ import { levelAt } from '../data/waves';
 import { loadSavedCrowd } from '../debugCrowd';
 import { loadSavedDifficulty } from '../debugDifficulty';
 import { BotOverlay } from '../dev/botOverlay';
-import { CheatPanel, type BotControl } from '../dev/cheatPanel';
+import { CheatPanel, cheatsUsed, type BotControl } from '../dev/cheatPanel';
+import { activeOverrides } from '../dev/staleOverrides';
 import { JUMPS, jumpAhead, type JumpId } from '../dev/jumpAhead';
 import { AlienTest, alienTestMode, type AlienTestRequest } from '../dev/alienTest';
 import { setDocked } from '../dev/dock';
@@ -78,6 +79,8 @@ export class GameScene extends Phaser.Scene {
   /** Choix d'upgrade affiché (le jeu ne s'arrête pas). */
   private upgradeOpen = false;
   private recorder: RunRecorder | null = null;
+  /** Partie de test notée dans la partie enregistrée (`?jump`, `?endtest`, test d'alien), `null` pour une vraie partie. */
+  private runJump: string | null = null;
   private snapMeasuredAt = -1;
   private snapPeak = 0;
   private snapPeakAt = 0;
@@ -124,6 +127,8 @@ export class GameScene extends Phaser.Scene {
     const openScreen = (this.registry.get('openScreen') as string | undefined) ?? SCENES.title; // « Quitter » du menu pause : SoloScreen
     this.registry.remove('openScreen');
     this.titleOpen = false;
+    cheatsUsed.clear(); // nouvelle partie : la partie enregistrée ne note que les triches de celle-ci
+    this.runJump = null;
     if (online) {
       this.session = online;
     } else {
@@ -148,6 +153,7 @@ export class GameScene extends Phaser.Scene {
             this.scene.start(SCENES.viewer);
           })
         : undefined;
+      this.runJump = test ? 'alienTest' : endTest ? 'endtest' : jump;
       if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer, jump)); // test : partie avancée dès le lancement
       if (endTest) this.prepareEndTest();
       // hors onboarding (le tutoriel arrive directement sur la partie, indice des commandes affiché) : écran titre Solo / Multiplayer d'abord
@@ -265,6 +271,7 @@ export class GameScene extends Phaser.Scene {
       // enregistrement de la partie (calibration du Gestionnaire de vagues et du réseau) : pas chez un client, ses compteurs sont vides
       if (!this.ended && (!this.session.online || this.session instanceof HostSession)) {
         this.recorder ??= new RunRecorder(sim);
+        this.recorder.noteFrame(delta);
         this.recorder.update(this.session.localPlayer);
       }
     }
@@ -362,7 +369,7 @@ export class GameScene extends Phaser.Scene {
   private readonly onEvent = (e: SimEvent): void => {
     this.view.handle(e);
     if (e.t === 'boss' || e.t === 'bossDown' || e.t === 'bossEnrage') this.events.emit('boss', e); // bandeau / flèche du HUD
-    if (e.t === 'boss') this.recorder?.noteBoss(e.alien, e.kind);
+    this.recorder?.noteEvent(e); // partie enregistrée (dev) : timeline des boss, upgrades, power-ups, morts…
     if (e.t === 'boss') poki.measureOnce('boss', bossAnalyticsId(e.alien), 'start'); // jumeaux : une seule fois pour les deux
     if (e.t === 'bossDown') poki.measureOnce('boss', bossAnalyticsId(e.alien), 'complete'); // jumeaux : `bossDown` ne part qu'à la mort du dernier
     if (e.t === 'tutorial') {
@@ -498,7 +505,7 @@ export class GameScene extends Phaser.Scene {
     const rec = this.recorder;
     this.recorder = null; // une relance coop repart sur un nouvel enregistrement
     if (!rec || rec.samples.length < 10) return;
-    void saveToCode('bench-run', rec.finish(this.session.localPlayer, this.mode.id, victory)).then((m) => console.info(m));
+    void saveToCode('bench-run', rec.finish(this.session.localPlayer, this.mode.id, victory, { cheats: [...cheatsUsed], overrides: activeOverrides(), jump: this.runJump })).then((m) => console.info(m));
   }
 
   /** Test de la fin (`?endtest=1`) : 16 troopers et le Giant Crab déjà là (PV réels), devant la squad. */

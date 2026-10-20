@@ -44,6 +44,8 @@ export class WaveRunner {
   private _replaying = false;
   /** La première vague de la partie (hors configuration forcée et rejeu) est déjà partie ? Elle ne sort JAMAIS en cercle autour d'une squad : le cercle ne vaut qu'à partir de la deuxième. */
   firstWaveSent = false;
+  /** Mesure (RunRecorder) : chaque envoi (temps, niveau, configuration, effectif, arrivée, rejeu pendant un boss, aliens demandés avant le bonus des joueurs en plus) ; vidé par `reset`. */
+  readonly log: { t: number; level: number; config: string; mul: number; arrival: string; replay: boolean; count: number }[] = [];
   /** Instant (timeline) de la dernière apparition de boss. */
   private bossAt: number | null = null;
   private fighting = false;
@@ -100,6 +102,7 @@ export class WaveRunner {
   }
 
   reset(): void {
+    this.log.length = 0;
     this.firstWaveSent = false; // nouvelle partie : la première vague ne sera de nouveau jamais en cercle
     this._time = 0;
     this._cursor = 0;
@@ -221,7 +224,14 @@ export class WaveRunner {
     const ring = ringRoll0 && !firstWave; // la toute première vague n'est jamais en cercle (le tirage a lieu quand même : même suite aléatoire)
     const ringRoll = ring ? this.rng.next() : 0;
     const arrival = ring ? 'ring' : ambush ? 'ahead' : undefined;
-    for (const g of groups) if (g.count > 0) this.spawn(g.type, scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul), ALIENS[g.type].boss ? undefined : arrival, ringRoll);
+    let sent = 0;
+    for (const g of groups) {
+      if (g.count <= 0) continue;
+      const n = scaledCount(Math.round(g.count), !!ALIENS[g.type].boss, mul);
+      sent += n;
+      this.spawn(g.type, n, ALIENS[g.type].boss ? undefined : arrival, ringRoll);
+    }
+    this.log.push({ t: Math.round(this._time * 10) / 10, level, config: config.name ?? String(all.indexOf(config) + 1), mul: Math.round(mul * 100) / 100, arrival: arrival ?? 'normal', replay: this._replaying, count: sent });
     return { ...config, groups };
   }
 }

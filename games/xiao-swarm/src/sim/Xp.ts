@@ -3,6 +3,7 @@ import { splitXp } from '../data/progression';
 import type { AlienState, XpOrb } from './entities';
 import { catchItem, chase } from './Pickup';
 import type { Sim } from './Sim';
+import { tallyAdd } from './tally';
 import type { Squad } from './Squad';
 
 /** Rayons d'attraction et de ramassage : ceux de `PICKUP` (config.ts), communs aux globes d'XP, recrues et power-ups, multipliés par la stat `magnet` de la squad. */
@@ -48,8 +49,9 @@ export class Xp {
       const slideAng = dir + rng.range(-XP_SLIDE.spread, XP_SLIDE.spread);
       const v = XP_SLIDE.speed * rng.range(XP_SLIDE.speedJitter[0], XP_SLIDE.speedJitter[1]);
       this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME, vx: Math.cos(slideAng) * v, vy: Math.sin(slideAng) * v });
+      tallyAdd(this.sim.tally.xp, 'dropped', value);
     }
-    if (this.orbs.length > MAX_ORBS) this.orbs.splice(0, this.orbs.length - MAX_ORBS);
+    if (this.orbs.length > MAX_ORBS) for (const o of this.orbs.splice(0, this.orbs.length - MAX_ORBS)) tallyAdd(this.sim.tally.xp, 'overflow', o.value);
   }
 
   update(dt: number): void {
@@ -82,6 +84,7 @@ export class Xp {
         }
       }
       if (o.life <= 0) {
+        tallyAdd(this.sim.tally.xp, 'expired', o.value);
         this.orbs.splice(i, 1);
         continue;
       }
@@ -125,6 +128,7 @@ export class Xp {
       catchItem(o, best.owner); // attiré : il ne disparaît plus ni ne clignote, et suit cette squad
       if (bestD < PICKUP.pickRadius * bestStat) {
         this.sim.squadOf(best.owner)!.gainXp(o.value);
+        tallyAdd(this.sim.tally.xp, 'picked', o.value);
         this.orbs.splice(i, 1);
         continue;
       }

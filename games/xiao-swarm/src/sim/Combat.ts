@@ -52,6 +52,7 @@ export class Combat {
       texture: '',
       team: 'aliens',
       owner: '',
+      src: '',
       hit: new Set(),
     }),
     (p) => {
@@ -60,6 +61,7 @@ export class Combat {
     (p) => {
       // remise à zéro à la libération : un projectile recyclé ne doit garder aucun comportement du précédent
       p.hit.clear();
+      p.src = '';
       p.lob = false;
       p.aoe = 0;
       p.knock = 0;
@@ -126,6 +128,7 @@ export class Combat {
     this.updateDelayedBlobs(dt);
     this.updateBarrages(dt);
     this.updateProjectiles(dt);
+    this.sim.blame = 'other';
   }
 
   /**
@@ -253,6 +256,7 @@ export class Combat {
       const lx = this.inArenaX(target.x + target.vx * lob.flight * lead + rng.range(-scatter, scatter)); // l'impact reste dans la carte
       const ly = this.inArenaY(target.y + target.vy * lob.flight * lead + rng.range(-scatter, scatter));
       const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, lob.flight * rng.range(0.92, 1.1), lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, lob.aoe, lob.texture, a.team, 'aliens');
+      p.src = `${a.def.id}:lob`;
       p.poison = lob.poison ?? 0;
       p.spawn = lob.spawn ?? 0;
       p.spawnHp = lob.spawnHpMul ?? 1;
@@ -302,7 +306,9 @@ export class Combat {
       if (b.t > 0) continue;
       this.delayedBlobs.splice(i, 1);
       this.sim.events.push({ t: 'alienShot', id: b.id, alien: b.alien, x: b.mx, y: b.my });
-      this.launchLob(b.mx, b.my, b.lx, b.ly, b.flight, b.damage, b.aoe, b.texture, b.team, 'aliens').poison = b.poison;
+      const p = this.launchLob(b.mx, b.my, b.lx, b.ly, b.flight, b.damage, b.aoe, b.texture, b.team, 'aliens');
+      p.poison = b.poison;
+      p.src = `${b.alien}:deathBlob`;
     }
   }
 
@@ -355,6 +361,7 @@ export class Combat {
       const ly = this.inArenaY(target.y + target.vy * sp.flight * sp.lead + Math.sin(ang) * dist * 0.7);
       const flight = sp.flight * rng.range(0.92, 1.1);
       const p = this.launchLob(a.x, a.y - a.radius * 0.6, lx, ly, flight, sp.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg, sp.aoe, sp.texture, a.team, 'aliens');
+      p.src = `${a.def.id}:spray`;
       if (sp.puddle) {
         p.puddle = sp.puddle.radius;
         p.puddleTtl = sp.puddle.ttl;
@@ -480,6 +487,7 @@ export class Combat {
           p.y += p.vy * (dt + p.life);
           // crachat (et toute boule à flaque) : pas de recul ; les autres boules repoussent comme avant
           const spit = p.puddle > 0 || p.texture === 'fx_spit';
+          if (p.team === 'aliens') this.sim.blame = p.src || 'projectile'; // mesure : l'explosion retient sa source
           this.sim.addBlast(p.x, p.y, p.aoe, p.damage, p.team, p.owner, spit ? 0 : 300, spit ? 'spit' : p.texture === 'fx_blob_green' ? 'acid' : p.texture === 'fx_blob_red' ? 'slime' : undefined, p.poison);
           if (p.crit) this.sim.events.push({ t: 'crit', x: p.x, y: p.y - 10, dmg: p.damage });
           if (p.puddle > 0) this.sim.addPuddle(p.x, p.y, p.puddle, p.puddleTtl, p.puddleSlow);
@@ -528,6 +536,7 @@ export class Combat {
       if (pvp || fromAlien) {
         for (const s of soldierHash.query(p.x, p.y, hitR + MAX_UNIT_RADIUS, this.scratchS)) {
           if (s.team === p.team || !this.overlaps(p, s, hitR)) continue;
+          this.sim.blame = p.src || 'projectile';
           if (p.freeze > 0) {
             if (p.damage > 0) this.sim.damage(s, p.damage, p.owner, p.vx / len, p.vy / len); // faibles dégâts
             this.sim.freezeHit(s, p.freeze); // la boucle de glace éclate : seul le soldat touché est pris dans un glaçon

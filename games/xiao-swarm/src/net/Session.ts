@@ -35,8 +35,8 @@ export interface Session {
   reviveLocal(free?: boolean): void;
   /** La squad locale choisit l'upgrade `index` parmi ses propositions (en ligne : envoyé à l'hôte). */
   chooseUpgrade(index: number): void;
-  /** La squad locale relance ses propositions d'upgrade (en ligne : envoyé à l'hôte). */
-  rerollUpgrade(): void;
+  /** La squad locale relance ses propositions d'upgrade (en ligne : envoyé à l'hôte). `rewarded` : relance payée par une vidéo (solo seulement, ignoré en ligne). */
+  rerollUpgrade(rewarded?: boolean): void;
   /**
    * Partie en ligne : pas de pause (l'hôte fait tourner tout le monde), pas de revive par pub,
    * et un joueur anéanti réapparaît tout seul (l'hôte s'en charge).
@@ -135,8 +135,8 @@ export class LocalSession implements Session {
     this.sim.chooseUpgrade(this.localPlayer, index);
   }
 
-  rerollUpgrade(): void {
-    this.sim.rerollUpgrade(this.localPlayer);
+  rerollUpgrade(rewarded = false): void {
+    this.sim.rerollUpgrade(this.localPlayer, rewarded);
   }
 
   reviveLocal(free = false): void {

@@ -206,10 +206,13 @@ export class Squad {
     return !!this.offer;
   }
 
-  /** Remplace les propositions ouvertes par un nouveau tirage (si possible sans les mêmes upgrades). Vrai si la relance a eu lieu. */
-  rerollOffer(): boolean {
-    if (!this.offer || this.rerolls <= 0 || this.sim.tutorial?.active) return false; // pas de relance pendant l'onboarding (offre imposée)
-    this.rerolls--;
+  /**
+   * Remplace les propositions ouvertes par un nouveau tirage (si possible sans les mêmes upgrades). Vrai si la relance a eu lieu.
+   * `rewarded` : relance payée par une vidéo récompensée (solo, plus de relance en stock) : ne consomme rien.
+   */
+  rerollOffer(rewarded = false): boolean {
+    if (!this.offer || (this.rerolls <= 0 && !rewarded) || this.sim.tutorial?.active) return false; // pas de relance pendant l'onboarding (offre imposée)
+    if (!rewarded) this.rerolls--;
     this.rollOffer(this.offer, true);
     return true;
   }

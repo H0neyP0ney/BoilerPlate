@@ -2,7 +2,8 @@ import { setSkinLoader } from '../assets/skinSheets';
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS } from '@xiao/engine';
 import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../config';
-import { RETENTION_MILESTONES, TIME_MILESTONES } from '../data/analytics';
+import { RETENTION_MILESTONES, TIME_MILESTONES, survivedBucket } from '../data/analytics';
+import { BalanceTracker } from '../balanceAnalytics';
 import type { SoldierClassId } from '../data/classes';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { FINAL_BOSS } from '../data/difficultyLevels';
@@ -68,6 +69,8 @@ export class GameScene extends Phaser.Scene {
   /** Vitesse de la simulation (panneau Triche, dev) : 1 = normale, 0 = figée. */
   private timeScale = 1;
   private revived = false;
+  /** Temps de jeu au dernier revive payé par une vidéo (analytics : combien de temps le joueur tient ensuite). */
+  private revivedAt = 0;
   /** Partie qui a commencé par le tutoriel : la première mort offre un revive gratuit, et son onde de choc détruit les aliens (aide à la première expérience). */
   private freeRevive = false;
   private ended = false;
@@ -96,6 +99,8 @@ export class GameScene extends Phaser.Scene {
   private tutoPhase = '';
   private nextTimeMilestone = 0;
   private lastLevelSent = 0;
+  /** Analytics d'équilibrage (solo) : causes des morts et des effondrements de la squad. */
+  private readonly balance = new BalanceTracker();
 
   constructor() {
     super(SCENES.game);
@@ -104,7 +109,10 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     setSkinLoader(this); // les planches de skins se téléchargent à la demande par le chargeur de cette scène (toujours active)
     this.revived = false;
+    this.revivedAt = 0;
     this.freeRevive = false;
+    this.chestsSeen.clear();
+    this.chestsAd.clear();
     this.ended = false;
     this.perfFrames = [0, 0, 0, 0];
     this.perfMs = [0, 0, 0, 0];
@@ -255,6 +263,7 @@ export class GameScene extends Phaser.Scene {
       this.trackProgress();
     }
     this.trackCoins();
+    this.trackChests();
     // choix d'upgrade : le monde est figé ; on dessine l'état à son dernier pas (alpha 1), sinon l'interpolation fait trembler les projectiles
     this.view.hideSquadCounts = this.titleOpen; // pas de bulle d'effectif sur les écrans titre
     this.view.render(running && sim.choiceT <= 0 ? this.session.alpha : 1, dt, secs);
@@ -290,6 +299,7 @@ export class GameScene extends Phaser.Scene {
     if (newRun) {
       this.nextTimeMilestone = 0;
       this.lastLevelSent = 0;
+      this.balance.reset();
       const games = storage.get('gamesPlayed', 0);
       if ((RETENTION_MILESTONES as readonly number[]).includes(games)) poki.measure('retention', `game-${games}`, 'reached'); // combien de joueurs rejouent
       const tuto = this.session.sim.tutorial;
@@ -316,8 +326,12 @@ export class GameScene extends Phaser.Scene {
     const sim = this.session.sim;
     if (!this.flow.isPlaying || this.ended || sim.tutorial?.active) return;
     const time = this.runTime;
+    const solo = !this.session.online;
+    if (solo) this.balance.update(sim, this.localSquad.size);
     while (this.nextTimeMilestone < TIME_MILESTONES.length && time >= TIME_MILESTONES[this.nextTimeMilestone]) {
-      poki.measureOnce('time', `${TIME_MILESTONES[this.nextTimeMilestone++]}s`, 'reached');
+      const milestone = TIME_MILESTONES[this.nextTimeMilestone++];
+      poki.measureOnce('time', `${milestone}s`, 'reached');
+      if (solo) this.balance.milestone(sim, milestone, this.localSquad.size, this.localSquad.level);
     }
     const level = this.waveNumber;
     if (level > this.lastLevelSent) {
@@ -413,7 +427,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeOpen = true;
     this.shownOffer = key;
     this.scene.stop(SCENES.levelUp);
-    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
+    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, rewardedReroll: this.canRewardReroll, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
   }
 
   /** Dev : encode l'état comme un snapshot réseau 2 fois par seconde (sans l'envoyer) pour afficher sa taille et le débit qu'il coûterait. */
@@ -446,10 +460,33 @@ export class GameScene extends Phaser.Scene {
     this.session.chooseUpgrade(index);
   }
 
-  /** Appelé par la fenêtre de choix : relance les propositions (la fenêtre se rouvre avec le nouveau tirage). */
-  rerollUpgrade(): void {
+  /** Relance contre vidéo récompensée : solo seulement (en ligne, le choix est limité à 5 s et le monde ne s'arrête pas pour une pub), jamais pendant le tutoriel. */
+  get canRewardReroll(): boolean {
+    return !this.session.online && !this.session.sim.tutorial?.active;
+  }
+
+  /**
+   * Appelé par la fenêtre de choix : relance les propositions (la fenêtre se rouvre avec le nouveau tirage).
+   * Plus de relance en stock (solo) : vidéo récompensée d'abord ; faux si la relance n'a pas eu lieu (vidéo ratée), la fenêtre redevient alors cliquable.
+   */
+  async rerollUpgrade(): Promise<boolean> {
     poki.measure('upgrade', 'reroll', 'interact');
-    this.session.rerollUpgrade();
+    if (this.localSquad.rerolls > 0 || !this.canRewardReroll) {
+      this.session.rerollUpgrade();
+      return true;
+    }
+    if (!this.flow.interrupt()) return false;
+    poki.measure('reward', 'reroll', 'interact');
+    let ok = false;
+    try {
+      ok = await poki.rewardedBreak('reroll');
+    } finally {
+      await this.flow.resume();
+    }
+    if (!ok) return false;
+    poki.measure('reward', 'reroll', 'complete');
+    this.session.rerollUpgrade(true);
+    return true;
   }
 
   /** L'onglet passe en arrière-plan : pause automatique en solo seulement (en ligne le jeu continue). */
@@ -523,6 +560,7 @@ export class GameScene extends Phaser.Scene {
   /** Victoire solo : record et enregistrement comme `endRun`, puis la séquence de fin (le gameplay Poki s'arrête quand la fusée est partie). */
   private startEnding(): void {
     this.ended = true;
+    if (this.revivedAt > 0) poki.measure('reward', 'revive', 'survived-win');
     this.saveRun(true);
     settings.unlockAfterWin(this.session.sim.difficulty); // finir un niveau débloque le suivant
     if (!this.session.online) storage.set('bestTime', Math.max(Math.floor(this.runTime), storage.get('bestTime', 0)));
@@ -552,6 +590,8 @@ export class GameScene extends Phaser.Scene {
       poki.measureOnce('death', `level-${this.waveNumber}`, 'reached');
       const boss = sim.aliens.find((a) => a.alive && a.def.boss);
       if (boss) poki.measureOnce('boss', bossAnalyticsId(boss.def.id), 'fail');
+      if (!online) this.balance.death(sim, this.localSquad.level);
+      if (this.revivedAt > 0) poki.measure('reward', 'revive', `survived-${survivedBucket(this.runTime - this.revivedAt)}`); // le revive vidéo a-t-il servi ? // cause de la mort et état de la squad (docs/ANALYTICS.md § Équilibrage)
     }
     const time = Math.floor(this.runTime);
     const best = online ? time : Math.max(time, storage.get('bestTime', 0));
@@ -588,13 +628,32 @@ export class GameScene extends Phaser.Scene {
     this.coinSeen = n;
   }
 
+  /** Analytics des coffres à diamants (solo) : `visible` à l'apparition, `expired` s'il disparaît sans que la jauge ait été remplie (`interact`). */
+  private chestsSeen = new Set<number>();
+  private chestsAd = new Set<number>();
+  private trackChests(): void {
+    if (this.session.online) return;
+    const chests = this.session.sim.gems.chests;
+    for (const c of chests) {
+      if (this.chestsSeen.has(c.id)) continue;
+      this.chestsSeen.add(c.id);
+      poki.measure('reward', 'gem_chest', 'visible');
+    }
+    for (const id of this.chestsSeen) {
+      if (chests.some((c) => c.id === id)) continue;
+      this.chestsSeen.delete(id);
+      if (!this.chestsAd.delete(id) && !this.ended) poki.measure('reward', 'gem_chest', 'expired');
+    }
+  }
+
   private async chestAd(id: number): Promise<void> {
     const gems = this.session.sim.gems;
     if (this.session.online || !this.flow.interrupt()) return gems.adResult(id, false);
     poki.measure('reward', 'gem_chest', 'interact');
+    this.chestsAd.add(id); // ce coffre ne compte pas comme « expiré » quand il disparaît
     let ok = false;
     try {
-      ok = await poki.rewardedBreak();
+      ok = await poki.rewardedBreak('gem_chest');
     } finally {
       await this.flow.resume();
       this.move.reset(); // les relâchements de touches pendant la vidéo sont perdus : on repart sans direction
@@ -616,7 +675,9 @@ export class GameScene extends Phaser.Scene {
   async revive(free = false): Promise<boolean> {
     if (free ? !this.flow.reviveFree() : !(await this.flow.revive())) return false;
     this.revived = true;
+    if (!free) this.revivedAt = this.runTime;
     this.ended = false;
+    this.balance.reset(); // la squad revient : la mesure repart
     this.session.reviveLocal(free);
     this.move.reset(); // idem : le revive (pub, écran de fin) fait perdre les relâchements de touches ; on repart sans direction
     this.scene.resume();

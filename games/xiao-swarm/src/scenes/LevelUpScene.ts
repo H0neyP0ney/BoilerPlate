@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { devLog, theme } from '@xiao/engine';
+import { devLog, poki, REWARDED_ICON, theme } from '@xiao/engine';
 import { SCENES, UPGRADE_CHOICE_TIME } from '../config';
 import type { UpgradeId } from '../data/progression';
 import { settings } from '../settings';
@@ -19,6 +19,8 @@ const REROLL_W = 253; // 190 avant le 13/10, 230 puis +10 % : bouton plus gros, 
 const REROLL_ICON = (0.5 * 0.9) / 1.1;
 /** Valeur de `pressed` quand le bouton enfoncé est « Relancer » (les cartes utilisent leur indice, -1 = rien). */
 const REROLL_PRESSED = -2;
+/** Hauteur de l'icône « pub vidéo » (relance contre vidéo, solo) en part de la hauteur du fond. */
+const REROLL_AD_ICON = 0.42;
 
 export interface LevelUpData {
   /** Propositions du joueur local, ou null : il a déjà choisi (en ligne, on attend les autres joueurs). */
@@ -28,6 +30,8 @@ export interface LevelUpData {
   level: number;
   /** Relances restantes. */
   rerolls: number;
+  /** Solo : à 0 relance, le bouton reste affiché avec l'icône vidéo (relance contre une vidéo récompensée). */
+  rewardedReroll?: boolean;
   /** Onboarding : upgrade recommandée, mise en avant par une flèche verte sur sa carte (le joueur choisit ce qu'il veut). */
   suggest?: UpgradeId;
 }
@@ -115,27 +119,35 @@ export class LevelUpScene extends Phaser.Scene {
       this.tweens.add({ targets: suggestBottom, scale: { from: SUGGEST_SCALE, to: SUGGEST_SCALE * 1.15 }, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
 
-    // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R)
+    // bouton « Relancer » : visible tant qu'il reste des relances (clic / toucher, ou touche R) ; en solo, à 0 relance, il propose une vidéo récompensée (icône vidéo à la place du compteur)
     let rerollBtn: Phaser.GameObjects.Container | null = null;
-    if (offer.length && data.rerolls > 0) {
+    const rewarded = data.rerolls <= 0 && !!data.rewardedReroll;
+    if (offer.length && (data.rerolls > 0 || rewarded)) {
+      if (rewarded) poki.measure('reward', 'reroll', 'visible');
       // fond du bouton (art-src/bouton_reroll.png), texte blanc cerclé de noir par-dessus
       const bg = this.add.image(0, 0, 'ui_reroll');
       const k = REROLL_W / bg.width;
       bg.setScale(k);
       const label = this.add
-        .text(0, 0, t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
+        .text(0, 0, rewarded ? t('rerollAd') : t('reroll', { value: data.rerolls }), { fontFamily: theme.font, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
         .setOrigin(0.5)
         .setResolution(CARD_TEXT_RES);
       // icône de dé avant le texte (même image que le globe de relance), le tout centré sur le bouton
       const diceKey = powerUpIconKey('reroll');
       const dice = this.textures.exists(diceKey) ? this.add.image(0, 0, diceKey) : null;
-      if (dice) {
-        dice.setScale((bg.displayHeight * REROLL_ICON) / dice.height);
-        const gap = 8;
-        const total = dice.displayWidth + gap + label.width;
-        dice.setPosition(-total / 2 + dice.displayWidth / 2, 0);
-        label.setX(-total / 2 + dice.displayWidth + gap + label.width / 2);
+      // relance contre vidéo : icône « pub vidéo » des boutons rewarded après le texte, à la place du compteur
+      dice?.setScale((bg.displayHeight * REROLL_ICON) / dice.height);
+      const ad = rewarded && this.textures.exists(REWARDED_ICON) ? this.add.image(0, 0, REWARDED_ICON) : null;
+      ad?.setScale((bg.displayHeight * REROLL_AD_ICON) / ad.height);
+      const gap = 8;
+      const parts = [dice, label, ad].filter((o): o is Phaser.GameObjects.Image | Phaser.GameObjects.Text => !!o);
+      const total = parts.reduce((n, o) => n + o.displayWidth, 0) + gap * (parts.length - 1);
+      let x = -total / 2;
+      for (const o of parts) {
+        o.setX(x + o.displayWidth / 2);
+        x += o.displayWidth + gap;
       }
+
       const hit = this.add.zone(0, 0, bg.displayWidth, bg.displayHeight).setInteractive({ useHandCursor: true });
       // comme les cartes : il faut appuyer PUIS relâcher sur le bouton, dans cette fenêtre (un clic déjà enfoncé à l'ouverture ne relance rien)
       hit.on('pointerdown', () => (this.pressed = REROLL_PRESSED));
@@ -173,7 +185,7 @@ export class LevelUpScene extends Phaser.Scene {
         this.tweens.add({ targets: star, scale: full, duration: 325, ease: 'Sine.Out', yoyo: true, onComplete: () => star.setVisible(false) }); // grossit puis rétrécit
       };
       this.time.addEvent({ delay: SHINE.period, loop: true, startAt: SHINE.period - (SHINE.first + SHINE.sweep * 0.8), callback: sparkle });
-      rerollBtn = this.add.container(0, 0, dice ? [bg, dice, label, shine, star, hit] : [bg, label, shine, star, hit]);
+      rerollBtn = this.add.container(0, 0, [bg, ...parts, shine, star, hit]);
     }
 
     const layout = () => {
@@ -268,7 +280,9 @@ export class LevelUpScene extends Phaser.Scene {
     if (this.busy) return;
     this.busy = true;
     playSfx(this, 'ui_reroll');
-    this.game_.rerollUpgrade();
+    void this.game_.rerollUpgrade().then((ok) => {
+      if (!ok && this.scene.isActive()) this.busy = false; // vidéo ratée ou indisponible : on peut encore choisir une carte (ou réessayer)
+    });
   }
 
   private pick(index: number): void {

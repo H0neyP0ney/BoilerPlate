@@ -15,7 +15,7 @@ export { createI18n, type I18n, type Vars } from './core/i18n';
 // Input & UI
 export { DEFAULT_MOVE_KEYS, MoveInput, type MoveKeyCodes } from './input/MoveInput';
 export { VirtualJoystick } from './ui/VirtualJoystick';
-export { Button, type ButtonOptions, type ButtonVariant } from './ui/Button';
+export { Button, REWARDED_ICON, type ButtonOptions, type ButtonVariant } from './ui/Button';
 export { theme, setTheme, type Theme } from './ui/theme';
 export { StepSlider, type StepSliderOptions } from './ui/StepSlider';
 

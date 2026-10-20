@@ -72,7 +72,7 @@ export class RunFlow {
   async revive(): Promise<boolean> {
     if (this._state !== 'dead') return false;
     poki.measure('reward', 'revive', 'interact');
-    const ok = await poki.rewardedBreak();
+    const ok = await poki.rewardedBreak('revive');
     if (!ok) return false;
     this._state = 'playing';
     poki.gameplayStart();

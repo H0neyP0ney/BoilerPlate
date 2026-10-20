@@ -373,8 +373,9 @@ export class Sim {
   }
 
   /** Le joueur `owner` relance ses propositions d'upgrade (nombre limité par partie). */
-  rerollUpgrade(owner: PlayerId): boolean {
-    const ok = this.squadOf(owner)?.rerollOffer() ?? false;
+  /** `rewarded` : relance payée par une vidéo récompensée (solo), sans consommer de relance. */
+  rerollUpgrade(owner: PlayerId, rewarded = false): boolean {
+    const ok = this.squadOf(owner)?.rerollOffer(rewarded) ?? false;
     if (ok && this.choiceT > 0) this.choiceT = UPGRADE_CHOICE_TIME; // la jauge d'attente repart à zéro (choix en ligne)
     return ok;
   }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Button, theme } from '@xiao/engine';
+import { Button, poki, theme } from '@xiao/engine';
 import { ensureGemTextures, GEM_KEY } from '../art/gems';
 import { skinThumb } from '../art/skinThumbs';
 import { onSkinSheetReady, retainSkinSheets } from '../assets/skinSheets';
@@ -53,6 +53,7 @@ export class ShopScene extends Phaser.Scene {
 
   create(): void {
     hudOnTop(this); // compteur de diamants et boutons du HUD au-dessus du calque sombre
+    poki.measure('shop', 'open', 'visible'); // analytics : les diamants (coffres rewarded) donnent-ils envie d'ouvrir la boutique ?
     this.game_ = this.scene.get(SCENES.game) as GameScene;
     ensureGemTextures(this);
     this.rebuild();
@@ -86,7 +87,7 @@ export class ShopScene extends Phaser.Scene {
         price: skinPrice(s),
         owned: settings.ownedSkins.includes(s.id),
         equipped: settings.skin === s.id,
-        buy: () => settings.buySkin(s.id),
+        buy: () => bought(settings.buySkin(s.id), `skin-${s.id}`),
         equip: () => settings.equipSkin(s.id),
         preview: (cx, cy, _cw, ch) => this.skinPreview(s, cx, cy, ch),
       }))];
@@ -115,7 +116,7 @@ export class ShopScene extends Phaser.Scene {
       price: trailPrice(tr),
       owned: settings.ownedTrails.includes(tr.id),
       equipped: settings.trail === tr.id,
-      buy: () => settings.buyTrail(tr.id),
+      buy: () => bought(settings.buyTrail(tr.id), `trail-${tr.id}`),
       equip: () => settings.equipTrail(tr.id),
       preview: (cx, cy, cw, _ch, k) => this.trailPreview(tr, cx, cy, cw, k),
     }))];
@@ -268,4 +269,10 @@ export class ShopScene extends Phaser.Scene {
     for (const o of this.objects) o.destroy();
     this.objects = [];
   }
+}
+
+/** Analytics : achat réussi → `shop/<objet>/buy` (ids sans chiffres). Renvoie `ok`. */
+function bought(ok: boolean, what: string): boolean {
+  if (ok) poki.measure('shop', what, 'buy');
+  return ok;
 }

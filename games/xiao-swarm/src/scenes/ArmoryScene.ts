@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Button, sprites, theme } from '@xiao/engine';
+import { Button, poki, sprites, theme } from '@xiao/engine';
 import { COIN_KEY, ensureGemTextures } from '../art/gems';
 import { SCENES } from '../config';
 import { PERKS, UNIT_UNLOCKS } from '../data/armory';
@@ -28,6 +28,7 @@ export class ArmoryScene extends Phaser.Scene {
 
   create(): void {
     hudOnTop(this);
+    poki.measure('armory', 'open', 'visible'); // analytics : l'or ramassé donne-t-il envie d'ouvrir l'armurerie ?
     this.game_ = this.scene.get(SCENES.game) as GameScene;
     ensureGemTextures(this);
     this.rebuild();
@@ -94,7 +95,7 @@ export class ArmoryScene extends Phaser.Scene {
           owned: settings.hasUnit(u.id),
           price: u.price,
           ownedLabel: t('armoryUnlocked'),
-          buy: () => settings.buyUnit(u.id),
+          buy: () => bought(settings.buyUnit(u.id), `unit-${u.id}`),
           preview: (px, py) => this.unitPreview(add, u.id, px, py, k, !settings.hasUnit(u.id)),
         });
       });
@@ -110,7 +111,7 @@ export class ArmoryScene extends Phaser.Scene {
           locked: !settings.hasUnit(p.unit) ? t('armoryNeeds', { unit: unitName }) : undefined,
           price: p.price,
           ownedLabel: t('armoryOwned'),
-          buy: () => settings.buyPerk(p.id),
+          buy: () => bought(settings.buyPerk(p.id), `perk-${p.id}`),
         });
       });
     }
@@ -192,4 +193,10 @@ export class ArmoryScene extends Phaser.Scene {
     for (const o of this.objects) o.destroy();
     this.objects = [];
   }
+}
+
+/** Analytics : achat réussi → `armory/<objet>/buy` (ids sans chiffres). Renvoie `ok`. */
+function bought(ok: boolean, what: string): boolean {
+  if (ok) poki.measure('armory', what, 'buy');
+  return ok;
 }

@@ -307,8 +307,8 @@ export const DIFFICULTY_DEFAULTS = {
   reviveSquadFraction: 0.6,
   /** Coop : taille de l'escouade d'un joueur réanimé, en part de l'effectif maximal de l'équipier qui l'a ramené. */
   coopReviveRatio: 0.6,
-  /** Relances des propositions d'upgrade par partie et par joueur (entier). */
-  rerolls: 2,
+  /** Relances des propositions d'upgrade par partie et par joueur (entier). 1 depuis le 20/10 (2 avant) : en solo, une fois à 0, la relance passe par une vidéo récompensée. */
+  rerolls: 1,
   /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */
   prismChance: 0.05,
   /** Recrues : le taux de drop d'un alien est multiplié par `clamp(recruitMax − (taille de la squad − recruitSizeRef) × recruitSlope, recruitMin, recruitMax)` (petite squad = plus de recrues). */

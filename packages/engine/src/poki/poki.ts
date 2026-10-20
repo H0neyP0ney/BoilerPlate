@@ -47,6 +47,8 @@ class Poki {
   private loadingFinished = false;
   private inGameplay = false;
   private adPlaying = false;
+  /** La pub en cours a vraiment démarré (`onAdStart` appelé par le SDK) : sinon aucune pub n'était disponible. */
+  private adStarted = false;
   private mutedBeforeAd = false;
   /** Événements `measureOnce` déjà envoyés dans la partie en cours. */
   private readonly sent = new Set<string>();
@@ -122,14 +124,16 @@ class Poki {
   /**
    * Pub récompensée, uniquement sur choix explicite du joueur.
    * Retourne true seulement si la récompense doit être donnée.
+   * `placement` (analytics) : après la pub, `reward/<placement>/ad-shown` si une vidéo s'est vraiment affichée, sinon `reward/<placement>/no-ad` (aucune pub disponible).
    */
-  async rewardedBreak(): Promise<boolean> {
+  async rewardedBreak(placement?: string): Promise<boolean> {
     if (!ADS_ENABLED) return true; // pubs désactivées : récompense accordée sans pub
     if (!this.sdk) return true; // pas de SDK (développement, hébergement de test, adblock) : rien à montrer, la récompense est accordée (le jeu reste jouable)
     if (this.adPlaying) return false;
     this.gameplayStop();
     this.adPlaying = true;
     let success = false;
+    this.adStarted = false;
     try {
       success = await this.sdk.rewardedBreak(() => this.onAdStart());
     } catch {
@@ -137,6 +141,7 @@ class Poki {
     } finally {
       this.onAdEnd();
     }
+    if (placement) this.measure('reward', placement, this.adStarted ? 'ad-shown' : 'no-ad');
     return success;
   }
 
@@ -192,6 +197,7 @@ class Poki {
   }
 
   private onAdStart(): void {
+    this.adStarted = true;
     const game = this.game;
     if (!game) return;
     this.mutedBeforeAd = game.sound.mute;

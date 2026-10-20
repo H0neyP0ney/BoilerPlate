@@ -7,7 +7,6 @@ import { BalanceTracker } from '../balanceAnalytics';
 import type { SoldierClassId } from '../data/classes';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { FINAL_BOSS } from '../data/difficultyLevels';
-import { TUTORIAL } from '../data/tutorial';
 import { startDifficulty } from '../difficultyStart';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
@@ -427,7 +426,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeOpen = true;
     this.shownOffer = key;
     this.scene.stop(SCENES.levelUp);
-    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: this.session.sim.tutorial?.active ? 0 : squad.rerolls, rewardedReroll: this.canRewardReroll, suggest: this.session.sim.tutorial?.active ? TUTORIAL.suggest : undefined });
+    this.scene.launch(SCENES.levelUp, { offer: squad.offer ? [...squad.offer] : null, prism: [...squad.offerPrism], level: squad.level, rerolls: squad.scripted ? 0 : squad.rerolls, rewardedReroll: this.canRewardReroll && !squad.scripted, suggest: squad.scripted?.suggest, tip: squad.scripted?.tip });
   }
 
   /** Dev : encode l'état comme un snapshot réseau 2 fois par seconde (sans l'envoyer) pour afficher sa taille et le débit qu'il coûterait. */

@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Équilibrage Xiao Swarm</title>
+<!-- Modèle du rapport : scripts/bench-report.mjs remplace la valeur de DATA par les parties enregistrées (docs/bench/runs). Aucune dépendance externe. -->
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --surface-2: #f3f2ee;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --other: #b5b3ab;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --good-text: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.1); --accent: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --other: #5d5c57; --good-text: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, 0.1); --accent: #3987e5;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --other: #5d5c57; --good-text: #0ca30c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text-primary); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+header h1 { font-size: 20px; margin: 0; font-weight: 650; }
+header .meta { color: var(--text-secondary); font-size: 13px; }
+header .spacer { flex: 1; }
+button, select, input { font: inherit; color: inherit; }
+.ghost { background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--text-secondary); }
+.ghost:hover { background: var(--surface-2); }
+.filters { position: sticky; top: 0; z-index: 5; background: var(--page); border-bottom: 1px solid var(--border); padding: 10px 24px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.filters label { display: flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
+.filters select { background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+.filters .count { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+nav { display: flex; gap: 2px; padding: 10px 24px 0; flex-wrap: wrap; }
+nav button { background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; cursor: pointer; color: var(--text-secondary); font-weight: 550; }
+nav button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); }
+main { padding: 16px 24px 48px; }
+section { display: none; }
+section.on { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px 12px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.card .sub { color: var(--text-secondary); font-size: 12.5px; margin: 2px 0 8px; }
+.card .head { display: flex; gap: 8px; align-items: flex-start; }
+.card .head > div { flex: 1; }
+.card .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--text-secondary); margin: 4px 0 2px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.sq { height: 10px; width: 10px; border-radius: 3px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .mk text { fill: var(--text-secondary); }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); white-space: nowrap; z-index: 3; display: none; }
+.tip b { font-weight: 650; }
+.tip .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.tip .row span:last-child { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.tip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.tile { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.tile .k { color: var(--text-secondary); font-size: 12.5px; }
+.tile .v { font-size: 24px; font-weight: 650; margin-top: 2px; }
+.tile .d { color: var(--text-muted); font-size: 12px; }
+.bars { display: grid; grid-template-columns: minmax(90px, max-content) 1fr max-content; gap: 6px 10px; align-items: center; font-size: 12.5px; }
+.bars .lab { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.bars .track { height: 12px; position: relative; }
+.bars .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; min-width: 2px; }
+.bars .val { font-variant-numeric: tabular-nums; color: var(--text-primary); text-align: right; }
+.bars .val small { color: var(--text-muted); margin-left: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+th { color: var(--text-secondary); font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--surface-2); }
+tr.click { cursor: pointer; }
+.scroll { max-height: 420px; overflow: auto; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--surface-2); color: var(--text-secondary); margin-right: 4px; }
+.concl { display: grid; gap: 8px; }
+.c { display: grid; grid-template-columns: 22px 1fr; gap: 2px 10px; padding: 9px 12px; border-radius: 8px; background: var(--surface-2); }
+.c .ic { font-weight: 700; text-align: center; line-height: 20px; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; color: #fff; }
+.c.alert .ic { background: var(--critical); } .c.warn .ic { background: var(--warning); color: #0b0b0b; } .c.good .ic { background: var(--good); } .c.info .ic { background: var(--text-muted); }
+.c .t { font-weight: 600; }
+.c .lvl { font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-left: 6px; }
+.c .x { grid-column: 2; color: var(--text-secondary); font-size: 13px; }
+.c a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.note { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
+.runhead { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-secondary); font-size: 13px; }
+.runhead b { color: var(--text-primary); }
+@media (max-width: 640px) { header, .filters, nav, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Équilibrage Xiao Swarm</h1>
+  <span class="meta" id="meta"></span>
+  <span class="spacer"></span>
+  <button class="ghost" id="theme" title="Basculer clair / sombre">Thème</button>
+</header>
+<div class="filters">
+  <label>Difficulté <select id="fDiff"></select></label>
+  <label>Version min. <select id="fMinBuild"></select></label>
+  <label>Version exacte <select id="fBuild"></select></label>
+  <label>Format <select id="fFormat"><option value="all">Toutes les parties</option><option value="2">Format v2 seulement</option></select></label>
+  <label>Durée min. <select id="fMin"><option value="0">aucune</option><option value="30" selected>30 s</option><option value="60">1 min</option><option value="180">3 min</option></select></label>
+  <label><input type="checkbox" id="fClean" checked> Écarter triche et parties avancées</label>
+  <label><input type="checkbox" id="fTuto"> Écarter le tutoriel</label>
+  <span class="count" id="fCount"></span>
+</div>
+<nav id="tabs"></nav>
+<main id="main"></main>
+<script>
+const DATA = /*__DATA__*/null;
+
+// ---------------------------------------------------------------- utilitaires
+const $ = (sel, el = document) => el.querySelector(sel);
+const h = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+};
+const SVGNS = 'http://www.w3.org/2000/svg';
+const s = (tag, attrs = {}) => {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) e.setAttribute(k, v);
+  return e;
+};
+const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+const num = (v, d = 0) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : (d ? nf1 : nf).format(v));
+const pct = (v, d = 0) => (Number.isFinite(v) ? `${num(v * 100, d)} %` : '—');
+const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+const sum = (a) => a.reduce((x, y) => x + y, 0);
+const mean = (a) => (a.length ? sum(a) / a.length : NaN);
+const quant = (a, q) => {
+  if (!a.length) return NaN;
+  const b = [...a].sort((x, y) => x - y);
+  const i = (b.length - 1) * q;
+  const lo = Math.floor(i);
+  return b[lo] + (b[Math.min(b.length - 1, lo + 1)] - b[lo]) * (i - lo);
+};
+const median = (a) => quant(a, 0.5);
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const SERIES = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'];
+const col = (i) => `var(${SERIES[i % 8]})`;
+
+const BOSS_NAMES = { boss_gling: 'Gling Mère', boss_rhino: 'Rhino Alpha', boss_scarab: 'Scarab', boss_rhino_fire: 'Jumeaux', boss_rhino_ice: 'Jumeaux', boss_crab: 'Giant Crab' };
+const DIFF_NAMES = { normal: 'Normal', expert: 'Hard', impossible: 'Expert', inconnu: 'Inconnue (v1)' };
+const SOURCE_LABELS = { coins: { alien: 'Aliens', boss: 'Boss', golden_flee: 'Alien doré (fuite)', golden_death: 'Alien doré (tué)' }, gems: { golden: 'Alien doré', chest_free: 'Œuf (part gratuite)', chest: 'Coffre (vidéo)', final: 'Boss final' }, healBy: { medic: 'Medic', healField: 'Globe de soin' } };
+const label = (bag, k) => SOURCE_LABELS[bag]?.[k] ?? k;
+
+// ---------------------------------------------------------------- données filtrées
+const ALL = DATA?.runs ?? [];
+const F = { diff: 'all', build: 'all', minBuild: 'all', format: 'all', min: 30, clean: true, tuto: false };
+const tainted = (r) => r.cheats.length > 0 || !!r.jump;
+const buildOf = (r) => r.build?.version ?? 'avant v2';
+/** Compare deux versions « 0.1.156 » numériquement (une version illisible, ex. « avant v2 », passe avant toutes les autres). */
+function cmpVersion(a, b) {
+  const pa = /^\d+(\.\d+)*$/.test(a) ? a.split('.').map(Number) : null;
+  const pb = /^\d+(\.\d+)*$/.test(b) ? b.split('.').map(Number) : null;
+  if (!pa || !pb) return (pa ? 1 : 0) - (pb ? 1 : 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  return 0;
+}
+function filtered() {
+  return ALL.filter((r) => (F.diff === 'all' || r.difficulty === F.diff) && (F.build === 'all' || buildOf(r) === F.build) && (F.minBuild === 'all' || cmpVersion(buildOf(r), F.minBuild) >= 0) && (F.format === 'all' || r.format >= 2) && r.duration >= F.min && (!F.clean || !tainted(r)) && (!F.tuto || !r.tutorial));
+}
+const has = (r, k) => Array.isArray(r.s[k]);
+const hasBag = (r, k) => Array.isArray(r.bags[k]);
+/** Somme d'un compteur par clé sur une partie (ou une fenêtre [t0, t1[). */
+function bagTotal(r, k, t0 = -Infinity, t1 = Infinity) {
+  const out = {};
+  const b = r.bags[k];
+  if (!b) return out;
+  for (let i = 0; i < b.length; i++) {
+    const t = r.s.t[i];
+    if (!b[i] || t <= t0 || t > t1) continue;
+    for (const [key, v] of Object.entries(b[i])) out[key] = (out[key] ?? 0) + v;
+  }
+  return out;
+}
+function bagSum(runs, k) {
+  const out = {};
+  for (const r of runs) for (const [key, v] of Object.entries(bagTotal(r, k))) out[key] = (out[key] ?? 0) + v;
+  return out;
+}
+/**
+ * Série temporelle agrégée : fenêtres de `B` s ; pour chaque partie, moyenne de `fn(r, i)` sur la fenêtre (null = ignoré), puis médiane / quartiles / moyenne entre les parties
+ * encore en jeu sur cette fenêtre (`n`).
+ */
+function series(runs, fn, B = 10, agg = 'median') {
+  const per = new Map();
+  for (const r of runs) {
+    const acc = new Map();
+    for (let i = 0; i < r.s.t.length; i++) {
+      const v = fn(r, i);
+      if (v === null || v === undefined || !Number.isFinite(v)) continue;
+      const b = Math.floor((r.s.t[i] - 0.001) / B);
+      const a = acc.get(b) ?? [0, 0];
+      a[0] += v;
+      a[1]++;
+      acc.set(b, a);
+    }
+    for (const [b, [tot, n]] of acc) (per.get(b) ?? per.set(b, []).get(b)).push(tot / n);
+  }
+  return [...per.keys()]
+    .sort((x, y) => x - y)
+    .map((b) => {
+      const v = per.get(b);
+      return { x: (b + 1) * B, y: agg === 'mean' ? mean(v) : median(v), lo: quant(v, 0.25), hi: quant(v, 0.75), n: v.length };
+    });
+}
+/** Cumul par partie de `fn(r, i)` dans le temps, puis médiane entre parties (seulement les parties encore en jeu). */
+function cumulative(runs, fn, B = 10) {
+  return series(
+    runs.map((r) => {
+      let c = 0;
+      const cum = r.s.t.map((_, i) => (c += fn(r, i) ?? 0));
+      return { ...r, s: { ...r.s, _cum: cum } };
+    }),
+    (r, i) => r.s._cum[i],
+    B,
+  );
+}
+function bossMarkers(runs) {
+  const by = {};
+  for (const r of runs) for (const b of r.bosses) (by[BOSS_NAMES[b.alien] ?? b.alien] ??= []).push(b.t);
+  return Object.entries(by)
+    .map(([name, ts]) => ({ x: median(ts), label: name, n: ts.length }))
+    .filter((m) => m.n >= Math.max(1, runs.length * 0.2))
+    .sort((a, b) => a.x - b.x);
+}
+/** Clés les plus fortes d'un objet {clé: valeur}, le reste plié en « Autres ». */
+function topKeys(obj, n = 7) {
+  const keys = Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  return { keys: keys.slice(0, n), rest: keys.slice(n) };
+}
+
+// ---------------------------------------------------------------- graphiques (SVG faits main)
+const charts = [];
+/** Pas « rond » (1, 2, 2,5, 5 × 10^n) pour environ 4 graduations jusqu'à `v`. */
+function niceStep(v) {
+  const raw = (v > 0 ? v : 1) / 4;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
+}
+/** Haut de l'axe : premier multiple du pas au-dessus de `v`. */
+function niceMax(v) {
+  const st = niceStep(v);
+  return Math.max(st, Math.ceil((v > 0 ? v : 1) / st - 1e-9) * st);
+}
+function ticks(max) {
+  const st = niceStep(max * 0.999);
+  const out = [];
+  for (let v = 0; v <= max + st * 1e-6; v += st) out.push(Math.round(v * 1e6) / 1e6);
+  return out;
+}
+const fmtAxis = (v) => (Math.abs(v) >= 10000 ? `${nf1.format(v / 1000)} k` : nf1.format(Math.round(v * 10) / 10));
+
+/** Courbes sur un axe commun. `series`: [{name, color, pts:[{x,y,lo,hi,n}], dash?}]. */
+function lineChart(el, o) {
+  const draw = () => {
+    el.replaceChildren();
+    const all = o.series.flatMap((sr) => sr.pts);
+    if (!all.length) return el.append(h('div', { class: 'empty' }, o.empty ?? 'Pas de données pour ces filtres.'));
+    if (o.series.length >= 2) el.append(h('div', { class: 'legend' }, o.series.map((sr) => h('span', {}, h('i', { style: `background:${sr.color}` }), sr.name))));
+    const W = Math.max(280, el.clientWidth);
+    const H = o.height ?? 220;
+    const m = { l: 46, r: 14, t: o.markers?.length ? 20 : 8, b: 24 };
+    const xMax = o.xMax ?? Math.max(...all.map((p) => p.x));
+    const yMax = o.yMax ?? niceMax(Math.max(...all.map((p) => Math.max(p.y, o.noBand ? 0 : (p.hi ?? 0)))) * 1.05);
+    const X = (x) => m.l + (x / xMax) * (W - m.l - m.r);
+    const Y = (y) => H - m.b - (Math.min(y, yMax) / yMax) * (H - m.t - m.b);
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': o.title ?? '' });
+    for (const tv of ticks(yMax)) {
+      svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(tv), y2: Y(tv), stroke: tv === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+      const t = s('text', { x: m.l - 6, y: Y(tv) + 3.5, 'text-anchor': 'end' });
+      t.textContent = o.yFmt ? o.yFmt(tv) : fmtAxis(tv);
+      svg.append(t);
+    }
+    const step = o.xStep ?? (xMax > 600 ? 120 : xMax > 240 ? 60 : 30);
+    for (let x = 0; x <= xMax + 0.01; x += step) {
+      const t = s('text', { x: X(x), y: H - 6, 'text-anchor': 'middle' });
+      t.textContent = o.xFmt ? o.xFmt(x) : mmss(x);
+      svg.append(t);
+    }
+    for (const mk of o.markers ?? []) {
+      if (mk.x > xMax) continue;
+      const g = s('g', { class: 'mk' });
+      g.append(s('line', { x1: X(mk.x), x2: X(mk.x), y1: m.t - 4, y2: H - m.b, stroke: 'var(--axis)', 'stroke-width': 1 }));
+      const t = s('text', { x: X(mk.x) + 3, y: m.t - 8 });
+      t.textContent = mk.label;
+      g.append(t);
+      svg.append(g);
+    }
+    for (const sr of o.series) {
+      const pts = sr.pts;
+      if (!pts.length) continue;
+      if (!o.noBand && pts.some((p) => Number.isFinite(p.lo) && p.lo !== p.hi)) {
+        const up = pts.map((p) => `${X(p.x)},${Y(p.hi)}`).join(' L');
+        const dn = [...pts].reverse().map((p) => `${X(p.x)},${Y(p.lo)}`).join(' L');
+        svg.append(s('path', { d: `M${up} L${dn} Z`, fill: sr.color, opacity: 0.13 }));
+      }
+      svg.append(s('path', { d: 'M' + pts.map((p) => `${X(p.x)},${Y(p.y)}`).join(' L'), fill: 'none', stroke: sr.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-dasharray': sr.dash ? '6 4' : undefined }));
+    }
+    // survol : ligne verticale + infobulle avec chaque série au point le plus proche
+    const cross = s('line', { y1: m.t, y2: H - m.b, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden' });
+    const dots = o.series.map((sr) => s('circle', { r: 4, fill: sr.color, stroke: 'var(--surface-1)', 'stroke-width': 2, visibility: 'hidden' }));
+    svg.append(cross, ...dots);
+    const hit = s('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' });
+    svg.append(hit);
+    const tip = h('div', { class: 'tip' });
+    hit.addEventListener('mousemove', (ev) => {
+      const r = svg.getBoundingClientRect();
+      const x = ((ev.clientX - r.left) / r.width) * W;
+      const xv = ((x - m.l) / (W - m.l - m.r)) * xMax;
+      const rows = [];
+      let px = null;
+      o.series.forEach((sr, k) => {
+        if (!sr.pts.length) return dots[k].setAttribute('visibility', 'hidden');
+        let best = sr.pts[0];
+        for (const p of sr.pts) if (Math.abs(p.x - xv) < Math.abs(best.x - xv)) best = p;
+        px ??= best.x;
+        dots[k].setAttribute('cx', X(best.x));
+        dots[k].setAttribute('cy', Y(best.y));
+        dots[k].setAttribute('visibility', 'visible');
+        rows.push(h('div', { class: 'row' }, h('span', {}, h('span', { class: 'sw', style: `background:${sr.color}` }), sr.name), h('span', {}, (o.yFmt ?? ((v) => num(v, v < 10 ? 1 : 0)))(best.y) + (Number.isFinite(best.lo) && !o.noBand && best.n > 1 ? `  (${num(best.lo, best.lo < 10 ? 1 : 0)}–${num(best.hi, best.hi < 10 ? 1 : 0)})` : ''))));
+      });
+      if (px === null) return;
+      cross.setAttribute('x1', X(px));
+      cross.setAttribute('x2', X(px));
+      cross.setAttribute('visibility', 'visible');
+      const n = o.series[0].pts.find((p) => p.x === px)?.n;
+      tip.replaceChildren(h('b', {}, o.xFmt ? o.xFmt(px) : `à ${mmss(px)}`), n ? h('span', { style: 'color:var(--text-muted);margin-left:6px' }, `${n} partie${n > 1 ? 's' : ''}`) : '', ...rows);
+      tip.style.display = 'block';
+      const left = (X(px) / W) * el.clientWidth;
+      tip.style.left = `${Math.min(left + 12, el.clientWidth - tip.offsetWidth - 4)}px`;
+      tip.style.top = `${(o.series.length >= 2 ? 28 : 6)}px`;
+    });
+    hit.addEventListener('mouseleave', () => {
+      tip.style.display = 'none';
+      cross.setAttribute('visibility', 'hidden');
+      dots.forEach((d) => d.setAttribute('visibility', 'hidden'));
+    });
+    const box = h('div', { class: 'chart' }, svg, tip);
+    el.append(box);
+  };
+  charts.push({ el, draw });
+  draw();
+  // vue tableau : x puis chaque série
+  const xs = [...new Set(o.series.flatMap((sr) => sr.pts.map((p) => p.x)))].sort((a, b) => a - b);
+  return { cols: [o.xLabel ?? 'Temps', ...o.series.map((sr) => sr.name)], rows: xs.map((x) => [o.xFmt ? o.xFmt(x) : mmss(x), ...o.series.map((sr) => num(sr.pts.find((p) => p.x === x)?.y, 1))]) };
+}
+
+/** Colonnes empilées par fenêtre de temps. `buckets`: [{x, values:{clé: v}}], `keys` dans l'ordre d'empilement (couleur fixe par clé). */
+function stackChart(el, o) {
+  const draw = () => {
+    el.replaceChildren();
+    if (!o.buckets.length || !o.keys.length) return el.append(h('div', { class: 'empty' }, o.empty ?? 'Pas de données pour ces filtres.'));
+    el.append(h('div', { class: 'legend' }, o.keys.map((k) => h('span', {}, h('i', { class: 'sq', style: `background:${o.color(k)}` }), o.label ? o.label(k) : k))));
+    const W = Math.max(280, el.clientWidth);
+    const H = o.height ?? 240;
+    const m = { l: 46, r: 14, t: 8, b: 24 };
+    const totals = o.buckets.map((b) => sum(o.keys.map((k) => b.values[k] ?? 0)));
+    const yMax = niceMax(Math.max(...totals) * 1.05);
+    const n = o.buckets.length;
+    const bw = (W - m.l - m.r) / n;
+    const Y = (y) => H - m.b - (y / yMax) * (H - m.t - m.b);
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, height: H });
+    for (const tv of ticks(yMax)) {
+      svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(tv), y2: Y(tv), stroke: tv === 0 ? 'var(--axis)' : 'var(--grid)' }));
+      const t = s('text', { x: m.l - 6, y: Y(tv) + 3.5, 'text-anchor': 'end' });
+      t.textContent = fmtAxis(tv);
+      svg.append(t);
+    }
+    const tip = h('div', { class: 'tip' });
+    const every = Math.ceil(n / Math.max(1, Math.floor((W - m.l) / 46)));
+    o.buckets.forEach((b, i) => {
+      const x0 = m.l + i * bw + Math.min(3, bw * 0.12);
+      const w = Math.max(1, bw - 2 * Math.min(3, bw * 0.12));
+      let acc = 0;
+      const g = s('g');
+      o.keys.forEach((k) => {
+        const v = b.values[k] ?? 0;
+        if (v <= 0) return;
+        const y0 = Y(acc);
+        const y1 = Y(acc + v);
+        acc += v;
+        const hgt = Math.max(0, y0 - y1 - 1.5); // 2 px d'écart entre segments
+        if (hgt <= 0) return;
+        g.append(s('rect', { x: x0, y: y1, width: w, height: hgt, fill: o.color(k), rx: acc >= totals[i] - 1e-9 ? Math.min(3, w / 3) : 0 }));
+      });
+      const hit = s('rect', { x: m.l + i * bw, y: m.t, width: bw, height: H - m.t - m.b, fill: 'transparent' });
+      hit.addEventListener('mousemove', () => {
+        tip.replaceChildren(h('b', {}, b.label), ...o.keys.filter((k) => (b.values[k] ?? 0) > 0).reverse().map((k) => h('div', { class: 'row' }, h('span', {}, h('span', { class: 'sw', style: `background:${o.color(k)}` }), o.label ? o.label(k) : k), h('span', {}, num(b.values[k], b.values[k] < 10 ? 1 : 0)))), h('div', { class: 'row', style: 'border-top:1px solid var(--grid);margin-top:3px;padding-top:3px' }, h('span', {}, 'Total'), h('span', {}, num(totals[i], totals[i] < 10 ? 1 : 0))));
+        tip.style.display = 'block';
+        const left = ((m.l + (i + 1) * bw) / W) * el.clientWidth;
+        tip.style.left = `${left + tip.offsetWidth + 16 > el.clientWidth ? left - bw * (el.clientWidth / W) - tip.offsetWidth - 8 : left + 8}px`;
+        tip.style.top = '30px';
+        g.setAttribute('opacity', '0.85');
+      });
+      hit.addEventListener('mouseleave', () => {
+        tip.style.display = 'none';
+        g.removeAttribute('opacity');
+      });
+      svg.append(g, hit);
+      if (i % every === 0) {
+        const t = s('text', { x: m.l + (i + 0.5) * bw, y: H - 6, 'text-anchor': 'middle' });
+        t.textContent = b.short ?? b.label;
+        svg.append(t);
+      }
+    });
+    el.append(h('div', { class: 'chart' }, svg, tip));
+  };
+  charts.push({ el, draw });
+  draw();
+  return { cols: ['Fenêtre', ...o.keys.map((k) => (o.label ? o.label(k) : k)), 'Total'], rows: o.buckets.map((b) => [b.label, ...o.keys.map((k) => num(b.values[k] ?? 0, 1)), num(sum(o.keys.map((k) => b.values[k] ?? 0)), 1)]) };
+}
+
+/** Nuage de points (x = temps). `groups`: [{name, color, pts:[{x,y,tip, hollow}]}]. */
+function dotChart(el, o) {
+  const draw = () => {
+    el.replaceChildren();
+    const all = o.groups.flatMap((g) => g.pts);
+    if (!all.length) return el.append(h('div', { class: 'empty' }, 'Pas de données.'));
+    el.append(h('div', { class: 'legend' }, o.groups.map((g) => h('span', {}, h('i', { class: 'sq', style: `background:${g.color};border-radius:50%` }), g.name))));
+    const W = Math.max(280, el.clientWidth);
+    const H = o.height ?? 220;
+    const m = { l: 46, r: 14, t: o.markers?.length ? 20 : 8, b: 24 };
+    const xMax = Math.max(...all.map((p) => p.x)) || 1;
+    const yMax = niceMax(Math.max(...all.map((p) => p.y)) * 1.08);
+    const X = (x) => m.l + (x / xMax) * (W - m.l - m.r);
+    const Y = (y) => H - m.b - (y / yMax) * (H - m.t - m.b);
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, height: H });
+    for (const tv of ticks(yMax)) {
+      svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(tv), y2: Y(tv), stroke: tv === 0 ? 'var(--axis)' : 'var(--grid)' }));
+      const t = s('text', { x: m.l - 6, y: Y(tv) + 3.5, 'text-anchor': 'end' });
+      t.textContent = fmtAxis(tv);
+      svg.append(t);
+    }
+    for (let x = 0; x <= xMax; x += xMax > 300 ? 60 : 30) {
+      const t = s('text', { x: X(x), y: H - 6, 'text-anchor': 'middle' });
+      t.textContent = mmss(x);
+      svg.append(t);
+    }
+    for (const mk of o.markers ?? []) {
+      const g = s('g', { class: 'mk' });
+      g.append(s('line', { x1: X(mk.x), x2: X(mk.x), y1: m.t - 4, y2: H - m.b, stroke: 'var(--axis)' }));
+      const t = s('text', { x: X(mk.x) + 3, y: m.t - 8 });
+      t.textContent = mk.label;
+      g.append(t);
+      svg.append(g);
+    }
+    const flat = [];
+    for (const g of o.groups) for (const p of g.pts) {
+      svg.append(s('circle', { cx: X(p.x), cy: Y(p.y), r: 4, fill: p.hollow ? 'var(--surface-1)' : g.color, stroke: p.hollow ? g.color : 'var(--surface-1)', 'stroke-width': 2 }));
+      flat.push({ ...p, g });
+    }
+    const tip = h('div', { class: 'tip' });
+    const hit = s('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' });
+    hit.addEventListener('mousemove', (ev) => {
+      const r = svg.getBoundingClientRect();
+      const mx = ((ev.clientX - r.left) / r.width) * W;
+      const my = ((ev.clientY - r.top) / r.height) * H;
+      let best = null;
+      let bd = 26 ** 2;
+      for (const p of flat) {
+        const d = (X(p.x) - mx) ** 2 + (Y(p.y) - my) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = p;
+        }
+      }
+      if (!best) return (tip.style.display = 'none');
+      tip.replaceChildren(h('b', {}, `${mmss(best.x)} · ${best.g.name}`), h('div', {}, best.tip));
+      tip.style.display = 'block';
+      tip.style.left = `${Math.min((X(best.x) / W) * el.clientWidth + 10, el.clientWidth - tip.offsetWidth - 4)}px`;
+      tip.style.top = `${Math.max(0, (Y(best.y) / H) * (o.height ?? 220) - 50)}px`;
+    });
+    hit.addEventListener('mouseleave', () => (tip.style.display = 'none'));
+    svg.append(hit);
+    el.append(h('div', { class: 'chart' }, svg, tip));
+  };
+  charts.push({ el, draw });
+  draw();
+  return { cols: ['Temps', 'Groupe', 'Valeur', 'Détail'], rows: o.groups.flatMap((g) => g.pts.map((p) => [mmss(p.x), g.name, num(p.y), p.tip])) };
+}
+
+/** Barres horizontales classées (HTML) : [{label, value, sub, color}]. */
+function barList(el, items, o = {}) {
+  if (!items.length) {
+    el.append(h('div', { class: 'empty' }, o.empty ?? 'Pas de données pour ces filtres.'));
+    return { cols: [], rows: [] };
+  }
+  const max = Math.max(...items.map((i) => i.value)) || 1;
+  el.append(h('div', { class: 'bars' }, items.flatMap((it) => [h('div', { class: 'lab', title: it.label }, it.label), h('div', { class: 'track', title: `${it.label} : ${num(it.value, 1)}` }, h('div', { class: 'fill', style: `width:${(it.value / max) * 100}%;background:${it.color ?? o.color ?? 'var(--s1)'}` })), h('div', { class: 'val' }, (o.fmt ?? ((v) => num(v, v < 10 ? 1 : 0)))(it.value), it.sub ? h('small', {}, it.sub) : '')])));
+  return { cols: [o.labelName ?? 'Élément', o.valueName ?? 'Valeur', ''], rows: items.map((i) => [i.label, num(i.value, 1), i.sub ?? '']) };
+}
+
+/** Tableau triable. `cols`: [{k, label, num?, fmt?}], `rows`: objets. */
+function table(el, cols, rows, o = {}) {
+  let key = o.sort ?? cols[0].k;
+  let dir = o.dir ?? -1;
+  const wrap = h('div', { class: o.scroll === false ? '' : 'scroll' });
+  const render = () => {
+    const sorted = [...rows].sort((a, b) => {
+      const x = a[key];
+      const y = b[key];
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''))) * dir;
+    });
+    wrap.replaceChildren(
+      h('table', {}, h('thead', {}, h('tr', {}, cols.map((c) => h('th', { class: c.num ? 'num' : '', onclick: () => { dir = key === c.k ? -dir : -1; key = c.k; render(); } }, c.label, key === c.k ? (dir < 0 ? ' ↓' : ' ↑') : '')))), h('tbody', {}, sorted.map((r) => h('tr', { class: o.onclick ? 'click' : '', onclick: o.onclick ? () => o.onclick(r) : undefined }, cols.map((c) => h('td', { class: c.num ? 'num' : '' }, c.fmt ? c.fmt(r[c.k], r) : r[c.k] ?? '—')))))),
+    );
+  };
+  render();
+  el.append(wrap);
+}
+
+/** Carte : titre, sous-titre, contenu ; si `fill` renvoie {cols, rows}, un bouton « Tableau » bascule vers la vue tableau. */
+function card(parent, { title, sub, wide, note }, fill) {
+  const body = h('div');
+  const tbl = h('div', { style: 'display:none' });
+  const btn = h('button', { class: 'ghost', style: 'font-size:12px;padding:2px 8px;display:none' }, 'Tableau');
+  const c = h('div', { class: `card${wide ? ' wide' : ''}` }, h('div', { class: 'head' }, h('div', {}, h('h2', {}, title), sub ? h('div', { class: 'sub' }, sub) : ''), btn), body, tbl, note ? h('div', { class: 'note' }, note) : '');
+  parent.append(c);
+  const t = fill(body);
+  if (t && t.cols?.length && t.rows?.length) {
+    btn.style.display = '';
+    btn.onclick = () => {
+      const show = tbl.style.display === 'none';
+      if (show && !tbl.childElementCount) table(tbl, t.cols.map((label, k) => ({ k, label, num: k > 0 })), t.rows.map((r) => Object.fromEntries(r.map((v, k) => [k, v]))), { sort: 0, dir: 1 });
+      tbl.style.display = show ? '' : 'none';
+      body.style.display = show ? 'none' : '';
+      btn.textContent = show ? 'Graphique' : 'Tableau';
+    };
+  }
+  return c;
+}
+const tiles = (parent, list) => parent.append(h('div', { class: 'tiles' }, list.map((t) => h('div', { class: 'tile', title: t.title ?? '' }, h('div', { class: 'k' }, t.k), h('div', { class: 'v' }, t.v), t.d ? h('div', { class: 'd' }, t.d) : ''))));
+
+// ---------------------------------------------------------------- mesures dérivées
+const v2 = (runs) => runs.filter((r) => r.format >= 2);
+const perRun = (runs, k) => {
+  const o = bagSum(runs, k);
+  for (const key in o) o[key] /= runs.length || 1;
+  return o;
+};
+/** Seconde où la squad passe pour de bon sous la moitié de son pic de soldats (spirale de mort), ou null. */
+function collapseTime(r) {
+  const sd = r.s.soldiers;
+  let peak = 0;
+  let cut = null;
+  for (let i = 0; i < sd.length; i++) {
+    peak = Math.max(peak, sd[i]);
+    if (sd[i] < peak * 0.5) cut ??= r.s.t[i];
+    else if (cut !== null && sd[i] >= peak * 0.7) cut = null; // elle s'en est remise
+  }
+  return r.victory ? null : cut;
+}
+function survival(runs, B = 10) {
+  if (!runs.length) return [];
+  const maxT = Math.max(...runs.map((r) => r.duration));
+  const pts = [];
+  for (let t = 0; t <= maxT + B; t += B) pts.push({ x: t, y: runs.filter((r) => r.victory || r.duration > t).length / runs.length, n: runs.length });
+  return pts;
+}
+const minuteBuckets = (runs, k, B = 60, keyMap = (x) => x) => {
+  const maxT = Math.max(0, ...runs.map((r) => r.duration));
+  const out = [];
+  for (let t0 = 0; t0 < maxT; t0 += B) {
+    const alive = runs.filter((r) => r.duration > t0);
+    if (!alive.length) continue;
+    const values = {};
+    for (const r of alive) for (const [key, v] of Object.entries(bagTotal(r, k, t0, t0 + B))) values[keyMap(key)] = (values[keyMap(key)] ?? 0) + v / alive.length;
+    out.push({ x: t0 + B, label: `${mmss(t0)}–${mmss(t0 + B)} (${alive.length} partie${alive.length > 1 ? 's' : ''})`, short: mmss(t0), values });
+  }
+  return out;
+};
+/** Clés d'un compteur ramenées aux N plus fortes + « Autres » (couleurs fixes par clé). */
+function foldKeys(runs, k, n = 7) {
+  const tot = bagSum(runs, k);
+  const { keys, rest } = topKeys(tot, n);
+  const set = new Set(keys);
+  const colorOf = new Map(keys.map((key, i) => [key, col(i)]));
+  return { keys: rest.length ? [...keys, 'Autres'] : keys, map: (key) => (set.has(key) ? key : 'Autres'), color: (key) => colorOf.get(key) ?? 'var(--other)' };
+}
+
+// ---------------------------------------------------------------- conclusions automatiques
+function conclusions(runs) {
+  const out = [];
+  const add = (level, title, text, tab) => out.push({ level, title, text, tab });
+  if (!runs.length) return [{ level: 'info', title: 'Aucune partie pour ces filtres', text: 'Élargis les filtres, ou joue des parties en « npm run dev ».' }];
+  const R2 = v2(runs);
+  const wins = runs.filter((r) => r.victory).length;
+  const durs = runs.map((r) => r.duration);
+  if (runs.length < 5) add('warn', 'Peu de parties', `${runs.length} partie(s) seulement : les tendances ci-dessous restent fragiles. Vise 5 à 10 parties par niveau de difficulté.`);
+  if (!R2.length) add('warn', 'Aucune partie au format v2', 'Sources de dégâts, soins, économie et pression au contact n’existent que dans les parties enregistrées depuis le 20/10. Rejoue en « npm run dev ».');
+  const ov = [...new Set(runs.flatMap((r) => r.overrides))];
+  if (ov.length) add('warn', 'Réglages de dev mémorisés', `Certaines parties tournaient avec des réglages du navigateur qui masquent le code (${ov.join(', ')}) : les chiffres peuvent ne pas refléter les valeurs du code.`);
+  // issue des parties
+  add(wins / runs.length >= 0.6 ? 'warn' : 'info', `${pct(wins / runs.length)} de victoires`, `${wins} victoire(s) sur ${runs.length} partie(s) ; durée médiane ${mmss(median(durs))}, niveau médian ${num(median(runs.map((r) => r.level)))}.${wins / runs.length >= 0.6 ? ' Le niveau semble facile pour toi.' : ''}`, 'synth');
+  // moment critique : la fenêtre de 30 s où meurent le plus de squads
+  const deaths = runs.filter((r) => !r.victory).map((r) => r.duration);
+  if (deaths.length >= 2) {
+    const bins = {};
+    for (const d of deaths) bins[Math.floor(d / 30)] = (bins[Math.floor(d / 30)] ?? 0) + 1;
+    const [b, n] = Object.entries(bins).sort((x, y) => y[1] - x[1])[0];
+    const boss = bossMarkers(runs).find((m) => m.x >= b * 30 - 30 && m.x <= b * 30 + 30);
+    add(n / deaths.length >= 0.3 ? 'alert' : 'info', `Moment critique : ${mmss(b * 30)}–${mmss(b * 30 + 30)}`, `${n} mort(s) sur ${deaths.length} tombent dans cette fenêtre${boss ? `, autour de l’arrivée du boss ${boss.label} (${mmss(boss.x)})` : ''}.`, 'squad');
+  }
+  // spirale de mort
+  const cuts = runs.map((r) => ({ r, c: collapseTime(r) })).filter((x) => x.c !== null);
+  if (cuts.length >= 2) {
+    const gap = median(cuts.map((x) => x.r.duration - x.c));
+    const at = mmss(median(cuts.map((x) => x.c)));
+    if (gap < 15) add('warn', 'Effondrement brutal', `En médiane, la squad passe sous la moitié de son pic de soldats à ${at} et meurt ${num(gap)} s plus tard (${cuts.length} partie(s)) : elle est balayée d’un coup, sans usure progressive qui laisserait au joueur le temps de réagir.`, 'squad');
+    else add('info', 'Spirale de mort', `En médiane, la squad passe sous la moitié de son pic de soldats à ${at} et meurt ${num(gap)} s plus tard (${cuts.length} partie(s)) : une usure lente, que les recrues ne rattrapent pas.`, 'squad');
+  }
+  // modèle contre réalité
+  if (DATA.model) {
+    const ratios = [];
+    for (const r of runs) for (let i = 0; i < r.s.t.length; i++) {
+      const t = Math.round(r.s.t[i]);
+      const m = DATA.model.hp[t];
+      if (t >= 60 && m > 200) ratios.push(r.s.aliveHp[i] / m);
+    }
+    if (ratios.length > 30) {
+      const q = median(ratios);
+      add(q > 1.4 ? 'alert' : q < 0.7 ? 'warn' : 'good', q > 1.4 ? 'Le jeu est plus dur que le modèle' : q < 0.7 ? 'Le jeu est plus facile que le modèle' : 'Le modèle de pression colle au jeu', `Après la première minute, les PV d’aliens vivants valent en médiane ${pct(q)} de ce que prévoit le modèle (data/waveModel.ts). ${q > 1.4 || q < 0.7 ? 'Recale le modèle avec « npm run sim:calibrate » avant de régler les vagues dans le Gestionnaire.' : ''}`, 'pression');
+    }
+  }
+  // efficacité du DPS (v2 : theoDps complet)
+  const sat = [];
+  for (const r of R2) for (let i = 0; i < r.s.t.length; i++) if (r.s.theoDps[i] > 0 && r.s.aliveHp[i] > r.s.theoDps[i] * 4 && r.s.soldiers[i] > 0) sat.push({ t: r.s.t[i], e: r.s.dealt[i] / r.s.theoDps[i] });
+  if (sat.length > 30) {
+    const early = median(sat.filter((x) => x.t < 180).map((x) => x.e));
+    const late = median(sat.filter((x) => x.t >= 180).map((x) => x.e));
+    add(late < early * 0.75 ? 'warn' : 'info', `Efficacité du tir : ${pct(median(sat.map((x) => x.e)))}`, `Part du DPS théorique réellement infligée quand il y a de quoi tirer : ${pct(early)} avant 3:00, ${pct(late)} après.${late < early * 0.75 ? ' Elle chute en fin de partie : portée, aliens hors de portée, soldats neutralisés ou overkill.' : ''}`, 'pression');
+  }
+  if (R2.length) {
+    // source de dégâts dominante
+    const taken = bagSum(R2, 'takenBy');
+    const tot = sum(Object.values(taken));
+    const [top, v] = Object.entries(taken).sort((a, b) => b[1] - a[1])[0] ?? [];
+    if (top) add(v / tot > 0.35 ? 'alert' : 'info', `Première source de dégâts : ${top}`, `${pct(v / tot)} des PV perdus par la squad${v / tot > 0.35 ? ' : une seule capacité domine la pression subie. À regarder en premier pour l’équilibrage.' : '.'}`, 'degats');
+    const killers = bagSum(R2, 'deathsBy');
+    const kt = sum(Object.values(killers));
+    const [tk, kv] = Object.entries(killers).sort((a, b) => b[1] - a[1])[0] ?? [];
+    if (tk && tk !== top) add('info', `Ce qui tue le plus de soldats : ${tk}`, `${pct(kv / kt)} des soldats perdus. Différent de la source qui retire le plus de PV : ${tk} fait des coups qui achèvent.`, 'degats');
+    const causes = {};
+    for (const r of R2) if (!r.victory && r.deathCause) causes[r.deathCause] = (causes[r.deathCause] ?? 0) + 1;
+    const [cause, cn] = Object.entries(causes).sort((a, b) => b[1] - a[1])[0] ?? [];
+    if (cause) add('info', `Dernier coup le plus fréquent : ${cause}`, `${cn} mort(s) de squad sur ${Object.values(causes).reduce((a, b) => a + b, 0)}.`, 'degats');
+    // soins
+    const healed = sum(Object.values(bagSum(R2, 'healBy')));
+    if (tot > 0) add(healed / tot < 0.1 ? 'info' : 'good', `Les soins compensent ${pct(healed / tot)} des dégâts`, `${num(healed / R2.length)} PV soignés par partie pour ${num(tot / R2.length)} PV perdus.`, 'squad');
+    // XP perdue
+    const xp = bagSum(R2, 'xp');
+    const lost = ((xp.expired ?? 0) + (xp.overflow ?? 0)) / (xp.dropped || 1);
+    if (xp.dropped) add(lost > 0.15 ? 'warn' : 'good', `${pct(lost)} de l’XP perdue au sol`, lost > 0.15 ? 'Beaucoup de globes disparaissent avant d’être ramassés : rayon d’aimant ou durée de vie des globes trop faibles, ou squad qui ne revient pas en arrière.' : 'Presque toute l’XP lâchée est ramassée.', 'eco');
+    // recrues
+    const dropped = sum(R2.map((r) => sum(r.s.recDropped ?? [])));
+    const expired = sum(R2.map((r) => sum(r.s.recExpired ?? [])));
+    const swamped = sum(R2.map((r) => sum(r.s.recSwamped ?? [])));
+    if (dropped > 10) add(expired / dropped > 0.25 ? 'warn' : 'info', `${pct(expired / dropped)} des recrues jamais ramassées`, `${num(dropped / R2.length)} recrues apparues par partie, dont ${pct(swamped / (expired || 1))} des perdues « noyées » dans la horde (5 aliens ou plus autour).`, 'squad');
+    // économie
+    const coins = perRun(R2, 'coins');
+    const ct = sum(Object.values(coins));
+    if (ct > 0) add('info', `${num(ct)} pièces par partie`, Object.entries(coins).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${label('coins', k)} ${pct(v / ct)}`).join(' · ') + ` ; ${num(sum(Object.values(perRun(R2, 'gems'))), 1)} diamants par partie.`, 'eco');
+    // contrôle subi
+    let ctrl = 0;
+    let secs = 0;
+    for (const r of R2) for (let i = 0; i < r.s.t.length; i++) if (r.s.soldiers[i] > 0) {
+      secs++;
+      if (r.s.frozen[i] + r.s.stunned[i] + r.s.captured[i] + r.s.airborne[i] > 0) ctrl++;
+    }
+    if (secs) add(ctrl / secs > 0.25 ? 'warn' : 'info', `Au moins un soldat neutralisé ${pct(ctrl / secs)} du temps`, 'Gel, étourdissement, bulle ou vol (toile, souffle) : ces soldats ne tirent pas, une pression invisible dans les PV perdus.', 'squad');
+    // kiting
+    let still = 0;
+    let n = 0;
+    for (const r of R2) for (let i = 0; i < r.s.t.length; i++) if (r.s.soldiers[i] > 0) {
+      n++;
+      if (r.s.speed[i] < 20) still++;
+    }
+    if (n) add('info', `Squad immobile ${pct(still / n)} du temps`, 'Moins de 20 px/s. Le reste du temps, le joueur se déplace (kiting).', 'squad');
+    // perf
+    const fps = R2.flatMap((r) => (r.s.fps ?? []).map((f, i) => ({ f, a: r.s.aliens[i] }))).filter((x) => x.f > 0);
+    if (fps.length) {
+      const slow = fps.filter((x) => x.f < 50);
+      add(slow.length / fps.length > 0.1 ? 'warn' : 'good', `Sous 50 FPS ${pct(slow.length / fps.length)} du temps`, slow.length ? `Les secondes lentes comptent en médiane ${num(median(slow.map((x) => x.a)))} aliens vivants, contre ${num(median(fps.map((x) => x.a)))} en général.` : 'Le jeu tourne de façon fluide sur ta machine pendant ces parties.', 'perf');
+    }
+  }
+  const order = { alert: 0, warn: 1, good: 2, info: 3 };
+  return out.sort((a, b) => order[a.level] - order[b.level]);
+}
+
+// ---------------------------------------------------------------- vues
+const VIEWS = [
+  ['synth', 'Synthèse'],
+  ['pression', 'Pression'],
+  ['squad', 'Squad'],
+  ['degats', 'Dégâts subis'],
+  ['ennemis', 'Ennemis'],
+  ['eco', 'Économie'],
+  ['prog', 'Progression'],
+  ['perf', 'Perf & réseau'],
+  ['partie', 'Une partie'],
+];
+let current = 'synth';
+let selectedRun = null;
+const LEVEL_TXT = { alert: ['!', 'Alerte'], warn: ['!', 'À surveiller'], good: ['✓', 'Bon'], info: ['i', 'Info'] };
+const needV2 = (sec, runs) => {
+  if (v2(runs).length) return false;
+  sec.append(h('div', { class: 'card wide' }, h('div', { class: 'empty' }, 'Cette vue a besoin de parties au format v2 (enregistrées depuis le 20/10). Joue quelques parties en « npm run dev », puis relance « npm run sim:report ».')));
+  return true;
+};
+
+const RENDER = {
+  synth(sec, runs) {
+    const R2 = v2(runs);
+    const wins = runs.filter((r) => r.victory).length;
+    const causes = {};
+    for (const r of runs) if (!r.victory && r.deathCause) causes[r.deathCause] = (causes[r.deathCause] ?? 0) + 1;
+    const topCause = Object.entries(causes).sort((a, b) => b[1] - a[1])[0];
+    card(sec, { title: 'En bref', wide: true }, (b) =>
+      tiles(b, [
+        { k: 'Parties', v: num(runs.length), d: `${R2.length} au format v2` },
+        { k: 'Victoires', v: pct(wins / (runs.length || 1)), d: `${wins} sur ${runs.length}` },
+        { k: 'Durée médiane', v: runs.length ? mmss(median(runs.map((r) => r.duration))) : '—', d: runs.length ? `de ${mmss(Math.min(...runs.map((r) => r.duration)))} à ${mmss(Math.max(...runs.map((r) => r.duration)))}` : '' },
+        { k: 'Niveau médian atteint', v: num(median(runs.map((r) => r.level))) },
+        { k: 'Pièces par partie', v: R2.length ? num(sum(Object.values(perRun(R2, 'coins')))) : '—', d: 'parties v2' },
+        { k: 'Diamants par partie', v: R2.length ? num(sum(Object.values(perRun(R2, 'gems'))), 1) : '—', d: 'parties v2' },
+        { k: 'Cause de mort n° 1', v: topCause ? topCause[0].replace(':', ' · ') : '—', d: topCause ? `${topCause[1]} mort(s)` : 'parties v2' },
+      ]),
+    );
+    card(sec, { title: 'Conclusions', sub: 'Calculées sur les parties filtrées ; un lien mène à la vue qui le montre.', wide: true }, (b) =>
+      b.append(
+        h('div', { class: 'concl' }, conclusions(runs).map((c) => h('div', { class: `c ${c.level}` }, h('div', { class: 'ic', 'aria-hidden': 'true' }, LEVEL_TXT[c.level][0]), h('div', {}, h('span', { class: 't' }, c.title), h('span', { class: 'lvl' }, LEVEL_TXT[c.level][1])), h('div', { class: 'x' }, c.text, ' ', c.tab ? h('a', { onclick: () => show(c.tab) }, 'Voir →') : '')))),
+      ),
+    );
+    const mk = bossMarkers(runs);
+    card(sec, { title: 'Survie des squads', sub: 'Part des parties encore en cours à chaque instant (une victoire reste « en vie »). Lignes verticales : arrivée médiane des boss.' }, (b) => lineChart(b, { series: [{ name: 'Parties en cours', color: 'var(--s1)', pts: survival(runs) }], yMax: 1, yFmt: (v) => pct(v), markers: mk, noBand: true }));
+    card(sec, { title: 'Soldats vivants', sub: 'Médiane des parties encore en cours, bande = 25e à 75e centile.' }, (b) => lineChart(b, { series: [{ name: 'Soldats', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.soldiers[i]) }], markers: mk }));
+    card(sec, { title: 'Parties', sub: 'Clic sur une ligne : la détailler dans « Une partie ».', wide: true }, (b) =>
+      table(
+        b,
+        [
+          { k: 'date', label: 'Date' },
+          { k: 'build', label: 'Version' },
+          { k: 'diff', label: 'Difficulté' },
+          { k: 'duration', label: 'Durée', num: true, fmt: (v) => mmss(v) },
+          { k: 'level', label: 'Niveau', num: true },
+          { k: 'issue', label: 'Issue' },
+          { k: 'cause', label: 'Cause de la mort' },
+          { k: 'flags', label: 'Notes' },
+        ],
+        runs.map((r) => ({ id: r.id, date: r.date, build: buildOf(r), diff: DIFF_NAMES[r.difficulty] ?? r.difficulty, duration: r.duration, level: r.level, issue: r.victory ? 'Victoire' : 'Défaite', cause: r.deathCause || '—', flags: [r.format < 2 ? 'v1' : '', r.tutorial ? 'tutoriel' : '', r.online ? `en ligne (${r.players})` : '', r.jump ? `test : ${r.jump}` : '', r.cheats.length ? 'triche' : '', r.overrides.length ? 'réglages mémorisés' : ''].filter(Boolean).join(', ') })),
+        { sort: 'date', dir: -1, onclick: (row) => { selectedRun = row.id; show('partie'); } },
+      ),
+    );
+  },
+
+  pression(sec, runs) {
+    const mk = bossMarkers(runs);
+    const maxT = Math.max(0, ...runs.map((r) => r.duration));
+    const modelPts = DATA.model ? DATA.model.hp.slice(0, maxT + 1).map((y, x) => ({ x, y })).filter((p) => p.x % 5 === 0) : [];
+    card(sec, { title: 'PV d’aliens vivants : jeu contre modèle', sub: 'Toute la carte. Pointillés : ce que prévoit le modèle de pression (data/waveModel.ts) avec la timeline actuelle.', wide: true, note: DATA.model ? `Modèle : dpsStart ${DATA.model.params.dpsStart}, growthPerMin ${DATA.model.params.growthPerMin}, efficiency ${DATA.model.params.efficiency}, bossWeight ${DATA.model.params.bossWeight}. Recaler avec npm run sim:calibrate.` : 'Modèle indisponible.' }, (b) => lineChart(b, { series: [{ name: 'Jeu (médiane)', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.aliveHp[i]) }, { name: 'Modèle', color: 'var(--s2)', pts: modelPts, dash: true }], markers: mk }));
+    card(sec, { title: 'PV d’aliens au contact', sub: 'Aliens à moins de 300 px du centre de la squad : la pression vécue (parties v2).' }, (b) => lineChart(b, { series: [{ name: 'PV au contact', color: 'var(--s1)', pts: series(v2(runs), (r, i) => r.s.nearHp[i]) }], markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Aliens au contact', sub: 'Nombre d’aliens à moins de 300 px (parties v2).' }, (b) => lineChart(b, { series: [{ name: 'Aliens au contact', color: 'var(--s1)', pts: series(v2(runs), (r, i) => r.s.nearAliens[i]) }], markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Flux de PV par seconde', sub: 'PV d’aliens qui apparaissent contre PV que la squad leur retire. Quand la courbe orange passe sous la bleue, la horde grossit.' }, (b) => lineChart(b, { series: [{ name: 'Apparus /s', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.spawned[i], 30, 'mean') }, { name: 'Infligés /s', color: 'var(--s2)', pts: series(runs, (r, i) => r.s.dealt[i], 30, 'mean') }], markers: mk, noBand: true, note: 'moyenne' }));
+    card(sec, { title: 'DPS : théorique contre réel', sub: 'Parties v2 (DPS théorique complet : upgrades, critique, perks). Réel = PV retirés aux aliens par seconde.' }, (b) => lineChart(b, { series: [{ name: 'Théorique', color: 'var(--s1)', pts: series(v2(runs), (r, i) => r.s.theoDps[i], 30) }, { name: 'Réel', color: 'var(--s2)', pts: series(v2(runs), (r, i) => r.s.dealt[i], 30) }], markers: mk, noBand: true, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Efficacité du tir', sub: 'PV réellement infligés ÷ DPS théorique, seulement quand il y a assez d’aliens pour tirer en continu (parties v2).' }, (b) => lineChart(b, { series: [{ name: 'Efficacité', color: 'var(--s1)', pts: series(v2(runs), (r, i) => (r.s.theoDps[i] > 0 && r.s.aliveHp[i] > r.s.theoDps[i] * 4 ? r.s.dealt[i] / r.s.theoDps[i] : null), 30) }], yFmt: (v) => pct(v), markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Aliens vivants', sub: 'Toute la carte. Le Gestionnaire de vagues se fige au-delà de 150.' }, (b) => lineChart(b, { series: [{ name: 'Aliens', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.aliens[i]) }], markers: mk }));
+    card(sec, { title: 'Gestionnaire de vagues figé', sub: 'Part des parties où il est figé (boss vivant ou plus de 150 aliens), parties v2.' }, (b) => lineChart(b, { series: [{ name: 'Figé', color: 'var(--s1)', pts: series(v2(runs), (r, i) => r.s.suspended[i], 10, 'mean') }], yMax: 1, yFmt: (v) => pct(v), markers: mk, noBand: true, empty: 'Parties v2 seulement.' }));
+  },
+
+  squad(sec, runs) {
+    const mk = bossMarkers(runs);
+    const R2 = v2(runs);
+    card(sec, { title: 'Soldats vivants', sub: 'Médiane, bande = 25e à 75e centile.' }, (b) => lineChart(b, { series: [{ name: 'Soldats', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.soldiers[i]) }], markers: mk }));
+    card(sec, { title: 'Santé de la squad', sub: 'PV cumulés des soldats vivants en part de leur maximum (au-dessus de 100 % : overheal), parties v2.' }, (b) => lineChart(b, { series: [{ name: 'PV / max', color: 'var(--s1)', pts: series(R2, (r, i) => (r.s.squadMaxHp[i] > 0 ? r.s.squadHp[i] / r.s.squadMaxHp[i] : null)) }], yFmt: (v) => pct(v), markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'PV perdus et soignés par seconde', sub: 'Moyenne sur 30 s (parties v2).' }, (b) => lineChart(b, { series: [{ name: 'Perdus /s', color: 'var(--s2)', pts: series(R2, (r, i) => r.s.taken[i], 30, 'mean') }, { name: 'Soignés /s', color: 'var(--s3)', pts: series(R2, (r, i) => sum(Object.values(r.bags.healBy?.[i] ?? {})), 30, 'mean') }], markers: mk, noBand: true, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Soldats neutralisés', sub: 'Gelés + étourdis + avalés + en l’air (ne tirent pas), et soldats enflammés. Moyenne sur 30 s (parties v2).' }, (b) => lineChart(b, { series: [{ name: 'Neutralisés', color: 'var(--s1)', pts: series(R2, (r, i) => r.s.frozen[i] + r.s.stunned[i] + r.s.captured[i] + r.s.airborne[i], 30, 'mean') }, { name: 'Enflammés', color: 'var(--s2)', pts: series(R2, (r, i) => r.s.burning[i], 30, 'mean') }], markers: mk, noBand: true, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Soldats morts par minute', sub: 'Moyenne par partie encore en cours.' }, (b) => lineChart(b, { series: [{ name: 'Morts /min', color: 'var(--s2)', pts: series(runs, (r, i) => r.s.lost[i] * 60, 60, 'mean') }], markers: mk, noBand: true, xStep: 60 }));
+    card(sec, { title: 'Recrues par minute', sub: 'Apparues, ramassées, perdues (jamais ramassées). Moyenne par partie encore en cours.' }, (b) => lineChart(b, { series: [{ name: 'Apparues', color: 'var(--s1)', pts: series(runs, (r, i) => (r.s.recDropped ? r.s.recDropped[i] * 60 : null), 60, 'mean') }, { name: 'Ramassées', color: 'var(--s3)', pts: series(runs, (r, i) => (r.s.recPicked ? r.s.recPicked[i] * 60 : null), 60, 'mean') }, { name: 'Perdues', color: 'var(--s2)', pts: series(runs, (r, i) => (r.s.recExpired ? r.s.recExpired[i] * 60 : null), 60, 'mean') }], markers: mk, noBand: true, xStep: 60 }));
+    card(sec, { title: 'Vitesse de la squad', sub: 'px/s (0 = immobile) : le joueur kite-t-il ? Parties v2.' }, (b) => lineChart(b, { series: [{ name: 'Vitesse', color: 'var(--s1)', pts: series(R2, (r, i) => r.s.speed[i], 30) }], markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'Moment de la mort', sub: 'Nombre de squads mortes par fenêtre de 30 s.' }, (b) => {
+      const d = runs.filter((r) => !r.victory);
+      const maxT = Math.max(0, ...d.map((r) => r.duration));
+      const buckets = [];
+      for (let t = 0; t < maxT + 1; t += 30) buckets.push({ x: t + 30, label: `${mmss(t)}–${mmss(t + 30)}`, short: mmss(t), values: { Morts: d.filter((r) => r.duration > t && r.duration <= t + 30).length } });
+      return stackChart(b, { buckets, keys: ['Morts'], color: () => 'var(--s8)', empty: 'Aucune défaite.' });
+    });
+  },
+
+  degats(sec, runs) {
+    const R2 = v2(runs);
+    if (needV2(sec, runs)) return;
+    const fold = foldKeys(R2, 'takenBy', 7);
+    card(sec, { title: 'PV perdus par source et par minute', sub: 'Moyenne par partie encore en cours. Source = alien:capacité (ex. kamikaze:blast, boss_rhino:rush, burner:trail:burn).', wide: true }, (b) => stackChart(b, { buckets: minuteBuckets(R2, 'takenBy', 60, fold.map), keys: fold.keys, color: fold.color, height: 280 }));
+    const taken = perRun(R2, 'takenBy');
+    const tt = sum(Object.values(taken));
+    card(sec, { title: 'PV perdus par source', sub: 'Moyenne par partie, part du total.' }, (b) => barList(b, Object.entries(taken).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k, v]) => ({ label: k, value: v, sub: pct(v / tt), color: fold.color(fold.map(k)) })), { labelName: 'Source', valueName: 'PV par partie' }));
+    const deaths = perRun(R2, 'deathsBy');
+    const dt = sum(Object.values(deaths));
+    card(sec, { title: 'Soldats tués par source', sub: 'Moyenne par partie, part du total. Ce qui achève les soldats.' }, (b) => barList(b, Object.entries(deaths).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k, v]) => ({ label: k, value: v, sub: pct(v / dt), color: fold.color(fold.map(k)) })), { labelName: 'Source', valueName: 'Soldats par partie' }));
+    const causes = {};
+    for (const r of R2) if (!r.victory && r.deathCause) causes[r.deathCause] = (causes[r.deathCause] ?? 0) + 1;
+    card(sec, { title: 'Dernier coup (mort de la squad)', sub: 'Source du coup qui a tué le dernier soldat.' }, (b) => barList(b, Object.entries(causes).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v, color: fold.color(fold.map(k)) })), { fmt: (v) => `${v} fois`, empty: 'Aucune défaite au format v2.' }));
+    const heal = perRun(R2, 'healBy');
+    card(sec, { title: 'Soins par source', sub: `Moyenne par partie ; ${pct(sum(Object.values(heal)) / (tt || 1))} des PV perdus.` }, (b) => barList(b, Object.entries(heal).sort((a, b) => b[1] - a[1]).map(([k, v], i) => ({ label: label('healBy', k), value: v, color: col(i + 2) })), { empty: 'Aucun soin.' }));
+    card(sec, { title: 'Soldats perdus par classe', sub: 'Moyenne par partie.' }, (b) => barList(b, Object.entries(perRun(R2, 'lostTypes')).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v })), { empty: 'Aucun soldat perdu.' }));
+  },
+
+  ennemis(sec, runs) {
+    const R2 = v2(runs);
+    if (needV2(sec, runs)) return;
+    const n = R2.length;
+    const spawns = bagSum(R2, 'spawnTypes');
+    const kills = bagSum(R2, 'killTypes');
+    const taken = bagSum(R2, 'takenBy');
+    const deaths = bagSum(R2, 'deathsBy');
+    const first = {};
+    for (const r of R2) {
+      const seen = new Set();
+      r.bags.spawnTypes?.forEach((b, i) => {
+        if (!b) return;
+        for (const k of Object.keys(b)) if (!seen.has(k)) {
+          seen.add(k);
+          (first[k] ??= []).push(r.s.t[i]);
+        }
+      });
+    }
+    const types = [...new Set([...Object.keys(spawns), ...Object.keys(kills)])];
+    const by = (obj, t) => sum(Object.entries(obj).filter(([k]) => k === t || k.startsWith(`${t}:`)).map(([, v]) => v));
+    const rows = types.map((t) => ({ type: t, first: first[t] ? median(first[t]) : null, spawned: (spawns[t] ?? 0) / n, killed: (kills[t] ?? 0) / n, ratio: spawns[t] ? (kills[t] ?? 0) / spawns[t] : null, dmg: by(taken, t) / n, dmgPer: spawns[t] ? by(taken, t) / spawns[t] : null, killedSoldiers: by(deaths, t) / n }));
+    const totDmg = sum(rows.map((r) => r.dmg));
+    card(sec, { title: 'Bilan par type d’alien', sub: 'Moyennes par partie (v2). « Dégâts / alien » = PV retirés à la squad par alien apparu : la dangerosité unitaire. Clic sur un en-tête pour trier.', wide: true }, (b) =>
+      table(
+        b,
+        [
+          { k: 'type', label: 'Alien' },
+          { k: 'first', label: '1re apparition', num: true, fmt: (v) => (v === null ? '—' : mmss(v)) },
+          { k: 'spawned', label: 'Apparus', num: true, fmt: (v) => num(v, 1) },
+          { k: 'killed', label: 'Tués', num: true, fmt: (v) => num(v, 1) },
+          { k: 'ratio', label: 'Tués / apparus', num: true, fmt: (v) => pct(v) },
+          { k: 'dmg', label: 'PV retirés à la squad', num: true, fmt: (v) => `${num(v)}  (${pct(v / (totDmg || 1))})` },
+          { k: 'dmgPer', label: 'Dégâts / alien', num: true, fmt: (v) => num(v, 1) },
+          { k: 'killedSoldiers', label: 'Soldats tués', num: true, fmt: (v) => num(v, 1) },
+        ],
+        rows,
+        { sort: 'dmg', dir: -1, scroll: false },
+      ),
+    );
+    const fold = foldKeys(R2, 'killTypes', 7);
+    card(sec, { title: 'Aliens tués par minute', sub: 'Par type, moyenne par partie encore en cours.', wide: true }, (b) => stackChart(b, { buckets: minuteBuckets(R2, 'killTypes', 60, fold.map), keys: fold.keys, color: fold.color }));
+    const foldS = foldKeys(R2, 'spawnTypes', 7);
+    card(sec, { title: 'Aliens apparus par minute', sub: 'Par type, moyenne par partie encore en cours (invocations comprises : araignées, orbes).', wide: true }, (b) => stackChart(b, { buckets: minuteBuckets(R2, 'spawnTypes', 60, foldS.map), keys: foldS.keys, color: foldS.color }));
+  },
+
+  eco(sec, runs) {
+    const R2 = v2(runs);
+    if (needV2(sec, runs)) return;
+    const mk = bossMarkers(runs);
+    const coins = perRun(R2, 'coins');
+    const gems = perRun(R2, 'gems');
+    const xp = bagSum(R2, 'xp');
+    const ct = sum(Object.values(coins));
+    const gt = sum(Object.values(gems));
+    card(sec, { title: 'Économie par partie', wide: true }, (b) =>
+      tiles(b, [
+        { k: 'Pièces par partie', v: num(ct), d: `${num(ct / (mean(R2.map((r) => r.duration)) / 60), 1)} par minute` },
+        { k: 'Diamants par partie', v: num(gt, 1) },
+        { k: 'XP ramassée', v: pct((xp.picked ?? 0) / (xp.dropped || 1)), d: `${num((xp.dropped ?? 0) / R2.length)} XP lâchée par partie` },
+        { k: 'XP perdue au sol', v: pct(((xp.expired ?? 0) + (xp.overflow ?? 0)) / (xp.dropped || 1)), d: xp.overflow ? `dont ${num(xp.overflow / R2.length)} par trop-plein` : '' },
+      ]),
+    );
+    card(sec, { title: 'Pièces par source', sub: 'Pièces ramassées, moyenne par partie.' }, (b) => barList(b, Object.entries(coins).sort((a, b) => b[1] - a[1]).map(([k, v], i) => ({ label: label('coins', k), value: v, sub: pct(v / (ct || 1)), color: col(i) })), { empty: 'Aucune pièce ramassée.' }));
+    card(sec, { title: 'Diamants par source', sub: 'Diamants ramassés, moyenne par partie (solo seulement).' }, (b) => barList(b, Object.entries(gems).sort((a, b) => b[1] - a[1]).map(([k, v], i) => ({ label: label('gems', k), value: v, sub: pct(v / (gt || 1)), color: col(i) })), { empty: 'Aucun diamant ramassé.' }));
+    card(sec, { title: 'Pièces cumulées', sub: 'Médiane des parties encore en cours.' }, (b) => lineChart(b, { series: [{ name: 'Pièces', color: 'var(--s4)', pts: cumulative(R2, (r, i) => sum(Object.values(r.bags.coins?.[i] ?? {}))) }], markers: mk }));
+    const keys = Object.keys(bagSum(R2, 'coins')).sort((a, b) => (coins[b] ?? 0) - (coins[a] ?? 0));
+    card(sec, { title: 'Pièces par minute et par source', sub: 'Moyenne par partie encore en cours.' }, (b) => stackChart(b, { buckets: minuteBuckets(R2, 'coins'), keys, color: (k) => col(keys.indexOf(k)), label: (k) => label('coins', k) }));
+    card(sec, { title: 'XP des globes par minute', sub: 'Lâchée, ramassée et perdue (moyenne par partie encore en cours).' }, (b) => lineChart(b, { series: ['dropped', 'picked', 'expired'].map((k, i) => ({ name: { dropped: 'Lâchée', picked: 'Ramassée', expired: 'Perdue' }[k], color: col(i === 2 ? 1 : i === 1 ? 2 : 0), pts: series(R2, (r, j) => (r.bags.xp?.[j]?.[k] ?? 0) * 60, 60, 'mean') })), markers: mk, noBand: true, xStep: 60 }));
+  },
+
+  prog(sec, runs) {
+    const mk = bossMarkers(runs);
+    const R2 = v2(runs);
+    card(sec, { title: 'Niveau du joueur', sub: 'Médiane, bande = 25e à 75e centile.' }, (b) => lineChart(b, { series: [{ name: 'Niveau', color: 'var(--s1)', pts: series(runs, (r, i) => r.s.level[i]) }], markers: mk }));
+    const ups = {};
+    const prism = {};
+    for (const r of runs) {
+      for (const [k, v] of Object.entries(r.picked)) ups[k] = (ups[k] ?? 0) + v;
+      for (const [k, v] of Object.entries(r.prismPicked)) prism[k] = (prism[k] ?? 0) + v;
+    }
+    card(sec, { title: 'Upgrades prises', sub: 'Prises par partie en moyenne (choix de niveau et globes d’œuf), dont prismatiques.' }, (b) => barList(b, Object.entries(ups).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v / runs.length, sub: prism[k] ? `${num(prism[k] / runs.length, 1)} prism.` : '' })), { fmt: (v) => num(v, 1) }));
+    // boss : apparition, mort, durée du combat
+    const fights = {};
+    for (const r of R2) {
+      const open = {};
+      for (const e of r.events) {
+        const name = BOSS_NAMES[e.alien] ?? e.alien;
+        if (e.e === 'boss') open[name] ??= e.t;
+        if (e.e === 'bossDown' && open[name] !== undefined) {
+          (fights[name] ??= { spawn: [], down: [], len: [] }).down.push(e.t);
+          fights[name].len.push(e.t - open[name]);
+        }
+      }
+      for (const [name, t] of Object.entries(open)) (fights[name] ??= { spawn: [], down: [], len: [] }).spawn.push(t);
+    }
+    card(sec, { title: 'Combats de boss', sub: 'Parties v2 : arrivée et mort médianes, durée médiane du combat, part des parties où il est tué.' }, (b) =>
+      table(
+        b,
+        [
+          { k: 'name', label: 'Boss' },
+          { k: 'met', label: 'Rencontré', num: true },
+          { k: 'spawn', label: 'Arrivée', num: true, fmt: (v) => (Number.isFinite(v) ? mmss(v) : '—') },
+          { k: 'len', label: 'Durée du combat', num: true, fmt: (v) => (Number.isFinite(v) ? `${num(v)} s` : '—') },
+          { k: 'killed', label: 'Tué', num: true, fmt: (v) => pct(v) },
+        ],
+        Object.entries(fights).map(([name, f]) => ({ name, met: f.spawn.length, spawn: median(f.spawn), len: median(f.len), killed: f.down.length / (f.spawn.length || 1) })),
+        { sort: 'spawn', dir: 1, scroll: false },
+      ),
+    );
+    const pow = {};
+    for (const r of R2) for (const e of r.events) if (e.e === 'powerup') pow[e.kind] = (pow[e.kind] ?? 0) + 1;
+    card(sec, { title: 'Power-ups ramassés', sub: 'Par partie en moyenne (v2).' }, (b) => barList(b, Object.entries(pow).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v / (R2.length || 1) })), { fmt: (v) => num(v, 1), empty: 'Aucun power-up (ou pas de parties v2).' }));
+    card(sec, { title: 'Relances d’upgrade restantes', sub: 'Médiane (v2) : des relances jamais utilisées sont un levier inutilisé.' }, (b) => lineChart(b, { series: [{ name: 'Relances', color: 'var(--s1)', pts: series(R2, (r, i) => r.s.rerolls[i], 30) }], markers: mk, empty: 'Parties v2 seulement.' }));
+  },
+
+  perf(sec, runs) {
+    const R2 = v2(runs);
+    const mk = bossMarkers(runs);
+    card(sec, { title: 'Images par seconde', sub: 'Médiane (v2), bande = 25e à 75e centile.' }, (b) => lineChart(b, { series: [{ name: 'FPS', color: 'var(--s1)', pts: series(R2, (r, i) => (r.s.fps[i] > 0 ? r.s.fps[i] : null), 30) }], markers: mk, empty: 'Parties v2 seulement.' }));
+    card(sec, { title: 'FPS selon le nombre d’aliens', sub: 'Médiane des secondes mesurées, par tranche d’aliens vivants (v2).' }, (b) => {
+      const bands = [0, 50, 100, 150, 200, 300];
+      const items = bands.map((lo, i) => {
+        const hi = bands[i + 1] ?? Infinity;
+        const f = R2.flatMap((r) => (r.s.fps ?? []).filter((v, j) => v > 0 && r.s.aliens[j] >= lo && r.s.aliens[j] < hi));
+        return { label: hi === Infinity ? `${lo}+ aliens` : `${lo}–${hi} aliens`, value: f.length ? median(f) : 0, sub: `${f.length} s` };
+      }).filter((x) => x.value > 0);
+      return barList(b, items, { fmt: (v) => `${num(v)} FPS`, empty: 'Parties v2 seulement.' });
+    });
+    card(sec, { title: 'Pire image par seconde', sub: 'Durée de la plus longue image (ms), médiane (v2) : les à-coups.' }, (b) => lineChart(b, { series: [{ name: 'Pire image (ms)', color: 'var(--s2)', pts: series(R2, (r, i) => (r.s.worstFrameMs[i] > 0 ? r.s.worstFrameMs[i] : null), 30) }], markers: mk, empty: 'Parties v2 seulement.' }));
+    const net = runs.filter((r) => (r.s.snapBytes ?? []).some((v) => v > 0));
+    card(sec, { title: 'Taille du snapshot réseau', sub: 'Octets du plus gros snapshot de chaque seconde (parties en ligne, hôte).' }, (b) => lineChart(b, { series: [{ name: 'Octets', color: 'var(--s1)', pts: series(net, (r, i) => (r.s.snapBytes[i] > 0 ? r.s.snapBytes[i] : null), 30) }], markers: mk, empty: 'Aucune partie en ligne enregistrée.' }));
+  },
+
+  partie(sec, runs) {
+    const pool = runs.length ? runs : ALL;
+    if (!pool.length) return;
+    if (!pool.some((r) => r.id === selectedRun)) selectedRun = [...pool].sort((a, b) => b.id.localeCompare(a.id))[0].id;
+    const r = pool.find((x) => x.id === selectedRun);
+    const pick = h('select', { onchange: (e) => { selectedRun = e.target.value; render(); } }, [...pool].sort((a, b) => b.id.localeCompare(a.id)).map((x) => h('option', { value: x.id, selected: x.id === selectedRun ? '' : undefined }, `${x.date} · ${DIFF_NAMES[x.difficulty] ?? x.difficulty} · ${mmss(x.duration)} · ${x.victory ? 'victoire' : 'défaite'}`)));
+    const one = [r];
+    const mk = r.bosses.map((b) => ({ x: b.t, label: BOSS_NAMES[b.alien] ?? b.alien }));
+    card(sec, { title: 'Partie', wide: true }, (b) => b.append(h('label', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px;color:var(--text-secondary)' }, 'Partie', pick), h('div', { class: 'runhead' }, h('span', {}, 'Durée ', h('b', {}, mmss(r.duration))), h('span', {}, 'Niveau ', h('b', {}, r.level)), h('span', {}, 'Difficulté ', h('b', {}, DIFF_NAMES[r.difficulty] ?? r.difficulty)), h('span', {}, 'Issue ', h('b', {}, r.victory ? 'Victoire' : 'Défaite')), r.deathCause ? h('span', {}, 'Cause ', h('b', {}, r.deathCause)) : '', h('span', {}, 'Version ', h('b', {}, buildOf(r))), r.build?.commit ? h('span', {}, 'Commit ', h('b', {}, r.build.commit)) : '', r.jump ? h('span', { class: 'tag' }, `test : ${r.jump}`) : '', r.cheats.length ? h('span', { class: 'tag' }, `triche : ${r.cheats.join(', ')}`) : '', r.overrides.length ? h('span', { class: 'tag' }, `réglages mémorisés : ${r.overrides.join(', ')}`) : '')));
+    card(sec, { title: 'Soldats' }, (b) => lineChart(b, { series: [{ name: 'Soldats', color: 'var(--s1)', pts: series(one, (x, i) => x.s.soldiers[i], 5) }], markers: mk, noBand: true }));
+    if (r.format >= 2) card(sec, { title: 'Santé de la squad', sub: 'PV cumulés en part du maximum.' }, (b) => lineChart(b, { series: [{ name: 'PV / max', color: 'var(--s1)', pts: series(one, (x, i) => (x.s.squadMaxHp[i] > 0 ? x.s.squadHp[i] / x.s.squadMaxHp[i] : null), 5) }], yFmt: (v) => pct(v), markers: mk, noBand: true }));
+    card(sec, { title: 'PV d’aliens', sub: r.format >= 2 ? 'Toute la carte et au contact (300 px).' : 'Toute la carte.' }, (b) => lineChart(b, { series: [{ name: 'Carte', color: 'var(--s1)', pts: series(one, (x, i) => x.s.aliveHp[i], 5) }, ...(r.format >= 2 ? [{ name: 'Au contact', color: 'var(--s2)', pts: series(one, (x, i) => x.s.nearHp[i], 5) }] : [])], markers: mk, noBand: true }));
+    if (r.format >= 2) {
+      const fold = foldKeys(one, 'takenBy', 7);
+      card(sec, { title: 'PV perdus par source', sub: 'Par fenêtre de 20 s.' }, (b) => stackChart(b, { buckets: minuteBuckets(one, 'takenBy', 20, fold.map), keys: fold.keys, color: fold.color, empty: 'Aucun dégât subi.' }));
+    }
+    if (r.waves.length) {
+      const arr = { normal: ['Normale', 'var(--s1)'], ahead: ['Embuscade', 'var(--s2)'], ring: ['Cercle', 'var(--s3)'] };
+      card(sec, { title: 'Vagues envoyées', sub: 'Aliens demandés par envoi (avant le bonus des joueurs en plus). Rond creux : rejeu pendant un boss.', wide: true }, (b) => dotChart(b, { markers: mk, groups: Object.entries(arr).map(([k, [name, color]]) => ({ name, color, pts: r.waves.filter((w) => w.arrival === k).map((w) => ({ x: w.t, y: w.count, hollow: w.replay, tip: `Niveau ${w.level} · ${w.config} · ×${w.mul}${w.replay ? ' · rejeu' : ''}` })) })).filter((g) => g.pts.length) }));
+    }
+    if (r.events.length) {
+      const EV = { boss: 'Boss arrive', bossEnrage: 'Boss enragé', bossDown: 'Boss tué', levelUp: 'Niveau', upgrade: 'Upgrade', powerup: 'Power-up', recruit: 'Recrue', reroll: 'Relance', wiped: 'Squad anéantie', revive: 'Revive', gemChestReady: 'Coffre prêt', gemChestOpen: 'Coffre ouvert', tutorial: 'Tutoriel' };
+      card(sec, { title: 'Chronologie', sub: 'Événements de la partie (les recrues sont regroupées dans la colonne Soldats).', wide: true }, (b) =>
+        table(
+          b,
+          [
+            { k: 't', label: 'Temps', num: true, fmt: (v) => mmss(v) },
+            { k: 'kind', label: 'Événement' },
+            { k: 'detail', label: 'Détail' },
+          ],
+          r.events.filter((e) => e.e !== 'recruit').map((e) => ({ t: e.t, kind: EV[e.e] ?? e.e, detail: Object.entries(e).filter(([k]) => k !== 't' && k !== 'e').map(([k, v]) => (k === 'alien' ? BOSS_NAMES[v] ?? v : k === 'prism' ? (v ? 'prismatique' : '') : `${v}`)).filter(Boolean).join(' · ') })),
+          { sort: 't', dir: 1 },
+        ),
+      );
+    }
+  },
+};
+
+// ---------------------------------------------------------------- mise en page
+function show(id) {
+  current = id;
+  for (const b of document.querySelectorAll('nav button')) b.setAttribute('aria-selected', String(b.dataset.id === id));
+  render();
+  window.scrollTo({ top: 0 });
+}
+function render() {
+  charts.length = 0;
+  const runs = filtered();
+  $('#fCount').textContent = `${runs.length} partie${runs.length > 1 ? 's' : ''} sur ${ALL.length}`;
+  const main = $('#main');
+  main.replaceChildren();
+  const sec = h('section', { class: 'on' });
+  main.append(sec);
+  if (!runs.length && current !== 'partie') sec.append(h('div', { class: 'card wide' }, h('div', { class: 'empty' }, 'Aucune partie pour ces filtres.')));
+  else RENDER[current](sec, runs);
+}
+function init() {
+  if (!DATA) {
+    document.body.append(h('p', { style: 'padding:24px' }, 'Pas de données : ce fichier est le modèle du rapport. Lance npm run sim:report.'));
+    return;
+  }
+  $('#meta').textContent = `${ALL.length} partie(s) lue(s) dans ${DATA.source} · généré le ${new Date(DATA.generated).toLocaleString('fr-FR')}`;
+  const diffs = [...new Set(ALL.map((r) => r.difficulty))];
+  $('#fDiff').append(h('option', { value: 'all' }, 'Toutes'), ...diffs.map((d) => h('option', { value: d }, DIFF_NAMES[d] ?? d)));
+  const builds = [...new Set(ALL.map(buildOf))].sort(cmpVersion).reverse();
+  $('#fBuild').append(h('option', { value: 'all' }, 'Toutes'), ...builds.map((b) => h('option', { value: b }, b)));
+  $('#fMinBuild').append(h('option', { value: 'all' }, 'Aucune'), ...builds.filter((b) => cmpVersion(b, 'avant v2') !== 0).map((b) => h('option', { value: b }, `≥ ${b}`)));
+  const bind = (id, key, conv = (v) => v) => $(id).addEventListener('change', (e) => { F[key] = conv(e.target.type === 'checkbox' ? e.target.checked : e.target.value); render(); });
+  bind('#fDiff', 'diff');
+  bind('#fBuild', 'build');
+  bind('#fMinBuild', 'minBuild');
+  bind('#fFormat', 'format');
+  bind('#fMin', 'min', Number);
+  bind('#fClean', 'clean');
+  bind('#fTuto', 'tuto');
+  $('#tabs').append(...VIEWS.map(([id, name]) => h('button', { 'data-id': id, 'aria-selected': String(id === current), onclick: () => show(id) }, name)));
+  $('#theme').onclick = () => {
+    const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('bench-report-theme', document.documentElement.dataset.theme); } catch {}
+  };
+  try {
+    const t = localStorage.getItem('bench-report-theme');
+    if (t) document.documentElement.dataset.theme = t;
+  } catch {}
+  let to = 0;
+  addEventListener('resize', () => {
+    clearTimeout(to);
+    to = setTimeout(() => charts.forEach((c) => c.draw()), 120);
+  });
+  render();
+}
+init();
+</script>
+</body>
+</html>

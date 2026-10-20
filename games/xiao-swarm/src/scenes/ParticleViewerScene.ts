@@ -371,6 +371,27 @@ const EFFECTS: EffectDef[] = [
     ],
   },
   {
+    id: 'bossFountain',
+    label: 'Fontaine du boss tué (particules vertes)',
+    where: "Mort d'un boss (en plus de l'explosion habituelle) : pendant 1 s, des particules vertes jaillissent du cadavre vers le haut, retombent avec de la gravité et s'effacent. Aperçu : un jet à chaque lecture.",
+    specs: [
+      { key: 'durationMs', label: 'Durée du jet (ms)', min: 200, max: 3000, step: 50 },
+      { key: 'everyMs', label: 'Une salve toutes les (ms)', min: 4, max: 120, step: 2 },
+      { key: 'perTick', label: 'Particules par salve', min: 1, max: 8, step: 1 },
+      { key: 'speedMin', label: 'Vitesse min', min: 0, max: 900, step: 10 },
+      { key: 'speedMax', label: 'Vitesse max', min: 0, max: 1200, step: 10 },
+      { key: 'spread', label: 'Ouverture du cône (° de chaque côté)', min: 0, max: 90, step: 1 },
+      { key: 'gravity', label: 'Gravité (px/s²)', min: 0, max: 2500, step: 25 },
+      { key: 'scaleStart', label: 'Taille au départ', min: 0.2, max: 4, step: 0.05 },
+      { key: 'scaleEnd', label: 'Taille à la fin', min: 0, max: 3, step: 0.05 },
+      { key: 'lifeMin', label: 'Durée de vie min (ms)', min: 100, max: 3000, step: 25 },
+      { key: 'lifeMax', label: 'Durée de vie max (ms)', min: 100, max: 3500, step: 25 },
+      { key: 'originSpread', label: 'Largeur de la source (px)', min: 0, max: 120, step: 1 },
+      { key: 'color', label: 'Vert', min: 0, max: 0xffffff, step: 1, color: true },
+      { key: 'colorLight', label: 'Vert clair', min: 0, max: 0xffffff, step: 1, color: true },
+    ],
+  },
+  {
     id: 'stimBlood',
     label: 'Stimpack (sang chaud)',
     where: "Chaque soldat sous stimpack : des gouttes de sang rouge opaques jaillissent de lui en gerbes, retombent, avec une légère vapeur rouge. (Les flammes rouges de l'entrée « Flammes d'enragé » ne servent plus qu'aux aliens ressuscités.) Aperçu : 2 s.",
@@ -698,6 +719,9 @@ export class ParticleViewerScene extends Phaser.Scene {
       }
       case 'levelUp':
         this.fx.levelUpSoldier(() => ({ x, y }));
+        break;
+      case 'bossFountain':
+        this.fx.bossFountain(x, y);
         break;
       case 'stimBlood': {
         const blood = new StimBloodFx(this, 20).setPosition(x, y);

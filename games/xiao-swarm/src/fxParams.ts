@@ -103,6 +103,12 @@ export const FX_DEFAULTS = {
   levelWave: { waves: 4, gapMs: 170, distort: 0.07 },
   /** Onde de choc au sol (fx_ring) : explosion, slam du crabe, recrutement, apparition de squad. */
   ring: { durationMs: 350, startScaleX: 0.1, startScaleY: 0.07, alpha: 0.9, squash: 0.7 },
+  /**
+   * Fontaine de particules vertes d'un BOSS tué (20/10, fx_dot) : pendant `durationMs`, `perTick` particules toutes les `everyMs` ms jaillissent du cadavre vers le haut (cône de demi-angle `spread` degrés), retombent
+   * avec de la gravité (`gravity`, px/s²), rétrécissent de `scaleStart` à `scaleEnd` et s'effacent ; vitesse `speedMin`-`speedMax`, durée de vie `lifeMin`-`lifeMax`, source étalée de `originSpread` px.
+   * `color` / `colorLight` : les deux verts tirés au hasard.
+   */
+  bossFountain: { durationMs: 1000, everyMs: 16, perTick: 3, speedMin: 300, speedMax: 700, spread: 40, gravity: 1100, scaleStart: 1.8, scaleEnd: 0.4, lifeMin: 700, lifeMax: 1300, originSpread: 16, color: 0x3dff6e, colorLight: 0xc8ffd2 },
   /** Petit « + » qui monte : soin du Medic (fx_plus). */
   heal: { rise: 34, durationMs: 700, jitter: 10 },
   /** Roquettes du power-up (fx_rocket, ligne droite) et leur traînée de fumée blanche opaque qui rétrécit jusqu'à 0 (fx_smoke). */

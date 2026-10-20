@@ -1,5 +1,6 @@
 import { Rng } from '@xiao/engine/sim';
 import { DIFFICULTY, POWERUP_LIFE, RECRUIT, ELECTRO } from '../config';
+import { TUTORIAL_POWERUPS } from '../data/tutorial';
 import type { AlienState, Field, PowerUpKind, PowerUpState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
 import type { Sim } from './Sim';
@@ -42,6 +43,9 @@ export class PowerUps {
   /** Booster prismatique (loot) : même mécanique que la relance, en plus rare. */
   private prismLeft = -1;
   private prismReady = false;
+  /** Partie qui commence par le tutoriel : prochain power-up de `TUTORIAL_POWERUPS` à faire apparaître, et celui qui est actuellement au sol (le script n'avance qu'au ramassage). */
+  private scriptIndex = 0;
+  private scriptedItem: PowerUpState | null = null;
 
   constructor(private readonly sim: Sim) {}
 
@@ -162,6 +166,10 @@ export class PowerUps {
         continue;
       }
       this.items.splice(i, 1);
+      if (p === this.scriptedItem) {
+        this.scriptedItem = null;
+        this.scriptIndex++; // ramassé : le script passe au suivant
+      }
       this.apply(p, a.squad);
     }
     for (let i = this.fields.length - 1; i >= 0; i--) {
@@ -189,6 +197,9 @@ export class PowerUps {
   /** Apparition près d'une squad vivante au hasard, à distance de marche, sur un point libre. */
   private spawn(): void {
     if (this.items.length >= Math.round(DIFFICULTY.powerupMax)) return;
+    if (this.scriptedItem && this.items.includes(this.scriptedItem)) return; // le power-up du script est encore au sol : on attend qu'il soit ramassé (ou qu'il expire), sinon il apparaîtrait en double
+    this.scriptedItem = null;
+    const scripted = this.sim.tutorial && this.scriptIndex < TUTORIAL_POWERUPS.length ? TUTORIAL_POWERUPS[this.scriptIndex] : null;
     const { rng, arena } = this.sim;
     const squads = this.sim.aliveSquads;
     if (squads.length === 0) return;
@@ -202,7 +213,9 @@ export class PowerUps {
       const b = arena.bounds;
       if (p.x < b.minX + 60 || p.x > b.maxX - 60 || p.y < b.minY + 60 || p.y > b.maxY - 60) continue;
       // apparaît tel quel : la vue joue un petit scale « Back.Out » (pas de saut)
-      this.items.push({ id: this.sim.ids.get(), kind: rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE });
+      const item: PowerUpState = { id: this.sim.ids.get(), kind: scripted ?? rng.pick(KINDS), x: p.x, y: p.y, life: POWERUP_LIFE };
+      this.items.push(item);
+      if (scripted) this.scriptedItem = item;
       return;
     }
   }
@@ -265,6 +278,8 @@ export class PowerUps {
     this.items.length = 0;
     this.fields.length = 0;
     this.timer = DIFFICULTY.powerupFirst;
+    this.scriptIndex = 0;
+    this.scriptedItem = null;
     this.rerollLeft = -1;
     this.rerollReady = false;
     this.prismLeft = -1;

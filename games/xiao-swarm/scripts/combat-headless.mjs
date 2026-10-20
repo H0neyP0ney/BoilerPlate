@@ -562,6 +562,85 @@ try {
     check(mini === DIFFICULTY.coinBossCoins && fin === Math.round(DIFFICULTY.coinBossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
   }
 
+  // ---- Jackpot (+25 % d'or et de diamants par prise, 4 prises) : boss, aliens ordinaires, alien doré, coffres de boss
+  {
+    const { UPGRADES } = await vite.ssrLoadModule('/src/data/progression.ts');
+    const def = UPGRADES.goldDigger;
+    const withPicks = (k, seed = 41, level = 'normal') => {
+      const f = fresh(seed, level);
+      const sq = f.sim.squadOf('p1');
+      for (let i = 0; i < k; i++) sq.stats.add(def.stat, def.mod);
+      return f.sim;
+    };
+    check(def.maxStacks === 4 && def.mod.pct === 0.25 && def.stat === 'goldGain', 'Jackpot : 4 prises max, +25 % par prise (stat goldGain)', JSON.stringify(def));
+    const bossCoins = (k) => {
+      const sim = withPicks(k);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt('boss_gling', sq.center.x + 900, sq.center.y, 1, false);
+      const b = sim.aliens[0];
+      b.age = 1;
+      b.noXp = false;
+      const c0 = sim.gems.coins.length;
+      sim.damage(b, 1e12, 'p1');
+      sim.step(1 / 30, new Map());
+      return sim.gems.coins.length - c0;
+    };
+    const c0 = bossCoins(0), c2 = bossCoins(2), c4 = bossCoins(4);
+    check(c0 === DIFFICULTY.coinBossCoins && c2 === Math.round(DIFFICULTY.coinBossCoins * 1.5) && c4 === DIFFICULTY.coinBossCoins * 2, "Jackpot : l'or d'un boss grandit de 25 % par prise", `${c0} / ${c2} (2 prises) / ${c4} (4 prises) pièces`);
+    const slimeCoins = (k) => {
+      const sim = withPicks(k, 43);
+      clearAliens(sim);
+      let total = 0;
+      for (let i = 0; i < 3000; i++) {
+        const a = sim.horde.spawnAt('slime', 0, 0, 1, false);
+        const al = Array.isArray(a) ? a[0] : sim.aliens.at(-1);
+        al.noXp = false;
+        sim.gems.coins.length = 0;
+        sim.gems.dropCoins(al);
+        total += sim.gems.coins.length;
+        al.alive = false;
+        sim.aliens.length = 0;
+      }
+      return total;
+    };
+    const s0 = slimeCoins(0), s2 = slimeCoins(2);
+    check(s0 > 0 && s2 / s0 > 1.35 && s2 / s0 < 1.65, 'Jackpot : les aliens ordinaires lâchent ~25 % de pièces en plus par prise (2 prises : ×1,5)', `${s0} contre ${s2} pièces sur 3000 aliens (×${(s2 / s0).toFixed(2)})`);
+    const gemsAt = (k) => {
+      const sim = withPicks(k, 47);
+      const i0 = sim.gems.items.length;
+      sim.gems.dropGemsAt(0, 0, 6);
+      return sim.gems.items.length - i0;
+    };
+    check(gemsAt(0) === 6 && gemsAt(2) === 9 && gemsAt(4) === 12, 'Jackpot : les diamants lâchés (alien doré) grandissent de 25 % par prise', `${gemsAt(0)} / ${gemsAt(2)} / ${gemsAt(4)}`);
+    const chestAvg = (k) => {
+      const sim = withPicks(k, 53);
+      let t = 0;
+      for (let i = 0; i < 60; i++) t += sim.gems.chestQuantity('boss_scarab', sim.squadOf('p1').stats.get('goldGain'));
+      return t / 60;
+    };
+    const q0 = chestAvg(0), q4 = chestAvg(4);
+    check(q4 / q0 > 1.85 && q4 / q0 < 2.15, 'Jackpot : le coffre à diamants des boss contient 25 % de plus par prise (4 prises : ×2)', `${q0.toFixed(1)} contre ${q4.toFixed(1)} diamants en moyenne`);
+    // à l'ouverture réelle de l'œuf, le coffre créé porte bien la quantité majorée
+    const chestQty = (k) => {
+      const sim = withPicks(k, 59);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt('boss_gling', sq.center.x + 900, sq.center.y, 1, false);
+      const b = sim.aliens[0];
+      b.age = 1;
+      b.noXp = false;
+      sim.damage(b, 1e12, 'p1');
+      sim.step(1 / 30, new Map());
+      const egg = sim.aliens.find((x) => x.alive && x.def.egg);
+      sim.damage(egg, 1e9, 'p1');
+      sim.step(1 / 30, new Map());
+      return sim.gems.chests[0]?.qty ?? -1;
+    };
+    const k0 = chestQty(0), k4 = chestQty(4);
+    check(k0 > 0 && k4 > k0 * 1.6, "Jackpot : le coffre créé à l'ouverture de l'œuf porte la quantité majorée", `qty ${k0} sans, ${k4} avec 4 prises`);
+  }
+
   // ---- œuf de boss : PV = DPS de la squad × durée de destruction (2 s) × efficacité ; une squad plus nombreuse a un œuf plus costaud
   {
     const mk = (n) => {

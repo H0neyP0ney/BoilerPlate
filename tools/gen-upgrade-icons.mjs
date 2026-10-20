@@ -86,17 +86,14 @@ function soldier(cx, cy, s, color) {
 }
 
 const ICONS = {
-  // Esprit d'équipe : trois soldats côte à côte (vert lime)
-  teamSpirit: [
-    ...soldier(20, 34, 0.85, [120, 170, 60]),
-    ...soldier(68, 34, 0.85, [120, 170, 60]),
-    ...soldier(44, 26, 1.1, [168, 224, 74]),
-  ],
-  // Dernier rempart : panneau de danger rouge avec « ! »
-  lastStand: [
-    L(poly([[44, 8], [82, 76], [6, 76]]), [224, 48, 79]),
-    L(box(44, 42, 5, 15, 4), [255, 245, 235], false),
-    L(circle(44, 66, 5.5), [255, 245, 235], false),
+  // (Esprit d'équipe et Dernier rempart ont maintenant leurs vraies icônes : tools/slice-upgrade-icons.mjs ; retirés d'ici le 20/10, sinon ce script les écraserait)
+  // Jackpot (id goldDigger) : grosse pièce d'or (devant, avec son anneau) et diamant vert (derrière, en haut à droite)
+  goldDigger: [
+    L(poly([[64, 8], [82, 24], [64, 46], [46, 24]]), [62, 214, 128]), // diamant vert
+    L(poly([[64, 8], [73, 24], [64, 46], [55, 24]]), [150, 244, 190], false), // facette claire
+    L(circle(34, 56, 26), [255, 200, 40]), // pièce
+    L(ring(34, 56, 17, 2.4), [214, 142, 18], false), // anneau gravé
+    L(box(34, 56, 3.2, 11, 1.5), [214, 142, 18], false), // trait du « $ »
   ],
 };
 

@@ -42,7 +42,7 @@ export function splitXp(value: number, max = 9): number[] {  // `max` = nombre m
   return out;
 }
 
-export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand';
+export type UpgradeId = 'damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'goldDigger';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -74,6 +74,8 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   teamSpirit: { id: 'teamSpirit', stat: 'teamSpirit', mod: { flat: 0.01 }, maxStacks: 4, value: 1, color: 0x1f7a4a },
   /** Dernier rempart : +2 % de dégâts par soldat MANQUANT (taille max de la squad − soldats vivants), par prise : 2, 4, 6 % (2 % avant le 09/10, 3 % ensuite : mécanique de comeback) (stat `lastStand`, lue par `Combat.update`). */
   lastStand: { id: 'lastStand', stat: 'lastStand', mod: { flat: 0.02 }, maxStacks: 4, value: 2, color: 0x8f3243 },
+  /** Jackpot (20/10, id interne `goldDigger`) : +25 % de pièces d'or ET de diamants lâchés par prise, 4 prises (stat `goldGain`, lue par `sim/Gems.ts` : aliens, boss, alien doré, coffres de boss compris). */
+  goldDigger: { id: 'goldDigger', stat: 'goldGain', mod: { pct: 0.25 }, maxStacks: 4, value: 25, color: 0xe0a21b },
 };
 
 

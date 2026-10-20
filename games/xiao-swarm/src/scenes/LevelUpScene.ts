@@ -32,8 +32,10 @@ export interface LevelUpData {
   rerolls: number;
   /** Solo : à 0 relance, le bouton reste affiché avec l'icône vidéo (relance contre une vidéo récompensée). */
   rewardedReroll?: boolean;
-  /** Onboarding : upgrade recommandée, mise en avant par une flèche verte sur sa carte (le joueur choisit ce qu'il veut). */
+  /** Onboarding : upgrade imposée, mise en avant par une flèche verte sur sa carte ; les autres cartes ont l'air normales mais ne répondent pas (clic, toucher, touches) : le blocage n'est pas signalé. */
   suggest?: UpgradeId;
+  /** Onboarding : clé de texte sous la flèche, à la place de « Claim upgrade » (ex. l'upgrade prismatique). */
+  tip?: 'tutoPrism';
 }
 
 /**
@@ -59,6 +61,8 @@ export class LevelUpScene extends Phaser.Scene {
   private prevLeft = -1;
   /** Fin (ms, horloge de la scène) de l'affichage « Ally rerolled » à la place de l'attente. */
   private rerolledUntil = 0;
+  /** Onboarding : indice de la seule carte qu'on peut prendre (-1 : toutes). */
+  private onlyCard = -1;
 
   constructor() {
     super(SCENES.levelUp);
@@ -75,6 +79,7 @@ export class LevelUpScene extends Phaser.Scene {
     this.prevLeft = -1;
     this.rerolledUntil = 0;
     this.cards = [];
+    this.onlyCard = data.suggest && data.offer ? data.offer.indexOf(data.suggest) : -1; // tutoriel : seule la carte recommandée peut être prise
     this.input.on('pointerup', () => (this.pressed = -1)); // relâché ailleurs : l'appui ne compte plus
     this.prismFx = new Map();
     const game = this.game_;
@@ -109,7 +114,7 @@ export class LevelUpScene extends Phaser.Scene {
     if (suggestIdx >= 0) {
       // flèche ▲ + texte « Claim upgrade » sous la carte recommandée
       suggestLabel = this.add
-        .text(0, 0, t('tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 6, align: 'center' })
+        .text(0, 0, t(data.tip ?? 'tutoTakeUpgrade'), { fontFamily: theme.font, fontSize: data.tip ? '31px' : '26px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7, align: 'center' })
         .setOrigin(0.5, 0);
       const arrowUp = this.add
         .text(0, 0, '▲', { fontFamily: theme.font, fontSize: '40px', fontStyle: 'bold', color: '#5dff84', stroke: '#0a2210', strokeThickness: 7 })
@@ -209,8 +214,8 @@ export class LevelUpScene extends Phaser.Scene {
         (c.getData('tilt') as CardTilt | undefined)?.resize(); // la carte change de taille : sa photo et sa lumière ne sont plus valables
         resizeUpgradeCard(c, cw, ch, vertical);
         if (suggestBottom && i === suggestIdx) {
-          suggestBottom.setPosition(x, y + ch / 2 - 22); // 30 px plus près de la carte (la flèche mord un peu sur son bas)
-          suggestLabel?.setWordWrapWidth(Math.max(120, cw + 40), true);
+          suggestBottom.setPosition(x, y + ch / 2 - 42); // 50 px plus près de la carte (la flèche mord sur son bas ; 20 px de plus le 20/10)
+          suggestLabel?.setWordWrapWidth(data.tip ? Math.min(w - 20, Math.max(320, cw * 2.8)) : Math.max(120, cw + 40), true); // texte prismatique : largeur assez grande pour que chacune de ses 2 lignes tienne sur une seule ligne
         }
         const fx = this.prismFx.get(i);
         if (fx) {
@@ -233,7 +238,7 @@ export class LevelUpScene extends Phaser.Scene {
     // Touches de choix et de relance rebindables (Options > Hotkeys), par position physique (`code`) : par défaut 1 / 2 / 3 et R, qui marchent aussi en AZERTY, où les chiffres donnent & é " sans Maj.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const i = (['pick1', 'pick2', 'pick3'] as const).findIndex((a) => settings.hotkeyCode(a) === e.code);
-      if (i >= 0 && i < offer.length && !e.repeat) this.pick(i);
+      if (i >= 0 && i < offer.length && !e.repeat && this.allowed(i)) this.pick(i);
       if (e.code === settings.hotkeyCode('reroll') && rerollBtn && !e.repeat) this.reroll();
     });
   }
@@ -266,7 +271,7 @@ export class LevelUpScene extends Phaser.Scene {
     // il faut APPUYER puis relâcher sur la carte : un bouton déjà enfoncé quand la fenêtre s'ouvre (tir à la souris) ne choisit rien
     hit.on('pointerdown', () => (this.pressed = index));
     hit.on('pointerup', () => {
-      if (this.pressed === index) this.pick(index);
+      if (this.pressed === index) this.pick(index); // carte bloquée (onboarding) : `pick` ne fait rien, sans aucun retour visuel
       this.pressed = -1;
     });
     c.add(hit);
@@ -285,8 +290,13 @@ export class LevelUpScene extends Phaser.Scene {
     });
   }
 
+  /** Cette carte peut-elle être prise ? Toujours, sauf pendant l'onboarding où seule la carte recommandée l'est. */
+  private allowed(index: number): boolean {
+    return this.onlyCard < 0 || index === this.onlyCard;
+  }
+
   private pick(index: number): void {
-    if (this.busy) return;
+    if (this.busy || !this.allowed(index)) return;
     this.busy = true;
     // retour visuel : la carte choisie grossit, les autres s'effacent ; en ligne, on attend les autres joueurs
     this.cards.forEach((c, i) => this.tweens.add({ targets: c, alpha: i === index ? 1 : 0.25, scale: i === index ? 1.08 : 0.92, duration: 140 }));

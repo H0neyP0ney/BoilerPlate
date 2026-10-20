@@ -373,6 +373,9 @@ export interface XpOrb {
   py: number;
   value: number;
   life: number;
+  /** Globe qui ne disparaît jamais (tutoriel) ; `age` : secondes depuis sa chute (seulement pour lui, la chute se mesure sinon avec `life`). Sim seulement. */
+  eternal?: boolean;
+  age?: number;
   /** Aimant (power-up) : joueur vers qui le globe est aspiré (sim seulement). */
   pulled?: string;
   /** Attrapé (attiré par un soldat ou aspiré par l'aimant) : ne disparaît plus et ne clignote plus (`Pickup.catchItem`). */

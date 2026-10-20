@@ -1,8 +1,7 @@
 import type { Point } from '@xiao/engine/sim';
 import { RECRUIT } from '../config';
-import { TUTORIAL, TUTORIAL_REWARD, type TutorialGroup } from '../data/tutorial';
+import { TUTORIAL, TUTORIAL_LEVELUPS, TUTORIAL_REWARD, type LevelUpScript, type TutorialGroup } from '../data/tutorial';
 import { UPGRADES } from '../data/progression';
-import type { UpgradeId } from '../data/progression';
 import type { AlienState, PowerUpState } from './entities';
 import type { Sim } from './Sim';
 import type { Squad } from './Squad';
@@ -53,6 +52,8 @@ export class Tutorial {
   private phaseClock = 0;
   private recruitSeen = false;
   private powerupSeen = false;
+  /** Temps écoulé (s) depuis la fermeture du choix du level-up du tutoriel (pause avant la 3e vague). */
+  private afterChoice = 0;
 
   constructor(private readonly sim: Sim) {}
 
@@ -116,16 +117,16 @@ export class Tutorial {
     return { x: alive.reduce((n, a) => n + a.x, 0) / alive.length, y: alive.reduce((n, a) => n + a.y, 0) / alive.length };
   }
 
-  /** Offre de level-up imposée (null : tirage normal) : pendant le tutoriel, les 3 upgrades du script ; le joueur choisit ce qu'il veut. */
-  forcedOffer(): UpgradeId[] | null {
-    return this.active ? [...TUTORIAL.offer] : null;
+  /** Level up scripté n° `nth` de la partie (1, 2, 3), ou null : tirage normal. Vaut aussi après la fin du tutoriel (la partie en a commencé par un). */
+  scriptedLevelUp(nth: number): LevelUpScript | null {
+    return TUTORIAL_LEVELUPS[nth] ?? null;
   }
 
   /** Drop d'un alien du script : XP, et recrue / power-up forcés posés à distance de la squad. */
   drop(a: AlienState): void {
     const t = a.tut;
     if (!t) return;
-    if (this.sim.xpEnabled && t.xp > 0) this.sim.xp.drop(a, t.xp);
+    if (this.sim.xpEnabled && t.xp > 0) this.sim.xp.drop(a, t.xp, undefined, 0, 0, true); // globes éternels : le joueur doit tous les ramasser
     if (t.recruit) {
       // recrue du script : la 1re apparaît SUR le slime mort, les suivantes à distance de la squad ; elle saute en cloche SUR PLACE et reste
       // imprenable tant qu'elle n'a pas retouché le sol
@@ -152,7 +153,7 @@ export class Tutorial {
         if (this.reachedFor < 0 && this.reached(squad)) {
           this.marker = null; // atteint : le point vert disparaît, petite pause avant la 1re vague
           this.reachedFor = 0;
-          this.incomingAngle = -Math.PI / 9; // les premiers ennemis arrivent par la droite, un peu plus haut que la squad, hors écran
+          this.incomingAngle = 0; // les premiers ennemis arrivent par la droite, à la même hauteur (y) que la squad, hors écran (comme la 2e vague)
         } else if (this.reachedFor >= 0) this.reachedFor += dt;
         if (this.reachedFor >= TUTORIAL.firstWaveDelay) {
           this.spawn(TUTORIAL.waves.first, TUTORIAL.firstRingRadius, this.incomingAngle);
@@ -171,13 +172,17 @@ export class Tutorial {
           // sécurité : si l'XP des globes n'a pas suffi (valeurs modifiées), on donne ce qui manque pour que le level-up ait lieu
           if (squad.level < 2 && !squad.offer) squad.gainXp(squad.xpNeeded - squad.xp + 0.01);
           else if (squad.level >= 2 && !squad.offer && this.sim.choiceT <= 0) {
-            this.spawn(TUTORIAL.waves.third, TUTORIAL.ringRadius, undefined, true);
-            this.next('wave3');
+            // level-up choisi : une petite pause avant que la 3e vague n'apparaisse
+            if ((this.afterChoice += dt) >= TUTORIAL.thirdWaveDelay) {
+              this.spawn(TUTORIAL.waves.third, TUTORIAL.ringRadius, undefined, true);
+              this.next('wave3');
+            }
           }
         }
         break;
       case 'wave3':
-        if (this.waveDead() && this.recruitSeen && !this.recruitOnGround() && this.powerupSeen && !this.powerupOnGround()) {
+        // fin : vague 3 vaincue et soin ramassé ; la recrue de cette vague n'est plus exigée (20/10) : elle reste au sol, on peut la prendre après le tutoriel
+        if (this.waveDead() && this.powerupSeen && !this.powerupOnGround()) {
           this.next('done');
         }
         break;

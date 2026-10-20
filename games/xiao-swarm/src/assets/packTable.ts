@@ -149,6 +149,7 @@ export const PACK_OF: Record<string, Pack> = {
   'ui/upgrades/crit.png': 'core',
   'ui/upgrades/damage.png': 'core',
   'ui/upgrades/fireRate.png': 'core',
+  'ui/upgrades/goldDigger.png': 'core',
   'ui/upgrades/hp.png': 'core',
   'ui/upgrades/lastStand.png': 'core',
   'ui/upgrades/magnet.png': 'core',

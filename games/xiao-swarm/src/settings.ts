@@ -20,7 +20,7 @@ storage.setNamespace('xiao-swarm');
  * compteur de parties pour les interstitielles, record) ; les réglages (volumes, mutes, langue, zoom…) sont conservés. À faire quand une
  * version change assez le jeu pour que tout le monde doive refaire l'onboarding.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 5; // 5 (20/10, 0.1.159) : on rejoue le tutoriel pour tester ; 4 (0.1.158) : tutoriel retravaillé (level up et power-ups scriptés, plus de cadeau caché)
 if (storage.get<number>('saveVersion', 0) < SAVE_VERSION) {
   storage.set('settings.tutorialDone', false);
   storage.set('gamesPlayed', 0);

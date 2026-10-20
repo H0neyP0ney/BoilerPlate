@@ -1096,12 +1096,12 @@ export class Sim {
     if (squad) squad.kills++;
     this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
     if (a.def.golden) {
-      this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190, 'golden_death'); // alien doré tué : une grosse quantité d'argent et quelques diamants
-      this.gems.dropGemsAt(a.x, a.y, a.def.golden.deathGems);
+      this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190, 'golden_death', squad); // alien doré tué : une grosse quantité d'argent et quelques diamants
+      this.gems.dropGemsAt(a.x, a.y, a.def.golden.deathGems, 'golden', squad);
     }
     if (a.def.egg) {
       this.upgradeOrbs.burst(a.x, a.y); // œuf détruit : les globes d'upgrade roses en sortent
-      this.gems.spawnChest(a.x, a.y, this.eggBoss.get(a.id) ?? 'boss_gling'); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss
+      this.gems.spawnChest(a.x, a.y, this.eggBoss.get(a.id) ?? 'boss_gling', squad); // et le coffre à diamants (solo) saute de l'œuf, plus à la mort du boss
     }
     if (a.def.boss) {
       // rhinos jumeaux : le combat de boss ne se termine qu'à la mort du DERNIER ; lui seul fait un clear screen, laisse l'œuf, compte pour l'escalade et le bandeau.
@@ -1111,7 +1111,7 @@ export class Sim {
       const isFinal = bossKindAt(a.def, this.difficulty) === 'final'; // le boss final dépend du niveau (Normal : Scarab, Hard : rhinos jumeaux, Expert : Giant Crab)
       if (isFinal && !firstTwin) {
         this.finalBossDead = true;
-        this.gems.spawnFinalBurst(a.x, a.y, a.def.id); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
+        this.gems.spawnFinalBurst(a.x, a.y, a.def.id, squad); // l'équivalent d'un coffre à diamants : 10 s pour les ramasser avant la séquence de fin (solo)
       }
       if (!firstTwin) {
         this.wipeAliens(a, killer); // clear screen à chaque mort de boss ; un autre boss (non jumeau) encore en vie est épargné
@@ -1141,7 +1141,7 @@ export class Sim {
       return;
     }
     if (!a.noRecruit) this.recruits.maybeDrop(a, squad); // invoqué / ressuscité : pas de recrue (un alien d'un rejeu de vague, lui, peut en laisser)
-    if (!a.noXp && !a.def.egg && !a.def.projectile) this.gems.dropCoins(a); // pièces d'or (solo) : jamais par un alien sans XP (invoqué, rejeu de vague), un œuf ou un orbe
+    if (!a.noXp && !a.def.egg && !a.def.projectile) this.gems.dropCoins(a, squad); // pièces d'or (solo) : jamais par un alien sans XP (invoqué, rejeu de vague), un œuf ou un orbe
     this.powerups.maybeDropReroll(a, squad); // loot rare : ~5 relances par partie, au nombre d'aliens tués (DIFFICULTY.rerollLootFirst / rerollLootEvery)
     if (this.xpEnabled && !a.noXp) this.xp.drop(a, undefined, squad ?? this.nearestSquad(a.x, a.y), dirX, dirY); // les aliens des vagues rejouées pendant un boss ne donnent pas d'XP // le bonus d'XP de la squad qui a tué agrandit le butin
   }

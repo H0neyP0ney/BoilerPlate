@@ -1,7 +1,7 @@
 {
   "name": "@xiao/swarm-attack",
   "private": true,
-  "version": "0.1.156",
+  "version": "0.1.160",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "sim:combat": "node scripts/combat-headless.mjs",
     "sim:chase": "node scripts/chase-headless.mjs",
     "sim:calibrate": "node scripts/bench-calibrate.mjs",
+    "sim:report": "node scripts/bench-report.mjs",
     "sim:predict": "node scripts/net-predict-headless.mjs",
     "sim:jitter": "node scripts/net-jitter-headless.mjs",
     "sim:startstop": "node scripts/net-startstop-headless.mjs",

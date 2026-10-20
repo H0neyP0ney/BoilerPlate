@@ -20,6 +20,7 @@ import type { PlayerId, SimEvent } from '../sim/types';
 import { ArenaView } from './ArenaView';
 import { ShockDistort } from './ShockDistort';
 import { ElectricArcs } from './ElectricFx';
+import { smoothTutorialTargets } from './tutorialSmooth';
 import { Fx } from './Fx';
 import { FX } from '../fxParams';
 import { teleColor, teleInner, teleOuter } from './telegraph';
@@ -293,9 +294,15 @@ export class WorldView {
         if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y + oyA, goo, puddleSize(e.alien));
         // secousse : forte pour un boss tué (partout) et un œuf détruit ; légère et rapide pour un gros alien (charger, lurker, bulle)
         const k = FX.shake;
-        if (def.boss) this.scene.cameras.main.shake(k.bossMs, k.bossAmount, true);
+        if (def.boss) {
+          this.scene.cameras.main.shake(k.bossMs, k.bossAmount, true);
+          if (nearCam(e.x, e.y)) this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6); // fontaine de particules vertes qui jaillit du cadavre (1 s), en plus de l'explosion
+        }
         else if (def.egg) {
-          if (nearCam(e.x, e.y)) this.scene.cameras.main.shake(k.eggMs, k.eggAmount, true);
+          if (nearCam(e.x, e.y)) {
+            this.scene.cameras.main.shake(k.eggMs, k.eggAmount, true);
+            this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6); // l'œuf ouvert jaillit comme un boss tué : même fontaine de particules vertes
+          }
         } else if (def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(k.bigKillMs, k.bigKillAmount);
         if (e.alien === 'boss_crab') {
           this.fx.explosion(e.x, e.y, 160, nearCam(e.x, e.y));
@@ -860,7 +867,7 @@ export class WorldView {
         g.lineStyle(2, 0x0a2210, 0.9).strokeTriangle(px + c * 16, py + s * 13, px - c * 8 - s * 12, py - s * 7 + c * 10, px - c * 8 + s * 12, py - s * 7 - c * 10);
       }
     }
-    for (const m of tut.targets()) {
+    for (const m of smoothTutorialTargets(tut.targets())) {
       if (m.kind === 'orbs' && m.radius) {
         // zone bleue qui englobe tous les globes d'XP restants
         g.fillStyle(0x5ac8ff, 0.08 + 0.1 * beat).fillEllipse(m.x, m.y, m.radius * 2, m.radius * 1.3);

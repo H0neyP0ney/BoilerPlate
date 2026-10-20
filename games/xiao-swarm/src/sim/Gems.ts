@@ -49,17 +49,34 @@ export class Gems {
    * Pas de jauge pendant le saut.
    */
   /** Quantité de diamants d'un coffre de `boss` : sa moyenne (`AlienDef.diamonds`) × le multiplicateur du niveau (`DIFFICULTY.gemMul…`), ± `GEM_CHEST.spread`, au moins 1. */
-  chestQuantity(boss: AlienId): number {
+  chestQuantity(boss: AlienId, gold = 1): number {
     const lvl = this.sim.difficulty;
     const mul = lvl === 'impossible' ? DIFFICULTY.gemMulExpert : lvl === 'expert' ? DIFFICULTY.gemMulHard : DIFFICULTY.gemMulNormal;
-    return Math.max(1, Math.round((ALIENS[boss].diamonds ?? 0) * mul * (1 + this.rng.range(-DIFFICULTY.gemSpread, DIFFICULTY.gemSpread))));
+    return Math.max(1, Math.round((ALIENS[boss].diamonds ?? 0) * mul * gold * (1 + this.rng.range(-DIFFICULTY.gemSpread, DIFFICULTY.gemSpread))));
   }
 
-  spawnChest(x: number, y: number, boss: AlienId = 'boss_gling'): void {
+  /**
+   * Bonus d'or et de diamants de la squad (upgrade Jackpot, stat `goldGain` : ×1 sans l'upgrade, +25 % par prise) : celle qui a tué l'alien (`squad`), sinon la plus proche de (x, y).
+   * Multiplie les pièces des aliens et des boss, l'alien doré et les diamants (coffres de boss et boss final compris).
+   */
+  private goldMul(x: number, y: number, squad?: Squad): number {
+    const sq = squad ?? this.sim.nearestSquad(x, y);
+    return sq ? sq.stats.get('goldGain') : 1;
+  }
+
+  /** `n` × `mul`, arrondi au hasard (propre aux butins : 4 × 1,25 = 5 ; 1 × 1,25 = 1 ou 2) ; sans bonus (×1), aucun tirage. */
+  private scaled(n: number, mul: number): number {
+    if (mul === 1) return n;
+    const v = n * mul;
+    const f = Math.floor(v);
+    return f + (this.rng.chance(v - f) ? 1 : 0);
+  }
+
+  spawnChest(x: number, y: number, boss: AlienId = 'boss_gling', squad?: Squad): void {
     if (!this.enabled || this.sim.tutorial?.active) return;
     const { minX, maxX, minY, maxY } = this.sim.arena.bounds;
     const rng = this.rng;
-    const qty = this.chestQuantity(boss);
+    const qty = this.chestQuantity(boss, this.goldMul(x, y, squad));
     const R = GEM_CHEST.triangle / Math.sqrt(3); // rayon du cercle circonscrit : le centre du triangle est l'œuf
     const j = GEM_CHEST.triangleJitter;
     const ang = -Math.PI / 2 + rng.range(-0.05, 0.05); // sommet = au-dessus de l'œuf
@@ -72,10 +89,10 @@ export class Gems {
   }
 
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
-  spawnFinalBurst(x: number, y: number, boss: AlienId = 'boss_crab'): void {
+  spawnFinalBurst(x: number, y: number, boss: AlienId = 'boss_crab', squad?: Squad): void {
     if (!this.enabled) return;
     const rng = this.rng;
-    const n = Math.max(1, Math.round(this.chestQuantity(boss) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
+    const n = Math.max(1, Math.round(this.chestQuantity(boss, this.goldMul(x, y, squad)) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
     this.finalT = DIFFICULTY.gemFinalWait;
     const turn = rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + rng.range(-0.25, 0.25), rng.range(70, 200), 'final');
@@ -89,11 +106,13 @@ export class Gems {
   }
 
   /** Un alien vient de mourir : il peut lâcher une pièce d'or (plus souvent s'il est costaud), un boss en lâche une poignée. Solo seulement. */
-  dropCoins(a: AlienState): void {
+  dropCoins(a: AlienState, squad?: Squad): void {
     if (this.sim.ending) return; // les pièces tombent aussi en multi (contrairement aux diamants)
     const rng = this.rng;
+    const mul = this.goldMul(a.x, a.y, squad); // Jackpot : +25 % par prise (la chance d'un alien ordinaire est multipliée : 30 % → 37,5 % ; un costaud, 100 %, lâche parfois 2 pièces)
     const final = !!a.def.boss && bossKindAt(a.def, this.sim.difficulty) === 'final';
-    const n = a.def.boss ? Math.round(DIFFICULTY.coinBossCoins * (final ? DIFFICULTY.coinFinalMul : 1)) : rng.chance(a.maxHp >= DIFFICULTY.coinStrongHp ? DIFFICULTY.coinStrongChance : DIFFICULTY.coinChance) ? 1 : 0;
+    const chance = a.maxHp >= DIFFICULTY.coinStrongHp ? DIFFICULTY.coinStrongChance : DIFFICULTY.coinChance;
+    const n = a.def.boss ? Math.round(DIFFICULTY.coinBossCoins * (final ? DIFFICULTY.coinFinalMul : 1) * mul) : mul === 1 ? (rng.chance(chance) ? 1 : 0) : this.scaled(1, mul * chance);
     for (let i = 0; i < n; i++) {
       const hop = n > 1 ? rng.range(50, 150) : rng.range(15, 45);
       const ang = rng.range(0, Math.PI * 2);
@@ -102,14 +121,16 @@ export class Gems {
   }
 
   /** `n` pièces d'or qui retombent en cloche autour de (x, y), de `min` à `max` px (alien doré : sur sa route, ou à sa mort). */
-  dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45, src = 'golden_flee'): void {
+  dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45, src = 'golden_flee', squad?: Squad): void {
     if (this.sim.ending) return;
+    n = this.scaled(n, this.goldMul(x, y, squad));
     for (let i = 0; i < n; i++) this.pushCoin(x, y, this.rng.range(0, Math.PI * 2), this.rng.range(min, max), src);
   }
 
   /** `n` diamants qui jaillissent autour de (x, y) (solo seulement). */
-  dropGemsAt(x: number, y: number, n: number, src = 'golden'): void {
+  dropGemsAt(x: number, y: number, n: number, src = 'golden', squad?: Squad): void {
     if (!this.enabled) return;
+    n = this.scaled(n, this.goldMul(x, y, squad));
     const turn = this.rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + this.rng.range(-0.25, 0.25), this.rng.range(60, 160), src);
   }

@@ -632,6 +632,32 @@ export class Fx {
     }
   }
 
+  /**
+   * Fontaine de particules vertes d'un boss tué (`FX.bossFountain`) : elles jaillissent de (x, y) vers le haut pendant `durationMs`, retombent avec de la gravité, rétrécissent et s'effacent.
+   * Un émetteur jetable : arrêté après `durationMs`, détruit quand la dernière particule est morte.
+   */
+  bossFountain(x: number, y: number): void {
+    const f = FX.bossFountain;
+    const life = Math.max(f.lifeMin, f.lifeMax);
+    const em = this.scene.add
+      .particles(x, y, 'fx_dot', {
+        x: { min: -f.originSpread, max: f.originSpread },
+        y: { min: -f.originSpread * 0.5, max: f.originSpread * 0.5 },
+        frequency: f.everyMs,
+        quantity: f.perTick,
+        angle: { min: -90 - f.spread, max: -90 + f.spread },
+        speed: { min: f.speedMin, max: Math.max(f.speedMin, f.speedMax) },
+        gravityY: f.gravity,
+        scale: { start: f.scaleStart, end: f.scaleEnd },
+        alpha: { start: 1, end: 0.15 },
+        lifespan: { min: f.lifeMin, max: life },
+        tint: [f.color, f.colorLight, f.color],
+      })
+      .setDepth(DEPTH.fx + 1);
+    this.scene.time.delayedCall(f.durationMs, () => em.stop());
+    this.scene.time.delayedCall(f.durationMs + life + 100, () => em.destroy());
+  }
+
   /** Perte d'un soldat : gros éclat, gerbe de gouttes, flaque, double onde de choc, flash blanc, colonne rouge et croix qui s'élève. */
   death(x: number, y: number, color: number): void {
     const d = FX.death;

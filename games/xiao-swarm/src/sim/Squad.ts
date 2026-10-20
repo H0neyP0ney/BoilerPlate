@@ -3,15 +3,13 @@ import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLO
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { MEDIC_RANGE_UNITS } from '../data/armory';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
+import type { LevelUpScript } from '../data/tutorial';
 import type { Arena } from './Arena';
 import type { SoldierState } from './entities';
 import type { Sim } from './Sim';
 import { tallyAdd } from './tally';
 import type { PlayerId, PlayerInput } from './types';
 
-/** Partie qui commence par le tutoriel : les `TUTORIAL_NO_PRISM_LEVELUPS` premiers level up n'ont aucune carte prismatique, le suivant en impose une, `TUTORIAL_PRISM_UPGRADE`. */
-const TUTORIAL_NO_PRISM_LEVELUPS = 2;
-const TUTORIAL_PRISM_UPGRADE: UpgradeId = 'range';
 /** La laisse est annoncée à l'invité dès que l'ancre est à plus de cette part de son rayon (avant qu'elle ne se tende : sinon il l'apprenait un aller-retour trop tard). */
 const LEASH_WARN = 0.5;
 
@@ -35,7 +33,7 @@ export function stepAnchor(arena: Arena, anchor: Circle, mx: number, my: number,
   arena.constrain(anchor);
 }
 
-export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand';
+export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'magnet' | 'recruit' | 'xpGain' | 'range' | 'crit' | 'teamSpirit' | 'lastStand' | 'goldGain';
 
 /**
  * La squad d'un joueur = une "entité vivante" (GDD §4-6) :
@@ -75,7 +73,7 @@ export class Squad {
   coinsPicked = 0;
   unlocked: SoldierClassId[] = ['trooper'];
   perks = new Set<string>();
-  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0 });
+  readonly stats = new Stats<SquadStat>({ damage: 1, fireRate: 1, hp: 1, speed: 1, maxSquad: SQUAD.baseMaxSize, magnet: 1, recruit: 1, xpGain: 1, range: 1, crit: 0, teamSpirit: 0, lastStand: 0, goldGain: 1 });
   /** Progression (globes d'XP) : niveau, XP dans le niveau en cours, upgrades proposées (pause du jeu tant qu'on n'a pas choisi). */
   xp = 0;
   level = 1;
@@ -83,6 +81,8 @@ export class Squad {
   offer: UpgradeId[] | null = null;
   /** Pour chaque upgrade proposée : prismatique (bonus doublé) ? */
   offerPrism: boolean[] = [];
+  /** Level up scripté du tutoriel en cours (`TUTORIAL_LEVELUPS`), null sinon : la fenêtre de choix lit la carte imposée et le texte ; pas de relance. */
+  scripted: LevelUpScript | null = null;
   /** Booster prismatique ramassé (loot) : le prochain tirage d'upgrades de ce joueur est entièrement prismatique (consommé au tirage ; une relance retombe sur les chances normales). */
   prismBoost = false;
   /** Relances restantes de la partie. */
@@ -149,6 +149,7 @@ export class Squad {
     this.level = 1;
     this.offer = null;
     this.offerPrism = [];
+    this.scripted = null;
     this.prismBoost = false; // un booster prismatique ramassé mais pas encore utilisé ne passe pas à la partie suivante (relance coop)
     this.rerolls = Math.round(DIFFICULTY.rerolls);
     this.peakSize = 0;
@@ -211,7 +212,7 @@ export class Squad {
    * `rewarded` : relance payée par une vidéo récompensée (solo, plus de relance en stock) : ne consomme rien.
    */
   rerollOffer(rewarded = false): boolean {
-    if (!this.offer || (this.rerolls <= 0 && !rewarded) || this.sim.tutorial?.active) return false; // pas de relance pendant l'onboarding (offre imposée)
+    if (!this.offer || (this.rerolls <= 0 && !rewarded) || this.scripted) return false; // pas de relance sur un level up scripté du tutoriel (la relance n'est pas consommée)
     if (!rewarded) this.rerolls--;
     this.rollOffer(this.offer, true);
     return true;
@@ -222,31 +223,24 @@ export class Squad {
     let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
     const fresh = eligible.filter((id) => !avoid.includes(id));
     if (fresh.length >= OFFER_SIZE) eligible = fresh;
-    const forced = this.sim.tutorial?.forcedOffer() ?? null; // onboarding : offre imposée, jamais prismatique
-    const offer = forced ?? (eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null);
+    const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
+    const nth = choosing - 1; // n-ième level up de la partie
+    // partie qui commence par le tutoriel : les trois premiers level up sont scriptés (`TUTORIAL_LEVELUPS` : cartes, prismatiques, carte imposée, texte) ; jamais sur une relance
+    const script = !reroll ? (this.sim.tutorial?.scriptedLevelUp(nth) ?? null) : null;
+    this.scripted = script;
+    const offer = script ? [...script.offer] : eligible.length ? this.sim.rng.sample(eligible, OFFER_SIZE) : null;
     this.offer = offer;
     if (!offer) {
       this.pendingLevels = 0;
+      this.scripted = null;
       this.offerPrism = [];
         return;
     }
-    const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
-    // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois (plus de niveaux 10, 20, 30… tout prismatiques depuis le 13/10)
-    // partie qui commence par le tutoriel : jamais de prismatique aux deux premiers level up ; le troisième en impose une (`Range`)
-    const nth = choosing - 1; // n-ième level up de la partie
-    const early = !!this.sim.tutorial && !forced && nth <= TUTORIAL_NO_PRISM_LEVELUPS;
-    const boost = !forced && !early && this.prismBoost;
+    // booster prismatique ramassé : ce tirage est entièrement prismatique, une seule fois (plus de niveaux 10, 20, 30… tout prismatiques depuis le 13/10) ; un level up scripté ne le consomme pas
+    const boost = !script && this.prismBoost;
     if (boost) this.prismBoost = false;
-    const allPrism = !forced && boost; // une relance retombe sur les chances normales (le booster a déjà été consommé par le tirage d'origine)
-    this.offerPrism = offer.map(() => (forced || early ? false : allPrism || this.sim.rng.chance(DIFFICULTY.prismChance)));
-    if (this.sim.tutorial && !forced && !reroll && nth === TUTORIAL_NO_PRISM_LEVELUPS + 1 && (this.picked[TUTORIAL_PRISM_UPGRADE] ?? 0) < UPGRADES[TUTORIAL_PRISM_UPGRADE].maxStacks) {
-      let at = offer.indexOf(TUTORIAL_PRISM_UPGRADE);
-      if (at < 0) {
-        at = Math.floor(this.sim.rng.next() * offer.length);
-        offer[at] = TUTORIAL_PRISM_UPGRADE;
-      }
-      this.offerPrism[at] = true;
-    }
+    const allPrism = boost; // une relance retombe sur les chances normales (le booster a déjà été consommé par le tirage d'origine)
+    this.offerPrism = script ? offer.map((_, i) => script.prism?.[i] === true) : offer.map(() => allPrism || this.sim.rng.chance(DIFFICULTY.prismChance));
     this.sim.beginUpgradeChoice(); // pause du jeu le temps du choix
   }
 
@@ -259,6 +253,7 @@ export class Squad {
     this.sim.events.push({ t: 'upgradePicked', owner: this.owner, x: this.center.x, y: this.center.y, id, prism }); // texte flottant + onde sur la squad (view/WorldView.ts)
     this.offer = null;
     this.offerPrism = [];
+    this.scripted = null;
     this.pendingLevels--;
     return true;
   }

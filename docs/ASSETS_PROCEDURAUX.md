@@ -89,12 +89,14 @@ Sprites recolorés, icônes générées, dessins de FX tracés par le code : à 
 | `aliens/fireballer.png` (fireballer) | planche de l'iceballer recolorée en orange | `public/assets/aliens/` |
 | planches des rhinos Braise / Givre (`boss_rhino_fire` / `_ice`) | planche du Rhino Alpha recolorée (`tools/hue-shift.mjs`) | `public/assets/aliens/` |
 | `ui/powerups/electro.png` | icône du power-up Orbes électriques, générée par code (provisoire) | `public/assets/ui/powerups/` |
+| `ui/upgrades/goldDigger.png` | icône de l'upgrade Jackpot (id `goldDigger`) (pièce d'or et diamant vert), générée par `node tools/gen-upgrade-icons.mjs` (provisoire) | `public/assets/ui/upgrades/` |
 | Orbes électriques (power-up et rhinos jumeaux) | halo bleu, noyau blanc, éclairs et traînée tracés par le code | `WorldView.electricOrb` / `drawElectroOrbs` |
 | Coffre à diamants et diamants | dessinés par le code (velours violet, filets d'or) | `art/gems.ts` |
 | Fusée et confettis du feu d'artifice du boss final | fusée dessinée par le code, confettis = rectangles | `Fx.fireworkRocket` / `Fx.confetti` |
 | « +1 » vert et croix rouge de perte de soldat | texte et signe tracés par le code | `Fx.gain` / `Fx.death` |
 | Unité enflammée (3 flammes + fumée) | `fx_flame` / `fx_smoke` tracés par le code, positions et couleurs en dur dans `FX.burn` | `view/BurnFx.ts` |
 | Level up par soldat (colonne creuse, cercle au sol, particules) | tube dessiné en Graphics à chaque image + `fx_ring` / `fx_dot` | `Fx.levelUpSoldier`, `FX.levelUp` |
+| Fontaine de particules vertes du boss tué | particules `fx_dot` teintées en vert, gravité, réglées dans `FX.bossFountain` | `Fx.bossFountain` |
 | Stimpack (sang chaud) | gouttes `fx_dot` rouges + vapeur `fx_smoke`, émetteurs de particules | `view/StimBloodFx.ts`, `FX.stimBlood` |
 | Trails (huit couleurs) | rubans tracés par le code, couleurs PROVISOIRES | `data/trails.ts`, `view/TrailFx.ts` |
 | Skins (10 teintes) | soldats recolorés (sauf le ninja : vraie planche) | `data/skins.ts` |

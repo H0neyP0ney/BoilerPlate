@@ -12,6 +12,7 @@ import { t } from '../i18n';
 import { settings } from '../settings';
 import type { SimEvent } from '../sim/types';
 import { BOSS_ART, hudTop, XP_ART, xpBarLayout } from '../view/hudLayout';
+import { smoothTutorialTargets } from '../view/tutorialSmooth';
 import { BAR_GHOST_SPEED, ghostHit, type BarGhost } from '../view/WorldView';
 import { drawGear, HUD_ART, makeHudButton } from '../view/HudButtons';
 import { TimelineHud, timelineBottom } from '../view/TimelineHud';
@@ -603,7 +604,7 @@ ${t('roomPlayers', { players: g.playerCount })}`, // sur deux lignes, en bas à 
     const beat = 0.5 + 0.5 * Math.sin(this.time.now / 170);
     // bulle : flèche visée (`x`, `y`) et écart ; posée par `placeOverArrow` (au-dessus, ou dessous si la flèche est collée en haut)
     let label: { x: number; y: number; gap: number; text: string } | null = null;
-    for (const target of tut.targets()) {
+    for (const target of smoothTutorialTargets(tut.targets())) {
       const sx = ((target.x - wv.x) / wv.width) * width;
       const sy = ((target.y - wv.y) / wv.height) * height;
       const m = 46;

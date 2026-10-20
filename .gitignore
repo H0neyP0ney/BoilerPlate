@@ -7,3 +7,6 @@ poki-build
 
 # sources .wav des bruitages synthétisés (régénérables : python tools/gen-sfx.py)
 games/xiao-swarm/art-src/audio/sfx/
+
+# rapport visuel des parties (npm run sim:report), régénérable
+docs/bench/report*.html

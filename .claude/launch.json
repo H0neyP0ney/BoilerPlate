@@ -4,6 +4,7 @@
     { "name": "swarm", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173, "autoPort": true },
     { "name": "swarm-preview", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "-w", "@xiao/swarm-attack", "--", "--port", "5174", "--strictPort"], "port": 5174 },
     { "name": "swarm-alt", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "-w", "@xiao/swarm-attack", "--", "--port", "5175", "--strictPort"], "port": 5175 },
+    { "name": "bench-report", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "docs/bench", "--port", "5190", "--strictPort"], "port": 5190 },
     { "name": "starter", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "-w", "@xiao/starter", "--", "--port", "5180"], "port": 5180 }
   ]
 }

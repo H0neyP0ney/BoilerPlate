@@ -68,6 +68,8 @@ export class SoldierView {
   flash = 0;
   private rest = 0;
   seen = true;
+  /** Séquence d'idle en cours (vide : une autre) : sert à ne désynchroniser qu'à l'entrée dans l'idle. */
+  private idleKey = '';
   private walk = 0;
   /** Soin : PV vus à la frame précédente, durée restante des particules de soin (s) et cadence d'émission. */
   private lastHp: number;
@@ -162,6 +164,12 @@ export class SoldierView {
         (moving && sprites.playDirectional(b, id, 'walk', dirX, dirY)) ||
         sprites.playDirectional(b, id, 'idle', facing, 0);
       if (!played) b.setFlipX(sprites.flipFor(id, facing));
+      // idle désynchronisé : à chaque entrée dans une séquence d'idle (squad qui s'arrête, changement de direction, apparition), chaque soldat reprend la boucle à un moment AU HASARD, sinon
+      // toute la squad, qui s'arrête en même temps, respirerait exactement au même rythme (le catalogue relance la séquence à sa première frame)
+      const key = b.getData('anim') as string | undefined;
+      const idleKey = key?.startsWith('idle') ? key : '';
+      if (idleKey && idleKey !== this.idleKey) b.anims.setProgress(Math.random());
+      this.idleKey = idleKey;
     } else {
       this.walk += dt * (moving ? 14 : 0);
       bob = moving ? -Math.abs(Math.sin(this.walk)) * 3 : Math.sin(time * 2.2 + this.phase) * 0.8;

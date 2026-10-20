@@ -10,11 +10,11 @@ import type { UpgradeId } from './progression';
  *   2. vague 1 (après une courte pause, flèche rouge « ennemis en approche », arrivée par la gauche) : des glings et 1 slime, sans XP ; le slime lâche
  *      toujours une recrue, À DISTANCE de la squad (flèche + « Get +1 trooper ») ; vague vaincue et recrue ramassée → étape suivante directement ;
  *   3. vague 2 : plus grosse, que de l'XP, assez pour UN level-up ; tous les globes doivent être ramassés (flèche et zone bleues) ;
- *      l'offre de level-up est imposée (speed / damage / fireRate, damage au centre) avec `suggest` mis en avant, mais le joueur choisit ce qu'il veut ;
+ *      le 1er level-up est scripté (`TUTORIAL_LEVELUPS[1]` : speed / damage / fireRate, damage au centre, flèche verte « Claim upgrade ») ; les 2e et 3e le sont aussi, après le tutoriel ;
  *   4. vague 3 : encore plus grosse, sans XP ; une recrue et un power-up de soin seulement ; puis le tutoriel se termine.
  *
  * Valeurs d'XP : le niveau 1 coûte `xpToNext(1)` = 10 XP (data/progression.ts). Vague 1 : aucune XP (pas de globe) ;
- * vague 2 : 12 XP (≥ 10 : un seul level-up, et 12 < 10 + xpToNext(2) = 52).
+ * vague 2 : 10 XP, soit exactement le coût du niveau 1 : un seul level-up, et il n'arrive qu'avec le dernier globe ramassé (le joueur doit tous les prendre).
  */
 export interface TutorialGroup {
   type: AlienId;
@@ -28,11 +28,11 @@ export interface TutorialGroup {
 }
 
 /**
- * Cadeau CACHÉ de fin de tutoriel (première partie) : upgrades déjà « prises » en secret pour adoucir le début de la vraie partie.
+ * Cadeau CACHÉ de fin de tutoriel (première partie), VIDE pour l'instant (la mécanique reste) : upgrades déjà « prises » en secret pour adoucir le début de la vraie partie.
  * Elles agissent sur les stats de la squad mais n'apparaissent ni dans ses upgrades prises ni à l'écran, et ne comptent pas dans les
  * piles maximales : le joueur peut encore les choisir normalement.
  */
-export const TUTORIAL_REWARD: Partial<Record<UpgradeId, number>> = { damage: 1, speed: 3, recruit: 3, range: 2, fireRate: 1, hp: 2 };
+export const TUTORIAL_REWARD: Partial<Record<UpgradeId, number>> = {}; // VIDE depuis le 20/10 (test d'équilibrage sans cadeau) ; avant : { damage: 1, speed: 3, recruit: 3, range: 2, fireRate: 1, hp: 2 }
 
 export interface TutorialConfig {
   /** Rayon (px) du point vert : un soldat dedans valide l'étape. */
@@ -41,6 +41,8 @@ export interface TutorialConfig {
   markerDistance: number;
   /** Pause (s) entre l'arrivée sur le 1er point vert et la 1re vague. */
   firstWaveDelay: number;
+  /** Pause (s) entre la fermeture du choix d'upgrade (level-up du tutoriel) et l'apparition de la 3e vague. */
+  thirdWaveDelay: number;
   /** Rayon (px) de la 1re vague : plus loin, hors champ, signalée par une flèche rouge « ennemis en approche » dès l'arrivée sur le 1er point vert. */
   firstRingRadius: number;
   /** Rayon (px) de la 2e vague (celle des globes d'XP) : encore plus loin que la 1re, toujours à droite de la squad. */
@@ -48,15 +50,39 @@ export interface TutorialConfig {
   /** Rayon (px) autour de la squad où apparaissent les aliens d'une vague (à l'écran, pas hors champ). */
   ringRadius: number;
   waves: { first: TutorialGroup[]; second: TutorialGroup[]; third: TutorialGroup[] };
-  /** Offre de level-up imposée et celle qui est recommandée (flèche sur la carte). */
-  offer: UpgradeId[];
-  suggest: UpgradeId;
 }
+
+/**
+ * Level up SCRIPTÉ d'une partie qui commence par le tutoriel (clé = numéro du level up de la partie : 1, 2, 3 ; les suivants sont normaux). Les cartes sont dans l'ordre d'affichage
+ * (gauche, centre, droite). `prism` : cartes prismatiques (absent = aucune). `suggest` : seule carte qu'on peut prendre (flèche verte dessous ; les autres cartes ont l'air normales mais
+ * un clic, un toucher ou une touche ne font rien : le blocage n'est PAS signalé à l'écran) ; absent = choix libre, sans flèche. `tip` : clé de texte affichée sous la flèche à la place de
+ * « Claim upgrade ». Pas de relance pendant un level up scripté (elle ne serait pas consommée).
+ */
+export interface LevelUpScript {
+  offer: UpgradeId[];
+  prism?: boolean[];
+  suggest?: UpgradeId;
+  tip?: 'tutoPrism';
+}
+
+/**
+ * Premiers power-ups d'une partie qui commence par le tutoriel (20/10), dans l'ordre : le globe de SOIN est celui du tutoriel (vague 3, `waves.third`), puis, parmi les power-ups de la vraie partie,
+ * stimpack, rafale de roquettes, aimant, orbes électriques, et enfin le globe de stase (freezebot). Chacun apparaît au rythme habituel (`DIFFICULTY.powerupFirst` puis `powerupEvery…`) ; un power-up
+ * qui disparaît sans avoir été ramassé revient (le script n'avance qu'au ramassage). Ensuite : tirage au hasard comme d'habitude. Le coffre de relance et le booster prismatique sont des loots à part.
+ */
+export const TUTORIAL_POWERUPS: PowerUpKind[] = ['stim', 'rockets', 'magnet', 'electro', 'stasis'];
+
+export const TUTORIAL_LEVELUPS: Record<number, LevelUpScript> = {
+  1: { offer: ['speed', 'damage', 'fireRate'], suggest: 'damage' }, // damage au centre, imposée
+  2: { offer: ['range', 'speed', 'hp'] }, // portée à gauche, vitesse au centre, vie à droite : choix libre
+  3: { offer: ['speed', 'recruit', 'range'], prism: [false, true, false], suggest: 'recruit', tip: 'tutoPrism' }, // recrues prismatique au centre, imposée
+};
 
 export const TUTORIAL: TutorialConfig = {
   markerRadius: 55,
   markerDistance: 240,
   firstWaveDelay: 1.2,
+  thirdWaveDelay: 1, // pause entre la fin du level-up du tutoriel et l'apparition de la 3e vague (20/10)
   firstRingRadius: 680,
   secondRingRadius: 850,
   ringRadius: 340,
@@ -65,13 +91,15 @@ export const TUTORIAL: TutorialConfig = {
       { type: 'gling', count: 8, xp: 0 },
       { type: 'slime', count: 1, xp: 0, recruit: true },
     ], // pas de globe d'XP avant l'étape « ramasse les globes » (vague 3)
-    second: [{ type: 'gling', count: 12, xp: 1 }], // 12 glings à 1 XP = les mêmes 12 XP qu'avant (un seul level-up)
+    // 10 glings à 1 XP + 2 sans XP : l'XP totale vaut EXACTEMENT `xpToNext(1)` (10), donc le level-up ne part qu'au ramassage du DERNIER globe (avant : 12 XP pour 10 requis, le level-up arrivait avec 2 globes encore au sol)
+    second: [
+      { type: 'gling', count: 10, xp: 1 },
+      { type: 'gling', count: 2, xp: 0 },
+    ],
     third: [
       { type: 'gling', count: 15, xp: 0 },
       { type: 'slime', count: 1, xp: 0, recruit: true },
       { type: 'slime', count: 1, xp: 0, powerup: 'heal' },
     ],
   },
-  offer: ['speed', 'damage', 'fireRate'], // damage (la carte recommandée) au centre
-  suggest: 'damage',
 };

@@ -26,8 +26,9 @@ export class Xp {
    * multiplie l'XP du butin, donc le nombre et la taille des globes (1, 3 ou 8 XP) : chaque globe vaut toujours la même chose au ramassage.
    * La part décimale est tirée au sort (2 XP × 1,25 = 2,5 : 2 ou 3), pour que le bonus compte aussi sur les petits aliens.
    * (`dirX`, `dirY`) : sens du tir qui l'a tué ; les globes y sont expulsés et glissent (`XP_SLIDE`). Sans direction : à l'opposé de `squad`.
+   * `eternal` : les globes ne disparaissent jamais (tutoriel : le joueur doit tous les ramasser).
    */
-  drop(a: AlienState, xp = a.def.xp, squad?: Squad, dirX = 0, dirY = 0): void {
+  drop(a: AlienState, xp = a.def.xp, squad?: Squad, dirX = 0, dirY = 0, eternal = false): void {
     if (xp <= 0) return;
     const { rng } = this.sim;
     if (!dirX && !dirY && squad) {
@@ -48,7 +49,7 @@ export class Xp {
       const y = Math.min(b.maxY, Math.max(b.minY, a.y + Math.sin(ang) * r * 0.6));
       const slideAng = dir + rng.range(-XP_SLIDE.spread, XP_SLIDE.spread);
       const v = XP_SLIDE.speed * rng.range(XP_SLIDE.speedJitter[0], XP_SLIDE.speedJitter[1]);
-      this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME, vx: Math.cos(slideAng) * v, vy: Math.sin(slideAng) * v });
+      this.orbs.push({ id: this.sim.ids.get(), x, y, px: x, py: y, value, life: LIFETIME, eternal, vx: Math.cos(slideAng) * v, vy: Math.sin(slideAng) * v });
       tallyAdd(this.sim.tally.xp, 'dropped', value);
     }
     if (this.orbs.length > MAX_ORBS) for (const o of this.orbs.splice(0, this.orbs.length - MAX_ORBS)) tallyAdd(this.sim.tally.xp, 'overflow', o.value);
@@ -60,7 +61,8 @@ export class Xp {
       const o = this.orbs[i];
       o.px = o.x;
       o.py = o.y;
-      if (!o.caught) o.life -= dt; // attrapé : il ne disparaît plus
+      if (o.eternal) o.age = (o.age ?? 0) + dt; // tutoriel : jamais de disparition (la vie ne baisse pas), l'âge sert à la chute
+      else if (!o.caught) o.life -= dt; // attrapé : il ne disparaît plus
       if (o.vx || o.vy) {
         // glissade de sortie (sens du tir), freinée ; un globe attrapé ne glisse plus
         if (o.caught) o.vx = o.vy = 0;
@@ -90,7 +92,7 @@ export class Xp {
       }
       // le globe sort d'abord (saut + glissade, `XP_SLIDE.hopTime`) : ni attraction ni ramassage tant qu'il n'est pas retombé, sinon, avec un grand rayon d'aimant,
       // il serait avalé dans le tick de sa création sans qu'on le voie apparaître (sauf aspiré par le power-up aimant : `caught`)
-      if (!o.caught && LIFETIME - o.life < XP_SLIDE.hopTime) continue;
+      if (!o.caught && (o.eternal ? (o.age ?? 0) : LIFETIME - o.life) < XP_SLIDE.hopTime) continue;
       // soldat le plus proche dans le rayon d'attraction (celui de sa squad : stat `magnet`)
       let best: { x: number; y: number; owner: string } | undefined;
       let bestD = Infinity;

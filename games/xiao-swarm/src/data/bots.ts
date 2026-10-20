@@ -97,6 +97,7 @@ export const BOT_UPGRADE_PRIORITY: Record<UpgradeId, number> = {
   recruit: 3,
   teamSpirit: 6,
   lastStand: 3,
+  goldDigger: 1, // le bot ne joue pas pour l'économie : il la prend en dernier
 };
 
 /** Plafond de bots dans une partie coop (avec l'hôte et les clients : `MAX_PLAYERS` au total). */

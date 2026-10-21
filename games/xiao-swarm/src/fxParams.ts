@@ -108,6 +108,8 @@ export const FX_DEFAULTS = {
    * avec de la gravité (`gravity`, px/s²), rétrécissent de `scaleStart` à `scaleEnd` et s'effacent ; vitesse `speedMin`-`speedMax`, durée de vie `lifeMin`-`lifeMax`, source étalée de `originSpread` px.
    * `eggDelayMs` : un ŒUF détruit reste affiché ce temps (ms) après sa destruction, le temps que la fontaine commence à jaillir de lui. `color` / `colorLight` : les deux verts tirés au hasard.
    */
+  /** Mini fontaine verte de la mort d'un chaman : même effet que `bossFountain`, plus petite et plus courte (mêmes réglages, `eggDelayMs` inutilisé). */
+  shamanFountain: { durationMs: 350, everyMs: 16, perTick: 2, speedMin: 170, speedMax: 380, spread: 32, gravity: 1100, scaleStart: 1.1, scaleEnd: 0.25, lifeMin: 400, lifeMax: 750, originSpread: 8, eggDelayMs: 0, color: 0x3dff6e, colorLight: 0xc8ffd2 },
   bossFountain: { durationMs: 1000, everyMs: 16, perTick: 3, speedMin: 300, speedMax: 700, spread: 40, gravity: 1100, scaleStart: 1.8, scaleEnd: 0.4, lifeMin: 700, lifeMax: 1300, originSpread: 16, eggDelayMs: 0, color: 0x3dff6e, colorLight: 0xc8ffd2 },
   /** Petit « + » qui monte : soin du Medic (fx_plus). */
   heal: { rise: 34, durationMs: 700, jitter: 10 },

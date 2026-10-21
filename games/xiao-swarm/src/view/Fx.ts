@@ -637,8 +637,7 @@ export class Fx {
    * Fontaine de particules vertes d'un boss tué (`FX.bossFountain`) : elles jaillissent de (x, y) vers le haut pendant `durationMs`, retombent avec de la gravité, rétrécissent et s'effacent.
    * Un émetteur jetable : arrêté après `durationMs`, détruit quand la dernière particule est morte.
    */
-  bossFountain(x: number, y: number): void {
-    const f = FX.bossFountain;
+  bossFountain(x: number, y: number, f: typeof FX.bossFountain = FX.bossFountain): void {
     const life = Math.max(f.lifeMin, f.lifeMax);
     const em = this.scene.add
       .particles(x, y, 'fx_dot', {

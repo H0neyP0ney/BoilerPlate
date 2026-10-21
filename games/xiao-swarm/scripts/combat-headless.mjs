@@ -1233,7 +1233,7 @@ try {
         sim.events.push = (e) => { if (e.t === 'zap') zaps++; return push0(e); };
         for (let i = 0; i < 30 * 4.2; i++) { c.x = near.x - 40; c.y = near.y; step(1);  }
         const lost = n0 - near.hp;
-        check(A && A.every === 1 && A.radius === 180 && A.damage === 10 && zaps >= 4 && lost >= 3.5 * A.damage && far.hp > near.hp, "chargeur : aura électrique, toutes les s un éclair et 10 dégâts aux soldats à moins de 180 px", `${zaps} éclairs, ${lost.toFixed(0)} PV perdus en 4,2 s, soldat lointain moins touché : ${far.hp > near.hp}`);
+        check(A && A.every === 1 && A.radius === 220 && A.damage === 20 && zaps >= 4 && lost >= 3.5 * A.damage && far.hp > near.hp, "chargeur : aura électrique, toutes les s un éclair et 10 dégâts aux soldats à moins de 220 px", `${zaps} éclairs, ${lost.toFixed(0)} PV perdus en 4,2 s, soldat lointain moins touché : ${far.hp > near.hp}`);
       }
     }
     const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === BOSS_LEVEL && e.config === 5);

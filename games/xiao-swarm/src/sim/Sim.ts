@@ -944,8 +944,25 @@ export class Sim {
           }
         }
       }
+      if (!gone && p.venom) {
+        // flaque de poison : reste au sol jusqu'à la fin de son temps ; tout soldat dedans est empoisonné (durée remise à plein)
+        for (const s of this.soldierHash.query(p.x, p.y, p.r + 30, this.scratchSoldiers)) {
+          if (!s.alive || s.capturedBy || s.frozen > 0 || Math.hypot(s.x - p.x, s.y - p.y) > p.r + s.radius * 0.5) continue;
+          this.blame = p.venomSrc ?? 'venomZone';
+          this.envenom(s, p.venomTotal ?? 0, p.venomTime ?? 1);
+        }
+      }
       if (gone) this.puddles.splice(i, 1);
     }
+  }
+
+  /** Flaque de poison au sol (`deathZone` `venom`) : même emplacement qu'une flaque de flammes, mais elle empoisonne (`total` dégâts sur `time` s) au lieu de brûler. */
+  addVenomZone(x: number, y: number, r: number, ttl: number, total: number, time: number): void {
+    const b = this.arena.bounds;
+    x = Math.min(b.maxX - r, Math.max(b.minX + r, x));
+    y = Math.min(b.maxY - r, Math.max(b.minY + r, y));
+    this.puddles.push({ id: this.ids.get(), x, y, r, ttl, slow: 1, venom: true, venomTotal: total, venomTime: time, venomSrc: this.blame });
+    if (this.puddles.length > 40) this.puddles.shift();
   }
 
   /** Le soldat saute vers la Gling Mère : arrivée à `WEB.land` px d'elle (côté du soldat), dans l'arène et hors des obstacles. */
@@ -970,7 +987,7 @@ export class Sim {
   slowAt(x: number, y: number, radius: number): number {
     let k = 1;
     for (const p of this.puddles) {
-      if (p.frost || p.web) continue; // nuage de glace ou toile : ils agissent dans updatePuddles, ils ne ralentissent pas
+      if (p.frost || p.web || p.venom) continue; // nuage de glace, toile ou poison : ils agissent dans updatePuddles, ils ne ralentissent pas
       const rr = p.r + radius * 0.5;
       if ((x - p.x) ** 2 + (y - p.y) ** 2 < rr * rr) k = Math.min(k, p.slow);
     }
@@ -1219,6 +1236,7 @@ export class Sim {
     if (zone && !wipe && !this.ending) {
       this.blame = `${a.def.id}:deathZone`;
       if (zone.kind === 'fire') this.addFire(a.x, a.y + 4, zone.radius, zone.ttl, (zone.dps ?? 0) * a.escDmg);
+      else if (zone.kind === 'venom') this.addVenomZone(a.x, a.y + 4, zone.radius, zone.ttl, (zone.total ?? 0) * a.escDmg, zone.time ?? 1);
       else this.addPuddle(a.x, a.y + 4, zone.radius, zone.ttl, 1, true);
     }
     const bomb = a.def.deathBlast;

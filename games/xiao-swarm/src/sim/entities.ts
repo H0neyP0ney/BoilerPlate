@@ -339,6 +339,11 @@ export interface Puddle {
   /** Toile de la Gling Mère (id de l'alien qui l'a posée, sim seulement) : le premier soldat qui y marche la consomme et saute vers elle (`WEB`). Absente du snapshot : `web` y suffit. */
   web?: boolean;
   owner?: number;
+  /** Flaque de poison (mort du chaman / de la grenouille) : reste au sol, empoisonne les soldats dedans (`Sim.envenom`). `venomTotal` / `venomTime` et `venomSrc` : sim seulement (le client ne fait que la dessiner). */
+  venom?: boolean;
+  venomTotal?: number;
+  venomTime?: number;
+  venomSrc?: string;
 }
 
 /** Zone laissée au sol par un joueur mort (coop) : un équipier qui y reste `REVIVE_TIME` s le ramène avec une escouade de base. */

@@ -1,7 +1,7 @@
 import type { Rng } from '@xiao/engine/sim';
 import { ALIENS, type AlienId } from '../data/aliens';
 import { DIFFICULTY } from '../config';
-import { BOSS_REPLAY, entryTimes, scaledCount, WAVE_LEVELS, type WaveConfig, type WaveScript } from '../data/waves';
+import { BOSS_REPLAY, entryTimes, scaledCount, type WaveConfig, type WaveScript } from '../data/waves';
 
 /** Ce que le gestionnaire de vagues a besoin de savoir de la simulation (absent : la timeline avance toujours). */
 /** Réglage d'effectif des vagues rejouées de chaque boss (`DIFFICULTY.bossReplayMul…`). */
@@ -199,20 +199,8 @@ export class WaveRunner {
     const configs = all;
     const config = forced ?? configs[Math.floor(this.rng.next() * configs.length)];
     const groups = config.groups.map((g) => ({ ...g }));
-    const guestChance = this._replaying ? DIFFICULTY.waveGuestReplayChance : DIFFICULTY.waveGuestChance;
-    if (!forced && level >= 1 && guestChance > 0 && (guestChance >= 1 || this.rng.next() < guestChance)) { // pas de tirage de plus quand la chance vaut 1 (même suite aléatoire qu'avant)
-      // Mélange : un groupe « invité » tiré d'une configuration d'un niveau voisin (plus doux ou plus dur), en petit nombre.
-      const pool = [level - 1, level + 1].flatMap((l) => (l >= 1 && l <= WAVE_LEVELS.length ? (this.script.levels?.[l] ?? []).flatMap((c) => c.groups) : []));
-      if (pool.length > 0) {
-        const guest = pool[Math.floor(this.rng.next() * pool.length)];
-        const n = Math.max(1, Math.round(guest.count * DIFFICULTY.waveGuestShare));
-        const same = groups.find((g) => g.type === guest.type);
-        if (same) same.count += n;
-        else groups.push({ type: guest.type, count: n });
-      }
-    }
     for (const g of groups) {
-      const cap = ALIENS[g.type].maxPerWave; // ex. 2 slimes de glace au plus, même avec les invités d'un niveau voisin
+      const cap = ALIENS[g.type].maxPerWave; // ex. 3 slimes de glace au plus par vague
       if (cap !== undefined) g.count = Math.min(g.count, cap);
     }
     // embuscade : tirée une fois par vague (toujours, pour que le rng avance pareil), jamais pour une configuration forcée (boss, panneau Triche) ; les rejeux pendant un boss en font partie (leurs aliens restent sans XP : `Horde.create`)

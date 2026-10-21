@@ -159,7 +159,7 @@ try {
   hs.aliens.length = 0;
   hs.waves.trigger(0, 1); // niveau 0 = BOSS_LEVEL (Alpha Rhino seul)
   const bosses = hs.aliens.filter((x) => x.def.id === 'boss_rhino');
-  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * 1.75), 'boss unique, PV ×1,75 avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
+  check(bosses.length === 1 && Math.round(bosses[0].maxHp) === Math.round(ALIENS.boss_rhino.hp * (1 + DIFFICULTY.extraPlayerAliens)), 'boss unique, PV × (1 + extraPlayerAliens) avec 2 joueurs, comme le nombre d’aliens (PV de base du boss)', `${bosses.length} boss, ${bosses[0]?.maxHp} PV`);
   hs.aliens.length = 0;
   const base = 4;
   hs.waves.trigger(1, 3); // « Petit groupe » (slime ×4 × 1,15) : chaque squad vivante reçoit la vague
@@ -189,7 +189,7 @@ try {
   const orbClient = client.sim.xp.orbs.find((o) => o.id === orbId);
   check(!!orbClient && orbClient.life < 5, 'globe en fin de vie : le clignotement est transmis au client', orbClient ? `life ${orbClient.life}` : 'globe introuvable');
   // XP partagée (coop) : une seule barre, seuil × (1 + 0,75 × (joueurs − 1)) comme la charge de mobs ; un niveau = tous les joueurs montent et choisissent
-  check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 1,75)', `${a.xpNeeded}`);
+  check(a.xpNeeded === b.xpNeeded && a.xpNeeded > 0, 'XP partagée : même seuil pour les deux joueurs (× 1 + extraPlayerAliens)', `${a.xpNeeded}`);
   // remise à plat : un niveau déjà en cours (XP ramassée plus haut) fausserait la chronologie mesurée ci-dessous
   for (let i = 0; i < 400 && (hs.choiceT > 0 || hs.choiceDelay > 0 || hs.squads.some((sq) => sq.offer)); i++) {
     for (const sq of hs.squads) if (sq.offer) hs.chooseUpgrade(sq.owner, 0);

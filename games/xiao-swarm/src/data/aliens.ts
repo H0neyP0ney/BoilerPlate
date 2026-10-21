@@ -123,7 +123,7 @@ export interface AlienDef {
    * il est pris dans la glace (`FREEZE` de config.ts : 50 PV de gel, 1 PV par coup d'un allié) qui ne fond jamais : ses alliés doivent la briser. Il reste attaquable par les aliens.
    */
   ice?: { range: number; cooldown: number; lead: number; orb: AlienId };
-  /** Plafond d'aliens de cette espèce dans UNE vague (par squad), invités et mise à l'échelle comprises (slime de glace : 2). */
+  /** Plafond d'aliens de cette espèce dans UNE vague (par squad), mise à l'échelle comprise (slime de glace : 2). */
   maxPerWave?: number;
   /** Teinte multiplicative du visuel (ex. gling géant rose). */
   tint?: number;
@@ -169,8 +169,8 @@ export interface AlienDef {
   deathBlast?: { delay: number; radius: number; damage: number; knockback: number };
   /** À sa mort, `count` aliens `spawn` surgissent autour de son corps (chaman : 5 araignées). Invoqués : ni XP ni recrue ; pas pendant le clear screen d'un boss. */
   deathSpawn?: { spawn: AlienId; count: number; hpMul?: number };
-  /** Zone laissée au sol à la mort (jamais pendant un clear screen) : flaque de flammes (`fire`, brûle `dps` PV/s, comme la traînée du burner) ou nuage de gel (`frost`, comme celui du chaman : gèle le premier soldat qui y entre), de rayon `radius`, qui dure `ttl` s. */
-  deathZone?: { kind: 'fire' | 'frost'; radius: number; ttl: number; dps?: number };
+  /** Zone laissée au sol à la mort (jamais pendant un clear screen) : flaque de flammes (`fire`, brûle `dps` PV/s, comme la traînée du burner), nuage de gel (`frost`, comme celui du chaman : gèle le premier soldat qui y entre) ou flaque de poison (`venom`, reste au sol comme les flammes mais empoisonne), de rayon `radius`, qui dure `ttl` s. */
+  deathZone?: { kind: 'fire' | 'frost' | 'venom'; radius: number; ttl: number; dps?: number; /** Poison (`venom`) : `total` dégâts sur `time` s pour le soldat qui y reste (durée remise à plein tant qu'il y est, jamais cumulé). */ total?: number; time?: number };
   /** Langue : attrape un soldat à portée et le tire d'une fraction `pull` de la distance qui les sépare (jamais jusqu'à lui). */
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
@@ -324,6 +324,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 3.6 }, // portée 270 → 297 (+10 %, 14/10)
     deathSpawn: { spawn: 'spider', count: 3, hpMul: 3 }, // à sa mort (21/10) : comme le chaman, des araignées (jamais pendant un clear screen) ; nombre et PV (× leurs PV de base) réglables dans le panneau Stats de sa vue d'unité
+    deathZone: { kind: 'venom', radius: 30, ttl: 11.25, total: 50, time: 6 }, // à sa mort (21/10) : une flaque de poison au sol (comme le chaman)
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
     color: 0x3fd0a0,
@@ -384,6 +385,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     frost: { every: 9, range: 560, count: 2, gap: [103.5, 184], radius: 25.5, ttl: 10 }, // flocons à distance (07/10) : à 103,5-184 px du bord réel de la squad (+15 % le 09/10, 90-160 avant)
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30, zombie: { copies: 2, hpMul: 3, dmgMul: 1, speedMul: 1.35, attackMul: 3 } }, // le ressuscité est un ZOMBIE (réglages `zombie`, vue du chaman)
     deathSpawn: { spawn: 'spider', count: 5, hpMul: 3 }, // hpMul : PV des araignées de CETTE source (× leurs PV de base), réglable à part de la Gling Mère et du crabe; // à sa mort : 5 araignées
+    deathZone: { kind: 'venom', radius: 30, ttl: 11.25, total: 50, time: 6 }, // à sa mort (21/10) : une flaque de poison au sol (reste comme une flaque de flammes, empoisonne : 50 dégâts sur 6 s)
     xp: 8,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
     color: 0xffd84a,
@@ -439,7 +441,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'specialist',
     floats: true,
     dash: { range: 380, speedMul: 1.6 }, // la squad court à 210 : sans élan, la bulle ne la rattrape jamais
-    maxPerWave: 3, // trop forte en nombre (07/10) : une seule par vague et par squad, invités et ×1,5 compris ; 3 depuis le 12/10 (les vagues de bulles en ont 3 : niveaux 7 et 8)
+    maxPerWave: 3, // trop forte en nombre (07/10) : une seule par vague et par squad, ×1,5 compris ; 3 depuis le 12/10 (les vagues de bulles en ont 3 : niveaux 7 et 8)
     capture: { dps: 35.1 }, // digestion : 25 → 50 → 40 (−20 %, 07/10) → 30 → 39 (+30 %, 14/10)
     xp: 12,
     recruitChance: 0, // avant : 0 (×1.3 intégré le 09/10)

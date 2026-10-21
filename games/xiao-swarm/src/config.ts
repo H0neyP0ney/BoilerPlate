@@ -315,12 +315,6 @@ export const DIFFICULTY_DEFAULTS = {
   ambushChance: 0.1,
   /** Chance qu'une vague (hors boss, configurations forcées et tutoriel ; les vagues rejouées pendant un combat de boss peuvent aussi sortir en cercle) sorte du sol en cercle autour de la squad d'UN joueur tiré au hasard (`RING`, `Horde.spawnRing`). Prioritaire sur l'embuscade. 0 = jamais. */
   ringChance: 0.1,
-  /** Mélange des vagues (`WaveRunner.trigger`) : une vague tirée au hasard (jamais un boss ni une configuration forcée) reçoit un groupe « invité » d'un niveau voisin (L−1 ou L+1). Chance de l'invité (1 = toujours, comme avant ; 0 = vagues exactement comme écrites dans le Gestionnaire). */
-  waveGuestChance: 1,
-  /** Part du groupe invité ajoutée à la vague : nombre du groupe tiré × cette valeur, arrondi, au moins 1. */
-  waveGuestShare: 0.4,
-  /** Même chance d'invité, mais pour les vagues rejouées pendant un combat de boss (0 = rejeux purs, sans cracheur ni autre alien d'un niveau voisin). */
-  waveGuestReplayChance: 0, // 0 : rejeux purs, sans groupe invité (remis à 0 le 21/10 ; 1 entre le 20/10 et le 21/10, 0 le 20/10 avant)
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,

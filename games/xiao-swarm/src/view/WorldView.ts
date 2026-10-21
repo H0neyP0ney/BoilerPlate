@@ -1310,6 +1310,19 @@ export class WorldView {
         g.lineStyle(3, 0xff3a3a, 0.9 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
         continue;
       }
+      if (p.venom) {
+        // flaque de poison (mort du chaman / de la grenouille) : vert acide, bulles qui montent et éclatent ; y rester = empoisonné (contour vert vif)
+        g.fillStyle(0x2f9a2a, 0.34 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);
+        g.fillStyle(0x7dff4a, 0.18 * a).fillEllipse(p.x, p.y - r * 0.08, r * 1.3, r * 0.8);
+        for (let i = 0; i < 5; i++) {
+          const u = (time * 0.7 + i / 5 + p.id * 0.13) % 1;
+          const bx = p.x + Math.cos(p.id + i * 2.4) * r * 0.55;
+          const by = p.y - u * r * 0.7 + Math.sin(p.id + i * 1.3) * r * 0.2;
+          g.fillStyle(i % 2 ? 0xc8ffb0 : 0x6aff4a, 0.7 * Math.sin(u * Math.PI) * a).fillCircle(bx, by, r * (0.07 + 0.08 * u));
+        }
+        g.lineStyle(3, 0x4dff5e, 0.85 * a).strokeEllipse(p.x, p.y, r * 2, r * 1.3);
+        continue;
+      }
       if (p.frost) {
         // nuage de glace (flocons du chaman) : bleu glacé, bouffées blanches et flocons qui tournent ; y entrer = gelé
         g.fillStyle(0x3a8ad8, 0.3 * a).fillEllipse(p.x, p.y, r * 2, r * 1.3);

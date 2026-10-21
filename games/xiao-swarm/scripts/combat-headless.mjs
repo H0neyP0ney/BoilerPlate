@@ -223,6 +223,38 @@ try {
     check(wi.puddles === 0 && wf.fires === 0, 'iceballer / fireballer : aucune zone pendant un clear screen', `${wi.puddles} nuage(s), ${wf.fires} flamme(s)`);
   }
 
+  // ---- chaman / grenouille : à leur mort, une flaque de poison au sol (comme les flammes, mais elle empoisonne) ; rien pendant un clear screen
+  {
+    const run = (id, wipe) => {
+      const { sim, step } = fresh(18);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt(id, sq.center.x + 500, sq.center.y, 1, false);
+      step(60);
+      const a = sim.aliens.find((x) => x.def.id === id);
+      if (wipe) sim.wipeAliens?.('p1');
+      else sim.damage(a, 1e9, 'p1');
+      step(1);
+      const zone = sim.puddles.find((p) => p.venom);
+      let envenomed = false;
+      if (zone) {
+        const so = sq.soldiers[0];
+        so.invulnerable = 0; so.hp = so.maxHp = 1e6; so.venom = 0; so.venomDps = 0;
+        so.x = so.px = zone.x; so.y = so.py = zone.y;
+        sim.step(1 / 30, new Map());
+        envenomed = so.venom > 0 && so.venomDps > 8 && so.venomDps < 9;
+      }
+      return { zone, envenomed };
+    };
+    for (const id of ['shaman', 'toad']) {
+      const Z = ALIENS[id].deathZone;
+      const k = run(id, false);
+      check(Z?.kind === 'venom' && Z.radius > 0 && Z.ttl > 5 && k.zone && k.zone.r === Z.radius && Math.abs(k.zone.ttl - Z.ttl) < 0.5 && k.envenomed, `${id === 'shaman' ? 'chaman' : 'grenouille'} tué(e) : une flaque de poison au sol qui empoisonne le soldat dedans`, `zone ${k.zone ? 'oui' : 'non'}, empoisonné ${k.envenomed}`);
+      const w = run(id, true);
+      check(!w.zone, `${id === 'shaman' ? 'chaman' : 'grenouille'} : aucune flaque de poison pendant un clear screen`);
+    }
+  }
+
   // ---- grenouille : à sa mort, 3 araignées aux PV réglables (comme le chaman) ; pas pendant un clear screen
   {
     const { sim, step } = fresh(16);
@@ -230,14 +262,14 @@ try {
     const sq = sim.squadOf('p1');
     for (const o of sq.soldiers) o.invulnerable = 1e9;
     const D = ALIENS.toad.deathSpawn;
-    check(D?.spawn === 'spider' && D.count === 3 && D.hpMul === 2, 'grenouille : 3 araignées à sa mort (données, nombre et PV réglables)');
+    check(D?.spawn === 'spider' && D.count === 3 && D.hpMul > 0, 'grenouille : 3 araignées à sa mort (données, nombre et PV réglables)');
     sim.horde.spawnAt('toad', sq.center.x + 400, sq.center.y, 1, false);
     step(60);
     const toad = sim.aliens.find((a) => a.def.id === 'toad');
     sim.damage(toad, 1e9, 'p1');
     step(2);
     const spiders = sim.aliens.filter((a) => a.def.id === 'spider' && a.alive);
-    check(spiders.length === 3 && spiders.every((a) => a.noXp && a.noRecruit && Math.abs(a.maxHp - ALIENS.spider.hp * 2) < 0.01), 'grenouille tuée : 3 araignées (sans XP ni recrue, PV × 2)', `${spiders.length} araignée(s), PV ${spiders[0]?.maxHp.toFixed(1)}`);
+    check(spiders.length === 3 && spiders.every((a) => a.noXp && a.noRecruit && Math.abs(a.maxHp - ALIENS.spider.hp * D.hpMul) < 0.01), 'grenouille tuée : 3 araignées (sans XP ni recrue, PV × hpMul réglé)', `${spiders.length} araignée(s), PV ${spiders[0]?.maxHp.toFixed(1)}`);
   }
 
   // ---- chaman : à sa mort, 5 araignées (invoquées : ni XP ni recrue) ; pas pendant le clear screen d'un boss
@@ -1509,12 +1541,12 @@ try {
       });
       for (const id of downed) for (const so of sim.squadOf(id).soldiers) so.alive = false; // squad anéantie (à terre)
       for (const sq of sim.squads) if (downed.includes(sq.owner)) sq.soldiers.length = 0;
-      const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance, DIFFICULTY.waveGuestChance];
-      DIFFICULTY.ambushChance = 0; DIFFICULTY.ringChance = 1; DIFFICULTY.waveGuestChance = 0;
+      const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance];
+      DIFFICULTY.ambushChance = 0; DIFFICULTY.ringChance = 1;
       // niveau 4 réduit à sa configuration 3 (3 toads + 12 glings) : la même à chaque essai, assez d'aliens pour que les arrondis comptent peu ; une configuration FORCÉE (`trigger(niveau, n)`) n'est jamais en cercle, d'où ce détour
       sim.waves.script = { ...sim.waves.script, levels: { ...sim.waves.script.levels, 4: [sim.waves.script.levels[4][2]] } };
       sim.waves.trigger(4);
-      [DIFFICULTY.ambushChance, DIFFICULTY.ringChance, DIFFICULTY.waveGuestChance] = saved;
+      [DIFFICULTY.ambushChance, DIFFICULTY.ringChance] = saved;
       const aliens = sim.aliens.filter((a) => a.alive && !a.def.boss);
       // aliens autour de chaque squad : ceux dont elle est la squad la plus proche (les obstacles du milieu de la carte peuvent rapprocher un alien du centre de son cercle)
       const near = (a) => sim.squads.reduce((best, sq) => (Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < Math.hypot(a.x - best.center.x, a.y - best.center.y) ? sq : best), sim.squads[0]);

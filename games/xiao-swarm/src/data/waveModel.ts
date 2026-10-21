@@ -4,7 +4,7 @@ import { entryTimes, scaledCount, type TimelineEntry, type WaveConfig, type Wave
 /**
  * Courbe de pression des vagues (Gestionnaire de vagues) : ESTIMATION des PV d'aliens vivants au fil du run, en tenant compte
  * des morts. Un seul « tas » de PV : chaque envoi y ajoute les PV de la vague, la squad en retire `dps(t)` par seconde.
- * Pas une simulation du jeu (ni portée, ni déplacements, ni soin des aliens, ni alien « invité » du WaveRunner) : sert à
+ * Pas une simulation du jeu (ni portée, ni déplacements, ni soin des aliens,) : sert à
  * comparer des scripts entre eux. Pur (données), partagé éditeur / tests.
  */
 export interface WaveModel {

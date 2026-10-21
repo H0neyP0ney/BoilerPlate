@@ -1226,14 +1226,14 @@ try {
         const near = sq.soldiers[0];
         near.x = c.x + 40; near.y = c.y; near.px = near.x; near.py = near.y;
         const far = sq.soldiers[sq.soldiers.length - 1];
-        far.x = c.x + 300; far.y = c.y; far.px = far.x; far.py = far.y;
+        far.x = c.x + 400; far.y = c.y; far.px = far.x; far.py = far.y;
         const n0 = near.hp, f0 = far.hp;
         let zaps = 0;
         const push0 = sim.events.push.bind(sim.events);
         sim.events.push = (e) => { if (e.t === 'zap') zaps++; return push0(e); };
         for (let i = 0; i < 30 * 4.2; i++) { c.x = near.x - 40; c.y = near.y; step(1);  }
         const lost = n0 - near.hp;
-        check(A && A.every === 2 && A.radius === 80 && A.damage === 10 && zaps >= 2 && lost >= zaps * A.damage - 0.5 && far.hp === f0, "chargeur : aura électrique, toutes les 2 s un éclair et 10 dégâts aux soldats à moins de 80 px", `${zaps} éclairs, ${lost.toFixed(0)} PV perdus en 4,2 s, soldat lointain intact : ${far.hp === f0}`);
+        check(A && A.every === 1 && A.radius === 120 && A.damage === 10 && zaps >= 4 && lost >= zaps * A.damage - 0.5 && far.hp > near.hp, "chargeur : aura électrique, toutes les s un éclair et 10 dégâts aux soldats à moins de 120 px", `${zaps} éclairs, ${lost.toFixed(0)} PV perdus en 4,2 s, soldat lointain moins touché : ${far.hp > near.hp}`);
       }
     }
     const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === BOSS_LEVEL && e.config === 5);

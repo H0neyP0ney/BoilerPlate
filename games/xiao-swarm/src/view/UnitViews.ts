@@ -216,7 +216,7 @@ export class SoldierView {
     if (this.flash > 0) {
       this.flash -= dt;
       if (this.flash <= 0) this.rest = FLASH_REST;
-      this.body.setTint(0xff6a6a).setTintMode(Phaser.TintModes.FILL);
+      this.body.setTint(s.venom > 0 ? 0x6aff6a : 0xff6a6a).setTintMode(Phaser.TintModes.FILL); // empoisonné : le clignotement de touche est vert
     } else if (s.frozen > 0) {
       this.body.setTint(0x9fd4ff).setTintMode(Phaser.TintModes.MULTIPLY); // gelé : bleu, vu à travers la glace
     } else if (s.capturedBy) {

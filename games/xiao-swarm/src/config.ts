@@ -352,8 +352,8 @@ export const DIFFICULTY_DEFAULTS = {
   stimTime: 6.5,
   /** Revive (solo) : part de l'effectif maximal de la partie avec laquelle la squad réapparaît (minimum 1 soldat). */
   reviveSquadFraction: 0.6,
-  /** Coop : taille de l'escouade d'un joueur réanimé, en part de l'effectif maximal de l'équipier qui l'a ramené. */
-  coopReviveRatio: 0.6,
+  /** Coop : taille de l'escouade d'un joueur réanimé par un équipier, en part de SON PROPRE effectif maximal de la partie (`Squad.peakSize`). */
+  coopReviveRatio: 0.4, // 0,6 avant le 22/10
   /** Relances des propositions d'upgrade par partie et par joueur (entier). 1 depuis le 20/10 (2 avant) : en solo, une fois à 0, la relance passe par une vidéo récompensée. */
   rerolls: 1,
   /** Chance qu'une upgrade proposée soit prismatique (bonus doublé). */

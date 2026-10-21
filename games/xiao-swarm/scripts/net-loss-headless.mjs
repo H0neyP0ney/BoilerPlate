@@ -14,6 +14,7 @@ import { createServer } from 'vite';
 const only = new Set(process.argv.slice(2));
 const want = (name) => only.size === 0 || only.has(name);
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 let failures = 0;
 const check = (ok, label, detail = '') => {
   console.log(`${ok ? '✔' : '✘'} ${label}${detail ? ` — ${detail}` : ''}`);

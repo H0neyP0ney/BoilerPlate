@@ -6,6 +6,7 @@ const seconds = Number(process.argv[2] ?? 300);
 const extraBots = Number(process.argv[3] ?? 2);
 const seed = Number(process.argv[4] ?? 7);
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 let failures = 0;
 const check = (ok, label, detail = '') => {
   console.log(`${ok ? '✔' : '✘'} ${label}${detail ? ` — ${detail}` : ''}`);

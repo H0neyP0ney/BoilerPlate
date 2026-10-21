@@ -644,13 +644,13 @@ export class Sim {
   }
 
   /**
-   * Multiplicateur d'une stat d'alien qui apparaît maintenant : multiplicateur de BASE du niveau de difficulté (×1 en normal) × (1 + `gain` × multiplicateur d'ESCALADE du niveau) par boss tué.
+   * Multiplicateur d'une stat d'alien qui apparaît maintenant : multiplicateur de BASE du niveau de difficulté (×1 en normal par défaut) × (1 + `gain` × multiplicateur d'ESCALADE du niveau) par boss tué.
    * Les stats de base de tous les aliens passent par là (`Horde.create` : PV, `escDmg`, `escRate`, `escSpeed`).
    */
   private escalation(gain: number): number {
     const level = this.difficulty;
-    const base = level === 'expert' ? DIFFICULTY.expertBaseMul : level === 'impossible' ? DIFFICULTY.impossibleBaseMul : 1;
-    const scale = level === 'expert' ? DIFFICULTY.expertScaleMul : level === 'impossible' ? DIFFICULTY.impossibleScaleMul : 1;
+    const base = level === 'expert' ? DIFFICULTY.expertBaseMul : level === 'impossible' ? DIFFICULTY.impossibleBaseMul : DIFFICULTY.normalBaseMul;
+    const scale = level === 'expert' ? DIFFICULTY.expertScaleMul : level === 'impossible' ? DIFFICULTY.impossibleScaleMul : DIFFICULTY.normalScaleMul;
     return base * (1 + gain * scale) ** this.bossKills;
   }
 
@@ -1177,7 +1177,7 @@ export class Sim {
     tallyAdd(this.tally.kills, a.def.id, 1);
     const squad = killer ? this.squadOf(killer) : undefined;
     if (squad) squad.kills++;
-    this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer });
+    this.events.push({ t: 'alienDied', id: a.id, x: a.x, y: a.y, alien: a.def.id, killer, ...(wipe ? { wipe: true } : {}) });
     if (a.def.golden) {
       this.gems.dropCoinsAt(a.x, a.y, a.def.golden.deathCoins, 40, 190, 'golden_death', squad); // alien doré tué : une grosse quantité d'argent et quelques diamants
       this.gems.dropGemsAt(a.x, a.y, a.def.golden.deathGems, 'golden', squad);

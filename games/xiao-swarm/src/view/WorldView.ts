@@ -293,9 +293,9 @@ export class WorldView {
         const burstSize = e.alien === 'gling' ? 1.5 : Math.max(0.6, Math.min(2, shadowWidth(e.alien) / shadowWidth('slime')));
         this.fx.burst(e.x, e.y + oyA - def.radius * 0.6, goo, Math.round((e.alien === 'boss_crab' ? 40 : 10) * burstSize), burstSize);
         // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
-        if (e.alien === 'slime' || e.alien === 'shooter' || e.alien === 'toad' || e.alien === 'golden' || e.alien === 'spitter') {
-          const size = e.alien === 'shooter' ? 1.6 : e.alien === 'toad' ? 1.4 : e.alien === 'spitter' ? 1.5 : e.alien === 'golden' ? 1.3 : 1;
-          const light = e.alien === 'shooter' ? 0x9fb8ff : e.alien === 'golden' ? 0xfff2a8 : e.alien === 'spitter' ? 0xf0a8dc : 0xc8ffb0;
+        if (e.alien === 'slime' || e.alien === 'shooter' || e.alien === 'toad' || e.alien === 'golden' || e.alien === 'spitter' || e.alien === 'iceballer' || e.alien === 'fireballer') {
+          const size = e.alien === 'shooter' ? 1.6 : e.alien === 'toad' ? 1.4 : e.alien === 'spitter' ? 1.5 : e.alien === 'golden' ? 1.3 : e.alien === 'iceballer' || e.alien === 'fireballer' ? 1.3 : 1;
+          const light = e.alien === 'shooter' ? 0x9fb8ff : e.alien === 'golden' ? 0xfff2a8 : e.alien === 'spitter' ? 0xf0a8dc : e.alien === 'iceballer' ? 0xcff4ff : e.alien === 'fireballer' ? 0xffd08a : 0xc8ffb0;
           this.fx.gloop(e.x, e.y + oyA - def.radius * 0.6, goo, light, size);
         }
         // flaque au sol de la couleur de ses restes, pour tous : largeur de son ombre portée × `FX.puddle.shadowMul`
@@ -306,7 +306,7 @@ export class WorldView {
           this.scene.cameras.main.shake(k.bossMs, k.bossAmount, true);
           if (nearCam(e.x, e.y)) this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6); // fontaine de particules vertes qui jaillit du cadavre (1 s), en plus de l'explosion
         }
-        else if (e.alien === 'shaman' && nearCam(e.x, e.y)) this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6, FX.shamanFountain); // mini fontaine verte à la mort d'un chaman
+        else if (def.deathSpawn && !e.wipe && nearCam(e.x, e.y)) this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6, FX.shamanFountain); // mini fontaine verte à la mort d'un alien qui laisse des araignées (chaman, grenouille), sauf pendant un clear screen
         else if (def.egg) {
           if (nearCam(e.x, e.y)) {
             this.scene.cameras.main.shake(k.eggMs, k.eggAmount, true);

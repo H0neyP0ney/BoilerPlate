@@ -7,6 +7,7 @@ const size = Number(process.argv[3] ?? 4);
 const aliens = process.argv[4] === 'aliens';
 const netJitter = Number(process.argv[5] ?? 0);
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 try {
   const { HostSession } = await vite.ssrLoadModule('/src/net/HostSession.ts');
   const { ClientSession } = await vite.ssrLoadModule('/src/net/ClientSession.ts');

@@ -120,9 +120,16 @@ export class WaveEditorScene extends Phaser.Scene {
     root.append(
       head,
       actions,
-      section(
-        'Timeline',
-        'Quel niveau de vague est envoyé à quel moment. Hauteur et couleur = niveau. Clic dans la timeline : ajoute un envoi du niveau sélectionné plus bas.',
+      // la timeline reste affichée en haut quand on fait défiler la page (comme un volet figé d'Excel) : fond opaque, au-dessus du reste
+      el(
+        'div',
+        'position:sticky;top:-10px;z-index:5;display:flex;flex-direction:column;gap:4px;border-top:1px solid #444;padding:6px 0 6px;margin-top:2px;background:#0b1015',
+        el(
+          'div',
+          'display:flex;gap:10px;align-items:baseline',
+          el('b', 'color:#ffd166', 'Timeline'),
+          el('span', 'font-size:11px;color:#aab', 'Hauteur et couleur = niveau. Clic dans la timeline : ajoute un envoi du niveau sélectionné plus bas. Reste affichée en haut quand tu fais défiler.'),
+        ),
         this.timelineBox,
       ),
       section(
@@ -451,8 +458,8 @@ export class WaveEditorScene extends Phaser.Scene {
   }
 
   private renderTable(): void {
-    const cols = 'display:grid;grid-template-columns:70px 90px 110px 100px 90px 80px 70px 28px;gap:6px;align-items:center';
-    const headRow = el('div', `${cols};font-size:11px;color:#aab`, ...['Début (s)', 'Niveau', 'Répéter toutes les (s)', "Jusqu'à (s)", 'Configuration', 'Effectif ×', 'Envois', ''].map((t) => el('span', '', t)));
+    const cols = 'display:grid;grid-template-columns:70px 90px 90px 80px 28px;gap:6px;align-items:center';
+    const headRow = el('div', `${cols};font-size:11px;color:#aab`, ...['Début (s)', 'Niveau', 'Configuration', 'Effectif ×', ''].map((t) => el('span', '', t)));
     const rows = WAVE_SCRIPT.timeline.map((e, i) => this.entryRow(e, i, cols));
     const add = btn('+ Ajouter un envoi', () => {
       WAVE_SCRIPT.timeline.push({ at: Math.max(0, ...WAVE_SCRIPT.timeline.map((e) => e.at)) + 10, level: this.level });
@@ -474,9 +481,7 @@ export class WaveEditorScene extends Phaser.Scene {
       this.hot = -1;
       this.renderTimeline();
     });
-    const count = el('span', 'font-size:12px;color:#ffd166');
     const refresh = () => {
-      count.textContent = `× ${entryTimes(e).length}`;
       this.commit();
       this.renderTimeline();
     };
@@ -496,23 +501,6 @@ export class WaveEditorScene extends Phaser.Scene {
       refresh();
       level.blur();
     });
-    const every = numInput(e.every, { min: 0, step: 0.5, width: 90 }, (v) => {
-      if (v && v >= 0.5) {
-        e.every = v;
-        if (e.until === undefined || e.until < e.at) e.until = Math.max(e.at, 300);
-      } else {
-        delete e.every;
-        delete e.until;
-      }
-      refresh();
-    }, () => this.renderTable());
-    every.placeholder = 'une fois';
-    const until = numInput(e.until, { min: 0, step: 1, width: 80 }, (v) => {
-      if (e.every && v !== undefined) e.until = Math.max(e.at, v);
-      refresh();
-    });
-    until.disabled = !e.every;
-    until.placeholder = '—';
     const del = btn('×', () => {
       WAVE_SCRIPT.timeline.splice(i, 1);
       this.hot = -1;
@@ -520,7 +508,6 @@ export class WaveEditorScene extends Phaser.Scene {
       this.renderTimeline();
       this.renderTable();
     }, 'padding:0 6px');
-    count.textContent = `× ${entryTimes(e).length}`;
     const config = el('select', 'padding:2px;font:inherit');
     config.title = 'Configuration envoyée : au hasard parmi celles du niveau, ou une précise (boss)';
     config.append(new Option('Au hasard', ''));
@@ -539,7 +526,7 @@ export class WaveEditorScene extends Phaser.Scene {
     });
     mul.title = "Effectif de chaque envoi : nombre d'aliens de chaque groupe hors boss × cette valeur (arrondi, au moins 1). Sur un boss : vaut aussi pour les vagues rejouées pendant son combat";
     if (e.mul !== undefined && e.mul !== 1) mul.style.color = '#ffd166';
-    row.append(at, level, every, until, config, mul, count, del);
+    row.append(at, level, config, mul, del);
     return row;
   }
 

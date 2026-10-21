@@ -68,6 +68,43 @@ export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.
  */
+/**
+ * VERSION TEST PLAYTIME (21/10) : réglages temporaires pour un nouveau Web Fit Test Poki (objectif : allonger le temps de jeu moyen, 4:46 contre ~6:37 attendus).
+ * `enabled` = false rend le jeu exactement comme avant (aucun des autres réglages ne s'applique). Détail et marche à suivre pour revenir en arrière : `docs/TEST_PLAYTIME.md`.
+ * `?ptest=0` (URL, dev ou build déployé) coupe la version test le temps d'un essai ; `?ptest=1` la remet.
+ */
+export const PLAYTIME_TEST = {
+  enabled: true,
+  /** Pas d'écran titre / Solo / Multiplayer / boutique : la partie démarre directement. */
+  menusOff: true,
+  /** Toujours le niveau Normal (donc tous les boss en « easy » : aucune capacité réservée à Hard / Expert). */
+  forceNormal: true,
+  /** Plus de pièces ni de diamants au sol (aliens, boss, alien doré), plus d'alien doré, plus de coffre à diamants, upgrade Jackpot jamais proposée. */
+  noEconomy: true,
+  /** Timeline complète en Normal : la run ne se termine plus au Scarab mais au Giant Crab (10:00), après les rhinos jumeaux (7:00) : tous les boss sont joués, avec le niveau Normal. */
+  fullTimeline: true,
+  /** Cache les compteurs de pièces et de diamants du HUD. */
+  hideEconomyHud: true,
+  /** PV de base de tous les soldats × 2. */
+  soldierHpMul: 2,
+  /** PV de tous les boss ÷ 2. */
+  bossHpMul: 0.5,
+  /** Nombre de « Free Revive » offerts après le tutoriel (1 hors test). */
+  freeRevives: 2,
+};
+/** Vrai si le réglage booléen `k` de la version test playtime est actif. */
+export function ptOn(k: 'menusOff' | 'forceNormal' | 'noEconomy' | 'hideEconomyHud' | 'fullTimeline'): boolean {
+  return PLAYTIME_TEST.enabled && PLAYTIME_TEST[k];
+}
+/** Multiplicateur de la version test playtime (1 quand elle est coupée). */
+export function ptMul(k: 'soldierHpMul' | 'bossHpMul'): number {
+  return PLAYTIME_TEST.enabled ? PLAYTIME_TEST[k] : 1;
+}
+/** Nombre de Free Revive offerts après le tutoriel. */
+export function ptFreeRevives(): number {
+  return PLAYTIME_TEST.enabled ? PLAYTIME_TEST.freeRevives : 1;
+}
+
 /** Poison (`def.venom`) : un coup de dégâts toutes les `VENOM_TICK` s. */
 export const VENOM_TICK = 0.25;
 export const FIRE = { burnTime: 2, dmgMul: 1, orbDps: 1 / 3, tick: 0.0625, tickDmg: 0.25 / 6 }; // ticks de brûlure : touts les `tick` s (0,25 s avant : 2× plus souvent), chacun inflige `burnDps × tickDmg` (burnDps × 0,25 avant : 3× moins par tick, donc le DPS total est × 2/3) // 17/10 : brûlure 2 s (3 s avant) ; débit des flaques × 1 (× 2 avant : DPS −50 %) ; orbe de feu : débit = ses dégâts × `orbDps` PV/s (÷ 3 : 6 PV/s pour 18 de dégâts, 12 avant)
@@ -201,18 +238,20 @@ export const DIFFICULTY_DEFAULTS = {
    * Escalade : chaque boss ou mini-boss tué rend TOUS les aliens qui apparaissent ensuite plus forts, chaque stat avec son propre gain
    * (0,15 = +15 % par boss tué, cumulés : ×1,15 puis ×1,3225…, `Sim.escalation*`). Les aliens déjà là ne changent pas ; remis à zéro à la relance.
    */
-  bossEscalationHp: 0.15,
+  bossEscalationHp: 0.1,
   /** Escalade des dégâts (contact, tirs, flammes, explosions…) par boss ou mini-boss tué. */
-  bossEscalationDamage: 0.15,
+  bossEscalationDamage: 0.1,
   /** Escalade de la cadence d'attaque (cooldowns écoulés plus vite) par boss ou mini-boss tué. */
-  bossEscalationRate: 0.15,
+  bossEscalationRate: 0.1,
   /** Escalade de la vitesse de déplacement par boss ou mini-boss tué. */
   bossEscalationSpeed: 0.07,
   /**
-   * Niveaux de difficulté (14/10), `expert` et `impossible` (en normal : ×1). Deux multiplicateurs par niveau : `…BaseMul` agit sur les stats de BASE de tous les aliens (PV, dégâts, cadence
+   * Niveaux de difficulté (14/10), `normal`, `expert` (affiché « Hard ») et `impossible` (affiché « Expert ») ; `normal…` vaut 1 par défaut. Deux multiplicateurs par niveau : `…BaseMul` agit sur les stats de BASE de tous les aliens (PV, dégâts, cadence
    * d'attaque, vitesse ; ni XP ni recrues) ; `…ScaleMul` agit sur les stats qui GRANDISSENT avec les boss tués : il multiplie chaque gain d'escalade ci-dessus
    * (1,1 : +15 % par boss devient +16,5 %). Voir `Sim.escalation*`.
    */
+  normalBaseMul: 1, // niveau Normal (affiché « Normal », parfois dit « easy ») : ×1 par défaut, réglable depuis le 21/10
+  normalScaleMul: 1,
   expertBaseMul: 1.15,
   expertScaleMul: 1.15,
   impossibleBaseMul: 1.3,
@@ -266,9 +305,9 @@ export const DIFFICULTY_DEFAULTS = {
   bossEnrageCooldownCut: 0.3,
   // ---- multijoueur
   /** Chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague et des PV des boss (0,75 = +75 %). */
-  extraPlayerAliens: 0.75,
+  extraPlayerAliens: 0.6,
   /** Un joueur À TERRE (squad anéantie, qu'on peut réanimer) alourdit les vagues `extraPlayerDownedShare` fois moins qu'un joueur debout : 0,5 = son ajout passe de +75 % à +37,5 % (20/10). 1 = comme avant (il compte plein). */
-  extraPlayerDownedShare: 0.5,
+  extraPlayerDownedShare: 0.3,
   /** Plafond d'aliens à l'apparition par joueur vivant (survie). */
   maxAliensPerPlayer: 150, // 100 × 1,5 (l'ancien `alienCountMul` est intégré aux effectifs des vagues et à ce plafond, 09/10)
   // ---- vagues (`WaveRunner`)
@@ -281,7 +320,7 @@ export const DIFFICULTY_DEFAULTS = {
   /** Part du groupe invité ajoutée à la vague : nombre du groupe tiré × cette valeur, arrondi, au moins 1. */
   waveGuestShare: 0.4,
   /** Même chance d'invité, mais pour les vagues rejouées pendant un combat de boss (0 = rejeux purs, sans cracheur ni autre alien d'un niveau voisin). */
-  waveGuestReplayChance: 1, // 1 : les groupes invités reviennent pendant les rejeux de boss (essayé à 0 le 20/10 : rejeux purs, puis remis à la demande)
+  waveGuestReplayChance: 0, // 0 : rejeux purs, sans groupe invité (remis à 0 le 21/10 ; 1 entre le 20/10 et le 21/10, 0 le 20/10 avant)
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,

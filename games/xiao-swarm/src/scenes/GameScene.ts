@@ -1,12 +1,12 @@
 import { setSkinLoader } from '../assets/skinSheets';
 import Phaser from 'phaser';
 import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS, devLog } from '@xiao/engine';
-import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../config';
+import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, PLAYTIME_TEST, SCENES, VISUAL, ptFreeRevives, ptOn } from '../config';
 import { RETENTION_MILESTONES, TIME_MILESTONES, survivedBucket } from '../data/analytics';
 import { BalanceTracker } from '../balanceAnalytics';
 import type { SoldierClassId } from '../data/classes';
 import { ALIENS, type AlienId } from '../data/aliens';
-import { FINAL_BOSS } from '../data/difficultyLevels';
+import { finalBossesOf } from '../data/difficultyLevels';
 import { startDifficulty } from '../difficultyStart';
 import { MODES, type ModeDef } from '../data/modes';
 import { levelAt } from '../data/waves';
@@ -71,7 +71,8 @@ export class GameScene extends Phaser.Scene {
   /** Temps de jeu au dernier revive payé par une vidéo (analytics : combien de temps le joueur tient ensuite). */
   private revivedAt = 0;
   /** Partie qui a commencé par le tutoriel : la première mort offre un revive gratuit, et son onde de choc détruit les aliens (aide à la première expérience). */
-  private freeRevive = false;
+  /** Free Revive encore offerts (après le tutoriel : 1, ou `PLAYTIME_TEST.freeRevives`). */
+  private freeRevives = 0;
   private ended = false;
   /** Analytics de performance : images et temps réel (ms) joués depuis le début de la partie (ou du dernier envoi), partie en cours seulement. */
   private perfFrames = [0, 0, 0, 0];
@@ -106,10 +107,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    const ptestParam = poki.getURLParam('ptest'); // ?ptest=0 : jeu complet (version test playtime coupée), ?ptest=1 : version test
+    if (ptestParam === '0' || ptestParam === '1') PLAYTIME_TEST.enabled = ptestParam === '1';
     setSkinLoader(this); // les planches de skins se téléchargent à la demande par le chargeur de cette scène (toujours active)
     this.revived = false;
     this.revivedAt = 0;
-    this.freeRevive = false;
+    this.freeRevives = 0;
     this.chestsSeen.clear();
     this.chestsAd.clear();
     this.ended = false;
@@ -164,10 +167,10 @@ export class GameScene extends Phaser.Scene {
       if (jump) console.info(jumpAhead(this.session.sim, this.session.localPlayer, jump)); // test : partie avancée dès le lancement
       if (endTest) this.prepareEndTest();
       // hors onboarding (le tutoriel arrive directement sur la partie, indice des commandes affiché) : écran titre Solo / Multiplayer d'abord
-      this.titleOpen = !skipTitle && !this.session.sim.tutorial && !jump && !test && mode.id === 'survival';
+      this.titleOpen = !skipTitle && !this.session.sim.tutorial && !jump && !test && mode.id === 'survival' && !ptOn('menusOff'); // version test playtime : jamais d'écran titre
     }
     // la squad ne meurt pas pendant le tutoriel : une mort dans une partie qui l'a joué arrive forcément après, dans les vagues normales
-    this.freeRevive = !online && !!this.session.sim.tutorial;
+    this.freeRevives = !online && this.session.sim.tutorial ? ptFreeRevives() : 0;
     this.view = new WorldView(this, this.session.sim, this.session.localPlayer);
 
     const cam = this.cameras.main;
@@ -553,7 +556,7 @@ export class GameScene extends Phaser.Scene {
     sq.removeDead();
     sim.respawnSquad(me, Array.from({ length: 16 }, () => 'trooper'), 2);
     const c = sq.center;
-    for (const [i, id] of FINAL_BOSS[sim.difficulty].entries()) sim.horde.spawnAt(id as AlienId, c.x + 450 + i * 120, c.y + i * 60, 1, false); // le boss final du niveau (les deux rhinos en Hard)
+    for (const [i, id] of finalBossesOf(sim.difficulty).entries()) sim.horde.spawnAt(id as AlienId, c.x + 450 + i * 120, c.y + i * 60, 1, false); // le boss final du niveau (les deux rhinos en Hard)
   }
 
   /** Victoire solo : record et enregistrement comme `endRun`, puis la séquence de fin (le gameplay Poki s'arrête quand la fusée est partie). */
@@ -606,7 +609,7 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       best,
       canRevive: !online && !victory && !this.revived,
-      freeRevive: this.freeRevive && !this.revived,
+      freeRevive: this.freeRevives > 0 && !this.revived,
       scores: scoreRows(sim.squads, this.session.localPlayer),
       title: connectionLost ? t('connectionLost') : undefined,
     };
@@ -673,7 +676,8 @@ export class GameScene extends Phaser.Scene {
 
   async revive(free = false): Promise<boolean> {
     if (free ? !this.flow.reviveFree() : !(await this.flow.revive())) return false;
-    this.revived = true;
+    if (free) this.freeRevives = Math.max(0, this.freeRevives - 1);
+    this.revived = !free || this.freeRevives <= 0; // les Free Revive offerts s'enchaînent tant qu'il en reste
     if (!free) this.revivedAt = this.runTime;
     this.ended = false;
     this.balance.reset(); // la squad revient : la mesure repart

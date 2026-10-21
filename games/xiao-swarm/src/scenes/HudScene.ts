@@ -4,7 +4,7 @@ import { teleColor } from '../view/telegraph';
 import { latePack } from '../assets/latePack';
 import { COIN_KEY, ensureGemTextures, GEM_KEY } from '../art/gems';
 import { device, music, sfx, theme, toggleDevLog, DEV_TOOLS } from '@xiao/engine';
-import { PALETTE, SCENES } from '../config';
+import { PALETTE, SCENES, ptOn } from '../config';
 import type { AlienId } from '../data/aliens';
 import { defaultMoveLabels } from '../hotkeys';
 import { DIFFICULTY_LABEL_KEYS, type DifficultyLevel } from '../data/difficultyLevels';
@@ -843,6 +843,8 @@ ${t('roomPlayers', { players: g.playerCount })}`, // sur deux lignes, en bas à 
     this.coinText.setPosition(14 + 18 + 22, top + 22);
     this.gemIcon.setPosition(14 + 18, top + 22 + 36);
     this.gemText.setPosition(14 + 18 + 22, top + 22 + 36);
+    const eco = !ptOn('hideEconomyHud'); // version test playtime : compteurs de pièces et de diamants cachés
+    for (const o of [this.coinIcon, this.coinText, this.gemIcon, this.gemText]) o.setVisible(eco);
   }
 
   private readonly layout = (): void => {

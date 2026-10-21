@@ -1,7 +1,7 @@
 /**
  * Archétypes d'aliens (GDD §10-11) : mêmes systèmes, paramètres différents.
  */
-import { FINAL_BOSS, type DifficultyLevel } from './difficultyLevels';
+import { finalBossesOf, type DifficultyLevel } from './difficultyLevels';
 
 export type AlienId = 'slime' | 'boss_crab' | 'gling' | 'shooter' | 'kamikaze' | 'toad' | 'charger' | 'spitter' | 'shaman' | 'wall' | 'bubble' | 'burner' | 'lurker' | 'boss_rhino' | 'boss_scarab' | 'boss_gling' | 'iceballer' | 'ice_orb' | 'boss_rhino_fire' | 'boss_rhino_ice' | 'fire_orb' | 'spider' | 'boss_egg' | 'golden' | 'fireballer';
 
@@ -321,6 +321,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.495,
     target: 'nearest',
     tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 3.6 }, // portée 270 → 297 (+10 %, 14/10)
+    deathSpawn: { spawn: 'spider', count: 3, hpMul: 2 }, // à sa mort (21/10) : comme le chaman, des araignées (jamais pendant un clear screen) ; nombre et PV (× leurs PV de base) réglables dans le panneau Stats de sa vue d'unité
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
     color: 0x3fd0a0,
@@ -752,7 +753,7 @@ export function zombieStats(): ZombieStats {
  * Type d'un boss au niveau de difficulté `level` : `final` s'il clôt la run à ce niveau (`FINAL_BOSS`), sinon `mini` (il laisse un œuf). Un seul endroit pour la simulation, la vue et le miroir.
  */
 export function bossKindAt(def: AlienDef, level: DifficultyLevel): 'mini' | 'final' {
-  return def.boss && FINAL_BOSS[level].includes(def.id) ? 'final' : 'mini';
+  return def.boss && finalBossesOf(level).includes(def.id) ? 'final' : 'mini';
 }
 
 /**

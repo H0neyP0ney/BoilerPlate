@@ -4,6 +4,7 @@
 import { createServer } from 'vite';
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 let failures = 0;
 const check = (ok, label, detail = '') => {
   console.log(`${ok ? '✔' : '✘'} ${label}${detail ? ` — ${detail}` : ''}`);
@@ -193,6 +194,23 @@ try {
     check(Math.abs(sim.escalationHp - (1 + DIFFICULTY.bossEscalationHp) ** 2) < 1e-9 && Math.abs(sim.escalationSpeed - (1 + DIFFICULTY.bossEscalationSpeed) ** 2) < 1e-9, 'escalade : cumulée (2 boss = ×(1 + gain)²)', `PV ${sim.escalationHp.toFixed(3)}, vitesse ${sim.escalationSpeed.toFixed(3)}`);
     sim.restart();
     check(sim.bossKills === 0 && sim.escalationHp === 1 && sim.escalationSpeed === 1, 'escalade : remise à zéro à la relance de la partie');
+  }
+
+  // ---- grenouille : à sa mort, 3 araignées aux PV réglables (comme le chaman) ; pas pendant un clear screen
+  {
+    const { sim, step } = fresh(16);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    for (const o of sq.soldiers) o.invulnerable = 1e9;
+    const D = ALIENS.toad.deathSpawn;
+    check(D?.spawn === 'spider' && D.count === 3 && D.hpMul === 2, 'grenouille : 3 araignées à sa mort (données, nombre et PV réglables)');
+    sim.horde.spawnAt('toad', sq.center.x + 400, sq.center.y, 1, false);
+    step(60);
+    const toad = sim.aliens.find((a) => a.def.id === 'toad');
+    sim.damage(toad, 1e9, 'p1');
+    step(2);
+    const spiders = sim.aliens.filter((a) => a.def.id === 'spider' && a.alive);
+    check(spiders.length === 3 && spiders.every((a) => a.noXp && a.noRecruit && Math.abs(a.maxHp - ALIENS.spider.hp * 2) < 0.01), 'grenouille tuée : 3 araignées (sans XP ni recrue, PV × 2)', `${spiders.length} araignée(s), PV ${spiders[0]?.maxHp.toFixed(1)}`);
   }
 
   // ---- chaman : à sa mort, 5 araignées (invoquées : ni XP ni recrue) ; pas pendant le clear screen d'un boss
@@ -759,6 +777,49 @@ try {
     sp.age = 99; sp.attackCd = 0; sp.hp = sp.maxHp = 1e9;
     for (let i = 0; i < 10; i++) f.step(1);
     check(t1.venom > 0 && t1.venomDps > 8 && t1.venomDps < 9, "araignée : un coup de mêlée empoisonne vraiment le soldat touché", `venom ${t1.venom.toFixed(1)} s, ${t1.venomDps.toFixed(2)} PV/s`);
+  }
+
+  // ---- version test playtime (docs/TEST_PLAYTIME.md) : PV des soldats ×2, PV des boss ÷ 2, plus de pièces / diamants / coffre / alien doré / Jackpot
+  {
+    const cfg = await vite.ssrLoadModule('/src/config.ts');
+    const { CLASSES } = await vite.ssrLoadModule('/src/data/classes.ts');
+    const { UPGRADE_IDS } = await vite.ssrLoadModule('/src/data/progression.ts');
+    const base = fresh(51);
+    const hpOff = base.sim.squadOf('p1').soldiers[0];
+    const hpOffExpect = CLASSES[hpOff.def.id].hp;
+    cfg.PLAYTIME_TEST.enabled = true;
+    try {
+      const { sim, step } = fresh(52);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      const so = sq.soldiers[0];
+      sim.horde.spawnAt('boss_rhino', sq.center.x + 700, sq.center.y, 1, false);
+      const boss = sim.aliens.find((a) => a.def.id === 'boss_rhino');
+      const bossExpect = ALIENS.boss_rhino.hp * 0.5 * sim.escalationHp;
+      check(Math.abs(so.maxHp - CLASSES[so.def.id].hp * 2) < 0.01 && hpOff.maxHp === hpOffExpect, 'test playtime : PV de base des soldats ×2', `${so.maxHp.toFixed(1)} PV contre ${hpOff.maxHp.toFixed(1)} hors test`);
+      check(Math.abs(boss.maxHp - bossExpect) < 0.5, 'test playtime : PV des boss ÷ 2', `${boss.maxHp.toFixed(0)} PV (base ${ALIENS.boss_rhino.hp})`);
+      // aucune pièce : on tue 300 aliens (dont des costauds)
+      clearAliens(sim);
+      for (let i = 0; i < 300; i++) sim.horde.spawnAt(i % 5 === 0 ? 'charger' : 'slime', sq.center.x + 400 + (i % 20) * 10, sq.center.y + Math.floor(i / 20) * 10, 1, false);
+      for (const a of [...sim.aliens]) sim.damage(a, 1e9, 'p1');
+      step(3);
+      check(sim.gems.coins.length === 0 && sim.gems.items.length === 0, 'test playtime : aucune pièce ni aucun diamant ne tombe', `${sim.gems.coins.length} pièces, ${sim.gems.items.length} diamants`);
+      // pas de coffre à l'ouverture de l'œuf, pas d'alien doré
+      const egg = sim.horde.spawnEgg(sq.center.x + 300, sq.center.y);
+      sim.damage(egg, 1e9, 'p1');
+      step(2);
+      sim.horde.updateGoldenSpawns?.();
+      check(sim.gems.chests.length === 0 && !sim.aliens.some((a) => a.def.id === 'golden'), "test playtime : pas de coffre à diamants, pas d'alien doré", `${sim.gems.chests.length} coffre(s)`);
+      // timeline complète en Normal : le boss final est le Giant Crab, le Scarab et les jumeaux laissent un œuf
+      const { bossKindAt } = await vite.ssrLoadModule('/src/data/aliens.ts');
+      check(bossKindAt(ALIENS.boss_crab, 'normal') === 'final' && bossKindAt(ALIENS.boss_scarab, 'normal') === 'mini' && bossKindAt(ALIENS.boss_rhino_fire, 'normal') === 'mini', 'test playtime : en Normal, la run se termine au Giant Crab (Scarab et jumeaux : mini-boss)');
+      // Jackpot jamais proposée
+      let seen = 0;
+      for (let i = 0; i < 80; i++) { sq.rerollOffer(); if (sq.offer && sq.offer.includes('goldDigger')) seen++; }
+      check(UPGRADE_IDS.includes('goldDigger') && seen === 0, "test playtime : l'upgrade Jackpot n'est jamais proposée", `${seen} proposition(s) sur 80`);
+    } finally {
+      cfg.PLAYTIME_TEST.enabled = false;
+    }
   }
 
   // ---- charge enragée : le Rhino Alpha très enragé enchaîne ses charges (cooldown ÷ 10) ; il doit s'arrêter net au début du télégraphe (pas de glissade de 80-100 px dans le sens de la charge précédente)

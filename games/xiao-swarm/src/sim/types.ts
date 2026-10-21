@@ -28,7 +28,7 @@ export type SimEvent =
   | { t: 'hit'; id: number }
   /** Coup critique d'un soldat allié en (x, y) (impact du tir), `dmg` = dégâts infligés : l'affichage montre un « ! » rouge et ce nombre. */
   | { t: 'crit'; x: number; y: number; dmg: number }
-  | { t: 'alienDied'; id: number; x: number; y: number; alien: AlienId; killer: PlayerId | null }
+  | { t: 'alienDied'; id: number; x: number; y: number; alien: AlienId; killer: PlayerId | null; /** Mort pendant un clear screen de boss (pas de butin d'araignées ni de mini fontaine). */ wipe?: boolean }
   | { t: 'soldierDied'; id: number; x: number; y: number; cls: SoldierClassId; owner: PlayerId }
   | { t: 'shot'; id: number; cls: SoldierClassId; x: number; y: number; aim: number }
   | { t: 'impact'; x: number; y: number; texture: string }

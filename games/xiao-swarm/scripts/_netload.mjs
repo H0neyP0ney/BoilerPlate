@@ -3,6 +3,7 @@ import { createServer } from 'vite';
 
 const SECONDS = Number(process.argv[2] ?? 330);
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 try {
   const { HostSession } = await vite.ssrLoadModule('/src/net/HostSession.ts');
   const { ClientSession } = await vite.ssrLoadModule('/src/net/ClientSession.ts');

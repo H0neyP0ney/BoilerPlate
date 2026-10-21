@@ -211,24 +211,7 @@ export function generateTimeline(script: WaveScript, model: WaveModel, target: r
   return { timeline, meanError, maxError: max, relError: meanError / peak };
 }
 
-/** Regroupe les envois d'un même niveau à intervalle constant (3 au moins) en une entrée `every` / `until`. */
+/** Une entrée de la timeline par envoi (plus de regroupement `every` / `until` depuis le 21/10 : la timeline de la survie est écrite envoi par envoi). */
 function compress(sends: { t: number; level: number }[]): TimelineEntry[] {
-  const out: TimelineEntry[] = [];
-  for (let level = 1; level <= 8; level++) {
-    const times = sends.filter((s) => s.level === level).map((s) => s.t);
-    let i = 0;
-    while (i < times.length) {
-      let j = i;
-      const gap = i + 1 < times.length ? times[i + 1] - times[i] : 0;
-      while (j + 1 < times.length && Math.abs(times[j + 1] - times[j] - gap) < 1e-6) j++;
-      if (j - i >= 2) {
-        out.push({ at: times[i], level, every: gap, until: times[j] });
-        i = j + 1;
-      } else {
-        out.push({ at: times[i], level });
-        i++;
-      }
-    }
-  }
-  return out;
+  return sends.map((s) => ({ at: s.t, level: s.level }));
 }

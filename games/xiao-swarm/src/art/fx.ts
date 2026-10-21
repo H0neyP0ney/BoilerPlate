@@ -408,7 +408,7 @@ export function makeFxTextures(scene: Phaser.Scene): void {
       }
     });
   }
-  // Tourbillon d'étourdissement : spirale jaune à contour sombre, qui tourne au-dessus de la tête.
+  // Tourbillon d'étourdissement : spirale rose / violette à contour sombre, qui tourne au-dessus de la tête (jaune avant le 21/10).
   canvasTexture(scene, 'fx_stun', 32, 32, (ctx) => {
     const spiral = (): void => {
       ctx.beginPath();
@@ -423,10 +423,10 @@ export function makeFxTextures(scene: Phaser.Scene): void {
     };
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#3a2a08';
+    ctx.strokeStyle = '#2e0a3a';
     ctx.lineWidth = 6.5;
     spiral();
-    ctx.strokeStyle = '#ffe14a';
+    ctx.strokeStyle = '#e65cff';
     ctx.lineWidth = 3.2;
     spiral();
   });

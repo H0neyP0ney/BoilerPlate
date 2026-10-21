@@ -1,5 +1,5 @@
 import { assignSlotsOptimal, damp, robustCentroid, Stats, sunflowerSlots, type Circle, type Point } from '@xiao/engine/sim';
-import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL, WEB, ELECTRO } from '../config';
+import { CHASE, CROWD, DETACH_EXTRA, DIFFICULTY, GRAB_IMMUNE, GRAB_OUT, GRAB_SLOW, GRAB_SLOW_TIME, REJOIN_EXTRA, RELEASE_OUT, SQUAD, STIM_SPEED, UPGRADE_REPEL, WEB, ELECTRO, ptMul, ptOn } from '../config';
 import { CLASSES, type SoldierClassId } from '../data/classes';
 import { MEDIC_RANGE_UNITS } from '../data/armory';
 import { DISABLED_UPGRADES, OFFER_SIZE, UPGRADE_IDS, UPGRADES, xpToNext, type UpgradeId } from '../data/progression';
@@ -42,6 +42,11 @@ export type SquadStat ='damage' | 'fireRate' | 'hp' | 'speed' | 'maxSquad' | 'ma
  *  - séparation + obstacles → la formation se déforme puis se reforme ;
  *  - l'ancre est tenue en laisse autour du coeur de la squad.
  */
+/** Upgrade jamais proposée : désactivée dans `data/progression.ts`, ou Jackpot pendant la version test playtime (plus d'économie). */
+function upgradeDisabled(id: UpgradeId): boolean {
+  return DISABLED_UPGRADES.includes(id) || (id === 'goldDigger' && ptOn('noEconomy'));
+}
+
 export class Squad {
   readonly soldiers: SoldierState[] = [];
   /** Composition de la squad quand elle a été à son effectif maximal de la partie (base du revive : `DIFFICULTY.reviveSquadFraction`). */
@@ -220,7 +225,7 @@ export class Squad {
 
   /** `reroll` : relance du joueur (les prismatiques sont retirées au sort). */
   private rollOffer(avoid: readonly UpgradeId[] = [], reroll = false): void {
-    let eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
+    let eligible = UPGRADE_IDS.filter((id) => !upgradeDisabled(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
     const fresh = eligible.filter((id) => !avoid.includes(id));
     if (fresh.length >= OFFER_SIZE) eligible = fresh;
     const choosing = this.level - this.pendingLevels + 1; // niveau dont on choisit l'upgrade (plusieurs niveaux d'un coup : le plus ancien d'abord)
@@ -280,7 +285,7 @@ export class Squad {
     this.pendingLevels = 0;
     const { rng } = this.sim;
     for (let l = 1; l < level; l++) {
-      const eligible = UPGRADE_IDS.filter((id) => !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
+      const eligible = UPGRADE_IDS.filter((id) => !upgradeDisabled(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks);
       if (eligible.length === 0) break;
       const offer = rng.sample(eligible, OFFER_SIZE);
       const id = rng.weighted(offer, weight) ?? rng.pick(offer);
@@ -308,7 +313,7 @@ export class Squad {
   /** Applique la stat `hp` aux soldats déjà là : PV max et PV courants augmentent du même montant (silencieux). */
   refreshMaxHp(): void {
     for (const s of this.soldiers) {
-      const max = s.def.hp * this.stats.get('hp');
+      const max = s.def.hp * this.stats.get('hp') * ptMul('soldierHpMul');
       s.hp += max - s.maxHp;
       s.maxHp = max;
     }
@@ -346,7 +351,7 @@ export class Squad {
 
   /** Upgrade encore prenable (pas désactivée, pas au maximum de prises). */
   private canTake(id: UpgradeId): boolean {
-    return !DISABLED_UPGRADES.includes(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks;
+    return !upgradeDisabled(id) && (this.picked[id] ?? 0) < UPGRADES[id].maxStacks;
   }
 
   /** Upgrade prenable tirée au hasard, de préférence hors `avoid` (null si tout est au maximum). */
@@ -367,7 +372,7 @@ export class Squad {
     if (id === 'hp') {
       // les soldats déjà là gagnent les PV max supplémentaires, et autant de PV courants (50/100 + 20 % → 70/120)
       for (const s of this.soldiers) {
-        const max = s.def.hp * this.stats.get('hp');
+        const max = s.def.hp * this.stats.get('hp') * ptMul('soldierHpMul');
         s.hp += max - s.maxHp;
         s.maxHp = max;
         this.sim.events.push({ t: 'heal', x: s.x, y: s.y - 50 });
@@ -408,7 +413,7 @@ export class Squad {
 
   add(id: SoldierClassId, at: Point): SoldierState {
     const def = CLASSES[id];
-    const maxHp = def.hp * this.stats.get('hp');
+    const maxHp = def.hp * this.stats.get('hp') * ptMul('soldierHpMul');
     const s: SoldierState = {
       kind: 'soldier',
       id: this.sim.ids.get(),

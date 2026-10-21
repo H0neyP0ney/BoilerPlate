@@ -4,6 +4,7 @@ import { createServer } from 'vite';
 
 const latency = Number(process.argv[2] ?? 4); // par sens : 4 ticks ≈ 133 ms, soit ≈ 270 ms d'aller-retour
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 let failures = 0;
 const check = (ok, label, detail = '') => {
   console.log(`${ok ? '✔' : '✘'} ${label}${detail ? ` — ${detail}` : ''}`);

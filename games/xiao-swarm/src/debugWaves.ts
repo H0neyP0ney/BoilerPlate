@@ -36,8 +36,6 @@ function sanitize(raw: unknown): WaveScript | null {
       at: Math.max(0, e.at),
       level: Math.round(e.level),
       ...(Number.isFinite(e.config) && (e.config as number) >= 1 ? { config: Math.round(e.config as number) } : {}),
-      ...(num(e.every, 0) > 0 ? { every: e.every } : {}),
-      ...(num(e.every, 0) > 0 && Number.isFinite(e.until) ? { until: e.until } : {}),
     }));
   const m = r.model as Partial<WaveModel> | undefined;
   const model: WaveModel = {

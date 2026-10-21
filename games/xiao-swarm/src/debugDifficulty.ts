@@ -24,10 +24,12 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
   {
     title: 'Niveaux de difficulté',
     specs: [
-      { key: 'expertBaseMul', label: 'Expert : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie les stats de base de TOUS les aliens (PV, dégâts, cadence d\'attaque, vitesse ; pas l\'XP ni les recrues) en mode Expert. 1,1 = +10 %' },
-      { key: 'expertScaleMul', label: 'Expert : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie chaque gain d\'escalade par boss tué (section Boss) en mode Expert. 1,1 : +15 % par boss devient +16,5 %' },
-      { key: 'impossibleBaseMul', label: 'Impossible : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 %' },
-      { key: 'impossibleScaleMul', label: 'Impossible : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 % sur chaque gain d\'escalade' },
+      { key: 'normalBaseMul', label: 'Normal (easy) : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie les stats de base de TOUS les aliens (PV, dégâts, cadence d\'attaque, vitesse ; pas l\'XP ni les recrues) au niveau Normal. 1 = valeurs de data/aliens.ts' },
+      { key: 'normalScaleMul', label: 'Normal (easy) : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie chaque gain d\'escalade par boss tué (section Boss) au niveau Normal. 1 : +15 % par boss' },
+      { key: 'expertBaseMul', label: 'Hard (id expert) : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie les stats de base de TOUS les aliens (PV, dégâts, cadence d\'attaque, vitesse ; pas l\'XP ni les recrues) en mode Expert. 1,1 = +10 %' },
+      { key: 'expertScaleMul', label: 'Hard (id expert) : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Multiplie chaque gain d\'escalade par boss tué (section Boss) en mode Expert. 1,1 : +15 % par boss devient +16,5 %' },
+      { key: 'impossibleBaseMul', label: 'Expert (id impossible) : stats de base ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 %' },
+      { key: 'impossibleScaleMul', label: 'Expert (id impossible) : escalade ×', min: 0.5, max: 3, step: 0.01, hint: 'Comme Expert, pour le mode Impossible. 1,2 = +20 % sur chaque gain d\'escalade' },
     ],
   },
   {

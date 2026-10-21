@@ -9,6 +9,7 @@ const SECONDS = Number(process.argv[3] ?? 60);
 const TRY = process.argv[4] ? JSON.parse(process.argv[4]) : null;
 const HORDE = [['slime', 30], ['gling', 30], ['charger', 8], ['burner', 8], ['toad', 6]];
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 
 try {
   const { LocalSession } = await vite.ssrLoadModule('/src/net/Session.ts');

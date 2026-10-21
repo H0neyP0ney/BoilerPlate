@@ -2,6 +2,8 @@
  * Niveaux de difficulté de la run : `normal`, `expert`, `impossible`. Choisi par le joueur sur l'écran d'accueil (boutons à droite) ; en ligne, c'est l'hôte qui choisit
  * pour toute la room, et les joueurs qui la rejoignent voient le niveau sans pouvoir le changer. Pour l'instant le niveau ne change rien au jeu.
  */
+import { ptOn } from '../config';
+
 export type DifficultyLevel = 'normal' | 'expert' | 'impossible';
 
 export const DIFFICULTY_LEVELS: DifficultyLevel[] = ['normal', 'expert', 'impossible'];
@@ -23,6 +25,14 @@ export const FINAL_BOSS: Record<DifficultyLevel, readonly string[]> = {
   expert: ['boss_rhino_fire', 'boss_rhino_ice'],
   impossible: ['boss_crab'],
 };
+
+/**
+ * Boss final de la run au niveau `level` : `FINAL_BOSS`, sauf pendant la version test playtime (`PLAYTIME_TEST.fullTimeline`) où le Normal joue toute la timeline et se termine
+ * au Giant Crab (comme l'Expert).
+ */
+export function finalBossesOf(level: DifficultyLevel): readonly string[] {
+  return level === 'normal' && ptOn('fullTimeline') ? FINAL_BOSS.impossible : FINAL_BOSS[level];
+}
 
 /** Niveau lu dans une valeur libre (message réseau) : `normal` si ce n'en est pas un. */
 export function parseDifficultyLevel(value: unknown): DifficultyLevel {

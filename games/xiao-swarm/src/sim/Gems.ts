@@ -1,5 +1,5 @@
 import { clamp, Rng } from '@xiao/engine/sim';
-import { DIFFICULTY, GEM_CHEST, RECRUIT } from '../config';
+import { DIFFICULTY, GEM_CHEST, RECRUIT, ptOn } from '../config';
 import { ALIENS, bossKindAt, type AlienId } from '../data/aliens';
 import type { AlienState, GemChestState, GemState } from './entities';
 import { catchItem, chase, findAttractor, inPickRange, pulledAttractor } from './Pickup';
@@ -73,7 +73,7 @@ export class Gems {
   }
 
   spawnChest(x: number, y: number, boss: AlienId = 'boss_gling', squad?: Squad): void {
-    if (!this.enabled || this.sim.tutorial?.active) return;
+    if (ptOn('noEconomy') || !this.enabled || this.sim.tutorial?.active) return;
     const { minX, maxX, minY, maxY } = this.sim.arena.bounds;
     const rng = this.rng;
     const qty = this.chestQuantity(boss, this.goldMul(x, y, squad));
@@ -90,7 +90,7 @@ export class Gems {
 
   /** Le boss final tombe en (x, y) : l'équivalent d'un coffre qui explose, tout de suite, sans vidéo (`GEM_CHEST.burst` diamants, 10 s pour les ramasser). */
   spawnFinalBurst(x: number, y: number, boss: AlienId = 'boss_crab', squad?: Squad): void {
-    if (!this.enabled) return;
+    if (ptOn('noEconomy') || !this.enabled) return;
     const rng = this.rng;
     const n = Math.max(1, Math.round(this.chestQuantity(boss, this.goldMul(x, y, squad)) * DIFFICULTY.gemFinalShare)); // quantité modérée : une part du coffre
     this.finalT = DIFFICULTY.gemFinalWait;
@@ -107,7 +107,7 @@ export class Gems {
 
   /** Un alien vient de mourir : il peut lâcher une pièce d'or (plus souvent s'il est costaud), un boss en lâche une poignée. Solo seulement. */
   dropCoins(a: AlienState, squad?: Squad): void {
-    if (this.sim.ending) return; // les pièces tombent aussi en multi (contrairement aux diamants)
+    if (this.sim.ending || ptOn('noEconomy')) return; // les pièces tombent aussi en multi (contrairement aux diamants) ; version test playtime : aucune pièce
     const rng = this.rng;
     const mul = this.goldMul(a.x, a.y, squad); // Jackpot : +25 % par prise (la chance d'un alien ordinaire est multipliée : 30 % → 37,5 % ; un costaud, 100 %, lâche parfois 2 pièces)
     const final = !!a.def.boss && bossKindAt(a.def, this.sim.difficulty) === 'final';
@@ -122,14 +122,14 @@ export class Gems {
 
   /** `n` pièces d'or qui retombent en cloche autour de (x, y), de `min` à `max` px (alien doré : sur sa route, ou à sa mort). */
   dropCoinsAt(x: number, y: number, n: number, min = 15, max = 45, src = 'golden_flee', squad?: Squad): void {
-    if (this.sim.ending) return;
+    if (this.sim.ending || ptOn('noEconomy')) return;
     n = this.scaled(n, this.goldMul(x, y, squad));
     for (let i = 0; i < n; i++) this.pushCoin(x, y, this.rng.range(0, Math.PI * 2), this.rng.range(min, max), src);
   }
 
   /** `n` diamants qui jaillissent autour de (x, y) (solo seulement). */
   dropGemsAt(x: number, y: number, n: number, src = 'golden', squad?: Squad): void {
-    if (!this.enabled) return;
+    if (!this.enabled || ptOn('noEconomy')) return;
     n = this.scaled(n, this.goldMul(x, y, squad));
     const turn = this.rng.range(0, Math.PI * 2);
     for (let k = 0; k < n; k++) this.drop(x, y, turn + (k / n) * Math.PI * 2 + this.rng.range(-0.25, 0.25), this.rng.range(60, 160), src);

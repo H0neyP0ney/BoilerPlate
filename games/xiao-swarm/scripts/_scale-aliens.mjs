@@ -2,6 +2,7 @@
 import { createServer } from 'vite';
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
+(await vite.ssrLoadModule('/src/config.ts')).PLAYTIME_TEST.enabled = false; // la version test playtime (docs/TEST_PLAYTIME.md) ne doit pas fausser les tests : jeu complet
 const { ALIENS } = await vite.ssrLoadModule('/src/data/aliens.ts');
 const PART = -0.1; // −10 % (comme part = −0,1 dans shiftAllStat : PV, vitesse, dégâts × 0,9 ; délai de tir × 1,1)
 const SKIP = new Set(['golden']); // PV exacts demandés (2000) et comportement propre : non touché

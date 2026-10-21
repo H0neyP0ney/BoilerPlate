@@ -1,5 +1,5 @@
 import { damp, Rng, type Point } from '@xiao/engine/sim';
-import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS, FIRE, RUSH_RAMP } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS, FIRE, RUSH_RAMP, ptMul, ptOn } from '../config';
 import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
@@ -124,7 +124,7 @@ export class Horde {
   private create(def: (typeof ALIENS)[AlienId], x: number, y: number, hpFrac: number, revived: boolean, hpMul = 1): AlienState {
     const { rng } = this.sim;
     const c = this.sim.nearestSquad(x, y)?.center ?? { x, y };
-    const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * this.sim.escalationHp; // escalade des PV : par boss déjà tué
+    const maxHp = def.hp * hpMul * (revived ? zombieStats().hpMul : 1) * this.sim.escalationHp * (def.boss ? ptMul('bossHpMul') : 1); // escalade des PV : par boss déjà tué ; version test playtime : boss ÷ 2
     const shield = shieldOf(def, this.sim.difficulty);
     const maxShield = shield ? maxHp * shield.pct : 0;
     this.sim.metrics.spawnedHp += maxHp * hpFrac + maxShield;
@@ -449,6 +449,7 @@ export class Horde {
 
   /** Tire (une fois par partie) les dates d'apparition puis fait apparaître l'alien doré quand c'est l'heure, à `spawnDist` px d'une squad (hors écran). */
   private updateGoldenSpawns(): void {
+    if (ptOn('noEconomy')) return; // version test playtime : plus d'alien doré (il ne sert qu'à lâcher de l'argent)
     const G = ALIENS.golden.golden!;
     if (!this.goldRng) {
       this.goldRng = new Rng((this.sim.config.seed ^ 0x7f4a7c15) >>> 0);

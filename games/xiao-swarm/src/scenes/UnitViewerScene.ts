@@ -8,6 +8,7 @@ import { ACTIVE_CLASSES, CLASSES, type SoldierClassId } from '../data/classes';
 import { PALETTE, SCENES, SHADOW_ALPHA, VIEW_BG } from '../config';
 import { button, header, line, note, slider } from '../dev/devUi';
 import type { AlienTestRequest } from '../dev/alienTest';
+import { RATIO_BASE_SOLDIERS, RATIO_MAX_SOLDIERS, TANK_MUL, testSoldiers } from '../dev/alienTestRules';
 import { ScaleRef } from '../dev/scaleRef';
 import { proceduralKey, proceduralScale } from '../art/aliens';
 import { getDefaultStat, getStat, listStats, resetStats, saveAllStatsToCode, setStat } from '../debugStats';
@@ -1009,7 +1010,7 @@ ${id}` : id;
   private buildPanel(): void {
     const p = document.createElement('div');
     p.style.cssText =
-      'position:fixed;top:8px;left:8px;z-index:99999;width:290px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
+      'position:fixed;top:8px;left:8px;z-index:99999;width:312px;box-sizing:border-box;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
       'background:rgba(0,0,0,0.78);color:#dfe;font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:8px';
     const title = header("Visionneuse d'unités", () => this.select_(ALL));
 
@@ -1157,7 +1158,7 @@ ${id}` : id;
     const id = baseUnit(t.unit);
     const p = document.createElement('div');
     p.style.cssText =
-      'position:fixed;top:8px;left:330px;z-index:99999;width:270px;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
+      'position:fixed;top:8px;left:332px;z-index:99999;width:292px;box-sizing:border-box;max-height:calc(100vh - 16px);overflow:auto;padding:10px;' +
       'background:rgba(0,0,0,0.78);color:#dfe;font:13px system-ui,sans-serif;border-radius:6px;display:flex;flex-direction:column;gap:8px';
     const info = document.createElement('div');
     info.style.cssText = 'font-size:12px;color:#9fe;white-space:pre-wrap';
@@ -1182,11 +1183,16 @@ ${id}` : id;
       ...(kind === 'alien'
         ? [
             line(
-              button('▶ Test', () => {
-                this.registry.set('alienTest', { alien: id as AlienId, back: this.selected } satisfies AlienTestRequest);
+              button(`▶ Test réaliste (${testSoldiers(id as AlienId, 'ratio')} Trooper${testSoldiers(id as AlienId, 'ratio') > 1 ? 's' : ''})`, () => {
+                this.registry.set('alienTest', { alien: id as AlienId, back: this.selected, mode: 'ratio' } satisfies AlienTestRequest);
+                this.scene.start(SCENES.game);
+              }),
+              button(`▶ Duel ×${TANK_MUL} PV`, () => {
+                this.registry.set('alienTest', { alien: id as AlienId, back: this.selected, mode: 'tank' } satisfies AlienTestRequest);
                 this.scene.start(SCENES.game);
               }),
             ),
+            note(`Test réaliste : l'alien contre une squad dont l'effectif suit ses PV (${RATIO_BASE_SOLDIERS} Troopers contre un slime, au plus ${RATIO_MAX_SOLDIERS}). Duel ×${TANK_MUL} : 1 Trooper à ${TANK_MUL}× ses PV contre l'alien à ${TANK_MUL}× ses PV, pour observer le combat sans mourir.`),
           ]
         : []),
       note("Équilibrage : appliqué en direct aux prochaines apparitions (les unités déjà en jeu gardent leurs valeurs). Save écrit dans data/aliens.ts / data/classes.ts."),

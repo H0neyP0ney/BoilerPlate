@@ -59,8 +59,8 @@ export class LevelUpScene extends Phaser.Scene {
   private pressed = -1;
   /** Temps restant du choix à l'image précédente : une hausse = un équipier a relancé (la jauge repart de zéro pour tous). */
   private prevLeft = -1;
-  /** Fin (ms, horloge de la scène) de l'affichage « Ally rerolled » à la place de l'attente. */
-  private rerolledUntil = 0;
+  /** « Ally rerolled » : texte à part (visible aussi par un joueur qui a déjà choisi, la barre reste affichée) ; il apparaît avec un « pop » d'échelle quand un équipier relance. */
+  private allyText!: Phaser.GameObjects.Text;
   /** Onboarding : indice de la seule carte qu'on peut prendre (-1 : toutes). */
   private onlyCard = -1;
 
@@ -77,7 +77,6 @@ export class LevelUpScene extends Phaser.Scene {
     this.busy = false;
     this.pressed = -1;
     this.prevLeft = -1;
-    this.rerolledUntil = 0;
     this.cards = [];
     this.onlyCard = data.suggest && data.offer ? data.offer.indexOf(data.suggest) : -1; // tutoriel : seule la carte recommandée peut être prise
     this.input.on('pointerup', () => (this.pressed = -1)); // relâché ailleurs : l'appui ne compte plus
@@ -93,6 +92,11 @@ export class LevelUpScene extends Phaser.Scene {
       .text(0, 0, t('waitingPlayers'), { fontFamily: theme.font, fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#13233a', strokeThickness: 6 })
       .setOrigin(0.5)
       .setVisible(offer.length === 0);
+    this.allyText = this.add
+      .text(0, 0, t('allyRerolled'), { fontFamily: theme.font, fontSize: '26px', fontStyle: 'bold', color: '#ffd84a', stroke: '#3a2a08', strokeThickness: 7 })
+      .setOrigin(0.5)
+      .setDepth(40)
+      .setVisible(false);
     offer.forEach((id, i) => {
       const count = game.localSquad.picked[id] ?? 0; // prises déjà faites (pas celle qu'on s'apprête à prendre)
       const card = this.makeCard(id, i, count, data.prism[i] === true, game.localSquad.prismPicked[id] ?? 0);
@@ -225,6 +229,7 @@ export class LevelUpScene extends Phaser.Scene {
       const barW = n * cw + (n - 1) * gap;
       this.timerBox = { x: w / 2 - barW / 2, y: top + total + 22, w: barW };
       this.waitText.setPosition(w / 2, this.cards.length ? top + total + 62 : h / 2);
+      this.allyText.setPosition(w / 2, this.waitText.y + (this.waitText.visible ? 40 : 0)); // sous « En attente » s'il est affiché, sinon à sa place
       if (!this.cards.length) this.timerBox.y = h / 2 + 30;
       rerollBtn?.setPosition(w / 2, top + total + (this.game_.session.online ? 126 : 84)); // 30 px plus bas
     };
@@ -243,13 +248,22 @@ export class LevelUpScene extends Phaser.Scene {
     });
   }
 
+  /** « Ally rerolled » : le texte jaillit (échelle 0,4 → 1,15 en « Back.Out », puis revient à 1), reste ~2 s puis s'efface ; rejoué à chaque relance, par tous les joueurs (ceux qui ont déjà choisi comme les autres). */
+  private showAllyRerolled(): void {
+    const txt = this.allyText;
+    this.tweens.killTweensOf(txt);
+    txt.setPosition(txt.x, this.waitText.y + (this.waitText.visible ? 40 : 0)).setVisible(true).setAlpha(1).setScale(0.4);
+    playSfx(this, 'ui_reroll');
+    this.tweens.add({ targets: txt, scale: 1.15, duration: 260, ease: 'Back.Out', onComplete: () => this.tweens.add({ targets: txt, scale: 1, duration: 140 }) });
+    this.tweens.add({ targets: txt, alpha: 0, delay: 2000, duration: 450, onComplete: () => txt.setVisible(false) });
+  }
+
   /** Barre de temps : se vide de droite à gauche au rythme du choix de la simulation (le même chez tous les joueurs). */
   update(): void {
     if (!this.game_.session.online) return; // solo : pas de limite de temps, le jeu attend le choix du joueur
     const left = Math.max(0, this.game_.session.sim.choiceT);
-    if (this.prevLeft >= 0 && left > this.prevLeft + 0.25 && this.waitText.visible) this.rerolledUntil = this.time.now + 2500; // moi j'ai fini : je vois que la jauge repart à cause d'un équipier
+    if (this.prevLeft >= 0 && left > this.prevLeft + 0.25) this.showAllyRerolled(); // la jauge repart de zéro pour tous à cause de la relance d'un équipier (ma propre relance rouvre la fenêtre : `prevLeft` repart de -1)
     this.prevLeft = left;
-    this.waitText.setText(this.time.now < this.rerolledUntil ? t('allyRerolled') : t('waitingPlayers'));
     const k = Math.min(1, left / UPGRADE_CHOICE_TIME);
     const { x, y, w } = this.timerBox;
     const g = this.timerBar;

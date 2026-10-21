@@ -56,7 +56,7 @@ export class WaveRunner {
 
   constructor(
     private readonly script: WaveScript,
-    /** `arrival` : `'ahead'` = embuscade devant chaque squad, `'ring'` = cercle autour de la squad que désigne `ringRoll` (0-1, le même pour tous les groupes de la vague). */
+    /** `arrival` : `'ahead'` = embuscade devant chaque squad, `'ring'` = cercle autour de CHAQUE squad vivante (20/10 ; `ringRoll` n'est plus lu : le tirage reste pour ne pas changer la suite aléatoire). */
     private readonly spawn: (type: AlienId, count: number, arrival?: 'ahead' | 'ring', ringRoll?: number) => void,
     private readonly rng: Rng,
     private readonly hooks?: WaveRunnerHooks,

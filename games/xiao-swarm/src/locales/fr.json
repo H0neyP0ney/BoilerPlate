@@ -19,7 +19,7 @@
   "hintTutoDrag": "Glisse pour déplacer",
   "tutoIncoming": "Ennemis en approche !",
   "tutoTakeUpgrade": "Prends l'upgrade",
-  "tutoPrism": "Upgrade prismatique !\nBonus doublé !",
+  "tutoPrism": "Carte prismatique !\nUpgrade doublée !",
   "tutoMove": "Va ici",
   "tutoPowerup": "Prends le power-up",
   "hintKeys": "Déplace ta squad",
@@ -251,7 +251,7 @@
   "bossTip": "BOSS",
   "restartIn": "Nouvelle partie dans {value} s",
   "chooseUpgradeShort": "Choisis : 1 / 2 / 3",
-  "reroll": "Relancer ({value})",
+  "reroll": "Relancer x{value}",
   "rerollAd": "Relancer",
   "waitingPlayers": "On attend les autres joueurs…",
   "allyRerolled": "Un allié a relancé"

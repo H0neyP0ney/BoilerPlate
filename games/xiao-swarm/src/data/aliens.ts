@@ -38,6 +38,8 @@ export interface AlienDef {
   projectile?: { life: number; ring: number; kind?: 'ice' | 'fire' };
   /** Mêlée en zone : chaque coup au contact (`damage`, toutes les `attackCooldown` s) touche tous les soldats à moins de `cleave` px de lui, pas un seul. */
   cleave?: number;
+  /** Aura (chargeur) : toutes les `every` s, chaque soldat à moins de `radius` px de lui subit `damage` (× escalade) et un éclair électrique jaillit sur lui. */
+  aura?: { every: number; radius: number; damage: number };
   /**
    * Nuage ralentissant : toutes les `every` s, si la squad visée est à moins de `range` px, un nuage violet apparaît sur elle, un peu
    * en avant de sa course (vitesse × `lead` s) : les soldats dedans vont à `slow` × leur vitesse pendant `ttl` s (rayon `radius`).
@@ -60,7 +62,8 @@ export interface AlienDef {
     /** Scarab (Impossible) : toutes les `every` s, deux murs de rochers (télégraphe `windup` s puis ligne de `length` px, rochers de rayon `rock.radius` pendant `rock.ttl` s) : l'un SUR la squad, l'autre `ahead` px DEVANT elle (sa direction de course). */
     /** Rhino Alpha (Expert) : toutes les `every` s, `count` nuages de gel autour de la squad (même fonctionnement que `frost` du chaman, `range` ignoré). */
     frost?: { every: number; range: number; count: number; gap: [number, number]; radius: number; ttl: number };
-    walls?: { every: number; windup: number; length: number; ahead: number; rock: { radius: number; ttl: number } };
+    /** `blocks` > 0 : `blocks` murs d'UN SEUL rocher (`length` ignorée), le 1er sur la squad (où elle sera à la fin du télégraphe), le dernier là où elle se dirige (`ahead` px plus loin), les autres entre les deux, décalés de ±`scatter` px sur le côté. */
+    walls?: { every: number; windup: number; length: number; ahead: number; blocks?: number; scatter?: number; rock: { radius: number; ttl: number } };
     /** Rhinos jumeaux (Expert) : `count` orbes électriques tournent en continu autour du boss à `radius` px (`speed` rad/s, sens inverse pour le rhino de glace) ; un soldat touché (rayon `hit` px) perd `damage` PV, au plus une fois par orbe toutes les `rehit` s. */
     orbs?: { count: number; radius: number; speed: number; damage: number; hit: number; rehit: number };
     /** Bouclier propre au niveau Impossible (même fonctionnement que `shield`) : posé sur tous les boss. Voir `shieldOf`. */
@@ -130,11 +133,12 @@ export interface AlienDef {
   /** `twin` : boss jumeau (rhinos feu / glace) : le premier tombé est un alien comme les autres (ni clear screen, ni œuf, ni escalade) ; seul le dernier compte. */
   boss?: { kind: 'mini' | 'final'; twin?: boolean };
   /**
-   * Alien doré (rare, un seul par partie) : apparaît à `spawnDist` px d'une squad (donc hors écran : flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
+   * Alien doré (rare, un seul par partie) : apparaît à `spawnDist` px d'une squad (260 depuis le 20/10 : tout près, il sort du sol sous les yeux du joueur ; c'était 650 px, hors écran, signalé par la flèche jaune du HUD) entre `spawnFrom` et `spawnTo` s de jeu. Immobile tant qu'aucun soldat n'est
    * à moins de `engage` px (ou qu'il n'est pas blessé) ; il s'enfuit alors à `fleeSpeed` px/s en lâchant `coinCount` pièce(s) toutes les `coinEvery` s sur sa route ; après `burrowAfter` s de fuite il ESSAIE de s'enterrer (animation de `burrowTime` s) ; si il perd `burrowInterrupt` PV pendant ce temps, l'animation est interrompue, il repart en fuite puis RÉESSAIE après `burrowRetry` s : cette seconde
-   * tentative ne peut plus être interrompue (sauf s'il meurt) et il disparaît. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
+   * tentative ne peut plus être interrompue (sauf s'il meurt) et il disparaît.
+   * Depuis le 20/10 : `interruptibleTries` (2) tentatives sont interruptibles ; après la 2e interruption il fuit une dernière fois, puis sa 3e tentative est la finale (non interruptible). Sans interruption dès la 1re, il disparaît tout de suite. Tué : `deathCoins` pièces et `deathGems` diamants (solo). Tous ces réglages sont dans le panneau Stats de sa vue d'unité.
    */
-  golden?: { spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; burrowAfter: number; burrowRetry: number; burrowTime: number; burrowInterrupt: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
+  golden?: { spawnFrom: number; spawnTo: number; spawnDist: number; engage: number; fleeSpeed: number; burrowAfter: number; burrowRetry: number; burrowTime: number; burrowInterrupt: number; interruptibleTries: number; coinEvery: number; coinCount: number; deathCoins: number; deathGems: number };
   /** Boss : quantité MOYENNE de diamants du coffre (× le multiplicateur du niveau `DIFFICULTY.gemMul…`, ± `GEM_CHEST.spread`), réglable dans le panneau Stats de la vue d'unité. */
   diamonds?: number;
   /** Traînée de feu : laisse au sol, toutes les `every` s, une flaque de flammes (`radius` px) qui dure `ttl` s et brûle les soldats qui y marchent (`dps` PV/s). */
@@ -211,6 +215,15 @@ export interface AlienDef {
     /** Flaque ralentissante laissée à l'impact (absent : aucune). */
     puddle?: { radius: number; ttl: number; slow: number };
     texture: string;
+    /**
+     * À sa mort (hors clear screen), comme le shooter (`lob.deathBlobs`) : une fontaine de boules identiques aux siennes (mêmes dégâts, zone et télégraphe) jaillit en cloche autour du cadavre :
+     * `deathBlobs` à `deathBlobsMax` boules (nombre tiré au hasard entre les deux ; `deathBlobsMax` absent = exactement `deathBlobs`), à `deathMin`-`deathMax` px, une toutes les `deathGap` s.
+     */
+    deathBlobs?: number;
+    deathBlobsMax?: number;
+    deathMin?: number;
+    deathMax?: number;
+    deathGap?: number;
   };
   /** Échelle d'affichage (1 par défaut) ; le rayon de collision (`radius`) est à régler en conséquence. */
   scale?: number;
@@ -280,7 +293,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   kamikaze: {
     id: 'kamikaze',
     revivable: true, // ressuscitable par le chaman (14/10 : tous les aliens sauf boss, projectiles et œuf)
-    hp: 32.063, // avant : 25 (×1.5 intégré le 09/10)
+    hp: 35, // avant : 25 (×1.5 intégré le 09/10)
     speed: 118.13, // avant : 105 (×1.25 intégré le 09/10)
     radius: 23.5,
     mass: 1,
@@ -324,6 +337,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.55,
     target: 'nearest',
     cleave: 70, // mêlée en zone (07/10)
+    aura: { every: 2, radius: 80, damage: 10 }, // aura électrique (21/10) : un éclair sur chaque soldat proche, toutes les 2 s
     rush: { cooldown: 5, windup: 0.3, length: 600, width: 80, speed: 1000, damage: 45, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; préparation 0,4725 → 0,3 le 14/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     electric: true,
     xp: 10,
@@ -343,7 +357,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 1.8,
     attackCooldown: 0.495,
     target: 'nearest',
-    spray: { range: 462, cooldown: 3, pellets: 3, scatter: 60, flight: 1.07, lead: 0.3, damage: 12.6, aoe: 38, texture: 'fx_spit' }, // boules vertes, plus de flaque (07/10)
+    spray: { range: 462, cooldown: 3, pellets: 5, scatter: 60, flight: 1.07, lead: 0.3, damage: 12.6, aoe: 38, texture: 'fx_spit', deathBlobs: 7, deathBlobsMax: 10, deathMin: 50, deathMax: 130, deathGap: 0.04 }, // boules vertes, plus de flaque (07/10) ; à sa mort : une fontaine de 7 à 10 boules en cloche (20/10)
     // nuage ralentissant retiré pour l'instant (08/10) ; pour le remettre : cloud: { every: 6, range: 560, lead: 0.6, radius: 66.5, ttl: 3.5, slow: 0.5 }
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
@@ -458,7 +472,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
+    rush: { cooldown: 3.6, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, stun: 1.5 }, // ~380 px : ×3 (1900 ≈ 127 px ; 850 d'origine ≈ 57 px)
     spikeCross: { every: 6, aim: 0.6, sweep: 0.5, length: 150, width: 44, damage: 54 }, // toutes les 6 s : deux croix de 4 petites rangées de pics (150 px, 230 avant le 17/10) : sur la squad et là où elle se dirige
     boss: { kind: 'mini' },
     diamonds: 14, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
@@ -483,7 +497,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 28.08 }, burst: { orb: 'fire_orb', count: 8 } },
+    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, stun: 1.5, trail: { kind: 'fire', every: 0.03, radius: 36, ttl: 9, dps: 28.08 }, burst: { orb: 'fire_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
     diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -503,7 +517,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 1.1,
     target: 'nearest',
     oneShot: true,
-    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
+    rush: { cooldown: 5.14, windup: 0.75, length: 600, width: 120, speed: 1300, damage: 40.5, knockback: 5700, stun: 1.5, trail: { kind: 'frost', every: 0.03, radius: 38, ttl: 8, dps: 0 }, burst: { orb: 'ice_orb', count: 8 } },
     boss: { kind: 'mini', twin: true },
     diamonds: 28, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -515,7 +529,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
   /** Mini-boss (4:30) : Scarab, s'enterre et ressort sur la squad, puis fait tomber une pluie de stalactites. */
   boss_scarab: {
     id: 'boss_scarab',
-    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, walls: { every: 3, windup: 1.1, length: 200, ahead: 240, rock: { radius: 26, ttl: 6 } } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 3 s un mur sur la squad et un devant elle
+    impossible: { shield: { pct: 0.05, regenDelay: 5, regenTime: 4 }, walls: { every: 3, windup: 1.1, length: 0, ahead: 240, blocks: 3, scatter: 40, rock: { radius: 26, ttl: 6 } } }, // mode impossible : bouclier de 5 % des PV (comme tous les boss) + toutes les 3 s 3 murs d'UN bloc : sur la squad, là où elle se dirige et entre les deux (20/10 ; avant : un mur de 200 px sur la squad et un devant elle)
     hp: 17100, // 1500 × 11
     speed: 168.75, // avant : 150 (×1.25 intégré le 09/10) ; ×3
     radius: 68,
@@ -548,7 +562,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     expert: { web: { every: 5.6, range: 99999, count: 5, gap: [42, 112], radius: 56, ttl: 10 } }, // Hard et Expert : toutes les 5,6 s, 5 toiles (rayon 56) autour de la squad : y marcher = sauter vers la Mère, étourdi 1 s à l'arrivée
     impossible: { spiderRing: { every: 6, count: 10, radius: 300, hpMul: 1 }, shield: { pct: 0.05, regenDelay: 5, regenTime: 4 } }, // Expert : en plus, toutes les 6 s, 10 araignées surgissent en cercle autour de la squad + bouclier de 5 %
-    swarm: { every: 4, duration: 1.07, count: 15, spawn: 'spider', hpMul: 1 }, // hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
+    swarm: { every: 4, duration: 0.89, count: 15, spawn: 'spider', hpMul: 1 }, // duration : les 15 araignées sortent en 0,89 s (1,07 s avant le 20/10 : 20 % plus vite) ; hpMul : PV des araignées de la Gling Mère (× leurs PV de base)
     boss: { kind: 'mini' },
     diamonds: 10, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 100,
@@ -566,7 +580,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     damage: 3.6,
     attackCooldown: 0.55,
     target: 'nearest',
-    maxPerWave: 2,
+    maxPerWave: 3, // 3 depuis le 20/10 (2 avant) : les configurations « Feu et glace » en comptent 3
     ice: { range: 420, cooldown: 4.5, lead: 0.5, orb: 'ice_orb' }, // lance un orbe de glace destructible (08/10 ; un flocon avant)
     revivable: true,
     xp: 5,
@@ -694,7 +708,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     color: 0xffd24a,
     goo: 0xe0a800,
     hpBarWidth: 50,
-    golden: { spawnFrom: 180, spawnTo: 300, spawnDist: 650, engage: 220, fleeSpeed: 208, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 100, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
+    golden: { spawnFrom: 180, spawnTo: 300, spawnDist: 260, engage: 220, fleeSpeed: 187.2, burrowAfter: 4, burrowRetry: 4, burrowTime: 2, burrowInterrupt: 200, interruptibleTries: 2, coinEvery: 0.5, coinCount: 1, deathCoins: 60, deathGems: 6 },
   },
   /**
    * Fireballer (17/10) : le slime de glace qui tire des orbes de FEU à la place de la glace (`fire_orb` : alien-projectile destructible de 500 PV, laisse une traînée de flammes, enflamme le soldat touché).

@@ -387,6 +387,7 @@ const EFFECTS: EffectDef[] = [
       { key: 'lifeMin', label: 'Durée de vie min (ms)', min: 100, max: 3000, step: 25 },
       { key: 'lifeMax', label: 'Durée de vie max (ms)', min: 100, max: 3500, step: 25 },
       { key: 'originSpread', label: 'Largeur de la source (px)', min: 0, max: 120, step: 1 },
+      { key: 'eggDelayMs', label: "Œuf : reste affiché après sa destruction (ms)", min: 0, max: 2000, step: 50, hint: "Seulement dans le jeu (un œuf détruit ne disparaît qu'après ce délai, pour que la fontaine commence à jaillir de lui)" },
       { key: 'color', label: 'Vert', min: 0, max: 0xffffff, step: 1, color: true },
       { key: 'colorLight', label: 'Vert clair', min: 0, max: 0xffffff, step: 1, color: true },
     ],
@@ -413,6 +414,8 @@ const EFFECTS: EffectDef[] = [
       { key: 'mistLife', label: 'Vapeur : durée (ms)', min: 100, max: 3000, step: 50 },
       { key: 'mistRise', label: 'Vapeur : montée (px/s)', min: 0, max: 200, step: 1 },
       { key: 'mistColor', label: 'Vapeur : couleur', min: 0, max: 0, step: 1, color: true },
+      { key: 'blurScale', label: 'Flou autour des gouttes : taille (× goutte)', min: 1, max: 6, step: 0.1 },
+      { key: 'blurAlpha', label: 'Flou autour des gouttes : opacité', min: 0, max: 1, step: 0.05 },
     ],
   },
   {

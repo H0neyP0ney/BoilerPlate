@@ -75,7 +75,7 @@ export const FX_DEFAULTS = {
    * Stimpack (`view/StimBloodFx.ts`) : sang chaud qui jaillit du soldat. Gouttes (fx_dot, opaques) : `spreadX` = largeur de la source (× rayon), `speedYMin` / `speedYMax` = jet vers le haut, `speedX` = dérive, `gravity` = retombée,
    * `scaleStart` / `scaleEnd` = taille, `lifeMin` / `lifeMax` = durée (ms), couleurs `bloodColor` / `bloodDark` / `bloodLight`. Vapeur rouge (fx_smoke) : `mistAlpha`, `mistScale`, `mistLife` (ms), `mistRise` (px/s), `mistColor`.
    */
-  stimBlood: { spreadX: 0.6, speedYMin: 70, speedYMax: 170, speedX: 45, gravity: 420, scaleStart: 0.8, scaleEnd: 0.2, lifeMin: 450, lifeMax: 750, bloodColor: 0xc4001a, bloodDark: 0x7a0010, bloodLight: 0xff3b30, mistAlpha: 0.3, mistScale: 0.7, mistLife: 900, mistRise: 40, mistColor: 0xb01020 },
+  stimBlood: { spreadX: 0.6, speedYMin: 70, speedYMax: 170, speedX: 45, gravity: 420, scaleStart: 0.8, scaleEnd: 0.2, lifeMin: 450, lifeMax: 750, bloodColor: 0xc4001a, bloodDark: 0x7a0010, bloodLight: 0xff3b30, mistAlpha: 0.3, mistScale: 0.7, mistLife: 900, mistRise: 40, mistColor: 0xb01020, blurScale: 2.4, blurAlpha: 0.35 },
   /** Montée de niveau : chaque soldat de la squad devient tout blanc `holdMs` ms puis repasse à sa couleur en fondu (`fadeMs`). */
   levelFlash: { holdMs: 100, fadeMs: 650 },
   /** Colonne de lumière (fx_column) qui monte et s'estompe, avec halo : nouvelle recrue dans la squad (taille et durée par défaut). */
@@ -106,9 +106,9 @@ export const FX_DEFAULTS = {
   /**
    * Fontaine de particules vertes d'un BOSS tué (20/10, fx_dot) : pendant `durationMs`, `perTick` particules toutes les `everyMs` ms jaillissent du cadavre vers le haut (cône de demi-angle `spread` degrés), retombent
    * avec de la gravité (`gravity`, px/s²), rétrécissent de `scaleStart` à `scaleEnd` et s'effacent ; vitesse `speedMin`-`speedMax`, durée de vie `lifeMin`-`lifeMax`, source étalée de `originSpread` px.
-   * `color` / `colorLight` : les deux verts tirés au hasard.
+   * `eggDelayMs` : un ŒUF détruit reste affiché ce temps (ms) après sa destruction, le temps que la fontaine commence à jaillir de lui. `color` / `colorLight` : les deux verts tirés au hasard.
    */
-  bossFountain: { durationMs: 1000, everyMs: 16, perTick: 3, speedMin: 300, speedMax: 700, spread: 40, gravity: 1100, scaleStart: 1.8, scaleEnd: 0.4, lifeMin: 700, lifeMax: 1300, originSpread: 16, color: 0x3dff6e, colorLight: 0xc8ffd2 },
+  bossFountain: { durationMs: 1000, everyMs: 16, perTick: 3, speedMin: 300, speedMax: 700, spread: 40, gravity: 1100, scaleStart: 1.8, scaleEnd: 0.4, lifeMin: 700, lifeMax: 1300, originSpread: 16, eggDelayMs: 0, color: 0x3dff6e, colorLight: 0xc8ffd2 },
   /** Petit « + » qui monte : soin du Medic (fx_plus). */
   heal: { rise: 34, durationMs: 700, jitter: 10 },
   /** Roquettes du power-up (fx_rocket, ligne droite) et leur traînée de fumée blanche opaque qui rétrécit jusqu'à 0 (fx_smoke). */

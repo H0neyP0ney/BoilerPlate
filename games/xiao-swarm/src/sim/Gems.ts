@@ -176,8 +176,8 @@ export class Gems {
       c.px = c.x;
       c.py = c.y;
       c.age += dt;
-      if (c.state !== 'ad' && c.age >= DIFFICULTY.gemChestLife) {
-        this.chests.splice(i, 1); // pas pris au bout de `chestLife` s : il disparaît (jamais pendant la vidéo)
+      if (c.state !== 'ad' && c.charge <= 0 && c.age >= DIFFICULTY.gemChestLife) {
+        this.chests.splice(i, 1); // pas pris au bout de `chestLife` s : il disparaît (jamais pendant la vidéo, ni pendant qu'on l'ouvre : jauge qui se remplit)
         continue;
       }
       if (c.hop) {

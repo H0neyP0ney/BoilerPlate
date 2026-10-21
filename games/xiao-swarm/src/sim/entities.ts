@@ -137,7 +137,7 @@ export interface AlienState extends Body {
   wallsCd: number;
   /** Délai (s) avant les prochains nuages de gel du Rhino Alpha (Expert). */
   frostCd: number;
-  /** Alien doré : 0 = attend, 1 = en fuite ; nombre de tentatives d'enfouissage déjà interrompues (0 : la 1re est interruptible, 1 : la 2e ne l'est plus) ; délai avant la prochaine pièce semée. */
+  /** Alien doré : 0 = attend, 1 = en fuite ; nombre de tentatives d'enfouissage déjà interrompues (tant qu'il est sous `interruptibleTries`, la suivante est interruptible ; ensuite elle est la finale) ; délai avant la prochaine pièce semée. */
   goldState: number;
   goldTries: number;
   goldDrop: number;
@@ -147,6 +147,8 @@ export interface AlienState extends Body {
   goldNext: number;
   /** Délai (s) avant les prochains pics en croix du Rhino Alpha. */
   crossCd: number;
+  /** Aura (`def.aura`) : temps (s) avant le prochain éclair. */
+  auraCd: number;
   /** Lurker : temps (s) passé à marcher parce qu'un autre lurker enterré occupait l'endroit où il voulait s'enterrer (au-delà d'un moment, il se contente d'un écart minimal). */
   lurkBlockT: number;
   swarmT: number;

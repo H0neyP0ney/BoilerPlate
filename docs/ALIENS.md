@@ -14,7 +14,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 | `kamikaze` | `deathBlast` (explose 1 s après sa mort), `revivable` |
 | `toad` | `tongue` (attrape et tire un soldat ; portée 297 px depuis le 14/10), `revivable` |
 | `charger` | `rush` (charge télégraphiée), `cleave` (mêlée en zone), `revivable` ; télégraphe 0,3 s, 997,5 PV (14/10) |
-| `spitter` | `spray` (3 boules de crachat) ; `cloud` 💤 (nuage ralentissant retiré le 08/10), `revivable` |
+| `spitter` | `spray` (5 boules de crachat (3 avant le 20/10), et à sa mort une fontaine de 7 à 10 boules : `spray.deathBlobs`) ; `cloud` 💤 (nuage ralentissant retiré le 08/10), `revivable` |
 | `shaman` | `frost` (nuages de glace), `revive` (3 résurrections puis 30 s de repos), `deathSpawn` (5 araignées à sa mort, `hpMul` ×2), `revivable` (un chaman ressuscité peut ressusciter aussi) |
 | `wall` (bâtisseur) | `wall` (murs de rochers), `revivable` ; 384,75 PV (14/10) |
 | `lurker` | `lurk` (s'enterre, ligne de pics ; évite la hitbox d'un autre lurker enterré (70 px de marge, 20 px au bout de 0,8 s : `LURKER_SPACING`, `LURKER_PATIENCE`) ; télégraphe 0,45 s et pics à 1200 px/s depuis le 14/10 ; 1026 PV), `revivable` |
@@ -48,7 +48,7 @@ Légende : ✅ actif · 💤 désactivé / sans alien (le code existe, rien ne l
 
 ### Projectiles et zones
 - ✅ `lob` : tir en cloche explosif. 🔧 `count`, `lead` (anticipation), `scatter` (spray), `keepMoving`, `spawn` (✅ araignées enragées à l'impact : crabe), `poison` (💤 voir plus bas).
-- ✅ `spray` : crachat de plusieurs boules télégraphiées (cracheur).
+- ✅ `spray` : crachat de plusieurs boules télégraphiées (cracheur) ; `spray.deathBlobs` / `deathBlobsMax` : fontaine de boules à sa mort (7 à 10).
 - ✅ `ice` : orbe de glace destructible qui gèle un soldat (slime de glace).
 - ✅ `projectile` : alien-projectile (`ice_orb`, `fire_orb`), 500 PV, la squad peut le détruire.
 - ✅ `wall` : murs de rochers qui gênent la fuite.

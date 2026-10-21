@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP, FIRE } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP, FIRE, ROCK_POP } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, bossKindAt, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -166,7 +166,7 @@ export class Sim {
     this.tutorial = config.tutorial ? new Tutorial(this) : null;
     this.waves = new WaveRunner(
       config.mode.waves,
-      (type, count, arrival, ringRoll = 0) => {
+      (type, count, arrival) => {
         // Difficulté dynamique : chaque joueur de la partie en plus ajoute `DIFFICULTY.extraPlayerAliens` (75 %) d'ennemis (2 joueurs = ×1,75). Les joueurs
         // à terre comptent aussi (on peut les réanimer : la charge ne retombe pas quand un équipier tombe) ; ceux qui ont quitté la partie, non. Un boss,
         // lui, n'apparaît qu'une fois, avec ses PV multipliés par le même facteur (2 joueurs = ×1,75 ; ×le nombre de squads avant le 08/10).
@@ -175,7 +175,9 @@ export class Sim {
         const squads = this.aliveSquads;
         if (squads.length === 0) return;
         const dist = this.waves.time < EARLY_SPAWN_UNTIL ? EARLY_SPAWN_DISTANCE : SPAWN_DISTANCE;
-        const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (this.squads.length - 1); // tous les joueurs de la partie, vivants ou non
+        // joueurs de la partie : un joueur debout compte 1, un joueur À TERRE (squad anéantie, réanimable) `extraPlayerDownedShare` (0,5) ; à 2 joueurs dont un à terre : 1 + 0,75 × 0,5 = ×1,375 au lieu de ×1,75
+        const downed = this.squads.length - squads.length;
+        const playersMul = 1 + DIFFICULTY.extraPlayerAliens * (squads.length - 1 + downed * DIFFICULTY.extraPlayerDownedShare);
         if (ALIENS[type].boss) {
           this.horde.spawnNear(squads[Math.floor(this.rng.next() * squads.length)], type, count, dist, playersMul);
         } else {
@@ -183,9 +185,9 @@ export class Sim {
           const share = playersMul / squads.length;
           const cap = ALIENS[type].maxPerWave ?? Infinity; // plafond par vague et par squad (ex. 2 slimes de glace)
           if (arrival === 'ring' && !this.tutorial?.active) {
-            // vague en cercle : toute la vague (les parts de toutes les squads) sort du sol autour de la squad d'UN joueur, tirée au hasard (`ringRoll`, le même pour tous les groupes de la vague)
-            const target = squads[Math.min(squads.length - 1, Math.floor(ringRoll * squads.length))];
-            this.horde.spawnRing(target.center, type, Math.min(cap, Math.round(count * playersMul)), RING.radius, this.rng.range(0, Math.PI * 2)); // même cercle que la dernière vague du tutoriel (`Horde.spawnRing`)
+            // vague en cercle (20/10) : CHAQUE squad vivante est entourée de son propre cercle, et le total (× `playersMul`) est réparti entre elles comme pour une vague ordinaire (`share` :
+            // à 2 joueurs, chacun voit 87,5 % de la vague en cercle autour de lui ; en solo, toute la vague). Avant : tout le total autour d'UN joueur tiré au hasard.
+            for (const sq of squads) this.horde.spawnRing(sq.center, type, Math.min(cap, Math.round(count * share)), RING.radius, this.rng.range(0, Math.PI * 2)); // même cercle que la dernière vague du tutoriel (`Horde.spawnRing`)
             return;
           }
           for (const sq of squads) {
@@ -772,13 +774,47 @@ export class Sim {
       const spots = this.wallSpots(w.x, w.y, w.angle, w.length, w.rockR);
       const free = spots.map((p) => this.arena.isFree(p, w.rockR));
       spots.forEach((p, k) => {
-        if (free[k]) this.addRock(p.x, p.y, w.rockR, w.ttl);
+        if (!free[k]) return;
+        this.addRock(p.x, p.y, w.rockR, w.ttl);
+        this.rockPop(p.x, p.y, w.rockR);
       });
+    }
+  }
+
+  /**
+   * Un rocher de mur vient d'apparaître en (x, y) : toute unité (soldat ou alien) dont le corps le recouvre est projetée en cloche, dans le sens (centre de l'unité − centre du rocher) ; pour tous les murs
+   * (bâtisseur, Scarab Expert). Soldats : recul + saut en cloche (`knockT`, comme le souffle d'un kamikaze) ; aliens : recul, le saut est dessiné par la vue sur l'événement `rock`. Pas pour un alien qui sort du sol.
+   */
+  private rockPop(x: number, y: number, r: number): void {
+    const push = (u: { x: number; y: number; radius: number; mass: number; kx: number; ky: number }): boolean => {
+      let dx = u.x - x;
+      let dy = u.y - y;
+      let d = Math.hypot(dx, dy);
+      if (d >= r + u.radius) return false;
+      if (d < 1e-3) {
+        const ang = this.rng.range(0, Math.PI * 2); // pile dessous : direction au hasard
+        dx = Math.cos(ang);
+        dy = Math.sin(ang);
+        d = 1;
+      }
+      const v = ROCK_POP.knock / Math.max(3, u.mass);
+      u.kx += (dx / d) * v;
+      u.ky += (dy / d) * v;
+      return true;
+    };
+    for (const s of this.soldierHash.query(x, y, r + 40, this.scratchSoldiers)) {
+      if (!s.alive || s.capturedBy) continue;
+      if (push(s)) s.knockT = Math.max(s.knockT, KNOCK_HOP.time); // pendant ce temps seul le recul le déplace
+    }
+    for (const a of this.alienHash.query(x, y, r + 60, [])) {
+      if (!a.alive || !this.horde.knockable(a)) continue;
+      push(a);
     }
   }
 
   /** Positions des rochers d'un mur : qui se chevauchent à moitié, pour un mur continu et non une rangée de cailloux. */
   private wallSpots(x: number, y: number, angle: number, length: number, rockR: number): Point[] {
+    if (length <= 0) return [{ x, y }]; // mur d'UN bloc (Scarab Expert)
     const n = Math.max(2, Math.round(length / (rockR * 1.4)) + 1);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -951,9 +987,16 @@ export class Sim {
     if (i >= 0) this.fires.splice(i, 1);
   }
 
-  /** Enflamme un soldat : il brûle `time` s (la durée repart de zéro, jamais cumulée) à `dps` PV/s (le plus fort des feux qui le touchent). Un soldat gelé ne s'enflamme pas. */
+  /**
+   * Enflamme un soldat : il brûle `time` s (la durée repart de zéro, jamais cumulée) à `dps` PV/s (le plus fort des feux qui le touchent). Un soldat GELÉ ne s'enflamme pas : le feu fait au contraire
+   * fondre sa glace et le libère (`meltIce`, 20/10) ; pendant la brève protection du début du gel (`iceInvuln`) le feu n'y peut rien, comme les coups alliés.
+   */
   ignite(s: SoldierState, dps: number, time = FIRE.burnTime): void {
-    if (s.frozen > 0 || this.ending) return;
+    if (this.ending) return;
+    if (s.frozen > 0) {
+      if (s.alive && s.iceInvuln <= 0) this.meltIce(s);
+      return;
+    }
     s.burn = Math.max(s.burn, time);
     if (dps >= s.burnDps) s.burnSrc = this.blame; // mesure : le feu le plus fort est la source de la brûlure
     s.burnDps = Math.max(s.burnDps, dps);
@@ -1129,7 +1172,7 @@ export class Sim {
       this.events.push({ t: 'corpse', id: c.id, x: c.x, y: c.y, alien: c.type, ttl: c.ttl });
       if (this.corpses.length > 60) this.endCorpse(this.corpses[0], false);
     }
-    if (a.def.lob?.deathBlobs && !wipe && !this.ending) this.combat.deathBlobs(a); // shooter : 2 boules rouges en cloche autour du cadavre
+    if ((a.def.lob?.deathBlobs || a.def.spray?.deathBlobs) && !wipe && !this.ending) this.combat.deathBlobs(a); // shooter : 3 boules rouges en cloche autour du cadavre ; cracheur : 7 à 10 boules vertes
     const brood = a.def.deathSpawn;
     if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius, hpMul: brood.hpMul ?? 1 });
     const bomb = a.def.deathBlast;
@@ -1182,6 +1225,14 @@ export class Sim {
   }
 
   /** Coup allié sur un soldat gelé : 1 PV de gel en moins, quelle que soit sa puissance (rien au tout début du gel) ; à 0, il est libéré. */
+  /** Le feu fait fondre la glace d'un soldat gelé : il est libéré d'un coup (même sortie de glace qu'un glaçon brisé : événement `thaw`, brève protection). */
+  private meltIce(s: SoldierState): void {
+    s.frozen = 0;
+    s.iceInvuln = 0;
+    s.invulnerable = Math.max(s.invulnerable, 1.2);
+    this.events.push({ t: 'thaw', soldier: s.id, x: s.x, y: s.y });
+  }
+
   chipIce(s: SoldierState): void {
     if (!s.alive || s.frozen <= 0 || s.iceInvuln > 0) return;
     s.frozen = Math.max(0, s.frozen - 1);

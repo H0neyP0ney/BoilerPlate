@@ -314,6 +314,14 @@ export class SoldierView {
 const GHOST = { every: 0.05, life: 0.25, alpha: 0.5, color: 0x7fb8ff };
 
 export class AlienView {
+  /** Saut en cloche en cours (rocher de mur qui surgit sous l'alien) : durée restante et totale (s). */
+  private hopLeft = 0;
+  private hopTotal = 1;
+  /** Lance un saut en cloche de `duration` s (ne s'ajoute pas à un saut déjà en cours). */
+  hop(duration: number): void {
+    if (this.hopLeft > 0) return;
+    this.hopLeft = this.hopTotal = Math.max(0.05, duration);
+  }
   /** La séquence « attack » de l'action en cours a déjà été lancée (elle n'est pas relancée en boucle). */
   private attackStarted = false;
   rx = 0;
@@ -454,6 +462,11 @@ export class AlienView {
     const t = time * 7 + this.phase;
     const squash = this.animated || a.def.floats ? 0 : Math.sin(t) * 0.06;
     let lift = a.def.floats ? Math.sin(time * 3 + this.phase) * 5 : 0;
+    // rocher de mur qui surgit sous lui : saut en cloche (`hop`, durée `KNOCK_HOP.time`)
+    if (this.hopLeft > 0) {
+      this.hopLeft -= dt;
+      lift -= Math.sin(Math.PI * Math.min(1, Math.max(0, 1 - this.hopLeft / this.hopTotal))) * KNOCK_HOP.height;
+    }
     // saut écrasant : pendant le vol, le sprite monte en arc (l'ombre et la position restent au sol)
     const L = a.def.leap;
     if (L?.height && a.leapT > 0) {

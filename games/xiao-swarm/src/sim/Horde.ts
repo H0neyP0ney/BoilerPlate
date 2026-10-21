@@ -1,5 +1,5 @@
 import { damp, Rng, type Point } from '@xiao/engine/sim';
-import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS, FIRE } from '../config';
+import { AMBUSH, CHASE, CROWD, DIFFICULTY, RELOCATE, ALIEN_SPAWN_HOLD, FREEZE, GRAB_IMMUNE, MELEE_REACH, TEST_FLAGS, FIRE, RUSH_RAMP } from '../config';
 import { ALIENS, bossKindAt, shieldOf, twinOrbAt, zombieStats, type AlienId, type TargetPref } from '../data/aliens';
 import { atLeast } from '../data/difficultyLevels';
 import type { AlienState, Corpse, SoldierState } from './entities';
@@ -206,6 +206,7 @@ export class Horde {
       wallsCd: def.impossible?.walls ? def.impossible.walls.every : 0,
       frostCd: def.impossible?.frost ? def.impossible.frost.every : 0,
       crossCd: def.spikeCross ? def.spikeCross.every : 0,
+      auraCd: def.aura ? def.aura.every : 0,
       lurkBlockT: 0,
       swarmT: 0,
       swarmAcc: 0,
@@ -472,10 +473,14 @@ export class Horde {
     }
   }
 
-  /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; il essaie de s'enterrer après 4 s de fuite, puis une 2e fois (non interruptible) après 4 nouvelles secondes. */
+  /** Alien doré : attend tant qu'aucun soldat n'est proche (et qu'il n'est pas blessé), puis fuit à l'opposé de la squad la plus proche en semant des pièces ; il essaie de s'enterrer après 4 s de fuite, puis réessaie après 4 nouvelles secondes (`interruptibleTries` tentatives interruptibles, la dernière ne l'est plus). */
   private updateGolden(a: AlienState, dt: number): void {
     const G = a.def.golden!;
     a.age += dt; // sans cela son âge restait à 0 : il sortait éternellement de son trou d'apparition (invulnérable, jamais visé)
+    if (this.isEmerging(a)) {
+      a.vx = a.vy = a.kx = a.ky = 0; // il sort du sol (à côté de la squad depuis le 20/10) : immobile et invulnérable jusqu'à la fin de l'animation, puis seulement il s'engage
+      return;
+    }
     const sq = this.sim.nearestSquad(a.x, a.y);
     if (a.goldState === 0) {
       let near = Infinity;
@@ -490,19 +495,19 @@ export class Horde {
         return;
       }
     }
-    // il essaie de s'enterrer (animation de `burrowTime` s, même visuel que les traînards) : `goldBury` 1 = 1re tentative (interruptible), 2 = 2e tentative (jamais interrompue)
+    // il essaie de s'enterrer (animation de `burrowTime` s, même visuel que les traînards) : `goldBury` 1 = tentative interruptible (les `interruptibleTries` premières), 2 = dernière tentative (jamais interrompue)
     if (a.goldBury > 0) {
       a.vx = a.vy = a.kx = a.ky = 0;
       if (a.goldBury === 1 && a.goldHp0 - a.hp >= G.burrowInterrupt) {
         a.sinkT = 0; // il a perdu assez de PV pendant l'animation : elle est interrompue, il repart en fuite puis réessaie
         a.goldBury = 0;
-        a.goldTries = 1;
+        a.goldTries++; // tentatives interrompues jusqu'ici : à `interruptibleTries`, la suivante est la finale
         a.goldNext = G.burrowRetry;
       } else if ((a.sinkT -= dt) <= 0) a.alive = false; // enterré pour de bon : il disparaît (sans mort, ni butin)
       return;
     }
     if ((a.goldNext -= dt) <= 0) {
-      a.goldBury = a.goldTries > 0 ? 2 : 1;
+      a.goldBury = a.goldTries >= G.interruptibleTries ? 2 : 1;
       a.sinkT = G.burrowTime;
       a.goldHp0 = a.hp;
       a.vx = a.vy = 0;
@@ -816,7 +821,7 @@ export class Horde {
           a.rushWind -= dt;
           speed = 0;
           if (a.rushWind <= 0) {
-            a.rushT = r.length / r.speed;
+            a.rushT = r.length / r.speed + RUSH_RAMP;
             a.rushHits.clear();
             a.trailCd = 0; // la traînée commence dès le départ de la charge
           }
@@ -840,9 +845,18 @@ export class Horde {
           a.rushCd = r.cooldown;
           a.rushDx = gx;
           a.rushDy = gy;
+          // il s'arrête NET sur place : sans cela il glissait encore de 80-100 px dans le sens de sa charge précédente (enragé, la suivante démarre dès la fin de la précédente), et sa charge partait
+          // décalée du télégraphe (dont l'origine est sa position à cet instant)
+          a.vx = a.vy = 0;
+          a.kx = a.ky = 0;
           a.rushX = a.x;
           a.rushY = a.y;
         }
+      }
+      // Aura (chargeur) : toutes les `every` s, un éclair sur chaque soldat proche
+      if (def.aura && (a.auraCd -= dt) <= 0) {
+        a.auraCd = def.aura.every;
+        this.aura(a);
       }
       // Langue : attrape le soldat visé et le tire vers lui
       if (def.tongue) {
@@ -1571,6 +1585,21 @@ export class Horde {
     const moving = Math.hypot(sq.vel.x, sq.vel.y) > 40;
     const dir = moving ? Math.atan2(sq.vel.y, sq.vel.x) : Math.atan2(cy - a.y, cx - a.x);
     const perp = dir + Math.PI / 2;
+    if (W.blocks) {
+      // murs d'UN bloc (Scarab Expert, 20/10) : sur la squad (f = 0), là où elle se dirige (f = 1) et entre les deux, ces derniers décalés de ±`scatter` px sur le côté
+      for (let i = 0; i < W.blocks; i++) {
+        const f = W.blocks > 1 ? i / (W.blocks - 1) : 0;
+        const side = f > 0 && f < 1 ? this.sim.rng.range(-(W.scatter ?? 0), W.scatter ?? 0) : 0;
+        for (const shrink of [1, 0.75, 0.5]) {
+          const px = cx + Math.cos(dir) * W.ahead * f * shrink + Math.cos(perp) * side * shrink;
+          const py = cy + Math.sin(dir) * W.ahead * f * shrink + Math.sin(perp) * side * shrink;
+          if (!this.sim.wallFits(px, py, perp, 0, W.rock.radius)) continue; // hors carte ou sur un obstacle : rapproché de la squad, à défaut non posé
+          this.sim.addWall(px, py, perp, 0, W.windup, W.rock.radius, W.rock.ttl);
+          break;
+        }
+      }
+      return;
+    }
     for (const k of [0, 1]) {
       for (const f of [1, 0.75, 0.5]) {
         const px = cx + Math.cos(dir) * W.ahead * k * f;
@@ -1690,6 +1719,17 @@ export class Horde {
     this.sim.damageSoldier(s, t.damage * a.escDmg);
     this.sim.events.push({ t: 'tongue', alien: a.id, target: s.id, dur: 0.5 });
     return true;
+  }
+
+  /** Aura (`def.aura`) : `damage` et un éclair (événement `zap`) sur chaque soldat à moins de `radius` px de l'alien. */
+  private aura(a: AlienState): void {
+    const A = a.def.aura!;
+    for (const s of this.sim.soldierHash.query(a.x, a.y, A.radius + 30, this.scratchS)) {
+      if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > A.radius) continue;
+      this.blameAs(a, 'aura');
+      this.sim.damageSoldier(s, A.damage * a.escDmg);
+      this.sim.events.push({ t: 'zap', x: s.x, y: s.y });
+    }
   }
 
   /** Mêlée en zone (`def.cleave`) : `dmg` à tous les soldats à portée, en un seul coup. */

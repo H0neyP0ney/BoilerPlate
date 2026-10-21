@@ -121,6 +121,14 @@ export class PowerUps {
           const hit = sim.combat.squadHit(sq, ELECTRO.damage);
           if (hit.crit) sim.events.push({ t: 'crit', x: a.x, y: a.y - 10, dmg: hit.damage });
           sim.damage(a, hit.damage, sq.owner);
+          // game feel : léger recul vers l'extérieur de la squad (le coup a pu le tuer : alors rien à repousser)
+          if (a.alive && sim.horde.knockable(a)) {
+            const ox = a.x - sq.center.x;
+            const oy = a.y - sq.center.y;
+            const d = Math.hypot(ox, oy) || 1;
+            a.kx += ((ox / d) * ELECTRO.knock) / a.mass;
+            a.ky += ((oy / d) * ELECTRO.knock) / a.mass;
+          }
         }
       }
     }

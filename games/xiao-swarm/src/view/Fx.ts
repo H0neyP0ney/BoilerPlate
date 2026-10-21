@@ -194,8 +194,9 @@ export class Fx {
     this.smoke.emitParticleAt(x + Phaser.Math.FloatBetween(-s, s), y + Phaser.Math.FloatBetween(-s, s), 1);
   }
 
-  burst(x: number, y: number, color: number, count = 10): void {
+  burst(x: number, y: number, color: number, count = 10, sizeMul = 1): void {
     this.splat.setParticleTint(color);
+    this.splat.setParticleScale(FX.burst.scaleStart * sizeMul, FX.burst.scaleEnd * sizeMul);
     this.splat.explode(Math.max(1, Math.round(count * FX.burst.countMul)), x, y);
   }
 

@@ -43,6 +43,11 @@ export const MELEE_REACH = 10;
  * d'un allié (balle, rayon, explosion, quelle que soit sa puissance) en retire 1 ; à 0 il est libéré. Les `invuln` premières secondes,
  * les coups alliés ne comptent pas (on voit la glace se former). Le soldat gelé ne bouge ni ne tire, et reste attaquable par les aliens.
  */
+/**
+ * Charge (`def.rush`) : la vitesse monte en 1/8 s (`damp` à 8), ce qui fait perdre `speed / 8` px ; la charge dure `length / speed + RUSH_RAMP` pour parcourir
+ * réellement `length` (le télégraphe, 600 px) au lieu de ~410-470 (21/10).
+ */
+export const RUSH_RAMP = 1 / 8;
 export const FREEZE = { hp: 50, invuln: 0.5 };
 /**
  * Toiles de la Gling Mère (Expert) : un soldat qui marche dans une toile la consomme et saute vers elle pendant `jump` s (arc de `height` px à l'affichage), pour retomber à `land` px
@@ -56,14 +61,19 @@ export const FREEZE = { hp: 50, invuln: 0.5 };
 export const TEST_FLAGS = { allBossAbilities: false }; // objet mutable : les scripts de test le coupent pour retrouver les niveaux
 /**
  * Power-up Orbes électriques (17/10, ex-Fireball) : `count` orbes électriques tournent `time` s autour du centre de la squad (à `margin` px au-delà de son rayon, `speed` rad/s) ; chaque collision avec un alien lui
- * inflige `damage` (fixe, ni bonus ni critique) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
+ * inflige `damage` (fixe, ni bonus ni critique) et le REPOUSSE légèrement (`knock` px/s, divisé par sa masse, vers l'extérieur de la squad : un gros alien bouge à peine, un boss presque pas ; jamais un alien qui sort du sol ou s'enterre, `Horde.knockable`) ; un même alien ne subit pas deux fois la même orbe avant `rehit` s ; `hit` = rayon (px) d'une orbe.
  */
-export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 3.4, damage: 16, rehit: 0.5, hit: 16 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 % puis +15 % : 1,38 ; 4 orbes au lieu de 3, 17/10)
+export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 3.4, damage: 16, rehit: 0.5, hit: 16, knock: 220 }; // radiusMul : le rayon d'orbite (rayon de la squad + margin) est × 1,2 (+20 % puis +15 % : 1,38 ; 4 orbes au lieu de 3, 17/10)
 /**
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.
  */
 export const FIRE = { burnTime: 2, dmgMul: 1, orbDps: 1 / 3, tick: 0.0625, tickDmg: 0.25 / 6 }; // ticks de brûlure : touts les `tick` s (0,25 s avant : 2× plus souvent), chacun inflige `burnDps × tickDmg` (burnDps × 0,25 avant : 3× moins par tick, donc le DPS total est × 2/3) // 17/10 : brûlure 2 s (3 s avant) ; débit des flaques × 1 (× 2 avant : DPS −50 %) ; orbe de feu : débit = ses dégâts × `orbDps` PV/s (÷ 3 : 6 PV/s pour 18 de dégâts, 12 avant)
+/**
+ * Rocher de mur qui apparaît SOUS une unité (20/10, tous les murs : bâtisseur et Scarab Expert ; tous les soldats et aliens) : elle est projetée en cloche, dans le sens (centre de l'unité − centre du rocher) :
+ * impulsion `knock` ÷ max(3, masse) (soldats et aliens légers : même recul ; un boss lourd bouge à peine), avec le saut en cloche des kamikazes (`KNOCK_HOP`).
+ */
+export const ROCK_POP = { knock: 1100 };
 export const KNOCK_HOP = { time: 0.48, height: 40, arc: 1 }; // time : 0,6 s −20 % (17/10), la cloche en y dure autant ; arc < 1 raccourcirait la cloche seule
 export const WEB = { jump: 0.6, height: 70, land: 120, stun: 1 };
 /** Alien qui sort du sol : immobile ce temps (s) (view/UnitViews.ts : EMERGE_OPEN + EMERGE_POP). */
@@ -255,6 +265,8 @@ export const DIFFICULTY_DEFAULTS = {
   // ---- multijoueur
   /** Chaque joueur vivant en plus ajoute cette part du nombre d'aliens d'une vague et des PV des boss (0,75 = +75 %). */
   extraPlayerAliens: 0.75,
+  /** Un joueur À TERRE (squad anéantie, qu'on peut réanimer) alourdit les vagues `extraPlayerDownedShare` fois moins qu'un joueur debout : 0,5 = son ajout passe de +75 % à +37,5 % (20/10). 1 = comme avant (il compte plein). */
+  extraPlayerDownedShare: 0.5,
   /** Plafond d'aliens à l'apparition par joueur vivant (survie). */
   maxAliensPerPlayer: 150, // 100 × 1,5 (l'ancien `alienCountMul` est intégré aux effectifs des vagues et à ce plafond, 09/10)
   // ---- vagues (`WaveRunner`)
@@ -267,18 +279,18 @@ export const DIFFICULTY_DEFAULTS = {
   /** Part du groupe invité ajoutée à la vague : nombre du groupe tiré × cette valeur, arrondi, au moins 1. */
   waveGuestShare: 0.4,
   /** Même chance d'invité, mais pour les vagues rejouées pendant un combat de boss (0 = rejeux purs, sans cracheur ni autre alien d'un niveau voisin). */
-  waveGuestReplayChance: 1,
+  waveGuestReplayChance: 1, // 1 : les groupes invités reviennent pendant les rejeux de boss (essayé à 0 le 20/10 : rejeux purs, puis remis à la demande)
   /** La timeline se met en pause au-delà de `wavePauseAbove` aliens vivants et reprend à `waveResumeAt` (entiers). */
   wavePauseAbove: 150,
   waveResumeAt: 100,
   /** Pendant un combat de boss : nombre de derniers envois d'avant le boss rejoués en boucle (entier ; aliens sans XP). */
-  bossReplayCount: 4,
+  bossReplayCount: 3, // 3 depuis le 20/10 (4 avant)
   /** Effectif des vagues rejouées pendant le combat de CHAQUE boss (× celui de leur colonne « Effectif × » dans la timeline ; 0,8 = −20 %). Rhinos jumeaux = un seul réglage. */
-  bossReplayMulGling: 0.75,
-  bossReplayMulRhino: 0.75,
-  bossReplayMulScarab: 0.75,
-  bossReplayMulTwins: 0.75,
-  bossReplayMulCrab: 0.75,
+  bossReplayMulGling: 0.6, // 0,6 depuis le 20/10 (0,75 avant) pour les cinq boss
+  bossReplayMulRhino: 0.6,
+  bossReplayMulScarab: 0.6,
+  bossReplayMulTwins: 0.6,
+  bossReplayMulCrab: 0.6,
   // ---- aides au joueur
   /** Power-ups : premier à `powerupFirst` s, puis un toutes les `powerupEveryMin`-`powerupEveryMax` s, `powerupMax` au sol au plus (entier). */
   powerupFirst: 20,

@@ -25,6 +25,12 @@ export const iconLog: Icon = (g) => {
   g.fillStyle(0x9fd3ff, 1).fillRect(-8, -7, 12, 2.4).fillRect(-8, -1.2, 16, 2.4).fillRect(-8, 4.6, 9, 2.4);
 };
 
+/** Clear tuto : une coche dans un cadre (le tutoriel est marqué fait). */
+export const iconClearTuto: Icon = (g) => {
+  g.lineStyle(2, 0x7fe0a0, 1).strokeRoundedRect(-12, -12, 24, 24, 3);
+  g.lineStyle(3.5, 0x7fe0a0, 1).beginPath().moveTo(-7, 0).lineTo(-2, 6).lineTo(8, -7).strokePath();
+};
+
 /** Triche : un éclair. */
 export const iconCheat: Icon = (g) => {
   g.fillStyle(0xffd166, 1).fillTriangle(4, -14, -7, 3, 1, 3).fillTriangle(-4, 14, 7, -3, -1, -3).fillRect(-3, -3, 6, 6);

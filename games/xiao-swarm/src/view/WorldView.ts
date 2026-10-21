@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { lerp, sfx, sprites, theme } from '@xiao/engine';
-import { CROWD, DEPTH, ELECTRO, TEST_FLAGS, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
+import { CROWD, DEPTH, ELECTRO, KNOCK_HOP, TEST_FLAGS, FREEZE, ORB_BLINK_TIME, XP_SLIDE, PALETTE, PLAYER_COLORS, REVIVE_TIME, SHADOW_ALPHA, UPGRADE_REPEL, XP_ORB_POP } from '../config';
 import { ALIENS, twinOrbAt, type AlienId } from '../data/aliens';
 import { latePack } from '../assets/latePack';
 import { soldierSpriteId } from '../art/playerVariants';
@@ -70,6 +70,9 @@ function shadowWidth(id: AlienId): number {
   const def = ALIENS[id];
   return (sprites.get(`alien_${id}`).shadow ?? def.radius) * (def.floats ? 0.7 : 1) * 2.1; // `shadow` = rayon de l'ombre (px), indépendant du rayon de collision ; à défaut, le rayon de collision
 }
+
+/** Longueur (px) des petits arcs électriques d'un alien électrique (chargeur) : 30 px depuis le 20/10 (46 avant, −35 %). */
+const ALIEN_ARC_SIZE = 30;
 
 /** Échelle de la flaque de mort (et de cadavre) d'un alien : largeur de son ombre portée × `FX.puddle.shadowMul` (le même pour tous). */
 function puddleSize(id: AlienId): number {
@@ -142,11 +145,14 @@ export class WorldView {
   private readonly orbImgs: Phaser.GameObjects.Image[] = [];
   /** Instant (s, horloge de la vue) où chaque globe d'XP a été vu pour la première fois : son âge pour l'apparition et le saut en cloche, aussi chez un client (qui ne connaît pas `life`). */
   private readonly orbBorn = new Map<number, number>();
+  /** Œufs de boss détruits qu'on garde affichés un instant (`FX.bossFountain.eggDelayMs`) : id d'alien → heure (horloge de la scène, ms) où ils disparaissent. */
+  private readonly eggLinger = new Map<number, number>();
   /** Kamikazes morts : le corps reste sur place, clignote puis explose (l'explosion elle-même vient de la simulation). */
   /** Instant (s) où chaque nuage ralentissant est apparu à l'écran (animation de « pop »). */
   private readonly cloudBorn = new Map<number, number>();
   /** Orbes électriques (power-up et rhinos jumeaux) : dessinées chaque image par-dessus les unités. */
   private fireG?: Phaser.GameObjects.Graphics;
+  private readonly kamiFlip = new Map<number, { x: number; y: number; flip: boolean; at: number }>();
   /** Corps des kamikazes en attente d'explosion (par id de mèche, `sim.fuses` : hôte et invité). */
   private readonly fuseImgs = new Map<number, { img: Phaser.GameObjects.Sprite; base: number }>();
   /** Langues en cours : elles relient une grenouille au soldat attrapé pendant `dur` secondes. */
@@ -283,11 +289,13 @@ export class WorldView {
         if (nearCam(e.x, e.y)) playSfx(this.scene, def.egg ? 'egg_break' : def.boss || def.hp >= BIG_KILL_HP ? 'alien_die_l' : def.hp >= 100 ? 'alien_die_m' : 'alien_die_s');
         const goo = def.goo ?? def.color; // couleur de ses restes (shooter : bleu foncé, son tir reste rouge)
         const oyA = alienOffsetY(e.alien); // restes posés sous le sprite décalé
-        this.fx.burst(e.x, e.y + oyA - def.radius * 0.6, goo, e.alien === 'boss_crab' ? 40 : 10);
+        // particules calées sur la taille visuelle (largeur de l'ombre) rapportée à celle du slime ; le gling garde +50 % (réglage du 20/10)
+        const burstSize = e.alien === 'gling' ? 1.5 : Math.max(0.6, Math.min(2, shadowWidth(e.alien) / shadowWidth('slime')));
+        this.fx.burst(e.x, e.y + oyA - def.radius * 0.6, goo, Math.round((e.alien === 'boss_crab' ? 40 : 10) * burstSize), burstSize);
         // gelée : vrais slimes seulement (`gling` est désormais un petit cafard : simple éclaboussure)
-        if (e.alien === 'slime' || e.alien === 'shooter') {
-          const size = e.alien === 'shooter' ? 1.6 : 1;
-          const light = e.alien === 'shooter' ? 0x9fb8ff : 0xc8ffb0;
+        if (e.alien === 'slime' || e.alien === 'shooter' || e.alien === 'toad' || e.alien === 'golden') {
+          const size = e.alien === 'shooter' ? 1.6 : e.alien === 'toad' ? 1.4 : e.alien === 'golden' ? 1.3 : 1;
+          const light = e.alien === 'shooter' ? 0x9fb8ff : e.alien === 'golden' ? 0xfff2a8 : 0xc8ffb0;
           this.fx.gloop(e.x, e.y + oyA - def.radius * 0.6, goo, light, size);
         }
         // flaque au sol de la couleur de ses restes, pour tous : largeur de son ombre portée × `FX.puddle.shadowMul`
@@ -302,6 +310,7 @@ export class WorldView {
           if (nearCam(e.x, e.y)) {
             this.scene.cameras.main.shake(k.eggMs, k.eggAmount, true);
             this.fx.bossFountain(e.x, e.y + oyA - def.radius * 0.6); // l'œuf ouvert jaillit comme un boss tué : même fontaine de particules vertes
+            this.eggLinger.set(e.id, this.scene.time.now + FX.bossFountain.eggDelayMs); // et son image reste un instant : la fontaine commence à jaillir avant qu'il ne disparaisse
           }
         } else if (def.hp >= BIG_KILL_HP && nearCam(e.x, e.y)) this.scene.cameras.main.shake(k.bigKillMs, k.bigKillAmount);
         if (e.alien === 'boss_crab') {
@@ -394,6 +403,11 @@ export class WorldView {
       case 'rock':
         // l'image du caillou est créée / retirée par `syncRocks` (qui suit la liste de la simulation) ; ici, seulement la poussière
         if (nearCam(e.x, e.y)) this.fx.burst(e.x, e.y, 0x8a7d74, 8);
+        // un alien dont le corps recouvre le rocher qui surgit saute en cloche (la simulation l'a déjà repoussé ; les soldats ont leur drapeau `knockT`)
+        for (const a of this.sim.aliens) {
+          if (!a.alive || !this.sim.horde.knockable(a) || Math.hypot(a.x - e.x, a.y - e.y) >= e.r + a.radius) continue;
+          this.aliens.get(a.id)?.hop(KNOCK_HOP.time);
+        }
         break;
       case 'rockBreak':
         // charge qui fracasse un rocher de mur : poussière et débris projetés très loin dans le sens de la charge (l'image du rocher disparaît via `syncRocks`)
@@ -472,6 +486,12 @@ export class WorldView {
         }
         // pas de secousse pour les petites explosions (grenades, roquettes) ni celle du kamikaze (rayon 95, retirée le 11/10), sinon l'écran tremble en permanence ; le Flammeur (120), le crabe… secouent
         this.fx.explosion(e.x, e.y, e.r, e.r > 95 && nearCam(e.x, e.y));
+        if (e.style === 'fire') {
+          // explosion d'un kamikaze (seul alien à exploser en style « fire » : fin de sa mèche) : en plus des flammes, un splash de gouttes de sa couleur (jaune orangé) et une flaque au sol
+          const goo = ALIENS.kamikaze.goo ?? ALIENS.kamikaze.color;
+          this.fx.gloop(e.x, e.y, goo, 0xffe08a, e.r / 60);
+          if (nearCam(e.x, e.y)) this.fx.puddles(e.x, e.y, goo, e.r / 70);
+        }
         if (nearCam(e.x, e.y)) sfx.play(this.scene, SFX.blast.key, SFX.blast); // superposition max : voir `SFX.blast.maxVoices`
         break;
       case 'cleave':
@@ -479,6 +499,13 @@ export class WorldView {
         if (nearCam(e.x, e.y)) {
           this.fx.ring(e.x, e.y, e.r, 0xff6a6a, 160);
           playSfx(this.scene, 'cleave');
+        }
+        break;
+      case 'zap':
+        // aura du chargeur : gerbe d'arcs électriques sur le soldat touché
+        if (nearCam(e.x, e.y)) {
+          for (let i = 0; i < 4; i++) this.electric.spawn(e.x, e.y - 10, 16, 30);
+          this.fx.burst(e.x, e.y - 10, 0x7fd8ff, 4);
         }
         break;
       case 'stalactite':
@@ -768,7 +795,13 @@ export class WorldView {
       if (a.def.projectile && this.onScreen(v.rx, v.ry, 60)) (a.def.projectile.kind === 'fire' ? this.fx.fireTrail(v.rx, v.ry - 30, dt) : this.fx.iceTrail(v.rx, v.ry - 30, dt)); // orbe de feu : étincelles ; orbe de glace : flocons
       v.lookAt = a.def.lurk && a.lurkPhase > 0 ? this.nearestSoldierX(a.x, a.y) : null; // lurker enterré : regarde toujours sa proie
       v.sync(alpha, dt, time);
-      if (a.def.electric && a.alive && this.onScreen(v.rx, v.ry, 120)) this.electric.crackle(v.rx, v.ry - a.radius * 0.8 + alienOffsetY(a.def.id), a.radius * 1.1, 46, 11, dt); // alien électrique (chargeur) : arcs au hasard
+      if (a.def.electric && a.alive && this.onScreen(v.rx, v.ry, 120)) this.electric.crackle(v.rx, v.ry - a.radius * 0.8 + alienOffsetY(a.def.id), a.radius * 1.1, ALIEN_ARC_SIZE, 11, dt); // alien électrique (chargeur) : arcs au hasard
+    }
+    // œuf détruit : son image reste affichée `eggDelayMs` après sa mort (la simulation l'a déjà retiré de la liste)
+    for (const [id, until] of this.eggLinger) {
+      const v = this.aliens.get(id);
+      if (v && this.scene.time.now < until) v.seen = true;
+      else this.eggLinger.delete(id);
     }
     this.prune(this.aliens);
     this.electric.update(dt);
@@ -1075,6 +1108,10 @@ export class WorldView {
    * peu ; disparaît à la fin de la mèche (l'explosion est un événement).
    */
   private updateFuses(time: number): void {
+    // sens des kamikazes encore vivants : leur corps qui clignote garde la direction qu'ils avaient (la mèche part de leur dernière position)
+    const now = this.scene.time.now;
+    for (const [id, v] of this.aliens) if (v.state.def.deathBlast) this.kamiFlip.set(id, { x: v.rx, y: v.ry, flip: v.body.flipX, at: now });
+    for (const [id, k] of this.kamiFlip) if (now - k.at > 1500) this.kamiFlip.delete(id);
     const seen = new Set<number>();
     for (const f of this.sim.fuses) {
       seen.add(f.id);
@@ -1083,6 +1120,13 @@ export class WorldView {
         if (this.onScreen(f.x, f.y, 200)) playSfx(this.scene, 'fuse');
         const id = `alien_${f.alien}`;
         const img = sprites.add(this.scene, id, f.x, f.y + alienOffsetY(f.alien)).setDepth(DEPTH.actors + f.y);
+        let near: { x: number; y: number; flip: boolean } | undefined;
+        let best = 60 * 60;
+        for (const k of this.kamiFlip.values()) {
+          const d = (k.x - f.x) ** 2 + (k.y - f.y) ** 2;
+          if (d < best) (best = d), (near = k);
+        }
+        if (near) img.setFlipX(near.flip);
         sprites.place(img, id);
         v = { img, base: sprites.scaleOf(id) };
         img.setScale(v.base);
@@ -1391,8 +1435,8 @@ export class WorldView {
       const k = 1 - w.t / w.dur;
       const cos = Math.cos(w.angle);
       const sin = Math.sin(w.angle);
-      const hl = w.length / 2;
       const hw = w.rockR;
+      const hl = w.length > 0 ? w.length / 2 : hw * 0.4; // mur d'UN bloc : demi-longueur 0,4 hw + 0,6 hw ci-dessous = télégraphe carré de la taille du rocher
       const quad = (l: number, wd: number): Phaser.Math.Vector2[] =>
         [[-l, -wd], [l, -wd], [l, wd], [-l, wd]].map(([u, v]) => new Phaser.Math.Vector2(w.x + cos * u - sin * v, w.y + sin * u + cos * v));
       g.fillStyle(teleColor('wall'), 0.1 + 0.2 * k).fillPoints(quad(hl + hw * 0.6, hw), true);

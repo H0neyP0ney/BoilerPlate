@@ -1,6 +1,6 @@
 import { setSkinLoader } from '../assets/skinSheets';
 import Phaser from 'phaser';
-import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS } from '@xiao/engine';
+import { clamp, damp, DebugOverlay, MoveInput, music, poki, RunFlow, sfx, storage, DEV_TOOLS, devLog } from '@xiao/engine';
 import { CROWD, FREE_GAMES, INTERSTITIALS_ENABLED, SCENES, VISUAL } from '../config';
 import { RETENTION_MILESTONES, TIME_MILESTONES, survivedBucket } from '../data/analytics';
 import { BalanceTracker } from '../balanceAnalytics';
@@ -817,6 +817,14 @@ export class GameScene extends Phaser.Scene {
 
   toggleDifficultyPanel(): void {
     this.difficultyPanel?.toggle();
+  }
+
+  /** Dev : marque le tutoriel comme fait ; s'il est en cours, relance une partie normale. */
+  clearTutorial(): void {
+    const running = !!this.session.sim.tutorial?.active;
+    settings.setTutorialDone(true);
+    devLog('[dev] tutoriel marqué fait');
+    if (running) void this.retry();
   }
 
   toggleCheatPanel(): void {

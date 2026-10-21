@@ -510,22 +510,26 @@ try {
       gg.maxHp = gg.hp = ALIENS.golden.hp;
       return { f, gg };
     };
-    // interrompue (-100 PV pendant l'animation) : il repart en fuite, puis réessaie après 4 NOUVELLES secondes ; cette 2e tentative n'est plus interruptible
+    // interrompue (-200 PV pendant l'animation) : il repart en fuite, réessaie après 4 NOUVELLES secondes (2e tentative, interruptible aussi) ; interrompue à son tour, la 3e est la finale
     {
       const { f, gg } = mk(45);
       const none = new Map();
-      let t1 = 0;
-      while (gg.goldBury !== 1 && t1 < 30 * 8) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); t1++; }
-      const firstAt = t1 / 30;
-      f.sim.damage(gg, G.burrowInterrupt, 'p1'); // perd 100 PV pendant l'animation
+      const wait = (target) => { let t = 0; while (gg.goldBury !== target && t < 30 * 8) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); t++; } return t / 30; };
+      const firstAt = wait(1);
+      f.sim.damage(gg, G.burrowInterrupt - 1, 'p1'); // 199 PV : pas assez
       f.sim.step(1 / 30, none);
-      const interrupted = gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && gg.goldTries === 1;
-      let t2 = 0;
-      while (gg.goldBury !== 2 && t2 < 30 * 8) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); t2++; }
-      const secondAfter = t2 / 30;
-      f.sim.damage(gg, G.burrowInterrupt * 3, 'p1'); // même à -300 PV : plus d'interruption
+      const notYet = gg.goldBury === 1 && gg.sinkT > 0;
+      f.sim.damage(gg, 1, 'p1'); // 200 PV au total : interrompue
+      f.sim.step(1 / 30, none);
+      const interrupted1 = gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && gg.goldTries === 1;
+      const secondAfter = wait(1); // la 2e tentative est encore une tentative interruptible
+      f.sim.damage(gg, G.burrowInterrupt, 'p1');
+      f.sim.step(1 / 30, none);
+      const interrupted2 = gg.alive && gg.goldBury === 0 && gg.sinkT === 0 && gg.goldTries === 2;
+      const thirdAfter = wait(2); // la 3e est la finale
+      f.sim.damage(gg, G.burrowInterrupt * 3, 'p1'); // même à -600 PV : plus d'interruption
       for (let i = 0; i < 30 * (G.burrowTime + 0.5); i++) { f.sim.step(1 / 30, none); f.sim.aliens.splice(1); }
-      check(Math.abs(firstAt - G.burrowAfter) < 0.3 && interrupted && Math.abs(secondAfter - G.burrowRetry) < 0.3 && !gg.alive, "alien doré : 1re tentative à 4 s, interrompue à -100 PV ; la 2e, 4 s plus tard, ne peut plus être interrompue", `1re à ${firstAt.toFixed(1)} s, interrompue ${interrupted}, 2e ${secondAfter.toFixed(1)} s après, vivant ${gg.alive}`);
+      check(G.burrowInterrupt === 200 && G.interruptibleTries === 2 && Math.abs(firstAt - G.burrowAfter) < 0.3 && notYet && interrupted1 && Math.abs(secondAfter - G.burrowRetry) < 0.3 && interrupted2 && Math.abs(thirdAfter - G.burrowRetry) < 0.3 && !gg.alive, "alien doré : tentatives à 4 s, interrompues à -200 PV (2 fois) ; la 3e, 4 s plus tard, ne peut plus être interrompue", `1re à ${firstAt.toFixed(1)} s, 199 PV sans effet ${notYet}, interrompue ${interrupted1}, 2e ${secondAfter.toFixed(1)} s après, interrompue ${interrupted2}, 3e ${thirdAfter.toFixed(1)} s après, vivant ${gg.alive}`);
     }
     // mort : grosse quantité de pièces, quelques diamants
     const f2 = fresh(35);
@@ -560,6 +564,30 @@ try {
     const mini = coinsOf('normal', 'boss_gling');
     const fin = coinsOf('normal', 'boss_scarab');
     check(mini === DIFFICULTY.coinBossCoins && fin === Math.round(DIFFICULTY.coinBossCoins * DIFFICULTY.coinFinalMul), 'or des boss : le boss final lâche son or × le multiplicateur de boss final', `${mini} pièces (ordinaire), ${fin} (final, ×${DIFFICULTY.coinFinalMul})`);
+  }
+
+  // ---- alien doré : il apparaît TOUJOURS en sortant du sol à côté de la squad d'un joueur (260 px), immobile et invulnérable pendant l'animation, puis il s'engage
+  {
+    const G = ALIENS.golden.golden;
+    let near = 0, emerging = 0, still = 0, ok = 0;
+    for (let seed = 200; seed < 215; seed++) {
+      const { sim } = fresh(seed);
+      clearAliens(sim);
+      sim.step(1 / 30, new Map());
+      sim.horde.goldTimes = [0]; // l'heure tirée est passée : il apparaît au prochain tick
+      sim.step(1 / 30, new Map());
+      const g = sim.aliens.find((a) => a.def.golden);
+      if (!g) continue;
+      ok++;
+      const q = sim.squadOf('p1');
+      const d = Math.hypot(g.x - q.center.x, g.y - q.center.y);
+      if (Math.abs(d - G.spawnDist) < 30) near++;
+      if (sim.horde.isEmerging(g)) emerging++;
+      const x0 = g.x, y0 = g.y;
+      for (let i = 0; i < 10; i++) sim.step(1 / 30, new Map()); // 0,33 s : encore en train de sortir
+      if (sim.horde.isEmerging(g) && Math.hypot(g.x - x0, g.y - y0) < 2) still++;
+    }
+    check(G.spawnDist === 260 && ok === 15 && near === ok && emerging === ok && still >= ok - 1, "alien doré : apparaît toujours à côté de la squad (260 px) en sortant du sol, immobile pendant l'animation", `${ok}/15 apparus, ${near} à ~260 px, ${emerging} en train de sortir, ${still} immobiles ensuite`);
   }
 
   // ---- Jackpot (+25 % d'or et de diamants par prise, 4 prises) : boss, aliens ordinaires, alien doré, coffres de boss
@@ -677,6 +705,90 @@ try {
     check(first === 1 && early === 1 && blobs.length === 3 && dists.every((d) => d > 35 && d < 150), "shooter : à sa mort, 3 boules rouges en cloche autour de lui, l'une après l'autre (0,1 s)", `${first} puis ${early} puis ${blobs.length} boule(s), à ${dists.map((d) => d.toFixed(0)).join(' / ')} px`);
   }
 
+  // ---- orbes électriques du power-up : en plus des dégâts, un léger recul vers l'extérieur de la squad (divisé par la masse : un boss bouge presque pas)
+  {
+    const { ELECTRO } = await vite.ssrLoadModule('/src/config.ts');
+    const { PowerUps } = await vite.ssrLoadModule('/src/sim/PowerUps.ts');
+    const test = (id) => {
+      const { sim } = fresh(67);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sq.buffs.electro = 5;
+      const o = PowerUps.orbAt(sq, 0);
+      sim.horde.spawnAt(id, o.x, o.y, 1, false);
+      const a = sim.aliens[0];
+      a.age = 99;
+      a.hp = a.maxHp = 1e9; // ne meurt pas
+      a.noXp = true;
+      const x0 = a.x, y0 = a.y;
+      const outX = a.x - sq.center.x, outY = a.y - sq.center.y;
+      const n = Math.hypot(outX, outY);
+      sim.step(1 / 30, new Map());
+      const dk = { x: a.kx, y: a.ky };
+      return { hit: a.hp < a.maxHp, along: (dk.x * outX + dk.y * outY) / n, mass: a.mass };
+    };
+    const small = test('gling'), big = test('boss_rhino');
+    check(small.hit && small.along > 0 && Math.abs(small.along - ELECTRO.knock / small.mass) < ELECTRO.knock / small.mass * 0.35 + 5, 'orbes électriques : l alien touché est repoussé vers l extérieur de la squad (ELECTRO.knock / masse)', `recul ${small.along.toFixed(0)} px/s, attendu ~${(ELECTRO.knock / small.mass).toFixed(0)} (masse ${small.mass})`);
+    check(big.hit && big.along > 0 && big.along < small.along / 3, 'orbes électriques : un gros alien (boss) est à peine repoussé', `${big.along.toFixed(0)} px/s contre ${small.along.toFixed(0)} pour un gling`);
+  }
+
+  // ---- charge enragée : le Rhino Alpha très enragé enchaîne ses charges (cooldown ÷ 10) ; il doit s'arrêter net au début du télégraphe (pas de glissade de 80-100 px dans le sens de la charge précédente)
+  // et charger dans l'axe du télégraphe
+  {
+    const { DIFFICULTY } = await vite.ssrLoadModule('/src/config.ts');
+    const { sim } = fresh(61);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    for (const so of sq.soldiers) so.invulnerable = 1e6;
+    sim.horde.spawnAt('boss_rhino', sq.center.x + 600, sq.center.y, 1, false);
+    const rh = sim.aliens[0];
+    rh.hp = rh.maxHp = 1e12;
+    rh.age = 5 * DIFFICULTY.bossEnrageEvery + 1; // enragé niveau 5
+    const none = new Map();
+    let phase = 0, o = null, slide = 0, dev = 0, charges = 0, maxSlide = 0, maxDev = 0, started = null, minTravel = 1e9;
+    for (let i = 0; i < 30 * 40 && charges < 4; i++) {
+      sim.step(1 / 30, none);
+      if (rh.rushWind > 0 && phase === 0) { phase = 1; o = { x: rh.x, y: rh.y, dx: rh.rushDx, dy: rh.rushDy }; dev = 0; }
+      if (phase === 1 && rh.rushWind <= 0 && rh.rushT > 0) { phase = 2; slide = Math.hypot(rh.x - o.x, rh.y - o.y); maxSlide = Math.max(maxSlide, slide); }
+      if (phase === 2) {
+        dev = Math.max(dev, Math.abs((rh.x - o.x) * o.dy - (rh.y - o.y) * o.dx));
+        if (rh.rushT <= 0) { const tr = (rh.x - o.x) * o.dx + (rh.y - o.y) * o.dy; if (tr > 570) { maxDev = Math.max(maxDev, dev); minTravel = Math.min(minTravel, tr); } /* une charge freinée par le bord de la carte glisse le long : ignorée */ phase = 0; charges++; }
+      }
+    }
+    check(charges >= 4 && maxSlide < 25 && maxDev < 40 && minTravel > 570 && minTravel < 700, "charge enragée : il s'arrête net pendant le télégraphe et charge dans son axe (4 charges de suite, enragé niveau 5)", `${charges} charges ; dérive max pendant le télégraphe ${maxSlide.toFixed(0)} px ; écart latéral max ${maxDev.toFixed(0)} px`);
+  }
+
+  // ---- cracheur (spitter) : à sa mort, une fontaine de 7 à 10 boules vertes en cloche retombe autour de lui (50-130 px), presque d'un coup (0,04 s d'écart) ; mêmes dégâts que son crachat
+  {
+    const counts = [];
+    let radiusOk = true;
+    let textureOk = true;
+    let damageOk = true;
+    let last = '';
+    for (let seed = 100; seed < 130; seed++) {
+      const { sim } = fresh(seed);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      sim.horde.spawnAt('spitter', sq.center.x + 900, sq.center.y, 1, false, true);
+      const sp = sim.aliens[0];
+      sp.age = 99;
+      sim.damage(sp, 1e9, 'p1');
+      const none = new Map();
+      for (let i = 0; i < 12; i++) sim.step(1 / 30, none); // 0,4 s : toutes les boules sont parties, aucune n'est encore retombée (vol de 0,86 s)
+      const blobs = (sim.combat.projectiles.active ?? sim.combat.projectiles.items ?? []).filter((p) => p.lob && p.team === 'aliens');
+      counts.push(blobs.length);
+      for (const p of blobs) {
+        const d = Math.hypot(p.x + p.vx * p.life - sp.x, p.y + p.vy * p.life - sp.y);
+        if (d < 35 || d > 150) radiusOk = false;
+        if (p.texture !== ALIENS.spitter.spray.texture) textureOk = false;
+        if (Math.abs(p.damage - ALIENS.spitter.spray.damage * sim.escalationDamage) > 0.01) damageOk = false;
+      }
+      last = `${blobs.length}`;
+    }
+    const min = Math.min(...counts), max = Math.max(...counts);
+    check(min >= 7 && max <= 10 && min <= 8 && max >= 9 && radiusOk && textureOk && damageOk, "cracheur : à sa mort, 7 à 10 boules vertes en cloche autour de lui (50-130 px), mêmes dégâts que son crachat", `${min} à ${max} boules sur 30 morts (dernière : ${last}) ; rayon ${radiusOk ? 'ok' : 'hors plage'}, texture ${textureOk ? 'ok' : 'différente'}, dégâts ${damageOk ? 'ok' : 'différents'}`);
+  }
+
   // ---- rhinos jumeaux (Expert) : 2 orbes électriques tournent en continu autour de chacun (100 px) ; un soldat touché perd 10 PV (au plus une fois par orbe et par 0,5 s) ; rien en Normal
   {
     const { twinOrbAt } = await vite.ssrLoadModule('/src/data/aliens.ts');
@@ -740,6 +852,22 @@ try {
     f2.sim.horde.freezeSoldier(t0);
     f2.sim.step(1 / 30, none);
     check(t0.burn === 0 && t0.burnDps === 0, "feu : un soldat gelé est éteint (et ne s'enflamme pas)");
+    // l'inverse (20/10) : le feu fait fondre la glace d'un soldat gelé et le libère ; pendant la brève protection du début du gel (iceInvuln), il n'y peut rien
+    {
+      const f3 = fresh(44);
+      clearAliens(f3.sim);
+      const so = f3.sim.squadOf('p1').soldiers[0];
+      f3.sim.horde.freezeSoldier(so);
+      const frozen0 = so.frozen;
+      f3.sim.ignite(so, 50); // tout de suite : protection du début du gel
+      const stillFrozen = so.frozen === frozen0 && so.burn === 0;
+      so.iceInvuln = 0; // la protection est passée
+      const events = [];
+      f3.sim.events.drain(() => {}); // on vide la file avant la mesure
+      f3.sim.ignite(so, 50);
+      f3.sim.events.drain((e) => events.push(e.t));
+      check(stillFrozen && frozen0 > 0 && so.frozen === 0 && so.burn === 0 && events.includes('thaw') && so.invulnerable > 1, "feu : il fait fondre la glace d'un soldat gelé et le libère (pas pendant les 0,5 s de protection du début du gel), sans l'enflammer sur le coup", `gel ${frozen0} → ${so.frozen}, brûle ${so.burn}, événements ${events}, protection ${so.invulnerable.toFixed(1)} s`);
+    }
   }
 
   // ---- fireballer : comme le slime de glace mais il tire des orbes de FEU (500 PV, enflamment au contact) ; l'iceballer reste inchangé
@@ -870,7 +998,70 @@ try {
     check(casts === 0, 'Scarab : en Normal, aucune stalactite', `${casts} pluie(s) en 12 s`);
   }
 
-  // ---- Scarab (Expert) : toutes les 3 s, un mur annoncé sur la squad et un devant elle
+  // ---- test d'un alien (dev) : effectif de la squad proportionnel aux PV (2 Troopers contre un slime), plafonné ; duel ×10 PV = 1 soldat contre 1 alien
+  {
+    const R = await vite.ssrLoadModule('/src/dev/alienTestRules.ts');
+    const n = (id) => R.testSoldiers(id, 'ratio');
+    const ok = n('slime') === 2 && n('gling') === 1 && n('toad') === 1 && n('spitter') === 4 && n('charger') === 5 && n('bubble') === R.RATIO_MAX_SOLDIERS && n('boss_scarab') === R.RATIO_MAX_SOLDIERS;
+    check(ok && R.testSoldiers('boss_crab', 'tank') === 1 && R.testSoldiers('slime', 'tank') === 1 && R.TANK_MUL === 10, "test d'un alien : squad proportionnelle aux PV (2 contre un slime, au plus 40), duel ×10 PV = 1 soldat contre 1 alien", `slime ${n('slime')}, gling ${n('gling')}, spitter ${n('spitter')}, charger ${n('charger')}, bulle ${n('bubble')}, Scarab ${n('boss_scarab')}`);
+    // une grande squad de test tient dans la taille maximale de la squad (on relève `maxSquad` au besoin)
+    const { sim } = fresh(65);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    sq.fastForward(1);
+    const big = n('charger');
+    const cap = R.squadCapFor(big);
+    if (cap > sq.maxSize) sq.stats.add('maxSquad', { flat: cap - sq.maxSize });
+    sim.respawnSquad('p1', Array.from({ length: big }, () => 'trooper'), 1);
+    check(sq.size === big && sq.maxSize >= big, "test d'un alien : une squad de " + big + " Troopers tient dans la squad (maxSquad relevé)", `${sq.size} soldats, max ${sq.maxSize}`);
+  }
+
+  // ---- un rocher de mur qui apparaît SOUS une unité (soldat ou alien, tous les murs) la projette en cloche dans le sens (centre unité − centre rocher) ; un boss lourd à peine
+  {
+    const { ROCK_POP } = await vite.ssrLoadModule('/src/config.ts');
+    // (1) intégration : un mur d'un bloc (comme celui du bâtisseur ou du Scarab) qui surgit sous un soldat
+    {
+      const { sim } = fresh(63);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      const so = sq.soldiers[0];
+      const wx = so.x - 10, wy = so.y; // rocher juste à gauche du soldat : il doit partir vers la droite
+      sim.addWall(wx, wy, 0, 0, 0.05, 26, 5);
+      let peakT = 0, peakKx = 0;
+      for (let i = 0; i < 4; i++) {
+        sim.step(1 / 30, new Map());
+        peakT = Math.max(peakT, so.knockT);
+        peakKx = Math.max(peakKx, so.kx);
+      }
+      check(peakT > 0 && peakKx > ROCK_POP.knock / Math.max(3, so.mass) * 0.4, "rocher de mur sous un soldat : projeté en cloche vers l'extérieur du rocher (saut + recul)", `knockT ${peakT.toFixed(2)} s, recul x ${peakKx.toFixed(0)} px/s`);
+    }
+    // (2) la fonction elle-même, sur des unités posées à la main : soldat, alien léger, boss lourd
+    {
+      const { sim } = fresh(64);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      const so = sq.soldiers[0];
+      const x = sq.center.x + 1200, y = sq.center.y; // loin de la squad
+      sim.horde.spawnAt('gling', x + 12, y - 20, 1, false, true);
+      sim.horde.spawnAt('boss_scarab', x + 600, y + 600, 1, false);
+      const [gl, boss] = sim.aliens;
+      gl.age = boss.age = 99;
+      gl.x = x + 12; gl.y = y - 20;
+      boss.x = x; boss.y = y + 4;
+      so.x = x + 2; so.y = y - 8; so.kx = so.ky = 0; so.knockT = 0;
+      sim.alienHash.clear();
+      for (const a of sim.aliens) sim.alienHash.insert(a);
+      sim.soldierHash.clear();
+      sim.soldierHash.insert(so);
+      sim.rockPop(x, y, 26);
+      const along = (u) => (u.kx * (u.x - x) + u.ky * (u.y - y)) / (Math.hypot(u.x - x, u.y - y) || 1);
+      check(so.knockT > 0 && along(so) > 0, "rocher de mur sous un soldat : saut en cloche (knockT) et recul dans le sens (centre soldat − centre rocher)", `knockT ${so.knockT.toFixed(2)} s, recul ${along(so).toFixed(0)} px/s`);
+      check(Math.hypot(gl.kx, gl.ky) > ROCK_POP.knock / Math.max(3, gl.mass) * 0.9 && along(gl) > 0, "rocher de mur sous un alien léger : projeté lui aussi, dans le sens (centre alien − centre rocher)", `recul ${Math.hypot(gl.kx, gl.ky).toFixed(0)} px/s`);
+      check(Math.hypot(boss.kx, boss.ky) < Math.hypot(gl.kx, gl.ky) / 3, 'rocher de mur sous un boss lourd : à peine bougé', `${Math.hypot(boss.kx, boss.ky).toFixed(0)} px/s contre ${Math.hypot(gl.kx, gl.ky).toFixed(0)} pour un gling`);
+    }
+  }
+
+  // ---- Scarab (Expert) : toutes les 3 s, 3 murs d'UN bloc annoncés : sur la squad, là où elle se dirige (240 px plus loin) et entre les deux (20/10)
   {
     const { sim } = fresh(18, 'impossible');
     clearAliens(sim);
@@ -880,13 +1071,37 @@ try {
     sc.age = 99;
     sc.wallsCd = 0.05;
     const seen = new Set();
+    const lens = [];
     const move = new Map([['p1', { mx: -1, my: 0 }]]);
     for (let i = 0; i < 30 * 7; i++) {
       sim.step(1 / 30, move);
       sim.aliens.splice(1);
-      for (const w of sim.walls) seen.add(w.id);
+      for (const w of sim.walls) {
+        if (!seen.has(w.id)) lens.push(w.length);
+        seen.add(w.id);
+      }
     }
-    check(seen.size >= 4 && seen.size % 2 === 0, 'Scarab (Expert) : des murs par paires (sur la squad et devant elle), toutes les 3 s (plus vite une fois enragé)', `${seen.size} murs annoncés en 7 s`);
+    check(seen.size >= 7 && lens.every((l) => l === 0), "Scarab (Expert) : 3 murs d'UN seul rocher par salve (sur la squad, devant elle et entre les deux), toutes les 3 s (plus vite une fois enragé)", `${seen.size} murs annoncés en 7 s, longueurs ${[...new Set(lens)]}`);
+    // la salve : le 1er mur sur la squad (où elle sera), le dernier à ~240 px devant, le 3e entre les deux
+    {
+      const g = fresh(18, 'impossible');
+      clearAliens(g.sim);
+      const q = g.sim.squadOf('p1');
+      g.sim.horde.spawnAt('boss_scarab', q.center.x + 900, q.center.y, 1, false);
+      const sc2 = g.sim.aliens[0];
+      sc2.age = 99;
+      sc2.wallsCd = 0.05;
+      const mv = new Map([['p1', { mx: -1, my: 0 }]]);
+      let first = [];
+      for (let i = 0; i < 30 * 2 && first.length < 3; i++) {
+        g.sim.step(1 / 30, mv);
+        g.sim.aliens.splice(1);
+        first = g.sim.walls.filter((w) => w.dur - w.t < 0.2);
+      }
+      const ordered = [...g.sim.walls].sort((u, v) => u.id - v.id).slice(0, 3);
+      const along = ordered.map((w) => Math.hypot(w.x - ordered[0].x, w.y - ordered[0].y));
+      check(ordered.length === 3 && along[1] > 60 && along[1] < 190 && along[2] > 200 && along[2] < 280, 'Scarab (Expert) : la salve de 3 blocs : un sur la squad, un à ~120 px (décalé sur le côté) et un à ~240 px devant', `distances au 1er : ${along.map((d) => d.toFixed(0)).join(' / ')} px`);
+    }
     const normal = fresh(18);
     clearAliens(normal.sim);
     normal.sim.horde.spawnAt('boss_scarab', normal.sim.squadOf('p1').center.x + 900, normal.sim.squadOf('p1').center.y, 1, false);
@@ -997,7 +1212,29 @@ try {
       }
       const R = ALIENS.charger.rush;
       check(R.stun === 1.5 && stunned > R.stun - 0.1 && stunned <= R.stun && ALIENS.charger.electric === true, 'chargeur : sa charge électrique étourdit 1,5 s le soldat touché', `étourdi ${stunned.toFixed(2)} s`);
-      check(!ALIENS.boss_rhino.rush.stun && !ALIENS.boss_rhino.electric && !ALIENS.boss_rhino_fire.rush.stun && !ALIENS.boss_rhino_ice.rush.stun, "rhinos : leur charge n'étourdit pas");
+      check(ALIENS.boss_rhino.rush.stun === 1.5 && !ALIENS.boss_rhino.electric && ALIENS.boss_rhino_fire.rush.stun === 1.5 && ALIENS.boss_rhino_ice.rush.stun === 1.5, "rhinos : leur charge étourdit aussi 1,5 s (toutes les charges encaissées étourdissent)");
+      // aura du chargeur : toutes les 2 s, 10 dégâts et un éclair (événement zap) sur chaque soldat à moins de 80 px
+      {
+        const { sim, step } = fresh(43);
+        clearAliens(sim);
+        const sq = sim.squadOf('p1');
+        const A = ALIENS.charger.aura;
+        sim.horde.spawnAt('charger', sq.center.x, sq.center.y + 20, 1, false);
+        const c = sim.aliens.find((a) => a.def.id === 'charger');
+        c.age = 99; c.rushCd = 1e9; c.attackCd = 1e9; c.hp = c.maxHp = 1e9;
+        for (const o of sq.soldiers) { o.invulnerable = 0; o.hp = o.maxHp = 1e6; }
+        const near = sq.soldiers[0];
+        near.x = c.x + 40; near.y = c.y; near.px = near.x; near.py = near.y;
+        const far = sq.soldiers[sq.soldiers.length - 1];
+        far.x = c.x + 300; far.y = c.y; far.px = far.x; far.py = far.y;
+        const n0 = near.hp, f0 = far.hp;
+        let zaps = 0;
+        const push0 = sim.events.push.bind(sim.events);
+        sim.events.push = (e) => { if (e.t === 'zap') zaps++; return push0(e); };
+        for (let i = 0; i < 30 * 4.2; i++) { c.x = near.x - 40; c.y = near.y; step(1);  }
+        const lost = n0 - near.hp;
+        check(A && A.every === 2 && A.radius === 80 && A.damage === 10 && zaps >= 2 && lost >= zaps * A.damage - 0.5 && far.hp === f0, "chargeur : aura électrique, toutes les 2 s un éclair et 10 dégâts aux soldats à moins de 80 px", `${zaps} éclairs, ${lost.toFixed(0)} PV perdus en 4,2 s, soldat lointain intact : ${far.hp === f0}`);
+      }
     }
     const entry = DEFAULT_WAVE_SCRIPT.timeline.find((e) => e.level === BOSS_LEVEL && e.config === 5);
     const cfg = DEFAULT_WAVE_SCRIPT.levels[BOSS_LEVEL][4];
@@ -1132,6 +1369,49 @@ try {
     const dists = aliens.map((a) => Math.hypot(a.x - sq.center.x, a.y - sq.center.y));
     const quadrants = new Set(aliens.map((a) => `${a.x > sq.center.x}|${a.y > sq.center.y}`));
     check(aliens.length >= 4 && dists.every((d) => d > 200 && d < 420) && quadrants.size >= 3 && aliens.every((a) => a.age < 0.1), 'cercle : la vague entière sort du sol en cercle autour de la squad', `${aliens.length} aliens à ${Math.min(...dists).toFixed(0)}-${Math.max(...dists).toFixed(0)} px, ${quadrants.size} quadrants`);
+  }
+
+  // ---- vague en cercle à plusieurs joueurs (20/10) : chaque squad vivante est entourée de son propre cercle, le total (× 1 + 0,75 × (joueurs − 1)) réparti entre elles ;
+  // un joueur à terre n'ajoute plus que la moitié (× 1 + 0,75 × 0,5 à deux), et toute la vague tombe alors sur la squad restante
+  {
+    const { Sim } = await vite.ssrLoadModule('/src/sim/Sim.ts');
+    const { RING } = await vite.ssrLoadModule('/src/config.ts');
+    const ringedBy = (players, downed = []) => {
+      const sim = new Sim({ mode: MODES.survival, seed: 77, players, xp: true });
+      sim.spawnSquads(() => ['trooper', 'trooper', 'trooper', 'trooper']);
+      for (let i = 0; i < 3; i++) sim.step(1 / 30, new Map()); // la 1re vague (à 0 s) part : la suivante peut alors être en cercle
+      sim.aliens.length = 0;
+      const b = sim.arena.bounds;
+      sim.squads.forEach((sq, i) => {
+        // chaque squad à son propre endroit, au milieu de la carte (le cercle ne doit pas être rogné par le bord), loin des autres
+        const tx = (b.minX + b.maxX) / 2 + 900 * (i - (sim.squads.length - 1) / 2), ty = (b.minY + b.maxY) / 2;
+        const dx = tx - sq.center.x, dy = ty - sq.center.y;
+        sq.anchor.x += dx; sq.anchor.y += dy;
+        for (const so of sq.soldiers) { so.x += dx; so.y += dy; so.px = so.x; so.py = so.y; }
+        sq.center.x += dx; sq.center.y += dy;
+      });
+      for (const id of downed) for (const so of sim.squadOf(id).soldiers) so.alive = false; // squad anéantie (à terre)
+      for (const sq of sim.squads) if (downed.includes(sq.owner)) sq.soldiers.length = 0;
+      const saved = [DIFFICULTY.ambushChance, DIFFICULTY.ringChance, DIFFICULTY.waveGuestChance];
+      DIFFICULTY.ambushChance = 0; DIFFICULTY.ringChance = 1; DIFFICULTY.waveGuestChance = 0;
+      // niveau 4 réduit à sa configuration 3 (3 toads + 12 glings) : la même à chaque essai, assez d'aliens pour que les arrondis comptent peu ; une configuration FORCÉE (`trigger(niveau, n)`) n'est jamais en cercle, d'où ce détour
+      sim.waves.script = { ...sim.waves.script, levels: { ...sim.waves.script.levels, 4: [sim.waves.script.levels[4][2]] } };
+      sim.waves.trigger(4);
+      [DIFFICULTY.ambushChance, DIFFICULTY.ringChance, DIFFICULTY.waveGuestChance] = saved;
+      const aliens = sim.aliens.filter((a) => a.alive && !a.def.boss);
+      // aliens autour de chaque squad : ceux dont elle est la squad la plus proche (les obstacles du milieu de la carte peuvent rapprocher un alien du centre de son cercle)
+      const near = (a) => sim.squads.reduce((best, sq) => (Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < Math.hypot(a.x - best.center.x, a.y - best.center.y) ? sq : best), sim.squads[0]);
+      const per = sim.squads.map((sq) => aliens.filter((a) => near(a) === sq && Math.hypot(a.x - sq.center.x, a.y - sq.center.y) < RING.radius + 90).length);
+      return { total: aliens.length, per };
+    };
+    const solo = ringedBy(['p1']);
+    const duo = ringedBy(['p1', 'p2']);
+    const trio = ringedBy(['p1', 'p2', 'p3']);
+    const ok = duo.per.every((n) => n >= 1) && trio.per.every((n) => n >= 1) && Math.abs(duo.per[0] - duo.per[1]) <= 2 && Math.abs(trio.per[0] - trio.per[2]) <= 2;
+    check(ok && Math.abs(duo.total / solo.total - 1.75) < 0.25 && Math.abs(trio.total / solo.total - 2.5) < 0.3, 'cercle à plusieurs joueurs : chaque squad est entourée de son cercle, total ×1,75 à 2 joueurs et ×2,5 à 3, réparti à parts égales', `solo ${solo.total} (${solo.per}) ; 2 joueurs ${duo.total} (${duo.per}) ; 3 joueurs ${trio.total} (${trio.per})`);
+    const down = ringedBy(['p1', 'p2'], ['p2']);
+    const f = 1 + DIFFICULTY.extraPlayerAliens * DIFFICULTY.extraPlayerDownedShare;
+    check(DIFFICULTY.extraPlayerDownedShare === 0.5 && Math.abs(down.total / solo.total - f) < 0.2 && down.per[0] >= down.total - 1, 'un joueur à terre alourdit les vagues 2 fois moins : à 2 joueurs dont un à terre, ×1,375 (et non ×1,75), tout autour de la squad vivante', `solo ${solo.total} ; 2 joueurs dont un à terre ${down.total} (×${(down.total / solo.total).toFixed(2)}, attendu ×${f}) ; autour de la squad vivante ${down.per[0]}`);
   }
 
   // ---- la toute première vague de la partie n'est jamais en cercle (même avec une chance à 1), la suivante l'est
@@ -1946,6 +2226,33 @@ try {
       const still = f2.sim.gems.chests.length;
       for (let i = 0; i < 30 * 2; i++) f2.session.advance(34, () => {});
       check(still === 1 && f2.sim.gems.chests.length === 0, 'coffre à diamants : disparaît au bout de 10 s s\'il n\'est pas pris', `${still} à 9 s, ${f2.sim.gems.chests.length} à 11 s`);
+    }
+    // pendant qu'on l'ouvre (jauge qui se remplit), le coffre ne disparaît pas même passé les 10 s ; une fois qu'on s'éloigne, la jauge retombe puis il disparaît
+    {
+      const f3 = fresh(27);
+      clearAliens(f3.sim);
+      const q = f3.sim.squadOf('p1');
+      f3.sim.gems.spawnChest(q.center.x + 100, q.center.y);
+      const c = f3.sim.gems.chests[0];
+      c.hop = undefined;
+      c.x = c.px = q.center.x + 100;
+      c.y = c.py = q.center.y;
+      c.age = DIFFICULTY.gemChestLife - 0.4; // presque à bout de vie
+      for (const so of q.soldiers) { so.x = so.px = c.x; so.y = so.py = c.y; }
+      q.anchor.x = c.x;
+      q.anchor.y = c.y;
+      const none = new Map();
+      let charged = 0;
+      for (let i = 0; i < 30 * 1; i++) {
+        for (const so of q.soldiers) { so.x = so.px = c.x; so.y = so.py = c.y; }
+        f3.sim.step(1 / 30, none);
+        charged = Math.max(charged, c.charge);
+      }
+      const alive1 = f3.sim.gems.chests.includes(c) && c.age > DIFFICULTY.gemChestLife;
+      for (const so of q.soldiers) { so.x = so.px = c.x + 3000; so.y = so.py = c.y; }
+      q.anchor.x = c.x + 3000;
+      for (let i = 0; i < 30 * 6; i++) f3.sim.step(1 / 30, none);
+      check(charged > 0 && alive1 && !f3.sim.gems.chests.includes(c), "coffre à diamants : ne disparaît pas pendant qu'on l'ouvre (jauge > 0), même après 10 s ; il disparaît une fois la jauge retombée", `charge max ${charged.toFixed(2)}, vivant à ${(c.age).toFixed(1)} s : ${alive1}, plus là après : ${!f3.sim.gems.chests.includes(c)}`);
     }
     // les power-ups apparaissent à nu (pas de boîte), sans saut : la vue joue un petit scale
     const f = fresh(25);

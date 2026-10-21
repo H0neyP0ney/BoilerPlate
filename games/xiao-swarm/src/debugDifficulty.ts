@@ -73,6 +73,7 @@ export const DIFFICULTY_SECTIONS: { title: string; specs: DifficultySpec[] }[] =
     title: 'Multijoueur',
     specs: [
       { key: 'extraPlayerAliens', label: 'Aliens par joueur en plus', min: 0, max: 2, step: 0.05, hint: "Chaque joueur vivant en plus ajoute cette part des aliens d'une vague et des PV des boss (0,75 = +75 %)" },
+      { key: 'extraPlayerDownedShare', label: 'Joueur à terre : part de son ajout', min: 0, max: 1, step: 0.05, hint: "Un joueur à terre alourdit les vagues cette part de ce qu'il ajoute debout (0,5 : +37,5 % au lieu de +75 %, 1 : comme avant, 0 : plus du tout)" },
       { key: 'maxAliensPerPlayer', label: "Plafond d'aliens / joueur", min: 20, max: 400, step: 5, hint: "Aliens au plus à l'apparition par joueur vivant. Un boss l'ignore" },
     ],
   },

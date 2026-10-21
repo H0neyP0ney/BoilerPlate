@@ -99,18 +99,20 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
       { name: 'Langue + essaim', groups: [{ type: 'toad', count: 3 }, { type: 'gling', count: 12 }] },
       { name: 'Cracheurs', groups: [{ type: 'spitter', count: 3 }, { type: 'slime', count: 6 }] },
       { name: 'Cracheurs et essaim', groups: [{ type: 'spitter', count: 3 }, { type: 'gling', count: 12 }] },
+      { name: 'Premiers feux', groups: [{ type: 'fireballer', count: 2 }, { type: 'slime', count: 10 }] }, // 20/10 : les premiers fireballers dès le niveau 4 (83 s), avant le Rhino Alpha
     ],
     5: [
       { name: 'Un gros', groups: [{ type: 'shooter', count: 3 }, { type: 'slime', count: 11 }] },
       { name: 'Artillerie', groups: [{ type: 'shooter', count: 6 }, { type: 'gling', count: 9 }] },
       { name: 'Mélange', groups: [{ type: 'shooter', count: 3 }, { type: 'toad', count: 3 }, { type: 'kamikaze', count: 6 }] },
-      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 3 }, { type: 'slime', count: 6 }] },
+      { name: 'Slimes de feu', groups: [{ type: 'fireballer', count: 3 }, { type: 'slime', count: 6 }] }, // 20/10 : échangé avec le niveau 6 (c'était les slimes de glace)
+      { name: 'Feu et glace', groups: [{ type: 'fireballer', count: 2 }, { type: 'iceballer', count: 3 }, { type: 'slime', count: 8 }] }, // 20/10 : les deux lanceurs d'orbes ensemble, dès le niveau 5 (2 fireballers, 3 iceballers)
     ],
     6: [
       { name: 'Cracheurs et feu', groups: [{ type: 'spitter', count: 6 }, { type: 'burner', count: 6 }, { type: 'slime', count: 9 }] },
       { name: 'Brasier', groups: [{ type: 'burner', count: 9 }, { type: 'gling', count: 15 }] },
       { name: 'Chaman', groups: [{ type: 'shaman', count: 3 }, { type: 'slime', count: 15 }, { type: 'gling', count: 9 }] },
-      { name: 'Slimes de feu', groups: [{ type: 'fireballer', count: 3 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] },
+      { name: 'Slimes de glace', groups: [{ type: 'iceballer', count: 3 }, { type: 'slime', count: 12 }, { type: 'gling', count: 9 }] }, // 20/10 : échangé avec le niveau 5 (c'étaient les slimes de feu)
     ],
     7: [
       { name: 'Rhinocéros', groups: [{ type: 'charger', count: 3 }, { type: 'wall', count: 6 }, { type: 'slime', count: 9 }] },
@@ -162,16 +164,18 @@ export const DEFAULT_WAVE_SCRIPT: WaveScript = {
     { at: 60, level: 0, config: 4 },
     { at: 75, level: 3 },
     { at: 83, level: 4 },
-    { at: 87, level: 3 },
+    { at: 87, level: 4 }, // 20/10 : plus de grenouilles / cracheurs avant le Rhino Alpha (8 envois de niveau 3 passés au niveau 4 entre 87 s et 113 s)
     { at: 88.5, level: 2 },
-    { at: 90, level: 3, every: 2.5, until: 95 },
+    { at: 77, level: 4, every: 2.5, until: 82 }, // 20/10 : avancé de 90-95 s à 77-82 s (le creux de 75-90 s se remplit, le pic de 90-105 s baisse)
     { at: 91, level: 2 },
     { at: 94, level: 2, every: 2.5, until: 101.5 },
-    { at: 98, level: 3 },
-    { at: 100.5, level: 3, every: 2, until: 116.5 },
-    { at: 103.5, level: 2, every: 2, until: 107.5 },
+    { at: 98, level: 5 }, // 20/10 : un envoi de niveau 5 (lanceurs, 3 configurations sur 4) avant le Rhino Alpha, à la place d'un envoi de niveau 3
+    { at: 100.5, level: 4, every: 4, until: 112.5 }, // un envoi sur deux de l'ancienne série de niveau 3 (100,5 à 116,5 toutes les 2 s)
+    { at: 102.5, level: 3, every: 4, until: 114.5 },
+    { at: 116.5, level: 3 },
+    // 20/10 : les 7 envois de niveau 2 de 103,5 à 117,5 s (pic juste avant le Rhino Alpha) sont déplacés dans le creux d'après le Rhino, en niveau 3 : 138 à 162 s
+    { at: 138, level: 3, every: 4, until: 162 },
     { at: 109, level: 4 },
-    { at: 111.5, level: 2, every: 2, until: 117.5 },
     { at: 118, level: 4 },
     { at: 119.5, level: 3, every: 8, until: 159.5 },
     { at: 120, level: 0, config: 1 },

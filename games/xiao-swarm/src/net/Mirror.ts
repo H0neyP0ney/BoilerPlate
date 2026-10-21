@@ -1,5 +1,5 @@
 import { damp, robustCentroid } from '@xiao/engine/sim';
-import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD, ELECTRO } from '../config';
+import { COINS, CROWD, ORB_BLINK_TIME, RELOCATE, REVIVE_TIME, SQUAD, ELECTRO, RUSH_RAMP } from '../config';
 import { ALIENS, shieldOf } from '../data/aliens';
 import { UPGRADE_IDS } from '../data/progression';
 import { skinFromIndex } from '../data/skins';
@@ -696,11 +696,11 @@ export class Mirror {
     const R = a.def.rush!;
     const key = 'r' + a.id + ':' + Math.round(a.rushX) + ':' + Math.round(a.rushY);
     if (this.teleDone.has(key)) return;
-    this.teleDone.set(key, R.length / R.speed + R.windup + 2);
+    this.teleDone.set(key, R.length / R.speed + RUSH_RAMP + R.windup + 2);
     // départ : dernière position de l'hôte (l'alien peut encore dériver pendant le télégraphe : `rushX/Y` est celle de son début) ; axe normalisé (quantifié au centième)
     const g = this.goals.get(a);
     const n = Math.hypot(a.rushDx, a.rushDy) || 1;
-    const c: Charge = { x: g ? g.x : a.x, y: g ? g.y : a.y, vx: 0, vy: 0, dx: a.rushDx / n, dy: a.rushDy / n, t: 0, dur: R.length / R.speed, done: false, hostSeen: false };
+    const c: Charge = { x: g ? g.x : a.x, y: g ? g.y : a.y, vx: 0, vy: 0, dx: a.rushDx / n, dy: a.rushDy / n, t: 0, dur: R.length / R.speed + RUSH_RAMP, done: false, hostSeen: false };
     this.charges.set(a.id, c);
     if (over > 0) this.stepCharge(a, c, over);
   }
@@ -1036,6 +1036,7 @@ export class Mirror {
         goldHp0: 0,
         goldNext: 0,
         crossCd: 0,
+        auraCd: 0,
         lurkBlockT: 0,
         swarmT: 0,
         swarmAcc: 0,

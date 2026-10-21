@@ -43,7 +43,7 @@ export class ElectricArcs {
       py += Math.sin(d) * step;
       pts.push(px, py);
     }
-    this.arcs.push({ pts, age: 0, life: ARC.life[0] + Math.random() * (ARC.life[1] - ARC.life[0]), width: size > 30 ? 2.2 : 1.6 });
+    this.arcs.push({ pts, age: 0, life: ARC.life[0] + Math.random() * (ARC.life[1] - ARC.life[0]), width: size > 25 ? 2.2 : 1.6 });
   }
 
   update(dt: number): void {

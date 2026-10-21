@@ -8,6 +8,7 @@ import { FX } from '../fxParams';
  */
 export class StimBloodFx {
   private readonly drops: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly blur: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly mist: Phaser.GameObjects.Particles.ParticleEmitter;
 
   /** `radius` : rayon de l'unité (px) ; `every` : ms entre deux gouttes (plus espacées sur une escouade entière). */
@@ -26,6 +27,21 @@ export class StimBloodFx {
         tint: f.mistColor,
       })
       .setDepth(DEPTH.actors + 4999);
+    // flou : un halo rouge doux (fx_glow) autour de chaque goutte, même trajectoire que les gouttes
+    this.blur = scene.add
+      .particles(0, 0, 'fx_glow', {
+        x: { min: -radius * f.spreadX, max: radius * f.spreadX },
+        y: { min: -radius * 0.3, max: radius * 0.4 },
+        speedY: { min: -f.speedYMax, max: -f.speedYMin },
+        speedX: { min: -f.speedX, max: f.speedX },
+        gravityY: f.gravity,
+        scale: { start: f.scaleStart * f.blurScale, end: f.scaleEnd * f.blurScale },
+        alpha: { start: f.blurAlpha, end: 0 },
+        lifespan: { min: f.lifeMin, max: Math.max(f.lifeMin, f.lifeMax) },
+        frequency: every,
+        tint: f.bloodColor,
+      })
+      .setDepth(DEPTH.actors + 4999.5);
     this.drops = scene.add
       .particles(0, 0, 'fx_dot', {
         x: { min: -radius * f.spreadX, max: radius * f.spreadX },
@@ -44,12 +60,14 @@ export class StimBloodFx {
 
   setPosition(x: number, y: number): this {
     this.mist.setPosition(x, y);
+    this.blur.setPosition(x, y);
     this.drops.setPosition(x, y);
     return this;
   }
 
   setVisible(v: boolean): this {
     this.mist.setVisible(v);
+    this.blur.setVisible(v);
     this.drops.setVisible(v);
     return this;
   }
@@ -57,12 +75,14 @@ export class StimBloodFx {
   /** Arrête l'émission ; les gouttes en l'air finissent leur vie. */
   stop(): this {
     this.mist.stop();
+    this.blur.stop();
     this.drops.stop();
     return this;
   }
 
   destroy(): void {
     this.mist.destroy();
+    this.blur.destroy();
     this.drops.destroy();
   }
 }

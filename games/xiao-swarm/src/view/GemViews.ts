@@ -56,7 +56,7 @@ class ChestView {
       this.landed = true;
       this.onLand()?.(x, y, 50); // atterrit : poussière
     }
-    const blink = s.age > DIFFICULTY.gemChestLife - GEM_CHEST.blink && Math.sin(time * 18) > 0; // dernières secondes : clignote
+    const blink = s.age > DIFFICULTY.gemChestLife - GEM_CHEST.blink && s.charge <= 0 && s.state !== 'ad' && Math.sin(time * 18) > 0; // dernières secondes : clignote (pas pendant qu'on l'ouvre : il ne disparaîtra plus)
     const depth = DEPTH.actors + y;
     this.chest.setPosition(x, y - arc).setDepth(depth).setAlpha(blink ? 0.35 : 1);
     const shown = !s.hop;

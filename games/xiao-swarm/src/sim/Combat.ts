@@ -268,10 +268,11 @@ export class Combat {
    * dans des directions au hasard (écart minimal entre elles : elles ne partent pas du même côté) ; mêmes dégâts, même zone, même télégraphe rouge.
    */
   deathBlobs(a: AlienState): void {
-    const lob = a.def.lob;
+    const lob = a.def.lob ?? a.def.spray; // shooter (tir en cloche) ou cracheur (crachat) : mêmes champs de mort, boules identiques à leur tir
     if (!lob?.deathBlobs) return;
     const { rng } = this.sim;
-    const n = lob.deathBlobs;
+    const max = 'deathBlobsMax' in lob ? lob.deathBlobsMax : undefined;
+    const n = max !== undefined && max > lob.deathBlobs ? rng.int(lob.deathBlobs, max) : lob.deathBlobs; // fourchette (cracheur : 7 à 10) ou nombre fixe (shooter : 3) ; aucun tirage de plus pour un nombre fixe
     const start = rng.range(0, Math.PI * 2);
     for (let i = 0; i < n; i++) {
       const ang = start + (i / n) * Math.PI * 2 + rng.range(-0.5, 0.5);
@@ -287,7 +288,7 @@ export class Combat {
         damage: lob.damage * (a.revived ? zombieStats().dmgMul : 1) * a.escDmg,
         aoe: lob.aoe,
         texture: lob.texture,
-        poison: lob.poison ?? 0,
+        poison: 'poison' in lob ? (lob.poison ?? 0) : 0,
         team: a.team,
         id: a.id,
         alien: a.def.id,

@@ -19,7 +19,7 @@ import { TimelineHud, timelineBottom } from '../view/TimelineHud';
 import { UPGRADE_PINK } from '../view/GlobeGlitter';
 import { staleDropped } from '../dev/staleOverrides';
 import { buildScoreboard, scoreRows } from '../view/Scoreboard';
-import { iconCheat, iconCrowd, iconDifficulty, iconLog, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
+import { iconCheat, iconClearTuto, iconCrowd, iconDifficulty, iconLog, makeSquareButton, VIEW_BORDER, VIEWER_BUTTONS } from '../dev/hudButtons';
 import type { GameScene } from './GameScene';
 import { fallbackSeen } from '../fallbackEvents';
 
@@ -214,6 +214,7 @@ export class HudScene extends Phaser.Scene {
         makeSquareButton(this, iconCheat, () => this.game_.toggleCheatPanel()),
         makeSquareButton(this, iconDifficulty, () => this.game_.toggleDifficultyPanel()),
         makeSquareButton(this, iconLog, () => toggleDevLog()), // console de log en jeu (aussi F4)
+        makeSquareButton(this, iconClearTuto, () => this.game_.clearTutorial()), // tutoriel marqué fait
       ];
       this.viewerBtns = VIEWER_BUTTONS.map((b) => makeSquareButton(this, b.icon, () => this.game_.openViewer(b.scene), VIEW_BORDER));
     }
@@ -407,6 +408,8 @@ ${t('roomPlayers', { players: g.playerCount })}`, // sur deux lignes, en bas à 
     this.bossArrow.clear();
     this.bossTip.setVisible(false);
     this.bossName.setVisible(!!boss);
+    // le cadre est au paquet 2b : la barre est construite à l'arrivée du 2a, donc l'image a pu être créée AVANT sa texture (carré vert « __MISSING » rendu transparent) ; elle ne se met pas à jour toute seule : on lui donne la vraie texture dès qu'elle est là
+    if (this.bossFrame && this.bossFrame.texture.key !== 'ui_boss_frame' && this.textures.exists('ui_boss_frame')) this.bossFrame.setTexture('ui_boss_frame');
     this.bossFrame?.setVisible(!!boss);
     this.bossGhost?.setVisible(false);
     this.bossFill?.setVisible(!!boss);

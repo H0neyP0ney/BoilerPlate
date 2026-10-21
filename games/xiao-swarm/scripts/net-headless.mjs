@@ -141,6 +141,8 @@ try {
   hs.fuses.length = 0; // ni mèche de kamikaze en cours (explosion d'alien : elle blesse légitimement)
   hs.blasts.length = 0;
   hs.combat.clear(); // pas de projectile d alien en vol (boule de glace, grenade…) : ils blessent légitimement
+  hs.fires.length = 0; // ni flaque de flammes ni soldat qui brûle (un fireballer plus précoce depuis le 20/10 peut en avoir laissé : la brûlure blesse légitimement)
+  for (const x of [...a.soldiers, ...b.soldiers]) { x.burn = 0; x.burnDps = 0; }
   const before = hpSum();
   const waveUpdate = hs.waves.update;
   hs.waves.update = () => {}; // pas de nouvelle vague pendant la mesure : un alien qui surgit puis frappe dans le même tick blesserait légitimement
@@ -258,7 +260,7 @@ try {
   const kx0 = a.soldiers.reduce((n, s) => n + Math.abs(s.kx) + Math.abs(s.ky), 0);
   hs.combat.spray(spitter, a.soldiers[0]);
   const lobs = hs.combat.projectiles.active.filter((p) => p.lob); // les balles des soldats déjà en vol ne comptent pas
-  check(lobs.length === 3 && lobs.every((p) => p.aoe > 0), 'cracheur : 3 boules en cloche télégraphiées', `${lobs.length}`);
+  check(lobs.length === ALIENS.spitter.spray.pellets && ALIENS.spitter.spray.pellets === 5 && lobs.every((p) => p.aoe > 0), 'cracheur : 5 boules en cloche télégraphiées (3 avant le 20/10)', `${lobs.length}`);
   // projectiles : identifiants stables, le client garde le MÊME objet d'un snapshot à l'autre (lissage) et le retrouve par id
   for (let i = 0; i < 8 && (client.sim.combat.projectiles.active.length < 3 || !client.sim.combat.projectiles.active.some((p) => p.lob)); i++) await tick(client); // le snapshot n'arrive pas à chaque tick (ni la même parité d'une partie à l'autre) : on attend de voir les boules en cloche
   const projBefore = new Map(client.sim.combat.projectiles.active.map((p) => [p.id, p]));

@@ -1215,6 +1215,12 @@ export class Sim {
     if ((a.def.lob?.deathBlobs || a.def.spray?.deathBlobs) && !wipe && !this.ending) this.combat.deathBlobs(a); // shooter : 3 boules rouges en cloche autour du cadavre ; cracheur : 7 à 10 boules vertes
     const brood = a.def.deathSpawn;
     if (brood && !wipe) this.deathSpawns.push({ type: brood.spawn, x: a.x, y: a.y, count: brood.count, radius: a.radius, hpMul: brood.hpMul ?? 1 });
+    const zone = a.def.deathZone;
+    if (zone && !wipe && !this.ending) {
+      this.blame = `${a.def.id}:deathZone`;
+      if (zone.kind === 'fire') this.addFire(a.x, a.y + 4, zone.radius, zone.ttl, (zone.dps ?? 0) * a.escDmg);
+      else this.addPuddle(a.x, a.y + 4, zone.radius, zone.ttl, 1, true);
+    }
     const bomb = a.def.deathBlast;
     if (bomb) {
       this.fuses.push({ id: this.ids.get(), x: a.x, y: a.y, t: bomb.delay, dur: bomb.delay, r: bomb.radius, dmg: bomb.damage * a.escDmg, knock: bomb.knockback, alien: a.def.id });

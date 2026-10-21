@@ -169,6 +169,8 @@ export interface AlienDef {
   deathBlast?: { delay: number; radius: number; damage: number; knockback: number };
   /** À sa mort, `count` aliens `spawn` surgissent autour de son corps (chaman : 5 araignées). Invoqués : ni XP ni recrue ; pas pendant le clear screen d'un boss. */
   deathSpawn?: { spawn: AlienId; count: number; hpMul?: number };
+  /** Zone laissée au sol à la mort (jamais pendant un clear screen) : flaque de flammes (`fire`, brûle `dps` PV/s, comme la traînée du burner) ou nuage de gel (`frost`, comme celui du chaman : gèle le premier soldat qui y entre), de rayon `radius`, qui dure `ttl` s. */
+  deathZone?: { kind: 'fire' | 'frost'; radius: number; ttl: number; dps?: number };
   /** Langue : attrape un soldat à portée et le tire d'une fraction `pull` de la distance qui les sépare (jamais jusqu'à lui). */
   tongue?: { range: number; cooldown: number; pull: number; damage: number };
   /** Charge télégraphiée : s'arrête `windup` s (zone rouge devant lui) puis fonce sur `length` px ; les soldats dans la zone sont repoussés et blessés. */
@@ -321,7 +323,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.495,
     target: 'nearest',
     tongue: { range: 297, cooldown: 3.2, pull: 0.4, damage: 3.6 }, // portée 270 → 297 (+10 %, 14/10)
-    deathSpawn: { spawn: 'spider', count: 3, hpMul: 2 }, // à sa mort (21/10) : comme le chaman, des araignées (jamais pendant un clear screen) ; nombre et PV (× leurs PV de base) réglables dans le panneau Stats de sa vue d'unité
+    deathSpawn: { spawn: 'spider', count: 3, hpMul: 3 }, // à sa mort (21/10) : comme le chaman, des araignées (jamais pendant un clear screen) ; nombre et PV (× leurs PV de base) réglables dans le panneau Stats de sa vue d'unité
     xp: 4,
     recruitChance: 0.052, // avant : 0.04 (×1.3 intégré le 09/10)
     color: 0x3fd0a0,
@@ -381,7 +383,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'nearest',
     frost: { every: 9, range: 560, count: 2, gap: [103.5, 184], radius: 25.5, ttl: 10 }, // flocons à distance (07/10) : à 103,5-184 px du bord réel de la squad (+15 % le 09/10, 90-160 avant)
     revive: { range: 330, cooldown: 3.5, cast: 1.3, hpFrac: 1, maxRevives: 3, lockout: 30, zombie: { copies: 2, hpMul: 3, dmgMul: 1, speedMul: 1.35, attackMul: 3 } }, // le ressuscité est un ZOMBIE (réglages `zombie`, vue du chaman)
-    deathSpawn: { spawn: 'spider', count: 5, hpMul: 2 }, // hpMul : PV des araignées de CETTE source (× leurs PV de base), réglable à part de la Gling Mère et du crabe; // à sa mort : 5 araignées
+    deathSpawn: { spawn: 'spider', count: 5, hpMul: 3 }, // hpMul : PV des araignées de CETTE source (× leurs PV de base), réglable à part de la Gling Mère et du crabe; // à sa mort : 5 araignées
     xp: 8,
     recruitChance: 0.13, // avant : 0.1 (×1.3 intégré le 09/10)
     color: 0xffd84a,
@@ -590,6 +592,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     recruitChance: 0.091, // avant : 0.07 (×1.3 intégré le 09/10)
     color: 0x7fd8ff,
     goo: 0x2e93b4, // couleur principale de son sprite (éclats et flaque de mort)
+    deathZone: { kind: 'frost', radius: 25.5, ttl: 10 }, // à sa mort (21/10) : un nuage de gel au sol, la zone du chaman
     hpBarWidth: 30,
   },
   /** Orbe de glace lancé par le slime de glace : projectile destructible (500 PV), gèle le soldat touché. */
@@ -644,7 +647,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     target: 'center',
     leap: { every: 10, windup: 0.6, flight: 0.9, recover: 0.7, radius: 150, maxDist: 900, height: 200 },
     spikeRing: { turn: Math.PI / 8, aim: 0.45, length: 760, width: 44, sweep: 0.6333, damage: 54, rays: 8 }, // même équilibrage que les pics du lurker (télégraphe 0,45 s, front à 1200 px/s : +20 % le 14/10, sweep 0,76 → 0,6333 s) : 8 directions, 760 px
-    lob: { range: 620, cooldown: 3, flight: 1, damage: 18, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 3 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
+    lob: { range: 620, cooldown: 3, flight: 1, damage: 18, aoe: 85, texture: 'fx_blob_red', count: 3, keepMoving: true, lead: [1.4, 1.8], scatter: 80, spawn: 5, spawnHpMul: 4 }, // grosses boules rouges : 20 dégâts en zone + 3 araignées enragées (le poison, `lob.poison`, est disponible pour un autre usage)
     boss: { kind: 'mini' }, // le type réel dépend du niveau : `bossKindAt` (final en Expert)
     diamonds: 40, // diamants moyens du coffre de ce boss (augmente avec les boss ; × multiplicateur du niveau)
     xp: 300,
@@ -734,6 +737,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     recruitChance: 0.091,
     color: 0xff7a2a,
     goo: 0xc8501a,
+    deathZone: { kind: 'fire', radius: 24, ttl: 11.25, dps: 28.08 }, // à sa mort (21/10) : une flaque de flammes au sol, la zone du burner
     hpBarWidth: 30,
   },
 };

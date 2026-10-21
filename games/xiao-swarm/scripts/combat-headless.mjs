@@ -196,6 +196,33 @@ try {
     check(sim.bossKills === 0 && sim.escalationHp === 1 && sim.escalationSpeed === 1, 'escalade : remise à zéro à la relance de la partie');
   }
 
+  // ---- iceballer / fireballer : à leur mort, un nuage de gel (zone du chaman) / une flaque de flammes (zone du burner) au sol ; rien pendant un clear screen
+  {
+    const test = (id, wipe) => {
+      const { sim, step } = fresh(17);
+      clearAliens(sim);
+      const sq = sim.squadOf('p1');
+      for (const o of sq.soldiers) o.invulnerable = 1e9;
+      sim.horde.spawnAt(id, sq.center.x + 500, sq.center.y, 1, false);
+      step(60);
+      const a = sim.aliens.find((x) => x.def.id === id);
+      const p0 = sim.puddles.length;
+      if (wipe) sim.wipeAliens?.('p1');
+      else sim.damage(a, 1e9, 'p1');
+      step(1);
+      return { puddles: sim.puddles.length - p0, fires: sim.fires.filter((f) => f.src === `${id}:deathZone`).length, sim, a };
+    };
+    const ice = test('iceballer', false);
+    const fire = test('fireballer', false);
+    const sh = ALIENS.shaman.frost, bu = ALIENS.burner.trail;
+    const Z = ALIENS.iceballer.deathZone, Y = ALIENS.fireballer.deathZone;
+    check(Z.kind === 'frost' && Z.radius === sh.radius && Z.ttl === sh.ttl && Y.kind === 'fire' && Y.radius === bu.radius && Y.ttl === bu.ttl && Y.dps === bu.dps, "iceballer / fireballer : zones de mort aux valeurs du chaman et du burner (données)");
+    check(ice.puddles === 1 && ice.sim.puddles.at(-1).frost && ice.fires === 0, 'iceballer tué : un nuage de gel au sol', `${ice.puddles} nuage(s), ${ice.fires} flamme(s)`);
+    check(fire.fires === 1 && fire.puddles === 0, 'fireballer tué : une flaque de flammes au sol', `${fire.fires} flamme(s), ${fire.puddles} nuage(s)`);
+    const wi = test('iceballer', true), wf = test('fireballer', true);
+    check(wi.puddles === 0 && wf.fires === 0, 'iceballer / fireballer : aucune zone pendant un clear screen', `${wi.puddles} nuage(s), ${wf.fires} flamme(s)`);
+  }
+
   // ---- grenouille : à sa mort, 3 araignées aux PV réglables (comme le chaman) ; pas pendant un clear screen
   {
     const { sim, step } = fresh(16);
@@ -1498,10 +1525,10 @@ try {
     const duo = ringedBy(['p1', 'p2']);
     const trio = ringedBy(['p1', 'p2', 'p3']);
     const ok = duo.per.every((n) => n >= 1) && trio.per.every((n) => n >= 1) && Math.abs(duo.per[0] - duo.per[1]) <= 2 && Math.abs(trio.per[0] - trio.per[2]) <= 2;
-    check(ok && Math.abs(duo.total / solo.total - 1.75) < 0.25 && Math.abs(trio.total / solo.total - 2.5) < 0.3, 'cercle à plusieurs joueurs : chaque squad est entourée de son cercle, total ×1,75 à 2 joueurs et ×2,5 à 3, réparti à parts égales', `solo ${solo.total} (${solo.per}) ; 2 joueurs ${duo.total} (${duo.per}) ; 3 joueurs ${trio.total} (${trio.per})`);
+    check(ok && Math.abs(duo.total / solo.total - (1 + DIFFICULTY.extraPlayerAliens)) < 0.25 && Math.abs(trio.total / solo.total - (1 + 2 * DIFFICULTY.extraPlayerAliens)) < 0.3, 'cercle à plusieurs joueurs : chaque squad est entourée de son cercle, total × (1 + extraPlayerAliens × (joueurs − 1)), réparti à parts égales', `solo ${solo.total} (${solo.per}) ; 2 joueurs ${duo.total} (${duo.per}) ; 3 joueurs ${trio.total} (${trio.per})`);
     const down = ringedBy(['p1', 'p2'], ['p2']);
     const f = 1 + DIFFICULTY.extraPlayerAliens * DIFFICULTY.extraPlayerDownedShare;
-    check(DIFFICULTY.extraPlayerDownedShare === 0.5 && Math.abs(down.total / solo.total - f) < 0.2 && down.per[0] >= down.total - 1, 'un joueur à terre alourdit les vagues 2 fois moins : à 2 joueurs dont un à terre, ×1,375 (et non ×1,75), tout autour de la squad vivante', `solo ${solo.total} ; 2 joueurs dont un à terre ${down.total} (×${(down.total / solo.total).toFixed(2)}, attendu ×${f}) ; autour de la squad vivante ${down.per[0]}`);
+    check(Math.abs(down.total / solo.total - f) < 0.2 && down.per[0] >= down.total - 1, 'un joueur à terre alourdit les vagues 2 fois moins : à 2 joueurs dont un à terre, ×1,375 (et non ×1,75), tout autour de la squad vivante', `solo ${solo.total} ; 2 joueurs dont un à terre ${down.total} (×${(down.total / solo.total).toFixed(2)}, attendu ×${f}) ; autour de la squad vivante ${down.per[0]}`);
   }
 
   // ---- la toute première vague de la partie n'est jamais en cercle (même avec une chance à 1), la suivante l'est

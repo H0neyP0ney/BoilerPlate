@@ -60,6 +60,12 @@ export interface SoldierState extends Body {
   /** Enflammé : temps restant (s) de brûlure et débit de dégâts (PV/s) ; le feu est une brûlure dans le temps, voir `FIRE`. */
   burn: number;
   burnDps: number;
+  /** Empoisonné (mêlée de l'araignée) : temps restant (s) et débit de dégâts (PV/s) ; source pour la mesure. */
+  venom: number;
+  venomDps: number;
+  /** Temps (s) de poison pas encore converti en dégâts (les dégâts partent par ticks de `VENOM_TICK`, le reste à la fin). */
+  venomAcc: number;
+  venomSrc?: string;
   /** Mesure (RunRecorder) : source de la brûlure en cours (`Sim.blame` du feu le plus fort). */
   burnSrc?: string;
   /** Soufflé en cloche par l'explosion d'un kamikaze : temps restant (s) pendant lequel seul le recul le déplace (il ne rejoint pas son slot), puis il revient en marchant. */

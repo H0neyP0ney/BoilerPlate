@@ -64,6 +64,8 @@ export const FX_DEFAULTS = {
    * `flameScale` / `flameHeight` = taille, `flicker` = vacillement, `alpha`. Fumée : `smokeY` = départ, `smokeRise` = montée (px), `smokeScale` + `smokeGrow` = taille au départ / gain, `smokeSpeed` = cycles par seconde,
    * `smokeSpread` = écart entre les volutes, `smokeAlpha`. Couleurs : flammes du côté (`flameColor`) et du milieu (`flameColorMid`), fumée.
    */
+  /** Soldat empoisonné (mêlée de l'araignée) : bulles vertes (fx_dot) qui montent en grossissant, petite lueur verte (fx_glow) et fines gouttes qui retombent. */
+  venom: { spacing: 8, baseY: -14, rise: 26, bubbleScale: 0.5, bubbleGrow: 0.5, speed: 0.9, alpha: 0.85, glowScale: 1.1, glowAlpha: 0.28, color: 0x4dff5e, colorLight: 0xc8ffb0 },
   burn: { spacing: 9, baseY: -18, hop: 5, flameScale: 0.64, flameHeight: 1.06, flicker: 0.1, alpha: 0.8, flameColor: 0xff6a1a, flameColorMid: 0xffd24a, smokeY: -26, smokeRise: 27, smokeScale: 0.3, smokeGrow: 0.6, smokeSpeed: 0.9, smokeSpread: 4.5, smokeAlpha: 0.5, smokeColor: 0x000000 },
   /**
    * Montée de niveau, par soldat (`Fx.levelUpSoldier`) : colonne bleue CREUSE (un tube : parois translucides, ellipses haut et bas, rien à l'intérieur) de rayon `colR` et de hauteur `colH` qui monte de `colRise` px en

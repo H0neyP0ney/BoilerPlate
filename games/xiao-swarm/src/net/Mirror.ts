@@ -930,6 +930,9 @@ export class Mirror {
         jy1: 0,
         jm: 0,
         poison: 0,
+        venom: 0,
+        venomDps: 0,
+        venomAcc: 0,
         grabbed: 0,
       };
       this.soldiers.set(u.id, s);
@@ -945,6 +948,7 @@ export class Mirror {
     // La vue ne teste que « a-t-il une cible ? » (pose de tir) : il se cible lui-même.
     s.target = u.target ? s : null;
     s.stun = u.stunned ? 1 : 0;
+    s.venom = u.venomous ? 1 : 0; // empoisonné : l'effet vert est dessiné par la vue
     s.burn = u.burning ? 1 : 0; // enflammé : la flamme est dessinée par la vue
     s.knockT = u.knocked ? 1 : 0; // soufflé par un kamikaze : la position vient du snapshot
     s.jumpT = u.airborne ? 1 : 0; // en vol vers la Gling Mère (toile) : la position vient du snapshot

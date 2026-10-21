@@ -732,6 +732,35 @@ try {
     check(big.hit && big.along > 0 && big.along < small.along / 3, 'orbes électriques : un gros alien (boss) est à peine repoussé', `${big.along.toFixed(0)} px/s contre ${small.along.toFixed(0)} pour un gling`);
   }
 
+  // ---- araignée : sa mêlée empoisonne (50 dégâts sur 6 s, durée remise à plein sans cumul) en plus du coup de 3
+  {
+    const { sim, step } = fresh(47);
+    clearAliens(sim);
+    const sq = sim.squadOf('p1');
+    const so = sq.soldiers[0];
+    so.invulnerable = 0; so.hp = so.maxHp = 1e6;
+    const V = ALIENS.spider.venom;
+    so.venom = 0; so.venomDps = 0;
+    sim.envenom(so, V.total, V.time);
+    sim.envenom(so, V.total, V.time); // deuxième coup : même débit, pas cumulé
+    const hp0 = so.hp;
+    let t = 0;
+    while (so.venom > 0 && t < 10) { step(1); t += 1 / 30; }
+    const lost = hp0 - so.hp;
+    check(ALIENS.spider.damage === 3 && ALIENS.spider.venom.total === 50 && ALIENS.spider.venom.time === 6 && lost > 46 && lost < 52 && t > 5.8 && t < 6.4, "araignée : sa mêlée empoisonne, 50 dégâts sur 6 s (sans cumul), coup de 3", `${lost.toFixed(1)} PV perdus en ${t.toFixed(1)} s`);
+    // via la vraie mêlée : une araignée au contact empoisonne le soldat
+    const f = fresh(48);
+    clearAliens(f.sim);
+    const sq2 = f.sim.squadOf('p1');
+    const t1 = sq2.soldiers[0];
+    t1.invulnerable = 0; t1.hp = t1.maxHp = 1e6;
+    f.sim.horde.spawnAt('spider', t1.x + 20, t1.y, 1, false);
+    const sp = f.sim.aliens[0];
+    sp.age = 99; sp.attackCd = 0; sp.hp = sp.maxHp = 1e9;
+    for (let i = 0; i < 10; i++) f.step(1);
+    check(t1.venom > 0 && t1.venomDps > 8 && t1.venomDps < 9, "araignée : un coup de mêlée empoisonne vraiment le soldat touché", `venom ${t1.venom.toFixed(1)} s, ${t1.venomDps.toFixed(2)} PV/s`);
+  }
+
   // ---- charge enragée : le Rhino Alpha très enragé enchaîne ses charges (cooldown ÷ 10) ; il doit s'arrêter net au début du télégraphe (pas de glissade de 80-100 px dans le sens de la charge précédente)
   // et charger dans l'axe du télégraphe
   {

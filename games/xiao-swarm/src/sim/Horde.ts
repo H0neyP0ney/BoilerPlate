@@ -996,6 +996,7 @@ export class Horde {
           this.blameAs(a, 'melee');
           if (def.oneShot) this.sim.damageSoldier(s, s.hp + s.shield + 1, null, false); // un coup = un mort
           else this.sim.damageSoldier(s, def.damage * power);
+          if (def.venom && s.alive) this.sim.envenom(s, def.venom.total * a.escDmg, def.venom.time); // mêlée empoisonnée (araignée)
           a.attackCd = def.attackCooldown;
         }
       }

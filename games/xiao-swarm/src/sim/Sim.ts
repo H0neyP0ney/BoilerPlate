@@ -1,5 +1,5 @@
 import { EventQueue, IdGen, Rng, SpatialHash, type Point } from '@xiao/engine/sim';
-import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP, FIRE, ROCK_POP } from '../config';
+import { BURIED, CAPTIVE_VULN, DIFFICULTY, RING, UPGRADE_REPEL, LEVEL_UP_DELAY, REVIVE_INVULN, REVIVE_RADIUS, REVIVE_TIME, UPGRADE_CHOICE_TIME, WEB, KNOCK_HOP, FIRE, ROCK_POP, VENOM_TICK } from '../config';
 import { xpToNext } from '../data/progression';
 import { ALIENS, bossKindAt, zombieStats, type AlienId } from '../data/aliens';
 import type { DifficultyLevel } from '../data/difficultyLevels';
@@ -89,6 +89,7 @@ export class Sim {
   /** Pics en croix du Rhino Alpha : passent par le snapshot (télégraphe et poussée chez les clients). */
   readonly crosses: SpikeCross[] = [];
   private burnCd = 0;
+  private venomCd = 0;
   /** Le boss final est mort : la partie (survie) est gagnée. */
   finalBossDead = false;
   /** Boss d'origine de chaque œuf vivant (id d'alien de l'œuf → boss) : détermine le contenu du coffre à diamants. Sim seulement. */
@@ -308,6 +309,9 @@ export class Sim {
         s.jumpT = 0;
         s.burn = 0;
         s.burnDps = 0;
+        s.venom = 0;
+        s.venomDps = 0;
+        s.venomAcc = 0;
         s.knockT = 0;
       }
     }
@@ -584,6 +588,7 @@ export class Sim {
     if (this.xpEnabled) this.xp.update(dt);
     this.updateCorpsesAndRocks(dt);
     this.updateFires(dt);
+    this.updateVenom(dt);
     this.updateReviveZones(dt);
     this.updateWalls(dt);
     this.updateStalactites(dt);
@@ -1041,6 +1046,41 @@ export class Sim {
         if (dps > 0) this.ignite(s, dps * FIRE.dmgMul);
         this.blame = `${s.burnSrc ?? 'fire'}:burn`;
         if (s.burn > 0) this.damageSoldier(s, s.burnDps * FIRE.tickDmg);
+      }
+    }
+  }
+
+  /** Empoisonne un soldat : `total` dégâts sur `time` s (durée remise à plein, débit au plus fort, jamais cumulé) ; un soldat gelé ou mort ne l'est pas. */
+  envenom(s: SoldierState, total: number, time: number): void {
+    if (!s.alive || s.frozen > 0) return;
+    s.venom = Math.max(s.venom, time);
+    const dps = total / time;
+    if (dps >= s.venomDps) s.venomSrc = this.blame;
+    s.venomDps = Math.max(s.venomDps, dps);
+  }
+
+  /** Poison : toutes les 0,25 s, `venomDps` × 0,25 de dégâts (par petits coups, comme le feu) tant qu'il reste du temps. */
+  private updateVenom(dt: number): void {
+    this.venomCd -= dt;
+    const tick = this.venomCd <= 0;
+    if (tick) this.venomCd = VENOM_TICK;
+    for (const sq of this.squads) {
+      for (const s of sq.soldiers) {
+        if (s.venom <= 0) continue;
+        s.venomAcc += Math.min(dt, s.venom);
+        s.venom -= dt;
+        const over = s.venom <= 0 || !s.alive || s.frozen > 0;
+        if (over || tick) {
+          if (s.alive && s.frozen <= 0 && s.venomAcc > 0) {
+            this.blame = `${s.venomSrc ?? 'spider'}:venom`;
+            this.damageSoldier(s, s.venomDps * s.venomAcc);
+          }
+          s.venomAcc = 0;
+        }
+        if (over) {
+          s.venom = 0;
+          s.venomDps = 0;
+        }
       }
     }
   }

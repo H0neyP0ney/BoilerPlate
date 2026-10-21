@@ -95,6 +95,7 @@ Sprites recolorés, icônes générées, dessins de FX tracés par le code : à 
 | Fusée et confettis du feu d'artifice du boss final | fusée dessinée par le code, confettis = rectangles | `Fx.fireworkRocket` / `Fx.confetti` |
 | « +1 » vert et croix rouge de perte de soldat | texte et signe tracés par le code | `Fx.gain` / `Fx.death` |
 | Unité enflammée (3 flammes + fumée) | `fx_flame` / `fx_smoke` tracés par le code, positions et couleurs en dur dans `FX.burn` | `view/BurnFx.ts` |
+| Soldat empoisonné (lueur verte + 4 bulles) | `fx_glow` / `fx_dot` teintés par le code, réglages `FX.venom` | `view/VenomFx.ts` |
 | Level up par soldat (colonne creuse, cercle au sol, particules) | tube dessiné en Graphics à chaque image + `fx_ring` / `fx_dot` | `Fx.levelUpSoldier`, `FX.levelUp` |
 | Fontaine de particules vertes du boss tué | particules `fx_dot` teintées en vert, gravité, réglées dans `FX.bossFountain` | `Fx.bossFountain` |
 | Stimpack (sang chaud) | gouttes `fx_dot` rouges + vapeur `fx_smoke`, émetteurs de particules | `view/StimBloodFx.ts`, `FX.stimBlood` |

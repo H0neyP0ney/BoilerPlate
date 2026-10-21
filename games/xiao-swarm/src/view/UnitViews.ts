@@ -5,6 +5,7 @@ import { BURIED, DEPTH, FREEZE, KNOCK_HOP, RECRUIT, RELOCATE, WEB } from '../con
 import { FX } from '../fxParams';
 import { TICK_RATE } from '../net/Session';
 import { BurnFx } from './BurnFx';
+import { VenomFx } from './VenomFx';
 import { createEnragedFlames, ENRAGED_TINT } from './EnragedFx';
 import { iceLook } from './IceBlockFx';
 import { latePack } from '../assets/latePack';
@@ -91,6 +92,7 @@ export class SoldierView {
   private stunIcon?: Phaser.GameObjects.Image;
   /** Flammes d'un soldat enflammé : deux images additives qui vacillent tant qu'il brûle (créées au premier besoin). */
   private burnFx?: BurnFx;
+  private venomFx?: VenomFx;
   /** Temps (s) passé en vol vers la Gling Mère (toile), 0 au sol : sert à l'arc du saut. */
   private airT = 0;
   /** Temps (s) passé soufflé par un kamikaze (cloche en y pendant le recul), 0 = au sol. */
@@ -195,6 +197,11 @@ export class SoldierView {
       this.burnFx ??= new BurnFx(this.scene);
       this.burnFx.update(this.rx, this.ry + bob + oy, time, this.phase, DEPTH.actors + this.ry);
     } else this.burnFx?.hide();
+    // empoisonné : bulles vertes (view/VenomFx.ts, réglages FX.venom)
+    if (s.venom > 0 && s.alive) {
+      this.venomFx ??= new VenomFx(this.scene);
+      this.venomFx.update(this.rx, this.ry + bob + oy, time, this.phase, DEPTH.actors + this.ry);
+    } else this.venomFx?.hide();
 
     if (this.hasGun) {
       const aim = s.target ? s.aim : facing > 0 ? 0 : Math.PI;
@@ -301,6 +308,7 @@ export class SoldierView {
   destroy(): void {
     this.stunIcon?.destroy();
     this.burnFx?.destroy();
+    this.venomFx?.destroy();
     this.whiteBody?.destroy();
     this.whiteGun?.destroy();
     this.ice?.destroy();

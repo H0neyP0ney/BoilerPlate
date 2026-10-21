@@ -164,6 +164,8 @@ export interface AlienDef {
   /** XP laissée à la mort, en globes bleus (voir data/progression.ts). */
   xp: number;
   /** Kamikaze : à sa mort le corps reste sur place, clignote `delay` s (zone rouge) puis explose : dégâts + recul aux soldats. */
+  /** Venin (araignée) : chaque coup de mêlée empoisonne le soldat touché : `total` dégâts répartis sur `time` s (durée remise à plein à chaque coup, jamais cumulé). */
+  venom?: { total: number; time: number };
   deathBlast?: { delay: number; radius: number; damage: number; knockback: number };
   /** À sa mort, `count` aliens `spawn` surgissent autour de son corps (chaman : 5 araignées). Invoqués : ni XP ni recrue ; pas pendant le clear screen d'un boss. */
   deathSpawn?: { spawn: AlienId; count: number; hpMul?: number };
@@ -244,7 +246,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 202.5, // avant : 180 (×1.25 intégré le 09/10) ; +40 %
     radius: 13,
     mass: 0.6,
-    damage: 2.25,
+    damage: 3, // avant : 2.25 (21/10)
     attackCooldown: 0.33,
     target: 'nearest',
     revivable: true,
@@ -660,7 +662,8 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     speed: 202.5, // avant : 180 (×1.25 intégré le 09/10)
     radius: 18,
     mass: 0.6,
-    damage: 2.25,
+    damage: 3, // avant : 2.25 (21/10)
+    venom: { total: 50, time: 6 }, // mêlée empoisonnée (21/10) : 50 dégâts sur 6 s, s'ajoutent aux 3 du coup
     attackCooldown: 0.33,
     target: 'nearest',
     revivable: true,

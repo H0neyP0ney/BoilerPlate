@@ -68,6 +68,8 @@ export const ELECTRO = { count: 4, time: 8, margin: 50, radiusMul: 1.38, speed: 
  * Feu (17/10) : toucher du feu (flaque de flammes, orbe de feu) ENFLAMME le soldat au lieu de le blesser sur le coup : il brûle `burnTime` s (la durée repart à zéro tant qu'il reste dans les flammes),
  * en perdant des PV dans le temps à `dmgMul` × le débit (dps) de la flaque ; une orbe de feu l'enflamme à `orbDps` × ses dégâts PV/s. La glace éteint le feu.
  */
+/** Poison (`def.venom`) : un coup de dégâts toutes les `VENOM_TICK` s. */
+export const VENOM_TICK = 0.25;
 export const FIRE = { burnTime: 2, dmgMul: 1, orbDps: 1 / 3, tick: 0.0625, tickDmg: 0.25 / 6 }; // ticks de brûlure : touts les `tick` s (0,25 s avant : 2× plus souvent), chacun inflige `burnDps × tickDmg` (burnDps × 0,25 avant : 3× moins par tick, donc le DPS total est × 2/3) // 17/10 : brûlure 2 s (3 s avant) ; débit des flaques × 1 (× 2 avant : DPS −50 %) ; orbe de feu : débit = ses dégâts × `orbDps` PV/s (÷ 3 : 6 PV/s pour 18 de dégâts, 12 avant)
 /**
  * Rocher de mur qui apparaît SOUS une unité (20/10, tous les murs : bâtisseur et Scarab Expert ; tous les soldats et aliens) : elle est projetée en cloche, dans le sens (centre de l'unité − centre du rocher) :

@@ -453,6 +453,9 @@ export class Squad {
       jy1: 0,
       jm: 0,
       poison: 0,
+      venom: 0,
+      venomDps: 0,
+      venomAcc: 0,
       grabbed: 0,
     };
     this.soldiers.push(s);

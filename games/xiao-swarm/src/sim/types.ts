@@ -48,8 +48,8 @@ export type SimEvent =
   | { t: 'thaw'; soldier: number; x: number; y: number }
   /** Mêlée en zone d'un alien (`def.cleave`, chargeur) : anneau rouge discret. */
   | { t: 'cleave'; x: number; y: number; r: number }
-  /** Éclair électrique sur un soldat (aura du chargeur). */
-  | { t: 'zap'; x: number; y: number }
+  /** Éclair électrique sur un soldat (aura du chargeur) ; `fromX` / `fromY` : le chargeur qui le lance. */
+  | { t: 'zap'; x: number; y: number; fromX: number; fromY: number }
   | { t: 'bossEnrage'; id: number; alien: AlienId; level: number }
   | { t: 'bossDown'; alien: AlienId; kind: 'mini' | 'final'; x: number; y: number }
   | { t: 'capture'; alien: number; soldier: number }

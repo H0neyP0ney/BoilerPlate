@@ -46,6 +46,22 @@ export class ElectricArcs {
     this.arcs.push({ pts, age: 0, life: ARC.life[0] + Math.random() * (ARC.life[1] - ARC.life[0]), width: size > 25 ? 2.2 : 1.6 });
   }
 
+  /** Un éclair brisé de (x1, y1) à (x2, y2) (aura du chargeur : du chargeur au soldat touché). */
+  bolt(x1: number, y1: number, x2: number, y2: number): void {
+    const n = 7;
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const nx = -(y2 - y1) / len;
+    const ny = (x2 - x1) / len;
+    const pts = [x1, y1];
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const off = (Math.random() - 0.5) * Math.min(26, len * 0.35);
+      pts.push(x1 + (x2 - x1) * t + nx * off, y1 + (y2 - y1) * t + ny * off);
+    }
+    pts.push(x2, y2);
+    this.arcs.push({ pts, age: 0, life: 0.14 + Math.random() * 0.06, width: 2.2 });
+  }
+
   update(dt: number): void {
     const g = this.g.clear();
     for (let i = this.arcs.length - 1; i >= 0; i--) {

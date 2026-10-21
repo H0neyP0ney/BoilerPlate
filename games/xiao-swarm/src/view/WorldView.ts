@@ -503,7 +503,8 @@ export class WorldView {
         break;
       case 'zap':
         // aura du chargeur : gerbe d'arcs électriques sur le soldat touché
-        if (nearCam(e.x, e.y)) {
+        if (nearCam(e.x, e.y) || nearCam(e.fromX, e.fromY)) {
+          this.electric.bolt(e.fromX, e.fromY - 20, e.x, e.y - 10); // petit éclair du chargeur au soldat
           for (let i = 0; i < 4; i++) this.electric.spawn(e.x, e.y - 10, 16, 30);
           this.fx.burst(e.x, e.y - 10, 0x7fd8ff, 4);
         }

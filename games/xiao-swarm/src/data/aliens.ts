@@ -337,7 +337,7 @@ export const ALIENS: Record<AlienId, AlienDef> = {
     attackCooldown: 0.55,
     target: 'nearest',
     cleave: 70, // mêlée en zone (07/10)
-    aura: { every: 1, radius: 120, damage: 10 }, // aura électrique (21/10) : un éclair sur chaque soldat proche, toutes les s (2 s / 80 px au départ)
+    aura: { every: 1, radius: 180, damage: 10 }, // aura électrique (21/10) : un éclair sur chaque soldat proche, toutes les s (2 s / 80 px au départ)
     rush: { cooldown: 5, windup: 0.3, length: 600, width: 80, speed: 1000, damage: 45, knockback: 5700, stun: 1.5 }, // charge électrique : étourdit 1,5 s ; préparation −30 % (0,675) et charge +30 % (416 px), 07/10 ; préparation 0,4725 → 0,3 le 14/10 ; recul = impulsion / masse du soldat (3), amorti par CROWD.knockDamp (5) : ~107 px (700 ne donnait que ~47 px)
     electric: true,
     xp: 10,

@@ -1728,7 +1728,7 @@ export class Horde {
       if (!s.alive || s.capturedBy || Math.hypot(s.x - a.x, s.y - a.y) > A.radius) continue;
       this.blameAs(a, 'aura');
       this.sim.damageSoldier(s, A.damage * a.escDmg);
-      this.sim.events.push({ t: 'zap', x: s.x, y: s.y });
+      this.sim.events.push({ t: 'zap', x: s.x, y: s.y, fromX: a.x, fromY: a.y });
     }
   }
 
